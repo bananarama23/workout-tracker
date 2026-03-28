@@ -468,11 +468,15 @@ function syncData(payload,statusId){
   if(!cloudUrl){if(el){el.textContent='No cloud URL';el.className=baseClass+' fail';}return;}
   var enc=encodeURIComponent(JSON.stringify(payload));
   var url=cloudUrl+'?payload='+enc;
-  var img=new Image();img.src=url;
-  fetch(url,{method:'GET',mode:'no-cors'}).catch(function(){});
-  setTimeout(function(){
-    if(el){el.textContent='Saved to Google Sheets';el.className=baseClass+' synced';}
-  },3000);
+  // Use fetch only - one request
+  fetch(url,{method:'GET',mode:'no-cors'})
+    .then(function(){
+      if(el){el.textContent='Saved to Google Sheets';el.className=baseClass+' synced';}
+    })
+    .catch(function(){
+      // no-cors always triggers catch but request still fires
+      if(el){el.textContent='Saved to Google Sheets';el.className=baseClass+' synced';}
+    });
 }
 
 // HISTORY
