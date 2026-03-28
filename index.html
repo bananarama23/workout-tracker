@@ -620,11 +620,35 @@ function goChol(){showOnly(['cholScr']);document.getElementById('mainSub').textC
 function goBody(){showOnly(['bodyScr']);document.getElementById('mainSub').textContent='Body Metrics';}
 
 function goWorkout(type){
-  wType=type;exs=type==='home'?homeEx:hotelEx;nls=type==='home'?homeNL:hotelNL;
-  logs=[];for(var i=0;i<exs.length;i++){logs.push({sets:[],feel:'',notes:''});for(var j=0;j<exs[i].sets;j++)logs[i].sets.push({reps:'',time:''});}
-  curEx=0;curSet=0;phase='idle';bodyFeel='';bfScore=0;
-  showOnly(['preCard','progBar']);
-  document.getElementById('mainSub').textContent=type==='home'?'Home * Pull-up Day':'Hotel * Stability Day';
+  wType=type;
+  // Show loading state
+  document.getElementById('mainSub').textContent='Loading workout...';
+  showOnly(['progBar']);
+  document.getElementById('progFill').style.width='30%';
+
+  // Try to load from sheet first
+  loadWorkoutFromSheet(type, function(result){
+    if (result && result.exercises && result.exercises.length) {
+      // Use sheet data
+      exs = parseSheetExercises(result);
+      // Build next labels from exercise names
+      nls = exs.map(function(ex,i){ return i<exs.length-1 ? exs[i+1].name : 'Done!'; });
+      document.getElementById('mainSub').textContent = result.title || (type==='home'?'Home * Pull-up Day':'Hotel * Stability Day');
+    } else {
+      // Fall back to hardcoded
+      exs=type==='home'?homeEx:hotelEx;
+      nls=type==='home'?homeNL:hotelNL;
+      document.getElementById('mainSub').textContent=type==='home'?'Home * Pull-up Day':'Hotel * Stability Day';
+    }
+    logs=[];
+    for(var i=0;i<exs.length;i++){
+      logs.push({sets:[],feel:'',notes:''});
+      for(var j=0;j<exs[i].sets;j++)logs[i].sets.push({reps:'',time:''});
+    }
+    curEx=0;curSet=0;phase='idle';bodyFeel='';bfScore=0;
+    document.getElementById('progFill').style.width='0%';
+    showOnly(['preCard','progBar']);
+  });
 }
 
 // BODY FEEL
@@ -1017,6 +1041,50 @@ function copyRes(){
     var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
     document.getElementById('copyBtn').textContent='COPIED - PASTE INTO CLAUDE';document.getElementById('copyBtn').classList.add('copied');
   });
+}
+
+// LOAD WORKOUT FROM SHEET
+function loadWorkoutFromSheet(type, onDone) {
+  if (!cloudUrl) { onDone(null); return; }
+  var url = cloudUrl + '?type=getWorkout&callback=wt_load_cb';
+  window.wt_load_cb = function(result) {
+    window.wt_load_cb = null;
+    var s = document.getElementById('wt_load_script');
+    if (s) s.parentNode.removeChild(s);
+    if (result && result.status === 'ok' && result.exercises && result.exercises.length) {
+      onDone(result);
+    } else {
+      onDone(null);
+    }
+  };
+  var script = document.createElement('script');
+  script.id = 'wt_load_script';
+  script.src = url;
+  script.onerror = function() { onDone(null); };
+  var ex = document.getElementById('wt_load_script');
+  if (ex) ex.parentNode.removeChild(ex);
+  document.head.appendChild(script);
+  setTimeout(function() { if (window.wt_load_cb) { window.wt_load_cb = null; onDone(null); } }, 5000);
+}
+
+function parseSheetExercises(result) {
+  var exs = [];
+  for (var i = 0; i < result.exercises.length; i++) {
+    var ex = result.exercises[i];
+    exs.push({
+      name: ex.name,
+      sets: parseInt(ex.sets) || 2,
+      reps: ex.reps,
+      rc: JSON.parse(ex.repCounts || '[]'),
+      rest: parseInt(ex.rest) || 60,
+      form: ex.form,
+      tweak: ex.tweak || null,
+      watch: ex.watch || null,
+      isPlank: ex.isPlank === 'yes',
+      seq: ex.sequence ? JSON.parse(ex.sequence) : null
+    });
+  }
+  return exs;
 }
 
 // INIT
