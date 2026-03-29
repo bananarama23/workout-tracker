@@ -29,12 +29,12 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;background:none;border:none;cursor:pointer;transition:all 0.2s;}
 .nav-btn .nav-icon{font-size:22px;transition:transform 0.2s;}
 .nav-btn .nav-label{font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:var(–muted);transition:color 0.2s;}
-.nav-btn.active .nav-label{color:var(–accent);}
-.nav-btn.active .nav-icon{transform:scale(1.1);}
+.nav-btn.active .nav-label{color:#2c3e50;font-weight:700;}
+.nav-btn.active .nav-icon{transform:scale(1.15);color:#2c3e50;}
 
 /* SCROLL CONTENT */
-.page-content{flex:1;padding:0 0 20px 0;overflow-y:auto;}
-.page-header{padding:60px 20px 20px;background:var(–accent);color:#fff;position:relative;}
+.page-content{flex:1;padding:0 0 80px 0;overflow-y:auto;}
+.page-header{padding:60px 20px 20px;background:#2c3e50;color:#fff;position:relative;}
 .page-header h1{font-family:‘Bebas Neue’,sans-serif;font-size:2rem;letter-spacing:2px;}
 .page-header p{font-size:0.85rem;opacity:0.8;margin-top:4px;}
 .greeting{font-size:1rem;opacity:0.7;margin-bottom:4px;}
@@ -360,15 +360,15 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 <!-- Quick log HIIT -->
 <div class="quick-actions">
   <div class="qa-btn" onclick="navTo('log');switchLogTab('hiit')">
-    <div class="qa-icon">&#127939;</div>
+    <div class="qa-icon" style="font-size:22px;font-weight:900;color:var(--blue);font-family:'Bebas Neue',sans-serif;letter-spacing:1px;">HIIT</div>
     <div class="qa-label">Log HIIT</div>
   </div>
   <div class="qa-btn" onclick="navTo('log');switchLogTab('chol')">
-    <div class="qa-icon">&#129656;</div>
+    <div class="qa-icon" style="font-size:22px;font-weight:900;color:var(--red);font-family:'Bebas Neue',sans-serif;letter-spacing:1px;">HDL</div>
     <div class="qa-label">Blood Test</div>
   </div>
   <div class="qa-btn" onclick="navTo('log');switchLogTab('body')">
-    <div class="qa-icon">&#9878;</div>
+    <div class="qa-icon" style="font-size:22px;font-weight:900;color:var(--green);font-family:'Bebas Neue',sans-serif;letter-spacing:1px;">BODY</div>
     <div class="qa-label">Body Metrics</div>
   </div>
 </div>
@@ -626,19 +626,19 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 
 <nav class="bottom-nav">
   <button class="nav-btn active" id="nav-home" onclick="navTo('home')">
-    <span class="nav-icon">&#127968;</span>
+    <span class="nav-icon" style="font-size:20px;font-weight:bold;font-family:serif;">H</span>
     <span class="nav-label">Home</span>
   </button>
   <button class="nav-btn" id="nav-workout" onclick="navTo('workout')">
-    <span class="nav-icon">&#128170;</span>
+    <span class="nav-icon" style="font-size:20px;font-weight:bold;font-family:serif;">W</span>
     <span class="nav-label">Workout</span>
   </button>
   <button class="nav-btn" id="nav-log" onclick="navTo('log')">
-    <span class="nav-icon">&#128221;</span>
+    <span class="nav-icon" style="font-size:20px;font-weight:bold;font-family:serif;">L</span>
     <span class="nav-label">Log</span>
   </button>
   <button class="nav-btn" id="nav-progress" onclick="navTo('progress')">
-    <span class="nav-icon">&#128200;</span>
+    <span class="nav-icon" style="font-size:20px;font-weight:bold;font-family:serif;">P</span>
     <span class="nav-label">Progress</span>
   </button>
 </nav>
@@ -840,8 +840,13 @@ function loadHomeData(){
   var ringColor=pct>=80?'#27ae60':pct>=60?'#f39c12':'#e74c3c';
   document.getElementById('consistencyRing').style.stroke=ringColor;
 
-  // Milestone
+  // Milestone - always show something
   updateMilestone(sessions);
+  // Override Loading... if still showing after data load
+  setTimeout(function(){
+    var mt=document.getElementById('milestoneText');
+    if(mt&&mt.textContent==='Loading...')mt.textContent='Complete a home workout to check pull-up progress';
+  },500);
 }
 
 function calcStreak(sessions){
