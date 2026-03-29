@@ -1552,11 +1552,17 @@ document.getElementById(‘cholDate’).value=today;
 document.getElementById(‘bodyDate’).value=today;
 }
 
+// Init - non-blocking
 buildEffBtns();
 initDates();
-tryLoadWorkout();
-loadHomeData();
 navTo(‘home’);
+// Defer sheet load and home data so page renders first
+setTimeout(function(){
+loadHomeData();
+setTimeout(function(){
+tryLoadWorkout();
+},1000);
+},100);
 </script>
 
 </body>
