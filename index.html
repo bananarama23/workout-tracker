@@ -716,6 +716,7 @@ function navTo(page){
   currentPage=page;
   if(page==='progress')loadProgressData();
   if(page==='home')loadHomeData();
+  if(page==='workout')tryLoadWorkout();
 }
 
 // LOCAL HISTORY
@@ -994,26 +995,26 @@ function backToWorkout(){sessionActive=false;navTo('home');}
 
 // LOAD WORKOUT FROM SHEET
 function tryLoadWorkout(){
-  document.getElementById('homeLoadingMsg').classList.remove('hidden');
-  document.getElementById('hotelLoadingMsg').classList.remove('hidden');
+  document.getElementById('currentWorkoutInfo').textContent='Loading from sheet...';
   var cbName='wt_load_'+Date.now();
   window[cbName]=function(result){
-    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
-    document.getElementById('homeLoadingMsg').classList.add('hidden');
-    document.getElementById('hotelLoadingMsg').classList.add('hidden');
+    window[cbName]=null;
+    var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
     if(result&&result.status==='ok'&&result.exercises&&result.exercises.length){
       sheetWorkout=result;
       var isHome=result.workoutType&&result.workoutType.toLowerCase().indexOf('home')>=0;
-      if(isHome){document.getElementById('homeLoadedBadge').classList.remove('hidden');}
-      else{document.getElementById('hotelLoadedBadge').classList.remove('hidden');}
-      document.getElementById('currentWorkoutInfo').textContent=(result.title||result.workoutType)+'  -  ready to start';
+      document.getElementById('homeLoadedBadge').classList.toggle('hidden',!isHome);
+      document.getElementById('hotelLoadedBadge').classList.toggle('hidden',isHome);
+      document.getElementById('currentWorkoutInfo').textContent=(result.title||result.workoutType)+' - ready to start';
+    } else {
+      document.getElementById('currentWorkoutInfo').textContent='Using default plan';
     }
   };
   var url=CLOUD_URL+'?type=getWorkout&callback='+cbName;
   var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
-  script.onerror=function(){document.getElementById('homeLoadingMsg').classList.add('hidden');document.getElementById('hotelLoadingMsg').classList.add('hidden');};
+  script.onerror=function(){document.getElementById('currentWorkoutInfo').textContent='Using default plan';};
   document.head.appendChild(script);
-  setTimeout(function(){if(window[cbName]){window[cbName]=null;document.getElementById('homeLoadingMsg').classList.add('hidden');document.getElementById('hotelLoadingMsg').classList.add('hidden');}},8000);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;document.getElementById('currentWorkoutInfo').textContent='Using default plan';}},6000);
 }
 
 // EXERCISE RENDER
@@ -1552,17 +1553,11 @@ document.getElementById(‘cholDate’).value=today;
 document.getElementById(‘bodyDate’).value=today;
 }
 
-// Init - non-blocking
+// Init
 buildEffBtns();
 initDates();
 navTo(‘home’);
-// Defer sheet load and home data so page renders first
-setTimeout(function(){
-loadHomeData();
-setTimeout(function(){
-tryLoadWorkout();
-},1000);
-},100);
+setTimeout(loadHomeData,200);
 </script>
 
 </body>
