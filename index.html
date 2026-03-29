@@ -17,15 +17,15 @@
   --nav-h:64px;--safe-bottom:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;overflow:hidden;}
+html,body{height:100%;overflow:hidden;position:fixed;width:100%;}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:16px;}
 
 /* PAGES */
-.page{position:fixed;top:0;left:0;right:0;bottom:calc(var(–nav-h) + var(–safe-bottom));overflow-y:auto;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;}
+.page{position:fixed;top:0;left:0;right:0;bottom:calc(var(–nav-h) + var(–safe-bottom));overflow-y:scroll;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;overscroll-behavior:contain;}
 .page.active{display:flex;}
 
 /* BOTTOM NAV */
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(–nav-h) + var(–safe-bottom));background:var(–surface);border-top:1px solid var(–border);display:flex;align-items:flex-start;padding-top:8px;padding-bottom:var(–safe-bottom);z-index:1000;box-shadow:0 -2px 20px rgba(0,0,0,0.08);}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(–nav-h) + var(–safe-bottom));background:var(–surface);border-top:1px solid var(–border);display:flex;align-items:flex-start;padding-top:8px;padding-bottom:var(–safe-bottom);z-index:999;box-shadow:0 -2px 20px rgba(0,0,0,0.08);}
 .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;background:none;border:none;cursor:pointer;transition:all 0.2s;}
 .nav-btn .nav-icon{font-size:22px;transition:transform 0.2s;}
 .nav-btn .nav-label{font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:var(–muted);transition:color 0.2s;}
@@ -33,7 +33,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .nav-btn.active .nav-icon{transform:scale(1.15);color:#2c3e50;}
 
 /* SCROLL CONTENT */
-.page-content{flex:1;padding:0 0 80px 0;overflow-y:auto;}
+.page-content{padding:0 0 20px 0;}
 .page-header{padding:60px 20px 20px;background:#2c3e50;color:#fff;position:relative;}
 .page-header h1{font-family:‘Bebas Neue’,sans-serif;font-size:2rem;letter-spacing:2px;}
 .page-header p{font-size:0.85rem;opacity:0.8;margin-top:4px;}
@@ -330,7 +330,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 <!-- Milestone -->
 <div class="milestone" id="milestoneCard">
   <div class="milestone-title">Next Milestone</div>
-  <div class="milestone-text" id="milestoneText">Loading...</div>
+  <div class="milestone-text" id="milestoneText">Complete a home workout</div>
   <div class="milestone-sub" id="milestoneSub"></div>
 </div>
 
@@ -804,6 +804,7 @@ function loadHomeData(){
   var hiitEl=document.getElementById('wkHIIT');
   hiitEl.textContent=wkHIIT;
   hiitEl.className='wb-num '+(wkHIIT>=2?'wb-green':wkHIIT>=1?'wb-amber':'wb-red');
+  document.getElementById('wkStreak').textContent=streak>0?streak:0;
 
   // Streak
   var streak=calcStreak(sessions);
@@ -834,7 +835,7 @@ function loadHomeData(){
   var wks=Object.keys(weekCounts);totalWks=wks.length;
   for(var w=0;w<wks.length;w++){if(weekCounts[wks[w]].hiit>=2)hiitWks++;}
   var pct=totalWks>0?Math.round((hiitWks/totalWks)*100):0;
-  document.getElementById('consistencyPct').textContent=pct+'%';
+  document.getElementById('consistencyPct').textContent=totalWks>0?(pct+'%'):'0%';
   var circ=2*Math.PI*32;
   document.getElementById('consistencyRing').style.strokeDashoffset=circ*(1-pct/100);
   var ringColor=pct>=80?'#27ae60':pct>=60?'#f39c12':'#e74c3c';
