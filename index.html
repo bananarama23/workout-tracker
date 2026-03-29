@@ -244,6 +244,10 @@
   <div class="log-card">
     <div class="log-card-title">HIIT SESSION</div>
     <div class="fld">
+      <label class="fld-lbl">Date</label>
+      <input type="date" class="fld-inp" id="hiitDate" style="font-size:1.1rem;">
+    </div>
+    <div class="fld">
       <label class="fld-lbl">Duration (minutes)</label>
       <input type="number" inputmode="numeric" class="fld-inp" id="hiitDur" placeholder="17">
     </div>
@@ -615,7 +619,14 @@ function goHome(){
   showOnly(['homeScr']);
   document.getElementById('mainSub').textContent='Choose your session';
 }
-function goHIIT(){showOnly(['hiitScr']);document.getElementById('mainSub').textContent='HIIT Session';buildEffBtns();}
+function goHIIT(){
+  showOnly(['hiitScr']);
+  document.getElementById('mainSub').textContent='HIIT Session';
+  buildEffBtns();
+  // Default to today
+  var today=new Date().toISOString().slice(0,10);
+  document.getElementById('hiitDate').value=today;
+}
 function goChol(){showOnly(['cholScr']);document.getElementById('mainSub').textContent='Blood Test';}
 function goBody(){showOnly(['bodyScr']);document.getElementById('mainSub').textContent='Body Metrics';}
 
@@ -680,12 +691,17 @@ function buildEffBtns(){
 function saveHIIT(){
   resAC();
   var dur=document.getElementById('hiitDur').value,notes=document.getElementById('hiitNotes').value;
+  var hiitDate=document.getElementById('hiitDate').value||new Date().toISOString().slice(0,10);
   if(!dur||!selEff){var el=document.getElementById('hiitRes');el.textContent='Please enter duration and effort';el.className='sync-res fail';return;}
-  var payload={type:'hiit',date:new Date().toISOString().slice(0,10),week:'Week '+getWeekNum(),duration:dur,effort:selEff,notes:notes};
+  // Calculate week number from selected date
+  var d=new Date(hiitDate);d.setHours(0,0,0,0);d.setDate(d.getDate()+3-(d.getDay()+6)%7);
+  var w1=new Date(d.getFullYear(),0,4);
+  var wn=1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7);
+  var payload={type:'hiit',date:hiitDate,week:'Week '+wn,duration:dur,effort:selEff,notes:notes};
   syncData(payload,'hiitRes');
   var txt='HIIT - '+new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'\nDuration: '+dur+' min\nEffort: '+selEff+'/10\n'+(notes?'Notes: '+notes:'');
   navigator.clipboard.writeText(txt).catch(function(){});
-  setTimeout(function(){document.getElementById('hiitDur').value='';document.getElementById('hiitNotes').value='';selEff=0;var bs=document.querySelectorAll('.eff-btn');for(var b=0;b<bs.length;b++)bs[b].classList.remove('on');},3500);
+  setTimeout(function(){document.getElementById('hiitDur').value='';document.getElementById('hiitNotes').value='';document.getElementById('hiitDate').value=new Date().toISOString().slice(0,10);selEff=0;var bs=document.querySelectorAll('.eff-btn');for(var b=0;b<bs.length;b++)bs[b].classList.remove('on');},3500);
 }
 
 // CHOLESTEROL
