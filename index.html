@@ -20,19 +20,19 @@ html,body{height:100%;overflow:hidden;position:fixed;width:100%;}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:16px;}
 
 /* PAGES */
-.page{position:fixed;top:0;left:0;right:0;bottom:calc(var(--nav-h) + var(--safe-bottom));overflow-y:auto;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;overscroll-behavior:contain;}
+.page{position:fixed;top:0;left:0;right:0;bottom:calc(var(--nav-h) + var(--safe-bottom));overflow-y:scroll;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;overscroll-behavior:contain;}
 .page.active{display:flex;}
 
 /* BOTTOM NAV */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + var(--safe-bottom));background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:flex-start;padding-top:8px;padding-bottom:var(--safe-bottom);z-index:999;box-shadow:0 -2px 20px rgba(0,0,0,0.08);}
 .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;background:none;border:none;cursor:pointer;transition:all 0.2s;}
-.nav-btn .nav-icon{font-size:22px;transition:transform 0.2s;color:var(--muted);}
+.nav-btn .nav-icon{font-size:22px;transition:transform 0.2s;}
 .nav-btn .nav-label{font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:var(--muted);transition:color 0.2s;}
 .nav-btn.active .nav-label{color:#2c3e50;font-weight:700;}
 .nav-btn.active .nav-icon{transform:scale(1.15);color:#2c3e50;}
 
 /* SCROLL CONTENT */
-.page-content{padding:0 0 40px 0;}
+.page-content{padding:0 0 20px 0;}
 .page-header{padding:60px 20px 20px;background:#2c3e50;color:#fff;position:relative;}
 .page-header h1{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:2px;}
 .page-header p{font-size:0.85rem;opacity:0.8;margin-top:4px;}
@@ -293,6 +293,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 
 .hidden{display:none!important;}
 </style>
+
 </head>
 <body>
 
@@ -320,44 +321,49 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
         <div class="wb-sub">weeks</div>
       </div>
     </div>
-    <div class="milestone" id="milestoneCard">
-      <div class="milestone-title">Next Milestone</div>
-      <div class="milestone-text" id="milestoneText">Complete a home workout</div>
-      <div class="milestone-sub" id="milestoneSub"></div>
+
+<div class="milestone" id="milestoneCard">
+  <div class="milestone-title">Next Milestone</div>
+  <div class="milestone-text" id="milestoneText">Complete a home workout</div>
+  <div class="milestone-sub" id="milestoneSub"></div>
+</div>
+
+<div class="card">
+  <div class="card-title">8-Week HIIT Consistency</div>
+  <div class="ring-container">
+    <svg class="ring-svg" width="80" height="80" viewBox="0 0 80 80">
+      <circle class="ring-bg-c" cx="40" cy="40" r="32" stroke-width="8" fill="none" transform="rotate(-90 40 40)"/>
+      <circle id="consistencyRing" cx="40" cy="40" r="32" stroke-width="8" fill="none" stroke="#27ae60" stroke-linecap="round" transform="rotate(-90 40 40)" stroke-dasharray="201" stroke-dashoffset="201"/>
+    </svg>
+    <div class="ring-info">
+      <div class="ring-pct" id="consistencyPct">-%</div>
+      <div class="ring-label">HIIT sessions hit target<br>over last 8 weeks</div>
     </div>
-    <div class="card">
-      <div class="card-title">8-Week HIIT Consistency</div>
-      <div class="ring-container">
-        <svg class="ring-svg" width="80" height="80" viewBox="0 0 80 80">
-          <circle class="ring-bg-c" cx="40" cy="40" r="32" stroke-width="8" fill="none" transform="rotate(-90 40 40)"/>
-          <circle id="consistencyRing" cx="40" cy="40" r="32" stroke-width="8" fill="none" stroke="#27ae60" stroke-linecap="round" transform="rotate(-90 40 40)" stroke-dasharray="201" stroke-dashoffset="201"/>
-        </svg>
-        <div class="ring-info">
-          <div class="ring-pct" id="consistencyPct">-%</div>
-          <div class="ring-label">HIIT sessions hit target<br>over last 8 weeks</div>
-        </div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-title">Last Session</div>
-      <div id="lastWorkoutContent">
-        <div style="color:var(--muted);font-size:0.9rem;">No sessions logged yet</div>
-      </div>
-    </div>
-    <div class="quick-actions">
-      <div class="qa-btn" onclick="navTo('log');switchLogTab('hiit')">
-        <div class="qa-icon" style="font-size:22px;font-weight:900;color:var(--blue);font-family:'Bebas Neue',sans-serif;letter-spacing:1px;">HIIT</div>
-        <div class="qa-label">Log HIIT</div>
-      </div>
-      <div class="qa-btn" onclick="navTo('log');switchLogTab('chol')">
-        <div class="qa-icon" style="font-size:22px;font-weight:900;color:var(--red);font-family:'Bebas Neue',sans-serif;letter-spacing:1px;">HDL</div>
-        <div class="qa-label">Blood Test</div>
-      </div>
-      <div class="qa-btn" onclick="navTo('log');switchLogTab('body')">
-        <div class="qa-icon" style="font-size:22px;font-weight:900;color:var(--green);font-family:'Bebas Neue',sans-serif;letter-spacing:1px;">BODY</div>
-        <div class="qa-label">Body Metrics</div>
-      </div>
-    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Last Session</div>
+  <div id="lastWorkoutContent">
+    <div style="color:var(--muted);font-size:0.9rem;">No sessions logged yet</div>
+  </div>
+</div>
+
+<div class="quick-actions">
+  <div class="qa-btn" onclick="navTo('log');switchLogTab('hiit')">
+    <div class="qa-icon" style="font-size:22px;font-weight:900;color:var(--blue);font-family:'Bebas Neue',sans-serif;letter-spacing:1px;">HIIT</div>
+    <div class="qa-label">Log HIIT</div>
+  </div>
+  <div class="qa-btn" onclick="navTo('log');switchLogTab('chol')">
+    <div class="qa-icon" style="font-size:22px;font-weight:900;color:var(--red);font-family:'Bebas Neue',sans-serif;letter-spacing:1px;">HDL</div>
+    <div class="qa-label">Blood Test</div>
+  </div>
+  <div class="qa-btn" onclick="navTo('log');switchLogTab('body')">
+    <div class="qa-icon" style="font-size:22px;font-weight:900;color:var(--green);font-family:'Bebas Neue',sans-serif;letter-spacing:1px;">BODY</div>
+    <div class="qa-label">Body Metrics</div>
+  </div>
+</div>
+
   </div>
 </div>
 
@@ -421,7 +427,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     </div>
   </div>
   <div class="prog-bar-wrap"><div class="prog-bar-fill" id="progFill" style="width:0%"></div></div>
-  <div class="page-content" id="sessionContent" style="padding-top:8px;"></div>
+  <div class="page-content" id="sessionContent" style="padding-top:8px;">
+    </div>
 </div>
 
 <div class="page hidden" id="page-done">
@@ -455,83 +462,87 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       <button class="log-tab" id="tab-chol" onclick="switchLogTab('chol')">Blood</button>
       <button class="log-tab" id="tab-body" onclick="switchLogTab('body')">Body</button>
     </div>
-    <div class="log-panel active" id="panel-hiit">
-      <div class="log-field">
-        <label>Date</label>
-        <input type="date" class="log-input" id="hiitDate">
-      </div>
-      <div class="log-field">
-        <label>Duration (minutes)</label>
-        <input type="number" inputmode="numeric" class="log-input log-input-big" id="hiitDur" placeholder="17">
-      </div>
-      <div class="log-field">
-        <label>Effort Level</label>
-        <div class="effort-grid" id="effBtns"></div>
-      </div>
-      <div class="log-field">
-        <label>Notes</label>
-        <textarea class="log-input" id="hiitNotes" placeholder="Apple Watch, how it felt..." rows="2"></textarea>
-      </div>
-      <div class="log-sync-msg" id="hiitMsg"></div>
-      <button class="log-save-btn lsb-hiit" onclick="saveHIIT()">SAVE HIIT SESSION</button>
+
+<div class="log-panel active" id="panel-hiit">
+  <div class="log-field">
+    <label>Date</label>
+    <input type="date" class="log-input" id="hiitDate">
+  </div>
+  <div class="log-field">
+    <label>Duration (minutes)</label>
+    <input type="number" inputmode="numeric" class="log-input log-input-big" id="hiitDur" placeholder="17">
+  </div>
+  <div class="log-field">
+    <label>Effort Level</label>
+    <div class="effort-grid" id="effBtns"></div>
+  </div>
+  <div class="log-field">
+    <label>Notes</label>
+    <textarea class="log-input" id="hiitNotes" placeholder="Apple Watch, how it felt..." rows="2"></textarea>
+  </div>
+  <div class="log-sync-msg" id="hiitMsg"></div>
+  <button class="log-save-btn lsb-hiit" onclick="saveHIIT()">SAVE HIIT SESSION</button>
+</div>
+
+<div class="log-panel" id="panel-chol">
+  <div class="log-field">
+    <label>Date</label>
+    <input type="date" class="log-input" id="cholDate">
+  </div>
+  <div class="chol-grid">
+    <div class="log-field">
+      <label>HDL</label>
+      <input type="number" inputmode="decimal" class="log-input log-input-big" id="cHDL" placeholder="24" oninput="updateRatio()">
     </div>
-    <div class="log-panel" id="panel-chol">
-      <div class="log-field">
-        <label>Date</label>
-        <input type="date" class="log-input" id="cholDate">
-      </div>
-      <div class="chol-grid">
-        <div class="log-field">
-          <label>HDL</label>
-          <input type="number" inputmode="decimal" class="log-input log-input-big" id="cHDL" placeholder="24" oninput="updateRatio()">
-        </div>
-        <div class="log-field">
-          <label>LDL</label>
-          <input type="number" inputmode="decimal" class="log-input log-input-big" id="cLDL" placeholder="132">
-        </div>
-        <div class="log-field">
-          <label>Total</label>
-          <input type="number" inputmode="decimal" class="log-input log-input-big" id="cTotal" placeholder="175" oninput="updateRatio()">
-        </div>
-        <div class="log-field">
-          <label>Triglycerides</label>
-          <input type="number" inputmode="decimal" class="log-input log-input-big" id="cTrig" placeholder="97">
-        </div>
-      </div>
-      <div class="ratio-display" id="ratioDisp" style="color:var(--muted);">Enter HDL + Total to see ratio</div>
-      <div class="log-field">
-        <label>Notes</label>
-        <textarea class="log-input" id="cNotes" placeholder="Fasted? Medication changes?" rows="2"></textarea>
-      </div>
-      <div class="log-sync-msg" id="cholMsg"></div>
-      <button class="log-save-btn lsb-chol" onclick="saveChol()">SAVE BLOOD TEST</button>
+    <div class="log-field">
+      <label>LDL</label>
+      <input type="number" inputmode="decimal" class="log-input log-input-big" id="cLDL" placeholder="132">
     </div>
-    <div class="log-panel" id="panel-body">
-      <div class="log-field">
-        <label>Date</label>
-        <input type="date" class="log-input" id="bodyDate">
-      </div>
-      <div class="chol-grid">
-        <div class="log-field">
-          <label>Weight (lbs)</label>
-          <input type="number" inputmode="decimal" class="log-input log-input-big" id="bWt" placeholder="170">
-        </div>
-        <div class="log-field">
-          <label>Waist (in)</label>
-          <input type="number" inputmode="decimal" class="log-input log-input-big" id="bWaist" placeholder="34">
-        </div>
-      </div>
-      <div class="log-field">
-        <label>Arm flexed (cm)</label>
-        <input type="number" inputmode="decimal" class="log-input log-input-big" id="bArm" placeholder="35">
-      </div>
-      <div class="log-field">
-        <label>Notes</label>
-        <textarea class="log-input" id="bNotes" placeholder="Morning? Post-workout?" rows="2"></textarea>
-      </div>
-      <div class="log-sync-msg" id="bodyMsg"></div>
-      <button class="log-save-btn lsb-body" onclick="saveBody()">SAVE BODY METRICS</button>
+    <div class="log-field">
+      <label>Total</label>
+      <input type="number" inputmode="decimal" class="log-input log-input-big" id="cTotal" placeholder="175" oninput="updateRatio()">
     </div>
+    <div class="log-field">
+      <label>Triglycerides</label>
+      <input type="number" inputmode="decimal" class="log-input log-input-big" id="cTrig" placeholder="97">
+    </div>
+  </div>
+  <div class="ratio-display" id="ratioDisp" style="color:var(--muted);">Enter HDL + Total to see ratio</div>
+  <div class="log-field">
+    <label>Notes</label>
+    <textarea class="log-input" id="cNotes" placeholder="Fasted? Medication changes?" rows="2"></textarea>
+  </div>
+  <div class="log-sync-msg" id="cholMsg"></div>
+  <button class="log-save-btn lsb-chol" onclick="saveChol()">SAVE BLOOD TEST</button>
+</div>
+
+<div class="log-panel" id="panel-body">
+  <div class="log-field">
+    <label>Date</label>
+    <input type="date" class="log-input" id="bodyDate">
+  </div>
+  <div class="chol-grid">
+    <div class="log-field">
+      <label>Weight (lbs)</label>
+      <input type="number" inputmode="decimal" class="log-input log-input-big" id="bWt" placeholder="170">
+    </div>
+    <div class="log-field">
+      <label>Waist (in)</label>
+      <input type="number" inputmode="decimal" class="log-input log-input-big" id="bWaist" placeholder="34">
+    </div>
+  </div>
+  <div class="log-field">
+    <label>Arm flexed (cm)</label>
+    <input type="number" inputmode="decimal" class="log-input log-input-big" id="bArm" placeholder="35">
+  </div>
+  <div class="log-field">
+    <label>Notes</label>
+    <textarea class="log-input" id="bNotes" placeholder="Morning? Post-workout?" rows="2"></textarea>
+  </div>
+  <div class="log-sync-msg" id="bodyMsg"></div>
+  <button class="log-save-btn lsb-body" onclick="saveBody()">SAVE BODY METRICS</button>
+</div>
+
   </div>
 </div>
 
@@ -545,30 +556,35 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       <div class="ps-title">Pull-Up Total Per Session</div>
       <div class="pull-up-chart">
         <canvas id="pullupCanvas" class="chart-canvas"></canvas>
-        <div id="pullupEmpty" style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">Do a home workout to see progression</div>
+        <div id="pullupEmpty" style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">Do a home workout to see your pull-up progression</div>
       </div>
     </div>
-    <div class="progress-section" id="cholSection">
-      <div class="ps-title">Cholesterol</div>
-      <div class="pull-up-chart">
-        <div id="cholRows"></div>
-        <canvas id="cholCanvas" class="chart-canvas" style="margin-top:12px;"></canvas>
-        <div id="cholEmpty" style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">Log a test to see trend</div>
-      </div>
-    </div>
-    <div class="progress-section">
-      <div class="ps-title">Exercise Feel Heatmap</div>
-      <div class="heatmap-wrap">
-        <div id="heatmapContent" style="color:var(--muted);font-size:0.85rem;padding:10px;">Complete sessions to see trend</div>
-      </div>
-    </div>
-    <div class="progress-section" style="margin-bottom:16px;">
-      <div class="ps-title">Personal Records</div>
-      <div class="pr-grid" id="prGrid">
-        <div style="color:var(--muted);font-size:0.85rem;grid-column:1/-1;padding:10px;">No records yet</div>
-      </div>
-    </div>
-    <div class="refresh-btn" onclick="loadProgressData()">&#8635; Refresh data</div>
+
+<div class="progress-section" id="cholSection">
+  <div class="ps-title">Cholesterol</div>
+  <div class="pull-up-chart">
+    <div id="cholRows"></div>
+    <canvas id="cholCanvas" class="chart-canvas" style="margin-top:12px;"></canvas>
+    <div id="cholEmpty" style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">Log a blood test to see your cholesterol trend</div>
+  </div>
+</div>
+
+<div class="progress-section">
+  <div class="ps-title">Exercise Feel Heatmap</div>
+  <div class="heatmap-wrap">
+    <div id="heatmapContent" style="color:var(--muted);font-size:0.85rem;padding:10px;">Complete a few sessions to see your feel trend</div>
+  </div>
+</div>
+
+<div class="progress-section" style="margin-bottom:16px;">
+  <div class="ps-title">Personal Records</div>
+  <div class="pr-grid" id="prGrid">
+    <div style="color:var(--muted);font-size:0.85rem;grid-column:1/-1;padding:10px;">No records yet</div>
+  </div>
+</div>
+
+<div class="refresh-btn" onclick="loadProgressData()">&#8635; Refresh data</div>
+
   </div>
 </div>
 
@@ -693,6 +709,7 @@ function syncData(payload,msgId){
   if(el){el.textContent='Syncing...';el.style.background='#e3f2fd';el.style.color='var(--blue)';}
   if(!CLOUD_URL)return;
   var enc=encodeURIComponent(JSON.stringify(payload));
+  var url=CLOUD_URL+'?payload='+enc+'&callback=wt_cb_'+Date.now();
   var cbName='wt_cb_'+Date.now();
   window[cbName]=function(result){
     window[cbName]=null;
@@ -700,11 +717,28 @@ function syncData(payload,msgId){
     if(s)s.parentNode.removeChild(s);
     if(el){el.textContent='Saved to Google Sheets';el.style.background='#e8f5e9';el.style.color='var(--green)';}
   };
+  var url2=CLOUD_URL+'?payload='+enc+'&callback='+cbName;
   var script=document.createElement('script');
   script.id='wt_script_'+cbName;
-  script.src=CLOUD_URL+'?payload='+enc+'&callback='+cbName;
+  script.src=url2;
   script.onerror=function(){if(el){el.textContent='Saved locally';el.style.background='#fff3e0';el.style.color='var(--yellow)';}};
   document.head.appendChild(script);
+  setTimeout(function(){if(el&&el.textContent==='Syncing...'){el.textContent='Saved locally';el.style.background='#fff3e0';el.style.color='var(--yellow)';}},6000);
+}
+
+// FETCH FROM SHEET (for progress data)
+function fetchFromSheet(type,cb){
+  var cbName='wt_fetch_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);
+    if(s)s.parentNode.removeChild(s);cb(result);
+  };
+  var url=CLOUD_URL+'?type='+type+'&callback='+cbName;
+  var script=document.createElement('script');
+  script.id='s_'+cbName;script.src=url;
+  script.onerror=function(){cb(null);};
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;cb(null);}},8000);
 }
 
 // HOME DATA
@@ -714,6 +748,7 @@ function loadHomeData(){
   document.getElementById('greeting').textContent=greet;
   document.getElementById('todayDate').textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
 
+  // Week stats from local history
   var sessions=getAllSessions();
   var weekNum='Week '+getWeekNum();
   var wkStr=0,wkHIIT=0;
@@ -724,15 +759,19 @@ function loadHomeData(){
     }
   }
 
+  // Color code week boxes
   var strEl=document.getElementById('wkStrength');
   strEl.textContent=wkStr;
   strEl.className='wb-num '+(wkStr>=3?'wb-green':wkStr>=2?'wb-amber':'wb-red');
   var hiitEl=document.getElementById('wkHIIT');
   hiitEl.textContent=wkHIIT;
   hiitEl.className='wb-num '+(wkHIIT>=2?'wb-green':wkHIIT>=1?'wb-amber':'wb-red');
+  
+  // Streak
   var streak=calcStreak(sessions);
   document.getElementById('wkStreak').textContent=streak;
 
+  // Last workout
   if(sessions.length>0){
     var last=sessions[sessions.length-1];
     var d=new Date(last.date);
@@ -743,29 +782,42 @@ function loadHomeData(){
       '<div class="last-workout"><div><div class="lw-name">'+last.workoutType+'</div><div class="lw-date">'+dStr+'</div></div>'+(rec?'<span class="lw-feel '+feelCls+'">'+rec+'</span>':'')+'</div>';
   }
 
+  // HIIT consistency (8 weeks)
   var hiitWks=0,totalWks=0;
   var weekCounts={};
-  var cutoff=new Date();cutoff.setDate(cutoff.getDate()-56);
   for(var j=0;j<sessions.length;j++){
-    if(new Date(sessions[j].date)<cutoff)continue;
-    if(!weekCounts[sessions[j].week])weekCounts[sessions[j].week]={str:0,hiit:0};
-    if(sessions[j].workoutType==='HIIT')weekCounts[sessions[j].week].hiit++;
-    else weekCounts[sessions[j].week].str++;
+    var s=sessions[j];var d2=new Date(s.date);
+    var cutoff=new Date();cutoff.setDate(cutoff.getDate()-56);
+    if(d2<cutoff)continue;
+    if(!weekCounts[s.week])weekCounts[s.week]={str:0,hiit:0};
+    if(s.workoutType==='HIIT')weekCounts[s.week].hiit++;
+    else weekCounts[s.week].str++;
   }
   var wks=Object.keys(weekCounts);totalWks=wks.length;
   for(var w=0;w<wks.length;w++){if(weekCounts[wks[w]].hiit>=2)hiitWks++;}
   var pct=totalWks>0?Math.round((hiitWks/totalWks)*100):0;
   document.getElementById('consistencyPct').textContent=totalWks>0?(pct+'%'):'0%';
-  document.getElementById('consistencyRing').style.strokeDashoffset=201*(1-pct/100);
+  var circ=2*Math.PI*32;
+  document.getElementById('consistencyRing').style.strokeDashoffset=circ*(1-pct/100);
+  var ringColor=pct>=80?'#27ae60':pct>=60?'#f39c12':'#e74c3c';
+  document.getElementById('consistencyRing').style.stroke=ringColor;
+
+  // Milestone - always show something
   updateMilestone(sessions);
+  // Override Loading... if still showing after data load
+  setTimeout(function(){
+    var mt=document.getElementById('milestoneText');
+    if(mt&&mt.textContent==='Loading...')mt.textContent='Complete a home workout to check pull-up progress';
+  },500);
 }
 
 function calcStreak(sessions){
   var weekCounts={};
   for(var i=0;i<sessions.length;i++){
-    if(!weekCounts[sessions[i].week])weekCounts[sessions[i].week]={str:0,hiit:0};
-    if(sessions[i].workoutType==='HIIT')weekCounts[sessions[i].week].hiit++;
-    else weekCounts[sessions[i].week].str++;
+    var s=sessions[i];
+    if(!weekCounts[s.week])weekCounts[s.week]={str:0,hiit:0};
+    if(s.workoutType==='HIIT')weekCounts[s.week].hiit++;
+    else weekCounts[s.week].str++;
   }
   var weeks=Object.keys(weekCounts).sort().reverse();
   var streak=0;
@@ -777,6 +829,7 @@ function calcStreak(sessions){
 }
 
 function updateMilestone(sessions){
+  // Find best pull-up total
   var bestPU=0;
   for(var i=0;i<sessions.length;i++){
     var exs=sessions[i].exercises||[];
@@ -788,135 +841,656 @@ function updateMilestone(sessions){
       }
     }
   }
-  var goalPU=16;
+  var goalPU=16; // 4+4+4+4
   if(bestPU>0&&bestPU<goalPU){
     document.getElementById('milestoneText').textContent=(goalPU-bestPU)+' more pull-up rep'+(goalPU-bestPU>1?'s':'')+' to 4/4/4/4';
-    document.getElementById('milestoneSub').textContent='Current best: '+bestPU+' reps';
+    document.getElementById('milestoneSub').textContent='Current best: '+bestPU+' total reps per session';
   } else if(bestPU===0){
-    document.getElementById('milestoneText').textContent='Start a home workout to track progress';
+    document.getElementById('milestoneText').textContent='Complete a home workout to check pull-up progress';
     document.getElementById('milestoneSub').textContent='Target: 4/4/4/4 (16 total reps)';
   } else {
     document.getElementById('milestoneText').textContent='4/4/4/4 ACHIEVED!';
-    document.getElementById('milestoneSub').textContent='Next: 5/5/5/5';
+    document.getElementById('milestoneSub').textContent='Next: increase to 5/5/5/5';
   }
 }
 
 // EXERCISES
 var homeEx=[
-  {name:'PULL-UPS',sets:4,reps:'4/4/4/3',rc:[4,4,4,3],rest:85,form:'Dead hang every rep * 1 sec hold at top',watch:'Quality over forcing reps',isPlank:false,seq:[{t:'v',l:'Pull',n:550},{t:'b',bc:1,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300},{t:'b',bc:2,n:300},{t:'r'}]},
-  {name:'CLOSE-GRIP PUSH-UPS',sets:2,reps:'10/6',rc:[10,6],rest:90,form:'Thumbs touching * 2 sec lower',watch:'Stop 1 before failure',isPlank:false,seq:[{t:'v',l:'Down',n:300},{t:'b',bc:2,n:300},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Up',n:550},{t:'b',bc:1,n:550},{t:'r'}]},
-  {name:'DIPS',sets:2,reps:'12/12',rc:[12,12],rest:85,form:'2 sec lower * 3 sec squeeze',watch:'Harder than hotel - normal',isPlank:false,seq:[{t:'v',l:'Down',n:300},{t:'b',bc:2,n:300},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Squeeze',n:550},{t:'b',bc:3,n:550},{t:'r'}]}
+  {name:'PULL-UPS',sets:4,reps:'4/4/4/3',rc:[4,4,4,3],rest:85,
+   form:'Dead hang every rep * 1 sec hold at top * Chin clearly over bar * Controlled lower',
+   watch:'Does set 3 feel slightly easier?\nSet 4 - clean reps or grind?\nQuality over forcing reps',tweak:null,isPlank:false,
+   seq:[{t:'v',l:'Pull',n:550},{t:'b',bc:1,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300},{t:'b',bc:2,n:300},{t:'r'}]},
+  {name:'CLOSE-GRIP PUSH-UPS',sets:2,reps:'10/6',rc:[10,6],rest:90,
+   form:'Thumbs touching * 2 sec lower * 1 sec pause * Stop 1 before failure',
+   watch:'Expect a drop vs hotel - pull-up fatigue is normal',tweak:null,isPlank:false,
+   seq:[{t:'v',l:'Down',n:300},{t:'b',bc:2,n:300},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Up',n:550},{t:'b',bc:1,n:550},{t:'r'}]},
+  {name:'DIPS',sets:2,reps:'12/12',rc:[12,12],rest:85,
+   form:'2 sec lower * 1 sec pause * 3 sec squeeze every rep',
+   watch:'Will be harder than hotel (~12/9 expected) - normal',tweak:'3 sec squeeze every rep',isPlank:false,
+   seq:[{t:'v',l:'Down',n:300},{t:'b',bc:2,n:300},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Squeeze',n:550},{t:'b',bc:3,n:550},{t:'r'}]},
+  {name:'LEG RAISES',sets:2,reps:'20/20',rc:[20,20],rest:60,
+   form:'Legs straight * 2 sec hold at top * 3 sec lower * No hip snap',
+   watch:null,tweak:'2 sec hold at top',isPlank:false,
+   seq:[{t:'v',l:'Raise',n:550},{t:'b',bc:1,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:2,n:220},{t:'v',l:'Lower',n:300},{t:'b',bc:3,n:300},{t:'r'}]},
+  {name:'SINGLE-LEG GLUTE BRIDGES',sets:2,reps:'15/15',rc:[15,15],rest:45,
+   form:'2 sec up * 2 sec squeeze * Full extension',watch:null,tweak:null,isPlank:false,
+   seq:[{t:'v',l:'Up',n:550},{t:'b',bc:2,n:550},{t:'v',l:'Squeeze',n:220},{t:'b',bc:2,n:220},{t:'r'}]},
+  {name:'SIDE PLANKS',sets:2,reps:'60 sec/side',rc:[60,60],rest:30,
+   form:'Hips high * Straight body * Top arm + leg raised',
+   watch:'Start LEFT side first',tweak:'Left side first',isPlank:true,seq:null},
+  {name:'SUPINATED PULL-UPS',sets:2,reps:'2/1',rc:[2,1],rest:120,
+   form:'Underhand grip * Full hang * 3-4 sec slow lower * Chin over bar',
+   watch:'Still Medium? = arms responding',tweak:null,isPlank:false,
+   seq:[{t:'v',l:'Pull',n:550},{t:'b',bc:1,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300},{t:'b',bc:4,n:300},{t:'r'}]}
 ];
 var hotelEx=[
-  {name:'CLOSE-GRIP PUSH-UPS',sets:2,reps:'10/6',rc:[10,6],rest:90,form:'Thumbs touching',watch:'Feel stronger than home',isPlank:false,seq:[{t:'v',l:'Down',n:300},{t:'b',bc:2,n:300},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Up',n:550},{t:'b',bc:1,n:550},{t:'r'}]}
+  {name:'CLOSE-GRIP PUSH-UPS',sets:2,reps:'10/6',rc:[10,6],rest:90,
+   form:'Thumbs touching * 2 sec lower * 1 sec pause * Stop 1 before failure',
+   watch:'Should feel stronger than home - no pull-up fatigue',tweak:null,isPlank:false,
+   seq:[{t:'v',l:'Down',n:300},{t:'b',bc:2,n:300},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Up',n:550},{t:'b',bc:1,n:550},{t:'r'}]},
+  {name:'DIPS',sets:2,reps:'12/12',rc:[12,12],rest:85,
+   form:'2 sec lower * 1 sec pause * 3 sec squeeze every rep',
+   watch:'Lock in 12/12 clean',tweak:'3 sec squeeze every rep',isPlank:false,
+   seq:[{t:'v',l:'Down',n:300},{t:'b',bc:2,n:300},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Squeeze',n:550},{t:'b',bc:3,n:550},{t:'r'}]},
+  {name:'LEG RAISES',sets:2,reps:'20/20',rc:[20,20],rest:60,
+   form:'Legs straight * 2 sec hold at top * 3 sec lower * No hip snap',
+   watch:null,tweak:'2 sec hold at top',isPlank:false,
+   seq:[{t:'v',l:'Raise',n:550},{t:'b',bc:1,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:2,n:220},{t:'v',l:'Lower',n:300},{t:'b',bc:3,n:300},{t:'r'}]},
+  {name:'SINGLE-LEG GLUTE BRIDGES',sets:2,reps:'15/15',rc:[15,15],rest:45,
+   form:'2 sec up * 2 sec squeeze * Full extension',watch:null,tweak:null,isPlank:false,
+   seq:[{t:'v',l:'Up',n:550},{t:'b',bc:2,n:550},{t:'v',l:'Squeeze',n:220},{t:'b',bc:2,n:220},{t:'r'}]},
+  {name:'SIDE PLANKS',sets:2,reps:'60 sec/side',rc:[60,60],rest:30,
+   form:'Hips high * Straight body * Top arm + leg raised',
+   watch:'Start LEFT side first',tweak:'Left side first',isPlank:true,seq:null}
 ];
 
 // SESSION STATE
 var exs=[],wType='home',logs=[],curEx=0,curSet=0,phase='idle';
-var timerInt=null,tLeft=0,tTotal=0,mRun=false,mTOs=[],curRep=0,wkStart=null,bodyFeel='',bfScore=0;
+var timerInt=null,tLeft=0,tTotal=0,curRestSecs=0;
+var mRun=false,mTOs=[],curRep=0,plkStart=null;
+var bodyFeel='',bfScore=0,wkStart=null;
+var CIRC=2*Math.PI*46;
+var sheetWorkout=null;
 
 function startSession(type){
-  wType=type; exs=type==='home'?homeEx:hotelEx; logs=[];
+  wType=type;
+  if(sheetWorkout&&sheetWorkout.exercises&&sheetWorkout.exercises.length){
+    exs=parseSheetExercises(sheetWorkout);
+    document.getElementById('currentWorkoutInfo').textContent=sheetWorkout.title||type+' workout loaded from sheet';
+  } else {
+    exs=type==='home'?homeEx:hotelEx;
+  }
+  logs=[];
   for(var i=0;i<exs.length;i++){
     logs.push({sets:[],feel:'',notes:''});
     for(var j=0;j<exs[i].sets;j++)logs[i].sets.push({reps:'',time:''});
   }
-  curEx=0;curSet=0;phase='idle';
+  curEx=0;curSet=0;phase='idle';bodyFeel='';bfScore=0;
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
-  document.getElementById('page-pre').classList.remove('hidden');
-  document.getElementById('page-pre').classList.add('active');
+  var pre=document.getElementById('page-pre');pre.classList.remove('hidden');pre.classList.add('active');
+}
+
+function parseSheetExercises(data){
+  return (data.exercises||[]).map(function(ex){
+    return {
+      name:ex.name,sets:parseInt(ex.sets)||2,reps:ex.reps,
+      rc:JSON.parse(ex.repCounts||'[]'),rest:parseInt(ex.rest)||60,
+      form:ex.form,tweak:ex.tweak||null,watch:ex.watch||null,
+      isPlank:ex.isPlank==='yes',
+      seq:ex.sequence&&ex.sequence!=='null'?JSON.parse(ex.sequence):null
+    };
+  });
 }
 
 function setBF(score,label){
-  bfScore=score; bodyFeel=label; wkStart=Date.now(); sessionActive=true;
+  bfScore=score;bodyFeel=label;wkStart=Date.now();
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
-  document.getElementById('page-session').classList.remove('hidden');
-  document.getElementById('page-session').classList.add('active');
+  var sp=document.getElementById('page-session');sp.classList.remove('hidden');sp.classList.add('active');
+  sessionActive=true;
+  document.getElementById('nav-workout').classList.add('active');
   renderEx();
+}
+
+function endSession(){
+  if(confirm('End workout?')){
+    stopMetro();clearInterval(timerInt);sessionActive=false;navTo('workout');
+  }
+}
+function backToWorkout(){sessionActive=false;navTo('home');}
+
+function tryLoadWorkout(){
+  document.getElementById('currentWorkoutInfo').textContent='Loading from sheet...';
+  var cbName='wt_load_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;
+    var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    if(result&&result.status==='ok'&&result.exercises&&result.exercises.length){
+      sheetWorkout=result;
+      var isHome=result.workoutType&&result.workoutType.toLowerCase().indexOf('home')>=0;
+      document.getElementById('homeLoadedBadge').classList.toggle('hidden',!isHome);
+      document.getElementById('hotelLoadedBadge').classList.toggle('hidden',isHome);
+      document.getElementById('currentWorkoutInfo').textContent=(result.title||result.workoutType)+' - ready to start';
+    } else {
+      document.getElementById('currentWorkoutInfo').textContent='Using default plan';
+    }
+  };
+  var url=CLOUD_URL+'?type=getWorkout&callback='+cbName;
+  var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
+  script.onerror=function(){document.getElementById('currentWorkoutInfo').textContent='Using default plan';};
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;document.getElementById('currentWorkoutInfo').textContent='Using default plan';}},6000);
 }
 
 function renderEx(){
   var ex=exs[curEx];
+  document.getElementById('sessionTitle').textContent=(wType==='home'?'HOME':'HOTEL')+' WORKOUT';
   document.getElementById('sessionSub').textContent='Exercise '+(curEx+1)+' of '+exs.length;
-  var html='<div class="ex-card"><div class="ex-card-header"><div class="ex-name">'+ex.name+'</div><div class="ex-target">Target: '+ex.reps+'</div></div><div class="ex-card-body">';
+  var total=0;for(var j=0;j<exs.length;j++)total+=exs[j].sets;
+  var done=0;for(var k=0;k<curEx;k++)done+=exs[k].sets;done+=curSet;
+  document.getElementById('progFill').style.width=((done/total)*100)+'%';
+
+  var html='<div class="ex-card">';
+  html+='<div class="ex-card-header">';
+  html+='<div class="ex-num">Exercise '+(curEx+1)+' of '+exs.length+'</div>';
+  html+='<div class="ex-name">'+ex.name+'</div>';
+  html+='<div class="ex-target">Target: '+ex.reps+'</div>';
+  html+='</div><div class="ex-card-body">';
+
   if(ex.form)html+='<div class="form-cue">'+ex.form+'</div>';
+  if(ex.tweak)html+='<div class="tweak-cue">! '+ex.tweak+'</div>';
+  if(ex.watch)html+='<div class="watch-cue">'+ex.watch+'</div>';
+
+  if(ex.seq){
+    html+='<div class="seq-wrap"><div class="seq-label">Rep Sequence</div><div class="seq-steps" id="seqSteps">';
+    for(var s=0;s<ex.seq.length;s++){
+      var step=ex.seq[s];
+      if(step.t==='v')html+='<span class="seq-step ss-v" id="ss'+s+'">'+step.l+'</span>';
+      else if(step.t==='b')html+='<span class="seq-step ss-b" id="ss'+s+'">'+step.bc+'x</span>';
+      else html+='<span class="seq-step ss-r" id="ss'+s+'">#</span>';
+    }
+    html+='</div></div>';
+  } else {
+    html+='<div class="seq-wrap"><div class="seq-label">Rep Sequence</div><div style="font-size:0.8rem;color:var(--muted);">Hold timed - use rep counter button</div></div>';
+  }
+
   html+='<div class="voice-display"><div class="voice-word" id="vWord">&nbsp;</div></div>';
-  html+='<div class="feel-row"><button class="feel-btn" onclick="setFeel(\'Medium\')">Medium</button><button class="feel-btn" onclick="setFeel(\'Hard\')">Hard</button></div>';
-  html+='<div class="phase-row"><span class="phase-badge pb-ready" id="phBadge">READY</span></div>';
-  html+='<div class="timer-wrap"><div class="tcount" id="tCount">-</div></div>';
+  html+='<div class="log-inp-wrap">';
+  if(ex.isPlank){
+    html+='<div class="log-pl-row">';
+    html+='<div class="log-pl-box"><label>Left (sec)</label><input type="number" inputmode="numeric" id="pi0" placeholder="-" value="'+(logs[curEx].sets[0].time||'')+'"></div>';
+    html+='<div class="log-pl-box"><label>Right (sec)</label><input type="number" inputmode="numeric" id="pi1" placeholder="-" value="'+(logs[curEx].sets[1].time||'')+'"></div>';
+    html+='</div>';
+  } else {
+    html+='<div class="log-sets-row">';
+    for(var li=0;li<ex.rc.length;li++){
+      html+='<div class="log-set-box"><label>Set '+(li+1)+' ('+ex.rc[li]+')</label><input type="number" inputmode="numeric" id="si'+li+'" placeholder="'+ex.rc[li]+'" value="'+(logs[curEx].sets[li].reps||'')+'"></div>';
+    }
+    html+='</div>';
+  }
+  html+='<div class="feel-row">';
+  var feelOn=logs[curEx].feel;
+  html+='<button class="feel-btn'+(feelOn==='Medium'?' on-m':'')+'" onclick="setFeel(\'Medium\')">Medium</button>';
+  html+='<button class="feel-btn'+(feelOn==='Medium-hard'?' on-mh':'')+'" onclick="setFeel(\'Medium-hard\')">Medium-hard</button>';
+  html+='<button class="feel-btn'+(feelOn==='Hard'?' on-h':'')+'" onclick="setFeel(\'Hard\')">Hard</button>';
+  html+='</div>';
+  html+='<div class="feel-confirm" id="feelConf">Logged!</div>';
+  html+='<textarea class="notes-inp" id="notesInp" placeholder="Notes..." oninput="saveNotes()">'+(logs[curEx].notes||'')+'</textarea>';
+  html+='</div>';
+  html+='<div class="phase-row">';
+  html+='<span class="phase-badge pb-ready" id="phBadge">READY</span>';
+  html+='<div class="set-dots">';
+  for(var di=0;di<ex.sets;di++){
+    html+='<div class="set-dot'+(di<curSet?' dn':di===curSet?' cu':'')+'"></div>';
+  }
   html+='</div></div>';
-  html+='<div class="btn-row"><button class="btn b-start" id="mainBtn" onclick="handleMain()">START SET</button></div>';
+  html+='<div class="rest-adj hidden" id="restAdj"><button class="rest-adj" onclick="adjRest(-15)">-</button><div class="rest-lbl" id="restLbl">Rest</div><button class="rest-adj" onclick="adjRest(15)">+</button></div>';
+  html+='<div class="timer-wrap"><div class="timer-lbl" id="timerLbl">TAP TO START</div>';
+  html+='<div class="timer-ring"><svg width="110" height="110" viewBox="0 0 110 110"><circle class="ring-bg-c" cx="55" cy="55" r="46"/><circle class="ring-prog" id="rprog" cx="55" cy="55" r="46" stroke-dasharray="289.0" stroke-dashoffset="289.0"/></svg>';
+  html+='<div class="tdsp"><div class="tcount" id="tCount">-</div><div class="tsub" id="tSub">start set</div></div></div></div>';
+  html+='</div></div>';
   document.getElementById('sessionContent').innerHTML=html;
+
+  var btnHtml='<div class="btn-row"><button class="btn b-skip" onclick="prevEx()" '+(curEx===0&&curSet===0?'disabled':'')+'>PREV</button><button class="btn b-start" id="mainBtn" onclick="handleMain()">START SET</button></div>';
+  btnHtml+='<div class="btn-row"><button class="btn b-skip" onclick="reqSkip()">Skip Rest</button><button class="btn b-skip" onclick="nextEx()">Next Ex</button></div>';
+  if(curEx===exs.length-1)btnHtml+='<div class="btn-row"><button class="btn b-primary" onclick="finishWorkout()">FINISH WORKOUT</button></div>';
+  document.getElementById('sessionContent').innerHTML+=btnHtml;
 }
 
-function handleMain(){
-  resAC();
-  if(phase==='idle'||phase==='ready'){ phase='active'; updBtn(); startRC(); }
-  else if(phase==='active'){ stopMetro(); autoRest(); }
+function setFeel(v){
+  logs[curEx].feel=v;renderEx();
+  setTimeout(function(){var fc=document.getElementById('feelConf');if(fc){fc.classList.add('show');setTimeout(function(){fc.classList.remove('show');},1200);}},50);
+}
+function saveNotes(){var n=document.getElementById('notesInp');if(n)logs[curEx].notes=n.value;}
+
+function autoLog(idx){
+  var ex=exs[curEx];
+  if(!ex.isPlank){var inp=document.getElementById('si'+idx);if(inp&&!inp.value){inp.value=ex.rc[idx];logs[curEx].sets[idx].reps=String(ex.rc[idx]);}else if(inp)logs[curEx].sets[idx].reps=inp.value;}
+}
+
+function clearMTOs(){for(var i=0;i<mTOs.length;i++){try{clearTimeout(mTOs[i]);clearInterval(mTOs[i]);}catch(e){}}mTOs=[];mRun=false;}
+function hiStep(idx){var ss=document.querySelectorAll('.seq-step');for(var i=0;i<ss.length;i++)ss[i].classList.toggle('act',i===idx);}
+function setVW(txt,cls){var el=document.getElementById('vWord');if(el){el.textContent=txt;el.className='voice-word'+(cls?' '+cls:'');}}
+var ords=['one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen','twenty'];
+
+function runSeq(repNum,total,onDone){
+  var ex=exs[curEx];if(!ex.seq){if(onDone)onDone();return;}
+  var steps=ex.seq,tl=[],t=0;
+  for(var si=0;si<steps.length;si++){
+    var step=steps[si];
+    if(step.t==='v'){(function(s,idx){tl.push({time:t,fn:function(){hiStep(idx);setVW(s.l,'');speak(s.l);}});})(step,si);t+=1000;}
+    else if(step.t==='b'){for(var b=0;b<step.bc;b++){(function(lb,lsi,s){tl.push({time:t,fn:function(){if(lb===0)hiStep(lsi);setVW('*'.repeat(s.bc),'bp');beep(s.n||550,0.12);}});})(b,si,step);t+=1000;}}
+    else if(step.t==='r'){var word=ords[repNum-1]||String(repNum);(function(w,rn,idx){tl.push({time:t,fn:function(){hiStep(idx);setVW(String(rn),'rn');speak(w,1.05);}});})(word,repNum,si);t+=1000;}
+  }
+  if(repNum===total){
+    tl.push({time:t,fn:function(){setVW('Done!','');speak('Done');var ss=document.querySelectorAll('.seq-step');for(var i=0;i<ss.length;i++)ss[i].classList.remove('act');setTimeout(function(){if(phase==='active')autoRest();},800);}});t+=1200;
+  }
+  tl.push({time:t,fn:function(){if(onDone)onDone();}});
+  mTOs=[];for(var i=0;i<tl.length;i++)mTOs.push(setTimeout(tl[i].fn,tl[i].time));
 }
 
 function startRC(){
-  var ex=exs[curEx]; curRep=0; mRun=true;
-  speak(ex.name);
-  mTOs.push(setTimeout(function(){runNextRep(ex.rc[curSet]||10);},1200));
-}
-
-function runNextRep(total){
-  if(!mRun)return; curRep++;
-  if(curRep>total){ mRun=false; return; }
-  runSeq(curRep,total,function(){ if(mRun&&curRep<total)runNextRep(total); });
-}
-
-function runSeq(repNum,total,onDone){
-  var steps=exs[curEx].seq; var t=0;
-  for(var i=0;i<steps.length;i++){
-    var s=steps[i];
-    if(s.t==='v') mTOs.push(setTimeout((txt)=> { speak(txt); document.getElementById('vWord').textContent=txt; },t,s.l));
-    else if(s.t==='r') mTOs.push(setTimeout((n)=> { speak(n); document.getElementById('vWord').textContent=n; },t,repNum));
-    t+=1000;
+  var ex=exs[curEx];phase='active';updBtn();
+  if(ex.isPlank){
+    clearMTOs();mRun=true;
+    var hs=ex.rc[curSet]||60,sl=curSet===0?'Left':'Right';
+    plkStart=Date.now();speak(sl+' side plank. Hold for '+hs+' seconds.');
+    var el=0,ann=[];for(var s=10;s<hs;s+=10)ann.push(s);
+    var tid=(function(holdSecs){return setInterval(function(){
+      if(!mRun){clearInterval(tid);return;}
+      el++;var rem=holdSecs-el;setVW(rem,'rn');
+      if(rem<=3&&rem>0){bCD();speak(String(rem));}
+      else if(rem>0&&ann.indexOf(el)>=0)speak(rem+' seconds');
+      if(rem<=0){
+        clearInterval(tid);mRun=false;
+        var held=Math.round((Date.now()-plkStart)/1000);
+        logs[curEx].sets[curSet].time=String(held);
+        var inp=document.getElementById('pi'+curSet);if(inp)inp.value=held;
+        bRE();speak('Done. '+held+' seconds.'+(curSet===0?' Switch sides.':''));
+        setVW('Done!','');setTimeout(function(){if(phase==='active')autoRest();},800);
+      }
+    },1000);})(hs);mTOs.push(tid);return;
   }
-  mTOs.push(setTimeout(onDone,t));
+  clearMTOs();mRun=true;curRep=0;speak(ex.name);
+  var t=setTimeout(function(){runNextRep(exs[curEx].rc[curSet]||10);},1200);mTOs.push(t);
 }
 
-function stopMetro(){ mRun=false; for(var i=0;i<mTOs.length;i++)clearTimeout(mTOs[i]); mTOs=[]; syn.cancel(); }
+function runNextRep(total){if(!mRun)return;curRep++;if(curRep>total){mRun=false;setVW('Done!','');return;}runSeq(curRep,total,function(){if(mRun&&curRep<total)runNextRep(total);});}
+function stopMetro(){clearMTOs();syn.cancel();setVW('\u00a0','');}
+function autoRest(){autoLog(curSet);runRestTimer(exs[curEx].rest);}
 
-function autoRest(){ runRestTimer(exs[curEx].rest); }
-
-function runRestTimer(secs){
-  tLeft=secs; phase='resting'; updBtn();
-  timerInt=setInterval(function(){
-    tLeft--; document.getElementById('tCount').textContent=tLeft;
-    if(tLeft<=0){ clearInterval(timerInt); bRE(); restDone(); }
-  },1000);
-}
-
-function restDone(){ curSet++; if(curSet>=exs[curEx].sets){ curEx++; curSet=0; } if(curEx>=exs.length){ finishWorkout(); } else { phase='ready'; renderEx(); } }
-
-function finishWorkout(){
-  sessionActive=false; navTo('done');
-  document.getElementById('summaryRows').innerHTML='Workout Complete';
+function handleMain(){
+  resAC();
+  if(phase==='idle'||phase==='ready')startRC();
+  else if(phase==='active'){stopMetro();autoRest();}
 }
 
 function updBtn(){
-  var b=document.getElementById('mainBtn');
-  if(phase==='active') b.textContent='DONE';
-  else b.textContent='START';
+  var btn=document.getElementById('mainBtn');if(!btn)return;
+  if(phase==='idle'||phase==='ready'){btn.textContent='START SET';btn.className='btn b-start';btn.disabled=false;}
+  else if(phase==='active'){btn.textContent='SET DONE';btn.className='btn b-done';btn.disabled=false;}
+  else{btn.textContent='RESTING...';btn.className='btn b-rest';btn.disabled=true;}
 }
 
-function navTo(page){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.getElementById('page-'+page).classList.add('active');
+function adjRest(d){
+  if(phase!=='resting'&&phase!=='between')return;
+  tLeft=Math.max(5,tLeft+d);tTotal=Math.max(5,tTotal+d);curRestSecs=Math.max(5,curRestSecs+d);
+  var tc=document.getElementById('tCount');if(tc)tc.textContent=tLeft;
+  var rl=document.getElementById('restLbl');if(rl)rl.textContent=tLeft+' sec left';
+  setRing(tLeft/tTotal,true);
 }
 
-function setFeel(v){ logs[curEx].feel=v; }
-function switchLogTab(t){
-  document.querySelectorAll('.log-panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById('panel-'+t).classList.add('active');
+function reqSkip(){if(phase==='resting'||phase==='between')document.getElementById('skipOverlay').classList.add('show');}
+function confSkip(){document.getElementById('skipOverlay').classList.remove('show');clearInterval(timerInt);restDone();}
+function cancSkip(){document.getElementById('skipOverlay').classList.remove('show');}
+
+function runRestTimer(secs){
+  stopMetro();clearInterval(timerInt);
+  curRestSecs=secs;tLeft=secs;tTotal=secs;phase='resting';updBtn();
+  var pb=document.getElementById('phBadge');if(pb){pb.textContent='REST';pb.className='phase-badge pb-rest';}
+  var tl=document.getElementById('timerLbl');if(tl){tl.textContent='REST TIMER';tl.style.color='var(--blue)';}
+  var ra=document.getElementById('restAdj');if(ra)ra.classList.remove('hidden');
+  var rl=document.getElementById('restLbl');if(rl)rl.textContent=secs+' sec rest';
+  var tc=document.getElementById('tCount');if(tc)tc.textContent=tLeft;
+  var ts=document.getElementById('tSub');if(ts)ts.textContent='seconds';
+  setRing(1,true);bRS();
+  timerInt=setInterval(function(){
+    tLeft--;var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
+    setRing(tLeft/tTotal,true);
+    var rl2=document.getElementById('restLbl');if(rl2)rl2.textContent=tLeft+' sec left';
+    if(tLeft<=3&&tLeft>0)bCD();
+    if(tLeft<=0){clearInterval(timerInt);bRE();speak('Go');restDone();}
+  },1000);
 }
 
-// Initialization
+function restDone(){
+  var ra=document.getElementById('restAdj');if(ra)ra.classList.add('hidden');
+  curSet++;
+  if(curSet>=exs[curEx].sets){
+    if(curEx<exs.length-1){runBetween();}else{finishWorkout();}return;
+  }
+  phase='idle';updBtn();renderEx();
+}
+
+function runBetween(){
+  clearInterval(timerInt);
+  var nx=exs[curEx+1];tLeft=120;tTotal=120;curRestSecs=120;phase='between';updBtn();
+  var pb=document.getElementById('phBadge');if(pb){pb.textContent='BETWEEN';pb.className='phase-badge pb-between';}
+  var tl=document.getElementById('timerLbl');if(tl){tl.textContent='2 MIN REST';tl.style.color='var(--purple)';}
+  var ra=document.getElementById('restAdj');if(ra)ra.classList.remove('hidden');
+  var rl=document.getElementById('restLbl');if(rl)rl.textContent='120 sec rest';
+  var tc=document.getElementById('tCount');if(tc)tc.textContent=tLeft;
+  setRing(1,true);bRS();if(nx)speak('Rest. Next up: '+nx.name);
+  timerInt=setInterval(function(){
+    tLeft--;var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
+    setRing(tLeft/tTotal,true);
+    var rl2=document.getElementById('restLbl');if(rl2)rl2.textContent=tLeft+' sec left';
+    if(tLeft<=3&&tLeft>0)bCD();
+    if(tLeft<=0){clearInterval(timerInt);bRE();speak('Go');var ra2=document.getElementById('restAdj');if(ra2)ra2.classList.add('hidden');curEx++;curSet=0;phase='idle';renderEx();}
+  },1000);
+}
+
+function nextEx(){clearInterval(timerInt);stopMetro();curSet=0;curEx=Math.min(curEx+1,exs.length-1);phase='idle';renderEx();}
+function prevEx(){clearInterval(timerInt);stopMetro();curSet=0;curEx=Math.max(curEx-1,0);phase='idle';renderEx();}
+
+function setRing(frac,isRest){
+  var r=document.getElementById('rprog');if(!r)return;
+  r.style.strokeDashoffset=CIRC*(1-frac);
+  r.style.stroke=isRest?'var(--blue)':'var(--accent)';
+}
+
+function finishWorkout(){
+  stopMetro();clearInterval(timerInt);
+  var dur=wkStart?Math.round((Date.now()-wkStart)/60000):0;
+  exs.forEach(function(ex,ei){
+    if(!ex.isPlank){ex.rc.forEach(function(_,si){var inp=document.getElementById('si'+si);if(inp&&inp.value)logs[ei].sets[si].reps=inp.value;});}
+    else{[0,1].forEach(function(pi){var inp=document.getElementById('pi'+pi);if(inp&&inp.value)logs[ei].sets[pi].time=inp.value;});}
+  });
+  var week='Week '+getWeekNum();
+  var wtLbl=wType==='home'?'Home Strength':'Hotel Strength';
+  var sd={date:new Date().toISOString().slice(0,10),week:week,workoutType:wtLbl,bodyFeel:bodyFeel,duration:dur,exercises:[]};
+  exs.forEach(function(ex,ei){
+    var log=logs[ei];
+    var res=ex.isPlank?'L:'+(log.sets[0].time||'?')+'s/R:'+(log.sets[1].time||'?')+'s':log.sets.map(function(s,si){return s.reps||ex.rc[si];}).join('/');
+    var setsArr=ex.isPlank?[log.sets[0].time||'',log.sets[1].time||'']:log.sets.map(function(s,si){return s.reps||String(ex.rc[si]);});
+    sd.exercises.push({name:ex.name,targetReps:ex.reps,sets:setsArr,result:res,feel:log.feel,notes:log.notes,restSecs:ex.rest,formCues:ex.form,tweak:ex.tweak||'',isPlank:ex.isPlank?'yes':'no'});
+  });
+  recSession(sd);
+
+  var rows='';
+  exs.forEach(function(ex,ei){
+    var log=logs[ei];
+    var rs=ex.isPlank?'L:'+(log.sets[0].time||'?')+'s / R:'+(log.sets[1].time||'?')+'s':log.sets.map(function(s,si){return s.reps||ex.rc[si];}).join(' / ');
+    var fc=log.feel==='Medium'?'sf-m':log.feel==='Medium-hard'?'sf-mh':'sf-h';
+    rows+='<div class="sum-row"><div><div class="sum-name">'+ex.name+'</div><div class="sum-result">'+rs+'</div>'+(log.notes?'<div class="sum-notes">'+log.notes+'</div>':'')+'</div><span class="sum-feel '+fc+'">'+(log.feel||' - ')+'</span></div>';
+  });
+  if(dur>0)rows+='<div class="sum-row"><div class="sum-name">Duration</div><div class="sum-result">'+dur+' min</div></div>';
+  if(bodyFeel)rows+='<div class="sum-row"><div class="sum-name">Body feel</div><div class="sum-result">'+bfScore+'/5 '+bodyFeel+'</div></div>';
+  document.getElementById('summaryRows').innerHTML=rows;
+
+  var rec=calcRec(logs);
+  var rb=document.getElementById('recBadge');
+  if(rec){rb.textContent=rec.label;rb.className='rec-badge '+rec.cls;rb.style.display='block';}
+
+  sessionActive=false;
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
+  var dp=document.getElementById('page-done');dp.classList.remove('hidden');dp.classList.add('active');
+  bRE();setTimeout(bRE,500);speak('Workout complete. Great work.');
+  syncData(sd,'syncBadge');
+  loadHomeData();
+}
+
+function calcRec(logs){
+  var fm={'Medium':0,'Medium-hard':1,'Hard':2},tot=0,cnt=0;
+  logs.forEach(function(l){if(l.feel&&fm[l.feel]!==undefined){tot+=fm[l.feel];cnt++;}});
+  if(!cnt)return null;
+  var avg=tot/cnt;
+  if(avg<0.5)return{label:'Fully recovered',cls:'rec-good'};
+  if(avg<1.2)return{label:'Good session',cls:'rec-ok'};
+  if(avg<1.7)return{label:'Push week - monitor recovery',cls:'rec-push'};
+  return{label:'Overreach risk - rest tomorrow',cls:'rec-over'};
+}
+
+function buildCopyTxt(){
+  var today=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+  var week=getWeekNum();
+  var txt=(wType==='home'?'HOME':'HOTEL')+' STRENGTH - '+today.toUpperCase()+' (WEEK '+week+')\n';
+  if(bodyFeel)txt+='Body feel: '+bfScore+'/5 '+bodyFeel+'\n';
+  txt+='\n';
+  exs.forEach(function(ex,ei){
+    var log=logs[ei];txt+=ex.name+'\n';
+    if(ex.isPlank){txt+=' Left: '+(log.sets[0].time||'?')+' sec / Right: '+(log.sets[1].time||'?')+' sec\n';}
+    else{log.sets.forEach(function(s,si){txt+=' Set '+(si+1)+': '+(s.reps||ex.rc[si])+' reps\n';});}
+    txt+=' Feel: '+(log.feel||'-')+'\n';
+    if(log.notes)txt+=' Notes: '+log.notes+'\n';
+    txt+='\n';
+  });
+  return txt.trim();
+}
+function copyResults(){
+  var txt=buildCopyTxt();
+  navigator.clipboard.writeText(txt).then(function(){document.getElementById('copyBtn').textContent='COPIED - PASTE INTO CLAUDE';document.getElementById('copyBtn').classList.add('copied');}).catch(function(){var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);document.getElementById('copyBtn').textContent='COPIED - PASTE INTO CLAUDE';document.getElementById('copyBtn').classList.add('copied');});
+}
+
+function switchLogTab(tab){
+  ['hiit','chol','body'].forEach(function(t){
+    document.getElementById('tab-'+t).classList.remove('active');
+    document.getElementById('panel-'+t).classList.remove('active');
+  });
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.getElementById('panel-'+tab).classList.add('active');
+}
+
+var selEff=0;
+function buildEffBtns(){
+  var c=document.getElementById('effBtns');if(!c)return;c.innerHTML='';
+  for(var i=1;i<=10;i++){
+    var btn=document.createElement('button');btn.className='eff-btn';btn.textContent=i;
+    (function(v,b){b.onclick=function(){selEff=v;var bs=document.getElementById('effBtns').querySelectorAll('.eff-btn');for(var x=0;x<bs.length;x++)bs[x].classList.remove('on');b.classList.add('on');};})(i,btn);
+    c.appendChild(btn);
+  }
+}
+function saveHIIT(){
+  resAC();
+  var dur=document.getElementById('hiitDur').value;
+  var notes=document.getElementById('hiitNotes').value;
+  var date=document.getElementById('hiitDate').value||new Date().toISOString().slice(0,10);
+  if(!dur||!selEff){var el=document.getElementById('hiitMsg');el.textContent='Please enter duration and effort';el.style.background='#fce4ec';el.style.color='var(--red)';return;}
+  var d=new Date(date);d.setHours(0,0,0,0);d.setDate(d.getDate()+3-(d.getDay()+6)%7);
+  var w1=new Date(d.getFullYear(),0,4);var wn=1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7);
+  var payload={type:'hiit',date:date,week:'Week '+wn,duration:dur,effort:selEff,notes:notes};
+  var localSd={date:date,week:'Week '+wn,workoutType:'HIIT',exercises:[{name:'HIIT',feel:'',notes:notes}]};
+  recSession(localSd);
+  syncData(payload,'hiitMsg');
+  var txt='HIIT - '+new Date(date).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'\nDuration: '+dur+' min\nEffort: '+selEff+'/10\n'+(notes?'Notes: '+notes:'');
+  navigator.clipboard.writeText(txt).catch(function(){});
+  setTimeout(function(){document.getElementById('hiitDur').value='';document.getElementById('hiitNotes').value='';document.getElementById('hiitDate').value=new Date().toISOString().slice(0,10);selEff=0;var bs=document.getElementById('effBtns').querySelectorAll('.eff-btn');for(var b=0;b<bs.length;b++)bs[b].classList.remove('on');loadHomeData();},3500);
+}
+
+function updateRatio(){
+  var t=parseFloat(document.getElementById('cTotal').value)||0,h=parseFloat(document.getElementById('cHDL').value)||0;
+  var el=document.getElementById('ratioDisp');
+  if(t>0&&h>0){var r=(t/h).toFixed(1);var col=r<5?'var(--green)':r<6?'var(--yellow)':'var(--red)';el.innerHTML='TC/HDL Ratio: <span style="color:'+col+';font-size:1.8rem;">'+r+'</span>';}
+  else el.innerHTML='<span style="color:var(--muted);">Enter HDL + Total</span>';
+}
+function saveChol(){
+  resAC();
+  var hdl=document.getElementById('cHDL').value,ldl=document.getElementById('cLDL').value,tot=document.getElementById('cTotal').value;
+  var trig=document.getElementById('cTrig').value,notes=document.getElementById('cNotes').value;
+  var date=document.getElementById('cholDate').value||new Date().toISOString().slice(0,10);
+  if(!hdl||!ldl||!tot){var el=document.getElementById('cholMsg');el.textContent='Please enter HDL, LDL and Total';el.style.background='#fce4ec';el.style.color='var(--red)';return;}
+  var ratio=hdl>0?(parseFloat(tot)/parseFloat(hdl)).toFixed(1):'';
+  var payload={type:'cholesterol',date:date,hdl:hdl,ldl:ldl,total:tot,triglycerides:trig,notes:notes};
+  syncData(payload,'cholMsg');
+  var txt='BLOOD TEST - '+new Date(date).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'\nHDL: '+hdl+'\nLDL: '+ldl+'\nTotal: '+tot+(trig?'\nTrig: '+trig:'')+'\nRatio: '+ratio+(notes?'\nNotes: '+notes:'');
+  navigator.clipboard.writeText(txt).catch(function(){});
+  setTimeout(function(){['cHDL','cLDL','cTotal','cTrig','cNotes'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('ratioDisp').innerHTML='<span style="color:var(--muted);">Enter HDL + Total</span>';},3500);
+}
+
+function saveBody(){
+  resAC();
+  var wt=document.getElementById('bWt').value,waist=document.getElementById('bWaist').value;
+  var arm=document.getElementById('bArm').value,notes=document.getElementById('bNotes').value;
+  var date=document.getElementById('bodyDate').value||new Date().toISOString().slice(0,10);
+  var payload={type:'body',date:date,weight:wt,waist:waist,arm:arm,notes:notes};
+  syncData(payload,'bodyMsg');
+  setTimeout(function(){['bWt','bWaist','bArm','bNotes'].forEach(function(id){document.getElementById(id).value='';});},3500);
+}
+
+function loadProgressData(){
+  var sessions=getAllSessions();
+  buildPullUpChart(sessions);
+  buildHeatmap(sessions);
+  buildPRs(sessions);
+  buildCholDisplay();
+}
+
+function buildPullUpChart(sessions){
+  var puData=[];
+  var cutoff=new Date();cutoff.setDate(cutoff.getDate()-56);
+  sessions.forEach(function(s){
+    if(new Date(s.date)<cutoff)return;
+    var exs2=s.exercises||[];
+    exs2.forEach(function(ex){
+      if(ex.name==='PULL-UPS'){
+        var sets=ex.sets||[];var tot=0;sets.forEach(function(v){tot+=parseInt(v)||0;});
+        if(tot>0)puData.push({date:s.date,total:tot,feel:ex.feel});
+      }
+    });
+  });
+  var canvas=document.getElementById('pullupCanvas');
+  var empty=document.getElementById('pullupEmpty');
+  if(puData.length<2){canvas.style.display='none';empty.style.display='block';return;}
+  canvas.style.display='block';empty.style.display='none';
+  drawLineChart(canvas,puData.map(function(d){return d.date;}),puData.map(function(d){return d.total;}),'Pull-Ups','#2c3e50',16,'4/4/4/4 goal');
+}
+
+function drawLineChart(canvas,labels,values,label,color,goalVal,goalLabel){
+  var ctx=canvas.getContext('2d');
+  var W=canvas.offsetWidth||300;var H=150;
+  canvas.width=W*window.devicePixelRatio;canvas.height=H*window.devicePixelRatio;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
+  ctx.clearRect(0,0,W,H);
+  if(!values.length)return;
+  var pad={top:16,right:16,bottom:28,left:28};
+  var cW=W-pad.left-pad.right,cH=H-pad.top-pad.bottom;
+  var min=Math.min.apply(null,values)-1,max=Math.max(Math.max.apply(null,values)+1,goalVal?goalVal+1:0);
+  var xStep=values.length>1?cW/(values.length-1):cW;
+  if(goalVal){
+    var gy=pad.top+cH-(goalVal-min)/(max-min)*cH;
+    ctx.strokeStyle='#e74c3c';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(pad.left,gy);ctx.lineTo(pad.left+cW,gy);ctx.stroke();
+    ctx.setLineDash([]);ctx.fillStyle='#e74c3c';ctx.font='10px DM Sans';ctx.fillText(goalLabel||'Goal',pad.left+cW-60,gy-4);
+  }
+  ctx.strokeStyle='#e8ecf0';ctx.lineWidth=1;
+  for(var g=0;g<=4;g++){var gy2=pad.top+cH*g/4;ctx.beginPath();ctx.moveTo(pad.left,gy2);ctx.lineTo(pad.left+cW,gy2);ctx.stroke();}
+  ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.lineJoin='round';
+  ctx.beginPath();
+  values.forEach(function(v,i){var x=pad.left+i*xStep,y=pad.top+cH-(v-min)/(max-min)*cH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+  ctx.stroke();
+  values.forEach(function(v,i){
+    var x=pad.left+i*xStep,y=pad.top+cH-(v-min)/(max-min)*cH;
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle=color;ctx.font='bold 10px DM Sans';ctx.textAlign='center';ctx.fillText(v,x,y-8);
+  });
+  ctx.fillStyle='#95a5a6';ctx.font='9px DM Sans';ctx.textAlign='center';
+  var step=Math.ceil(labels.length/4);
+  labels.forEach(function(l,i){if(i%step===0){var x=pad.left+i*xStep;var d=new Date(l);ctx.fillText((d.getMonth()+1)+'/'+d.getDate(),x,H-6);}});
+}
+
+function buildHeatmap(sessions){
+  var cutoff=new Date();cutoff.setDate(cutoff.getDate()-56);
+  var exMap={};var dates=[];
+  sessions.forEach(function(s){
+    if(new Date(s.date)<cutoff)return;
+    if(dates.indexOf(s.date)<0)dates.push(s.date);
+    var exs2=s.exercises||[];
+    exs2.forEach(function(ex){
+      if(!exMap[ex.name])exMap[ex.name]=[];
+      exMap[ex.name].push({date:s.date,feel:ex.feel});
+    });
+  });
+  dates.sort();
+  var exNames=Object.keys(exMap);
+  if(!exNames.length){document.getElementById('heatmapContent').innerHTML='<div style="color:var(--muted);font-size:0.85rem;padding:10px;">Complete a few sessions to see your feel trend</div>';return;}
+  var html='<table class="heatmap-table"><thead><tr><th></th>';
+  dates.forEach(function(d){var dt=new Date(d);html+='<th class="hm-date-label">'+(dt.getMonth()+1)+'/'+(dt.getDate())+'</th>';});
+  html+='</tr></thead><tbody>';
+  exNames.forEach(function(name){
+    html+='<tr><td class="hm-ex-label">'+name.replace('SINGLE-LEG GLUTE BRIDGES','BRIDGES').replace('CLOSE-GRIP PUSH-UPS','PUSH-UPS').replace('SUPINATED PULL-UPS','SUP PU')+'</td>';
+    dates.forEach(function(d){
+      var entry=null;
+      exMap[name].forEach(function(e){if(e.date===d)entry=e;});
+      if(entry&&entry.feel){
+        var cls=entry.feel==='Medium'?'hm-m':entry.feel==='Medium-hard'?'hm-mh':'hm-h';
+        var abbr=entry.feel==='Medium'?'M':entry.feel==='Medium-hard'?'MH':'H';
+        html+='<td class="hm-cell '+cls+'">'+abbr+'</td>';
+      } else {
+        html+='<td class="hm-cell hm-empty"></td>';
+      }
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  html+='<div style="display:flex;gap:10px;margin-top:10px;font-size:0.72rem;">';
+  html+='<span class="hm-cell hm-m" style="width:auto;height:auto;padding:2px 8px;border-radius:4px;">M = Medium</span>';
+  html+='<span class="hm-cell hm-mh" style="width:auto;height:auto;padding:2px 8px;border-radius:4px;">MH = Medium-hard</span>';
+  html+='<span class="hm-cell hm-h" style="width:auto;height:auto;padding:2px 8px;border-radius:4px;">H = Hard</span>';
+  html+='</div>';
+  document.getElementById('heatmapContent').innerHTML=html;
+}
+
+function buildPRs(sessions){
+  var prs={};
+  sessions.forEach(function(s){
+    var exs2=s.exercises||[];
+    exs2.forEach(function(ex){
+      if(ex.isPlank==='yes'){
+        var l=parseInt(ex.sets[0])||0,r=parseInt(ex.sets[1])||0;
+        var key=ex.name+' hold';
+        if(!prs[key]||Math.max(l,r)>prs[key].val){prs[key]={val:Math.max(l,r),date:s.date,unit:'sec'};}
+      } else {
+        var sets=ex.sets||[];
+        sets.forEach(function(sv,si){
+          var v=parseInt(sv)||0;if(!v)return;
+          var key2=ex.name+' set '+(si+1);
+          if(!prs[key2]||v>prs[key2].val){prs[key2]={val:v,date:s.date,unit:'reps'};}
+        });
+      }
+    });
+  });
+  var keys=Object.keys(prs);
+  if(!keys.length){document.getElementById('prGrid').innerHTML='<div style="color:var(--muted);font-size:0.85rem;grid-column:1/-1;padding:10px;">No records yet</div>';return;}
+  var html='';
+  keys.forEach(function(k){
+    var pr=prs[k];var d=new Date(pr.date);
+    html+='<div class="pr-box"><div class="pr-name">'+k+'</div><div class="pr-val">'+pr.val+'<span style="font-size:0.8rem;color:var(--muted)"> '+pr.unit+'</span></div><div class="pr-date">'+(d.getMonth()+1)+'/'+(d.getDate())+'/'+d.getFullYear()+'</div></div>';
+  });
+  document.getElementById('prGrid').innerHTML=html;
+}
+
+function buildCholDisplay(){
+  var baseline={hdl:24,ldl:132,total:175,trig:97,ratio:7.3,date:'Nov 5 (baseline)'};
+  document.getElementById('cholRows').innerHTML=
+  '<div class="chol-row"><div class="chol-label">HDL (target 40+)</div><div class="chol-val" style="color:var(--red);">'+baseline.hdl+'</div><div class="chol-trend">Baseline</div></div>'+
+  '<div class="chol-row"><div class="chol-label">LDL</div><div class="chol-val" style="color:var(--yellow);">'+baseline.ldl+'</div><div class="chol-trend">Baseline</div></div>'+
+  '<div class="chol-row"><div class="chol-label">TC/HDL Ratio</div><div class="chol-val" style="color:var(--red);">'+baseline.ratio+'</div><div class="chol-trend">Target: <5</div></div>';
+  document.getElementById('cholEmpty').style.display='block';
+  document.getElementById('cholCanvas').style.display='none';
+}
+
+function initDates(){
+  var today=new Date().toISOString().slice(0,10);
+  document.getElementById('hiitDate').value=today;
+  document.getElementById('cholDate').value=today;
+  document.getElementById('bodyDate').value=today;
+}
+
+buildEffBtns();
+initDates();
 navTo('home');
-loadHomeData();
+setTimeout(loadHomeData,200);
 </script>
 </body>
 </html>
