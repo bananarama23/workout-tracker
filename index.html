@@ -397,6 +397,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     <div class="card" style="margin-top:4px;">
       <div class="card-title">Current Workout</div>
       <div id="currentWorkoutInfo" style="color:var(--muted);font-size:0.85rem;">Open the app after tapping the setWorkout URL to load today's session.</div>
+      <div style="margin-top:8px;font-size:0.65rem;color:var(--muted);letter-spacing:1px;">v1.4</div>
     </div>
     <div class="card">
       <div class="card-title">Controls</div>
@@ -1121,35 +1122,31 @@ function runSeq(repNum,total,onDone){
   var ex=exs[curEx];if(!ex.seq){if(onDone)onDone();return;}
   var steps=ex.seq,tl=[],t=0;
   var repWord=ords[repNum-1]||String(repNum);
-  var repInjected=false;
-  for(var si=0;si<steps.length;si++){
-    var step=steps[si];
+  var i=0;
+  while(i<steps.length){
+    var step=steps[i];
     if(step.t==='r'){
-      // Mark that next voice cue should include rep number - no time added
-      repInjected=false; // will be handled by next voice step
-      // Find next voice step and combine
-      for(var ni=si+1;ni<steps.length;ni++){
-        if(steps[ni].t==='v'){
-          repInjected=true;
-          (function(w,rn,ns,nidx){tl.push({time:t,fn:function(){hiStep(nidx);setVW(String(rn),'rn');speak(w+' '+ns.l,1.05);}});})(repWord,repNum,steps[ni],ni);
-          t+=900;
-          si=ni; // skip to after this voice step
-          break;
-        }
+      // Merge rep number with next voice cue - zero extra time
+      if(i+1<steps.length&&steps[i+1].t==='v'){
+        (function(w,rn,ns,nidx){tl.push({time:t,fn:function(){hiStep(nidx);setVW(rn+' '+ns.l,'rn');speak(w+' '+ns.l,1.0);}});})(repWord,String(repNum),steps[i+1],i+1);
+        t+=900;i+=2;
+      } else {i++;}
+    } else if(step.t==='v'){
+      (function(s,idx2){tl.push({time:t,fn:function(){hiStep(idx2);setVW(s.l,'');speak(s.l);}});})(step,i);
+      t+=900;i++;
+    } else if(step.t==='b'){
+      for(var b=0;b<step.bc;b++){
+        (function(lb,lsi,s){tl.push({time:t,fn:function(){if(lb===0)hiStep(lsi);setVW('*'.repeat(s.bc),'bp');beep(s.n||550,0.12);}});})(b,i,step);
+        t+=900;
       }
-      if(!repInjected){
-        // No next voice step, just speak the number
-        (function(w,rn){tl.push({time:t,fn:function(){setVW(String(rn),'rn');speak(w,1.1);}});})(repWord,repNum);
-        t+=600;
-      }
-    } else if(step.t==='v'){(function(s,idx){tl.push({time:t,fn:function(){hiStep(idx);setVW(s.l,'');speak(s.l);}});})(step,si);t+=800;}
-    else if(step.t==='b'){for(var b=0;b<step.bc;b++){(function(lb,lsi,s){tl.push({time:t,fn:function(){if(lb===0)hiStep(lsi);setVW('*'.repeat(s.bc),'bp');beep(s.n||550,0.12);}});})(b,si,step);t+=800;}}
+      i++;
+    } else {i++;}
   }
   if(repNum===total){
-    tl.push({time:t,fn:function(){setVW('Done!','');speak('Done');var ss=document.querySelectorAll('.seq-step');for(var i=0;i<ss.length;i++)ss[i].classList.remove('act');setTimeout(function(){if(phase==='active')autoRest();},800);}});t+=1200;
+    tl.push({time:t,fn:function(){setVW('Done!','');speak('Done');var ss=document.querySelectorAll('.seq-step');for(var i2=0;i2<ss.length;i2++)ss[i2].classList.remove('act');setTimeout(function(){if(phase==='active')autoRest();},800);}});t+=1200;
   }
   tl.push({time:t,fn:function(){if(onDone)onDone();}});
-  mTOs=[];for(var i=0;i<tl.length;i++)mTOs.push(setTimeout(tl[i].fn,tl[i].time));
+  mTOs=[];for(var j=0;j<tl.length;j++)mTOs.push(setTimeout(tl[j].fn,tl[j].time));
 }
 
 function startRC(){
@@ -1232,11 +1229,12 @@ function restDone(){
   if(curSet>=exs[curEx].sets){
     if(curEx<exs.length-1){runBetween();}else{finishWorkout();}return;
   }
-  phase='idle';updBtn();renderEx();
+  phase='idle';updBtn();saveCurrentInputs();renderEx();
 }
 
 function runBetween(){
   clearInterval(timerInt);
+  saveCurrentInputs();
   var nx=exs[curEx+1];
   tLeft=120;tTotal=120;curRestSecs=120;phase='between';
 
@@ -1277,11 +1275,11 @@ function saveCurrentInputs(){
   var ex=exs[curEx];
   if(!ex)return;
   if(ex.isPlank){
-    for(var pi=0;pi<2;pi++){var inp=document.getElementById('pi'+pi);if(inp&&inp.value)logs[curEx].sets[pi].time=inp.value;}
+    for(var pi=0;pi<2;pi++){var inp=document.getElementById('pi'+pi);if(inp)logs[curEx].sets[pi].time=inp.value||logs[curEx].sets[pi].time;}
   } else {
-    for(var si=0;si<ex.rc.length;si++){var inp2=document.getElementById('si'+si);if(inp2)logs[curEx].sets[si].reps=inp2.value;}
+    for(var si=0;si<ex.rc.length;si++){var inp2=document.getElementById('si'+si);if(inp2)logs[curEx].sets[si].reps=inp2.value||logs[curEx].sets[si].reps;}
   }
-  var n=document.getElementById('notesInp');if(n)logs[curEx].notes=n.value;
+  var n=document.getElementById('notesInp');if(n)logs[curEx].notes=n.value||logs[curEx].notes;
 }
 function nextEx(){saveCurrentInputs();clearInterval(timerInt);stopMetro();curSet=0;curEx=Math.min(curEx+1,exs.length-1);phase='idle';renderEx();}
 function prevEx(){saveCurrentInputs();clearInterval(timerInt);stopMetro();curSet=0;curEx=Math.max(curEx-1,0);phase='idle';renderEx();}
