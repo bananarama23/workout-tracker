@@ -26,7 +26,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 /* BOTTOM NAV */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + var(--safe-bottom));background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:flex-start;padding-top:8px;padding-bottom:var(--safe-bottom);z-index:999;box-shadow:0 -2px 20px rgba(0,0,0,0.08);}
 .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;background:none;border:none;cursor:pointer;transition:all 0.2s;}
-.nav-btn .nav-icon{font-size:22px;transition:transform 0.2s;}
+.nav-btn .nav-icon{font-size:22px;transition:transform 0.2s;color:var(--muted);}
 .nav-btn .nav-label{font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:var(--muted);transition:color 0.2s;}
 .nav-btn.active .nav-label{color:#2c3e50;font-weight:700;}
 .nav-btn.active .nav-icon{transform:scale(1.15);color:#2c3e50;}
@@ -123,7 +123,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .ss-r{background:#e3f2fd;color:var(--blue);}
 .seq-step.act{transform:scale(1.1);box-shadow:0 0 0 2px currentColor;}
 
-/* VOICE */
+/* VOICE DISPLAY */
 .voice-display{text-align:center;padding:10px 0;min-height:44px;display:flex;align-items:center;justify-content:center;}
 .voice-word{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:var(--accent);}
 .voice-word.bp{color:var(--red);}
@@ -296,7 +296,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 </head>
 <body>
 
-<!-- HOME PAGE -->
 <div class="page active" id="page-home">
   <div class="page-header">
     <div class="greeting" id="greeting">Good morning</div>
@@ -304,7 +303,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     <p id="todayDate"></p>
   </div>
   <div class="page-content">
-    <!-- Week progress -->
     <div class="week-grid" id="weekGrid">
       <div class="week-box">
         <div class="wb-num" id="wkStrength">-</div>
@@ -322,15 +320,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
         <div class="wb-sub">weeks</div>
       </div>
     </div>
-
-    <!-- Milestone -->
     <div class="milestone" id="milestoneCard">
       <div class="milestone-title">Next Milestone</div>
       <div class="milestone-text" id="milestoneText">Complete a home workout</div>
       <div class="milestone-sub" id="milestoneSub"></div>
     </div>
-
-    <!-- Consistency ring -->
     <div class="card">
       <div class="card-title">8-Week HIIT Consistency</div>
       <div class="ring-container">
@@ -340,20 +334,16 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
         </svg>
         <div class="ring-info">
           <div class="ring-pct" id="consistencyPct">-%</div>
-          <div class="ring-label">HIIT sessions hit target<br>over last 8 weeks</div>
+          <div class="ring-label">HIIT sessions hit target over last 8 weeks</div>
         </div>
       </div>
     </div>
-
-    <!-- Last workout -->
     <div class="card">
       <div class="card-title">Last Session</div>
       <div id="lastWorkoutContent">
         <div style="color:var(--muted);font-size:0.9rem;">No sessions logged yet</div>
       </div>
     </div>
-
-    <!-- Quick log HIIT -->
     <div class="quick-actions">
       <div class="qa-btn" onclick="navTo('log');switchLogTab('hiit')">
         <div class="qa-icon" style="font-size:22px;font-weight:900;color:var(--blue);font-family:'Bebas Neue',sans-serif;letter-spacing:1px;">HIIT</div>
@@ -371,7 +361,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   </div>
 </div>
 
-<!-- WORKOUT PAGE -->
 <div class="page" id="page-workout">
   <div class="page-header">
     <h1>WORKOUT</h1>
@@ -409,22 +398,20 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   </div>
 </div>
 
-<!-- BODY FEEL PRE-SCREEN (shown before session) -->
 <div class="page hidden" id="page-pre">
   <div class="pre-screen">
     <div class="pre-title">HOW DO YOU FEEL?</div>
     <div class="pre-sub">Rate your body before starting</div>
     <div class="bf-grid">
-      <button class="bf-btn bf-5" onclick="setBF(5,'Great')"><span>5  -  Great</span><span class="bf-score">&#128170;</span></button>
-      <button class="bf-btn bf-4" onclick="setBF(4,'Good')"><span>4  -  Good</span><span class="bf-score">:-)</span></button>
-      <button class="bf-btn bf-3" onclick="setBF(3,'OK')"><span>3  -  OK</span><span class="bf-score">:-|</span></button>
-      <button class="bf-btn bf-2" onclick="setBF(2,'Tired')"><span>2  -  Tired</span><span class="bf-score">zz</span></button>
-      <button class="bf-btn bf-1" onclick="setBF(1,'Poor')"><span>1  -  Poor</span><span class="bf-score">:(</span></button>
+      <button class="bf-btn bf-5" onclick="setBF(5,'Great')"><span>5 - Great</span><span class="bf-score">&#128170;</span></button>
+      <button class="bf-btn bf-4" onclick="setBF(4,'Good')"><span>4 - Good</span><span class="bf-score">:-)</span></button>
+      <button class="bf-btn bf-3" onclick="setBF(3,'OK')"><span>3 - OK</span><span class="bf-score">:-|</span></button>
+      <button class="bf-btn bf-2" onclick="setBF(2,'Tired')"><span>2 - Tired</span><span class="bf-score">zz</span></button>
+      <button class="bf-btn bf-1" onclick="setBF(1,'Poor')"><span>1 - Poor</span><span class="bf-score">:(</span></button>
     </div>
   </div>
 </div>
 
-<!-- SESSION PAGE -->
 <div class="page hidden" id="page-session">
   <div class="session-header">
     <button class="session-back" onclick="endSession()">&#8592;</button>
@@ -434,12 +421,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     </div>
   </div>
   <div class="prog-bar-wrap"><div class="prog-bar-fill" id="progFill" style="width:0%"></div></div>
-  <div class="page-content" id="sessionContent" style="padding-top:8px;">
-    <!-- Exercise card rendered here -->
-  </div>
+  <div class="page-content" id="sessionContent" style="padding-top:8px;"></div>
 </div>
 
-<!-- DONE PAGE -->
 <div class="page hidden" id="page-done">
   <div class="page-content">
     <div class="done-page">
@@ -454,13 +438,12 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       <div class="card">
         <div id="summaryRows"></div>
       </div>
-      <button class="copy-btn" id="copyBtn" onclick="copyResults()">&#128203; COPY  -  PASTE INTO CLAUDE</button>
+      <button class="copy-btn" id="copyBtn" onclick="copyResults()">&#128203; COPY - PASTE INTO CLAUDE</button>
       <button onclick="backToWorkout()" style="width:100%;padding:14px;background:#f8f9fa;border:2px solid var(--border);border-radius:14px;font-family:'DM Sans',sans-serif;font-size:0.9rem;color:var(--muted);cursor:pointer;">Back to Home</button>
     </div>
   </div>
 </div>
 
-<!-- LOG PAGE -->
 <div class="page" id="page-log">
   <div class="page-header">
     <h1>LOG</h1>
@@ -473,7 +456,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       <button class="log-tab" id="tab-body" onclick="switchLogTab('body')">Body</button>
     </div>
 
-    <!-- HIIT PANEL -->
     <div class="log-panel active" id="panel-hiit">
       <div class="log-field">
         <label>Date</label>
@@ -495,7 +477,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       <button class="log-save-btn lsb-hiit" onclick="saveHIIT()">SAVE HIIT SESSION</button>
     </div>
 
-    <!-- BLOOD TEST PANEL -->
     <div class="log-panel" id="panel-chol">
       <div class="log-field">
         <label>Date</label>
@@ -528,7 +509,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       <button class="log-save-btn lsb-chol" onclick="saveChol()">SAVE BLOOD TEST</button>
     </div>
 
-    <!-- BODY METRICS PANEL -->
     <div class="log-panel" id="panel-body">
       <div class="log-field">
         <label>Date</label>
@@ -558,14 +538,12 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   </div>
 </div>
 
-<!-- PROGRESS PAGE -->
 <div class="page" id="page-progress">
   <div class="page-header" style="background:linear-gradient(135deg,#2c3e50,#3d5166);">
     <h1>PROGRESS</h1>
     <p>Last 8 weeks</p>
   </div>
   <div class="page-content">
-    <!-- Pull-up chart -->
     <div class="progress-section">
       <div class="ps-title">Pull-Up Total Per Session</div>
       <div class="pull-up-chart">
@@ -574,7 +552,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       </div>
     </div>
 
-    <!-- Cholesterol -->
     <div class="progress-section" id="cholSection">
       <div class="ps-title">Cholesterol</div>
       <div class="pull-up-chart">
@@ -584,7 +561,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       </div>
     </div>
 
-    <!-- Exercise feel heatmap -->
     <div class="progress-section">
       <div class="ps-title">Exercise Feel Heatmap</div>
       <div class="heatmap-wrap">
@@ -592,7 +568,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       </div>
     </div>
 
-    <!-- Personal records -->
     <div class="progress-section" style="margin-bottom:16px;">
       <div class="ps-title">Personal Records</div>
       <div class="pr-grid" id="prGrid">
@@ -604,7 +579,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   </div>
 </div>
 
-<!-- BOTTOM NAV -->
 <nav class="bottom-nav">
   <button class="nav-btn active" id="nav-home" onclick="navTo('home')">
     <span class="nav-icon" style="font-size:20px;font-weight:bold;font-family:serif;">H</span>
@@ -624,7 +598,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   </button>
 </nav>
 
-<!-- SKIP CONFIRM -->
 <div class="skip-overlay" id="skipOverlay">
   <div class="skip-sheet">
     <p>Skip rest timer?</p>
@@ -735,10 +708,9 @@ function syncData(payload,msgId){
     if(s)s.parentNode.removeChild(s);
     if(el){el.textContent='Saved to Google Sheets';el.style.background='#e8f5e9';el.style.color='var(--green)';}
   };
-  var url2=CLOUD_URL+'?payload='+enc+'&callback='+cbName;
   var script=document.createElement('script');
   script.id='wt_script_'+cbName;
-  script.src=url2;
+  script.src=url;
   script.onerror=function(){if(el){el.textContent='Saved locally';el.style.background='#fff3e0';el.style.color='var(--yellow)';}};
   document.head.appendChild(script);
   setTimeout(function(){if(el&&el.textContent==='Syncing...'){el.textContent='Saved locally';el.style.background='#fff3e0';el.style.color='var(--yellow)';}},6000);
@@ -766,7 +738,6 @@ function loadHomeData(){
   document.getElementById('greeting').textContent=greet;
   document.getElementById('todayDate').textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
 
-  // Week stats from local history
   var sessions=getAllSessions();
   var weekNum='Week '+getWeekNum();
   var wkStr=0,wkHIIT=0;
@@ -777,20 +748,16 @@ function loadHomeData(){
     }
   }
 
-  // Color code week boxes
   var strEl=document.getElementById('wkStrength');
   strEl.textContent=wkStr;
   strEl.className='wb-num '+(wkStr>=3?'wb-green':wkStr>=2?'wb-amber':'wb-red');
   var hiitEl=document.getElementById('wkHIIT');
   hiitEl.textContent=wkHIIT;
   hiitEl.className='wb-num '+(wkHIIT>=2?'wb-green':wkHIIT>=1?'wb-amber':'wb-red');
-  document.getElementById('wkStreak').textContent=streak>0?streak:0;
-
-  // Streak
+  
   var streak=calcStreak(sessions);
   document.getElementById('wkStreak').textContent=streak;
 
-  // Last workout
   if(sessions.length>0){
     var last=sessions[sessions.length-1];
     var d=new Date(last.date);
@@ -801,7 +768,6 @@ function loadHomeData(){
       '<div class="last-workout"><div><div class="lw-name">'+last.workoutType+'</div><div class="lw-date">'+dStr+'</div></div>'+(rec?'<span class="lw-feel '+feelCls+'">'+rec+'</span>':'')+'</div>';
   }
 
-  // HIIT consistency (8 weeks)
   var hiitWks=0,totalWks=0;
   var weekCounts={};
   for(var j=0;j<sessions.length;j++){
@@ -821,9 +787,7 @@ function loadHomeData(){
   var ringColor=pct>=80?'#27ae60':pct>=60?'#f39c12':'#e74c3c';
   document.getElementById('consistencyRing').style.stroke=ringColor;
 
-  // Milestone - always show something
   updateMilestone(sessions);
-  // Override Loading... if still showing after data load
   setTimeout(function(){
     var mt=document.getElementById('milestoneText');
     if(mt&&mt.textContent==='Loading...')mt.textContent='Complete a home workout to check pull-up progress';
@@ -848,7 +812,6 @@ function calcStreak(sessions){
 }
 
 function updateMilestone(sessions){
-  // Find best pull-up total
   var bestPU=0;
   for(var i=0;i<sessions.length;i++){
     var exs=sessions[i].exercises||[];
@@ -860,7 +823,7 @@ function updateMilestone(sessions){
       }
     }
   }
-  var goalPU=16; // 4+4+4+4
+  var goalPU=16;
   if(bestPU>0&&bestPU<goalPU){
     document.getElementById('milestoneText').textContent=(goalPU-bestPU)+' more pull-up rep'+(goalPU-bestPU>1?'s':'')+' to 4/4/4/4';
     document.getElementById('milestoneSub').textContent='Current best: '+bestPU+' total reps per session';
@@ -933,7 +896,6 @@ var sheetWorkout=null;
 
 function startSession(type){
   wType=type;
-  // Check if sheet workout is loaded
   if(sheetWorkout&&sheetWorkout.exercises&&sheetWorkout.exercises.length){
     exs=parseSheetExercises(sheetWorkout);
     document.getElementById('currentWorkoutInfo').textContent=sheetWorkout.title||type+' workout loaded from sheet';
@@ -946,7 +908,6 @@ function startSession(type){
     for(var j=0;j<exs[i].sets;j++)logs[i].sets.push({reps:'',time:''});
   }
   curEx=0;curSet=0;phase='idle';bodyFeel='';bfScore=0;
-  // Show pre-screen
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
   var pre=document.getElementById('page-pre');pre.classList.remove('hidden');pre.classList.add('active');
 }
@@ -979,43 +940,28 @@ function endSession(){
 }
 function backToWorkout(){sessionActive=false;navTo('home');}
 
-// LOAD WORKOUT FROM SHEET
 function tryLoadWorkout(){
   document.getElementById('currentWorkoutInfo').textContent='Loading from sheet...';
-  document.getElementById('homeLoadedBadge').classList.add('hidden');
-  document.getElementById('hotelLoadedBadge').classList.add('hidden');
   var cbName='wt_load_'+Date.now();
   window[cbName]=function(result){
     window[cbName]=null;
     var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
     if(result&&result.status==='ok'&&result.exercises&&result.exercises.length){
       sheetWorkout=result;
-      var wt=(result.workoutType||'').toLowerCase();
-      var isHome=wt.indexOf('home')>=0;
+      var isHome=result.workoutType&&result.workoutType.toLowerCase().indexOf('home')>=0;
       document.getElementById('homeLoadedBadge').classList.toggle('hidden',!isHome);
       document.getElementById('hotelLoadedBadge').classList.toggle('hidden',isHome);
-      // Build a nice summary of what's loaded
-      var exNames=result.exercises.map(function(e){return e.name;});
-      var summary=(result.title||result.workoutType)+'
-'+exNames.join(' * ');
-      document.getElementById('currentWorkoutInfo').textContent=summary;
+      document.getElementById('currentWorkoutInfo').textContent=(result.title||result.workoutType)+' - ready to start';
     } else {
-      document.getElementById('currentWorkoutInfo').textContent='No workout set - using default plan. Tap the setWorkout URL first.';
+      document.getElementById('currentWorkoutInfo').textContent='Using default plan';
     }
   };
   var url=CLOUD_URL+'?type=getWorkout&callback='+cbName;
   var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
-  script.onerror=function(){document.getElementById('currentWorkoutInfo').textContent='Could not reach sheet - using default plan';};
+  script.onerror=function(){document.getElementById('currentWorkoutInfo').textContent='Using default plan';};
   document.head.appendChild(script);
-  setTimeout(function(){
-    if(window[cbName]){
-      window[cbName]=null;
-      document.getElementById('currentWorkoutInfo').textContent='Could not reach sheet - using default plan';
-    }
-  },10000);
 }
 
-// EXERCISE RENDER
 function renderEx(){
   var ex=exs[curEx];
   document.getElementById('sessionTitle').textContent=(wType==='home'?'HOME':'HOTEL')+' WORKOUT';
@@ -1035,7 +981,6 @@ function renderEx(){
   if(ex.tweak)html+='<div class="tweak-cue">! '+ex.tweak+'</div>';
   if(ex.watch)html+='<div class="watch-cue">'+ex.watch+'</div>';
 
-  // Seq preview
   if(ex.seq){
     html+='<div class="seq-wrap"><div class="seq-label">Rep Sequence</div><div class="seq-steps" id="seqSteps">';
     for(var s=0;s<ex.seq.length;s++){
@@ -1046,12 +991,11 @@ function renderEx(){
     }
     html+='</div></div>';
   } else {
-    html+='<div class="seq-wrap"><div class="seq-label">Rep Sequence</div><div style="font-size:0.8rem;color:var(--muted);">Hold timed  -  use rep counter button</div></div>';
+    html+='<div class="seq-wrap"><div class="seq-label">Rep Sequence</div><div style="font-size:0.8rem;color:var(--muted);">Hold timed - use rep counter button</div></div>';
   }
 
   html+='<div class="voice-display"><div class="voice-word" id="vWord">&nbsp;</div></div>';
 
-  // Log inputs
   html+='<div class="log-inp-wrap">';
   if(ex.isPlank){
     html+='<div class="log-pl-row">';
@@ -1072,10 +1016,9 @@ function renderEx(){
   html+='<button class="feel-btn'+(feelOn==='Hard'?' on-h':'')+'" onclick="setFeel(\'Hard\')">Hard</button>';
   html+='</div>';
   html+='<div class="feel-confirm" id="feelConf">Logged!</div>';
-  html+='<textarea class="notes-inp" id="notesInp" placeholder="Notes..." oninput="saveNotes()">'+( logs[curEx].notes||'')+'</textarea>';
+  html+='<textarea class="notes-inp" id="notesInp" placeholder="Notes..." oninput="saveNotes()">'+(logs[curEx].notes||'')+'</textarea>';
   html+='</div>';
 
-  // Phase + set dots
   html+='<div class="phase-row">';
   html+='<span class="phase-badge pb-ready" id="phBadge">READY</span>';
   html+='<div class="set-dots">';
@@ -1083,24 +1026,19 @@ function renderEx(){
     html+='<div class="set-dot'+(di<curSet?' dn':di===curSet?' cu':'')+'"></div>';
   }
   html+='</div></div>';
-
   html+='<div class="rest-adj hidden" id="restAdj"><button class="rest-adj" onclick="adjRest(-15)">-</button><div class="rest-lbl" id="restLbl">Rest</div><button class="rest-adj" onclick="adjRest(15)">+</button></div>';
-
   html+='<div class="timer-wrap"><div class="timer-lbl" id="timerLbl">TAP TO START</div>';
   html+='<div class="timer-ring"><svg width="110" height="110" viewBox="0 0 110 110"><circle class="ring-bg-c" cx="55" cy="55" r="46"/><circle class="ring-prog" id="rprog" cx="55" cy="55" r="46" stroke-dasharray="289.0" stroke-dashoffset="289.0"/></svg>';
   html+='<div class="tdsp"><div class="tcount" id="tCount">-</div><div class="tsub" id="tSub">start set</div></div></div></div>';
   html+='</div></div>';
-
   document.getElementById('sessionContent').innerHTML=html;
 
-  // Buttons below card
   var btnHtml='<div class="btn-row"><button class="btn b-skip" onclick="prevEx()" '+(curEx===0&&curSet===0?'disabled':'')+'>PREV</button><button class="btn b-start" id="mainBtn" onclick="handleMain()">START SET</button></div>';
   btnHtml+='<div class="btn-row"><button class="btn b-skip" onclick="reqSkip()">Skip Rest</button><button class="btn b-skip" onclick="nextEx()">Next Ex</button></div>';
   if(curEx===exs.length-1)btnHtml+='<div class="btn-row"><button class="btn b-primary" onclick="finishWorkout()">FINISH WORKOUT</button></div>';
   document.getElementById('sessionContent').innerHTML+=btnHtml;
 }
 
-// FEEL
 function setFeel(v){
   logs[curEx].feel=v;renderEx();
   setTimeout(function(){var fc=document.getElementById('feelConf');if(fc){fc.classList.add('show');setTimeout(function(){fc.classList.remove('show');},1200);}},50);
@@ -1112,7 +1050,6 @@ function autoLog(idx){
   if(!ex.isPlank){var inp=document.getElementById('si'+idx);if(inp&&!inp.value){inp.value=ex.rc[idx];logs[curEx].sets[idx].reps=String(ex.rc[idx]);}else if(inp)logs[curEx].sets[idx].reps=inp.value;}
 }
 
-// SEQ ENGINE
 function clearMTOs(){for(var i=0;i<mTOs.length;i++){try{clearTimeout(mTOs[i]);clearInterval(mTOs[i]);}catch(e){}}mTOs=[];mRun=false;}
 function hiStep(idx){var ss=document.querySelectorAll('.seq-step');for(var i=0;i<ss.length;i++)ss[i].classList.toggle('act',i===idx);}
 function setVW(txt,cls){var el=document.getElementById('vWord');if(el){el.textContent=txt;el.className='voice-word'+(cls?' '+cls:'');}}
@@ -1244,7 +1181,6 @@ function setRing(frac,isRest){
   r.style.stroke=isRest?'var(--blue)':'var(--accent)';
 }
 
-// FINISH
 function finishWorkout(){
   stopMetro();clearInterval(timerInt);
   var dur=wkStart?Math.round((Date.now()-wkStart)/60000):0;
@@ -1263,7 +1199,6 @@ function finishWorkout(){
   });
   recSession(sd);
 
-  // Build done screen
   var rows='';
   exs.forEach(function(ex,ei){
     var log=logs[ei];
@@ -1275,7 +1210,6 @@ function finishWorkout(){
   if(bodyFeel)rows+='<div class="sum-row"><div class="sum-name">Body feel</div><div class="sum-result">'+bfScore+'/5 '+bodyFeel+'</div></div>';
   document.getElementById('summaryRows').innerHTML=rows;
 
-  // Recovery badge
   var rec=calcRec(logs);
   var rb=document.getElementById('recBadge');
   if(rec){rb.textContent=rec.label;rb.className='rec-badge '+rec.cls;rb.style.display='block';}
@@ -1307,10 +1241,10 @@ function buildCopyTxt(){
   txt+='\n';
   exs.forEach(function(ex,ei){
     var log=logs[ei];txt+=ex.name+'\n';
-    if(ex.isPlank){txt+='  Left: '+(log.sets[0].time||'?')+' sec / Right: '+(log.sets[1].time||'?')+' sec\n';}
-    else{log.sets.forEach(function(s,si){txt+='  Set '+(si+1)+': '+(s.reps||ex.rc[si])+' reps\n';});}
-    txt+='  Feel: '+(log.feel||'-')+'\n';
-    if(log.notes)txt+='  Notes: '+log.notes+'\n';
+    if(ex.isPlank){txt+=' Left: '+(log.sets[0].time||'?')+' sec / Right: '+(log.sets[1].time||'?')+' sec\n';}
+    else{log.sets.forEach(function(s,si){txt+=' Set '+(si+1)+': '+(s.reps||ex.rc[si])+' reps\n';});}
+    txt+=' Feel: '+(log.feel||'-')+'\n';
+    if(log.notes)txt+=' Notes: '+log.notes+'\n';
     txt+='\n';
   });
   return txt.trim();
@@ -1320,17 +1254,15 @@ function copyResults(){
   navigator.clipboard.writeText(txt).then(function(){document.getElementById('copyBtn').textContent='COPIED - PASTE INTO CLAUDE';document.getElementById('copyBtn').classList.add('copied');}).catch(function(){var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);document.getElementById('copyBtn').textContent='COPIED - PASTE INTO CLAUDE';document.getElementById('copyBtn').classList.add('copied');});
 }
 
-// LOG TAB SWITCHING
 function switchLogTab(tab){
-  ['hiit','chol','body'].forEach(function(t){
-    document.getElementById('tab-'+t).classList.remove('active');
-    document.getElementById('panel-'+t).classList.remove('active');
+  ['hiit', 'chol', 'body'].forEach(function(t){
+    document.getElementById('tab-' + t).classList.remove('active');
+    document.getElementById('panel-' + t).classList.remove('active');
   });
-  document.getElementById('tab-'+tab).classList.add('active');
-  document.getElementById('panel-'+tab).classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('panel-' + tab).classList.add('active');
 }
 
-// HIIT LOG
 var selEff=0;
 function buildEffBtns(){
   var c=document.getElementById('effBtns');if(!c)return;c.innerHTML='';
@@ -1349,7 +1281,6 @@ function saveHIIT(){
   var d=new Date(date);d.setHours(0,0,0,0);d.setDate(d.getDate()+3-(d.getDay()+6)%7);
   var w1=new Date(d.getFullYear(),0,4);var wn=1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7);
   var payload={type:'hiit',date:date,week:'Week '+wn,duration:dur,effort:selEff,notes:notes};
-  // Save locally too
   var localSd={date:date,week:'Week '+wn,workoutType:'HIIT',exercises:[{name:'HIIT',feel:'',notes:notes}]};
   recSession(localSd);
   syncData(payload,'hiitMsg');
@@ -1358,7 +1289,6 @@ function saveHIIT(){
   setTimeout(function(){document.getElementById('hiitDur').value='';document.getElementById('hiitNotes').value='';document.getElementById('hiitDate').value=new Date().toISOString().slice(0,10);selEff=0;var bs=document.getElementById('effBtns').querySelectorAll('.eff-btn');for(var b=0;b<bs.length;b++)bs[b].classList.remove('on');loadHomeData();},3500);
 }
 
-// CHOLESTEROL
 function updateRatio(){
   var t=parseFloat(document.getElementById('cTotal').value)||0,h=parseFloat(document.getElementById('cHDL').value)||0;
   var el=document.getElementById('ratioDisp');
@@ -1379,7 +1309,6 @@ function saveChol(){
   setTimeout(function(){['cHDL','cLDL','cTotal','cTrig','cNotes'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('ratioDisp').innerHTML='<span style="color:var(--muted);">Enter HDL + Total</span>';},3500);
 }
 
-// BODY METRICS
 function saveBody(){
   resAC();
   var wt=document.getElementById('bWt').value,waist=document.getElementById('bWaist').value;
@@ -1390,7 +1319,6 @@ function saveBody(){
   setTimeout(function(){['bWt','bWaist','bArm','bNotes'].forEach(function(id){document.getElementById(id).value='';});},3500);
 }
 
-// PROGRESS DATA
 function loadProgressData(){
   var sessions=getAllSessions();
   buildPullUpChart(sessions);
@@ -1431,29 +1359,24 @@ function drawLineChart(canvas,labels,values,label,color,goalVal,goalLabel){
   var cW=W-pad.left-pad.right,cH=H-pad.top-pad.bottom;
   var min=Math.min.apply(null,values)-1,max=Math.max(Math.max.apply(null,values)+1,goalVal?goalVal+1:0);
   var xStep=values.length>1?cW/(values.length-1):cW;
-  // Goal line
   if(goalVal){
     var gy=pad.top+cH-(goalVal-min)/(max-min)*cH;
     ctx.strokeStyle='#e74c3c';ctx.lineWidth=1;ctx.setLineDash([4,4]);
     ctx.beginPath();ctx.moveTo(pad.left,gy);ctx.lineTo(pad.left+cW,gy);ctx.stroke();
     ctx.setLineDash([]);ctx.fillStyle='#e74c3c';ctx.font='10px DM Sans';ctx.fillText(goalLabel||'Goal',pad.left+cW-60,gy-4);
   }
-  // Grid lines
   ctx.strokeStyle='#e8ecf0';ctx.lineWidth=1;
   for(var g=0;g<=4;g++){var gy2=pad.top+cH*g/4;ctx.beginPath();ctx.moveTo(pad.left,gy2);ctx.lineTo(pad.left+cW,gy2);ctx.stroke();}
-  // Line
   ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.lineJoin='round';
   ctx.beginPath();
   values.forEach(function(v,i){var x=pad.left+i*xStep,y=pad.top+cH-(v-min)/(max-min)*cH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
   ctx.stroke();
-  // Points
   values.forEach(function(v,i){
     var x=pad.left+i*xStep,y=pad.top+cH-(v-min)/(max-min)*cH;
     ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();
     ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.stroke();
     ctx.fillStyle=color;ctx.font='bold 10px DM Sans';ctx.textAlign='center';ctx.fillText(v,x,y-8);
   });
-  // Date labels
   ctx.fillStyle='#95a5a6';ctx.font='9px DM Sans';ctx.textAlign='center';
   var step=Math.ceil(labels.length/4);
   labels.forEach(function(l,i){if(i%step===0){var x=pad.left+i*xStep;var d=new Date(l);ctx.fillText((d.getMonth()+1)+'/'+d.getDate(),x,H-6);}});
@@ -1493,7 +1416,6 @@ function buildHeatmap(sessions){
     html+='</tr>';
   });
   html+='</tbody></table>';
-  // Legend
   html+='<div style="display:flex;gap:10px;margin-top:10px;font-size:0.72rem;">';
   html+='<span class="hm-cell hm-m" style="width:auto;height:auto;padding:2px 8px;border-radius:4px;">M = Medium</span>';
   html+='<span class="hm-cell hm-mh" style="width:auto;height:auto;padding:2px 8px;border-radius:4px;">MH = Medium-hard</span>';
@@ -1532,17 +1454,15 @@ function buildPRs(sessions){
 }
 
 function buildCholDisplay(){
-  // Try local first, then sheet
   var baseline={hdl:24,ldl:132,total:175,trig:97,ratio:7.3,date:'Nov 5 (baseline)'};
   document.getElementById('cholRows').innerHTML=
     '<div class="chol-row"><div class="chol-label">HDL (target 40+)</div><div class="chol-val" style="color:var(--red);">'+baseline.hdl+'</div><div class="chol-trend">Baseline</div></div>'+
     '<div class="chol-row"><div class="chol-label">LDL</div><div class="chol-val" style="color:var(--yellow);">'+baseline.ldl+'</div><div class="chol-trend">Baseline</div></div>'+
-    '<div class="chol-row"><div class="chol-label">TC/HDL Ratio</div><div class="chol-val" style="color:var(--red);">'+baseline.ratio+'</div><div class="chol-trend">Target: &lt;5</div></div>';
+    '<div class="chol-row"><div class="chol-label">TC/HDL Ratio</div><div class="chol-val" style="color:var(--red);">'+baseline.ratio+'</div><div class="chol-trend">Target: <5</div></div>';
   document.getElementById('cholEmpty').style.display='block';
   document.getElementById('cholCanvas').style.display='none';
 }
 
-// INIT
 function initDates(){
   var today=new Date().toISOString().slice(0,10);
   document.getElementById('hiitDate').value=today;
@@ -1550,7 +1470,6 @@ function initDates(){
   document.getElementById('bodyDate').value=today;
 }
 
-// Init
 buildEffBtns();
 initDates();
 navTo('home');
