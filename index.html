@@ -185,6 +185,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 
 /* BUTTONS */
 .btn-row{display:flex;gap:10px;padding:0 16px;margin-bottom:10px;}
+.session-footer{position:fixed;bottom:calc(var(--nav-h) + var(--safe-bottom));left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:10px 16px;z-index:100;display:none;}
+.session-footer.active{display:flex;gap:10px;}
 .btn{flex:1;padding:14px;border:none;border-radius:12px;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;cursor:pointer;transition:transform 0.15s;}
 .btn:active{transform:scale(0.97);}
 .b-primary{background:var(--accent);color:#fff;}
@@ -394,10 +396,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
         <div id="hotelLoadingMsg" class="wt-loading hidden">Loading...</div>
       </div>
     </div>
-    <div style="text-align:center;padding:0 16px 8px;display:flex;gap:10px;">
-      <button onclick="startSession('home',true)" style="flex:1;padding:8px;background:#f8f9fa;border:2px dashed var(--border);border-radius:10px;font-family:DM Sans,sans-serif;font-size:0.72rem;color:var(--muted);cursor:pointer;">&#127381; Test Home</button>
-      <button onclick="startSession('hotel',true)" style="flex:1;padding:8px;background:#f8f9fa;border:2px dashed var(--border);border-radius:10px;font-family:DM Sans,sans-serif;font-size:0.72rem;color:var(--muted);cursor:pointer;">&#127381; Test Hotel</button>
-    </div>
     <div class="card" style="margin-top:4px;">
       <div class="card-title">Current Workout</div>
       <div id="currentWorkoutInfo" style="color:var(--muted);font-size:0.85rem;">Open the app after tapping the setWorkout URL to load today's session.</div>
@@ -438,8 +436,13 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     </div>
   </div>
   <div class="prog-bar-wrap"><div class="prog-bar-fill" id="progFill" style="width:0%"></div></div>
-  <div class="page-content" id="sessionContent" style="padding-top:8px;">
+  <div class="page-content" id="sessionContent" style="padding-top:8px;padding-bottom:80px;">
     <!-- Exercise card rendered here -->
+  </div>
+  <div class="session-footer active" id="sessionFooter">
+    <button class="btn b-skip" id="footerPrev" onclick="prevEx()" style="flex:0 0 80px;">PREV</button>
+    <button class="btn b-start" id="footerMain" onclick="handleMain()" style="flex:1;">START SET</button>
+    <button class="btn b-skip" id="footerNext" onclick="nextEx()" style="flex:0 0 80px;">NEXT EX</button>
   </div>
 </div>
 
@@ -476,6 +479,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       <button class="log-tab" id="tab-chol" onclick="switchLogTab('chol')">Blood</button>
       <button class="log-tab" id="tab-body" onclick="switchLogTab('body')">Body</button>
       <button class="log-tab" id="tab-last" onclick="switchLogTab('last')">Last</button>
+      <button class="log-tab" id="tab-past" onclick="switchLogTab('past')">Past</button>
     </div>
 
     <!-- HIIT PANEL -->
@@ -568,6 +572,36 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       </div>
       <div class="log-sync-msg" id="lastMsg"></div>
       <button class="log-save-btn" style="background:var(--accent);" onclick="saveLastSession()">SAVE CHANGES TO SHEETS</button>
+    </div>
+
+    <!-- PAST SESSION PANEL -->
+    <div class="log-panel" id="panel-past">
+      <div class="log-field">
+        <label>Date</label>
+        <input type="date" class="log-input" id="pastDate">
+      </div>
+      <div class="log-field">
+        <label>Type</label>
+        <div style="display:flex;gap:8px;">
+          <button id="pastTypeHome" onclick="setPastType('home')" style="flex:1;padding:10px;border:2px solid var(--accent);background:var(--accent);color:#fff;border-radius:10px;font-family:Bebas Neue,sans-serif;font-size:0.9rem;cursor:pointer;">HOME</button>
+          <button id="pastTypeHotel" onclick="setPastType('hotel')" style="flex:1;padding:10px;border:2px solid var(--border);background:#f8f9fa;color:var(--muted);border-radius:10px;font-family:Bebas Neue,sans-serif;font-size:0.9rem;cursor:pointer;">HOTEL</button>
+        </div>
+      </div>
+      <div id="pastExercises"></div>
+      <div class="log-field">
+        <label>Body Feel</label>
+        <div style="display:flex;gap:6px;" id="pastFeelBtns">
+          <button class="feel-btn" onclick="setPastBodyFeel(this,'Great')">5 - Great</button>
+          <button class="feel-btn" onclick="setPastBodyFeel(this,'OK')">3 - OK</button>
+          <button class="feel-btn" onclick="setPastBodyFeel(this,'Poor')">1 - Poor</button>
+        </div>
+      </div>
+      <div class="log-field">
+        <label>Duration (min)</label>
+        <input type="number" inputmode="numeric" class="log-input log-input-big" id="pastDur" placeholder="45">
+      </div>
+      <div class="log-sync-msg" id="pastMsg"></div>
+      <button class="log-save-btn" style="background:var(--accent);" onclick="savePastSession()">SAVE TO SHEETS</button>
     </div>
   </div>
 </div>
@@ -758,6 +792,21 @@ function syncData(payload,msgId){
 }
 
 // FETCH FROM SHEET
+function fetchHistory(cb){
+  var cbName='wt_hist_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);
+    if(s)s.parentNode.removeChild(s);
+    cb(result&&result.sessions?result.sessions:null);
+  };
+  var url=CLOUD_URL+'?type=getHistory&callback='+cbName;
+  var script=document.createElement('script');
+  script.id='s_'+cbName;script.src=url;
+  script.onerror=function(){cb(null);};
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;cb(null);}},8000);
+}
+
 function fetchFromSheet(type,cb){
   var cbName='wt_fetch_'+Date.now();
   window[cbName]=function(result){
@@ -778,7 +827,12 @@ function loadHomeData(){
   var greet=now.getHours()<12?'Good morning':now.getHours()<17?'Good afternoon':'Good evening';
   document.getElementById('greeting').textContent=greet;
   document.getElementById('todayDate').textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
-  var sessions=getAllSessions();
+  fetchHistory(function(sheetSessions){
+    var sessions=sheetSessions||getAllSessions();
+    renderHomeData(sessions);
+  });
+}
+function renderHomeData(sessions){
   var weekNum='Week '+getWeekNum();
   var wkStr=0,wkHIIT=0;
   for(var i=0;i<sessions.length;i++){
@@ -827,7 +881,7 @@ function loadHomeData(){
     var mt=document.getElementById('milestoneText');
     if(mt&&mt.textContent==='Loading...')mt.textContent='Complete a home workout to check pull-up progress';
   },500);
-}
+}  // end renderHomeData
 
 function calcStreak(sessions){
   var weekCounts={};
@@ -876,7 +930,7 @@ var homeEx=[
   {name:'PULL-UPS',sets:4,reps:'4/4/4/3',rc:[4,4,4,3],rest:85,
    form:'Dead hang every rep * 1 sec hold at top * Chin clearly over bar * Controlled lower',
    watch:'Does set 3 feel slightly easier?\nSet 4 - clean reps or grind?\nQuality over forcing reps',tweak:null,isPlank:false,
-   seq:[{t:'r'},{t:'v',l:'Pull',n:550},{t:'b',bc:2,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300}]},
+   seq:[{t:'r'},{t:'v',l:'Pull',n:550},{t:'b',bc:2,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300},{t:'b',bc:1,n:300}]},
   {name:'CLOSE-GRIP PUSH-UPS',sets:2,reps:'10/6',rc:[10,6],rest:90,
    form:'Thumbs touching * 2 sec lower * 1 sec pause * Stop 1 before failure',
    watch:'Expect a drop vs hotel - pull-up fatigue is normal',tweak:null,isPlank:false,
@@ -929,11 +983,9 @@ var bodyFeel='',bfScore=0,wkStart=null;
 var CIRC=2*Math.PI*46;
 var sheetWorkout=null;
 
-var testMode=false;
-function startSession(type,isTest){
-  testMode=isTest||false;
+function startSession(type){
   wType=type;
-  if(!testMode&&sheetWorkout&&sheetWorkout.exercises&&sheetWorkout.exercises.length){
+  if(sheetWorkout&&sheetWorkout.exercises&&sheetWorkout.exercises.length){
     exs=parseSheetExercises(sheetWorkout);
     document.getElementById('currentWorkoutInfo').textContent=sheetWorkout.title||type+' workout loaded from sheet';
   } else {
@@ -967,12 +1019,15 @@ function setBF(score,label){
   var sp=document.getElementById('page-session');sp.classList.remove('hidden');sp.classList.add('active');
   sessionActive=true;
   document.getElementById('nav-workout').classList.add('active');
+  document.getElementById('sessionFooter').classList.add('active');
   renderEx();
 }
 
 function endSession(){
   if(confirm('End workout?')){
-    stopMetro();clearInterval(timerInt);sessionActive=false;navTo('workout');
+    stopMetro();clearInterval(timerInt);sessionActive=false;
+    document.getElementById('sessionFooter').classList.remove('active');
+    navTo('workout');
   }
 }
 function backToWorkout(){sessionActive=false;navTo('home');}
@@ -1017,7 +1072,7 @@ function saveCurrentInputs(){
 
 function renderEx(){
   var ex=exs[curEx];
-  document.getElementById('sessionTitle').textContent=(testMode?'TEST - ':'')+(wType==='home'?'HOME':'HOTEL')+' WORKOUT';
+  document.getElementById('sessionTitle').textContent=(wType==='home'?'HOME':'HOTEL')+' WORKOUT';
   document.getElementById('sessionSub').textContent='Exercise '+(curEx+1)+' of '+exs.length;
   var total=0;for(var j=0;j<exs.length;j++)total+=exs[j].sets;
   var done=0;for(var k=0;k<curEx;k++)done+=exs[k].sets;done+=curSet;
@@ -1078,8 +1133,7 @@ function renderEx(){
   html+='<div class="tdsp"><div class="tcount" id="tCount">-</div><div class="tsub" id="tSub">start set</div></div></div></div>';
   html+='</div></div>';
   document.getElementById('sessionContent').innerHTML=html;
-  var btnHtml='<div class="btn-row"><button class="btn b-skip" onclick="prevEx()" '+(curEx===0&&curSet===0?'disabled':'')+'>PREV</button><button class="btn b-start" id="mainBtn" onclick="handleMain()">START SET</button></div>';
-  btnHtml+='<div class="btn-row"><button class="btn b-skip" onclick="reqSkip()">Skip Rest</button><button class="btn b-skip" onclick="nextEx()">Next Ex</button></div>';
+  var btnHtml='<div class="btn-row"><button class="btn b-skip" onclick="reqSkip()">Skip Rest</button></div>';
   if(curEx===exs.length-1)btnHtml+='<div class="btn-row"><button class="btn b-primary" onclick="finishWorkout()">FINISH WORKOUT</button></div>';
   document.getElementById('sessionContent').innerHTML+=btnHtml;
   initSwipe();
@@ -1176,10 +1230,19 @@ function handleMain(){
 }
 
 function updBtn(){
-  var btn=document.getElementById('mainBtn');if(!btn)return;
-  if(phase==='idle'||phase==='ready'){btn.textContent='START SET';btn.className='btn b-start';btn.disabled=false;}
-  else if(phase==='active'){btn.textContent='SET DONE';btn.className='btn b-done';btn.disabled=false;}
-  else{btn.textContent='RESTING...';btn.className='btn b-rest';btn.disabled=true;}
+  var btn=document.getElementById('mainBtn');
+  var fbtn=document.getElementById('footerMain');
+  var fprev=document.getElementById('footerPrev');
+  var fnext=document.getElementById('footerNext');
+  var label,cls,dis;
+  if(phase==='idle'||phase==='ready'){label='START SET';cls='btn b-start';dis=false;}
+  else if(phase==='active'){label='SET DONE';cls='btn b-done';dis=false;}
+  else if(phase==='between'){label='RESTING...';cls='btn b-rest';dis=true;}
+  else{label='RESTING...';cls='btn b-rest';dis=true;}
+  if(btn){btn.textContent=label;btn.className=cls;btn.disabled=dis;}
+  if(fbtn){fbtn.textContent=label;fbtn.className='btn '+cls.split(' ')[1];fbtn.disabled=dis;}
+  if(fprev)fprev.disabled=(curEx===0&&curSet===0);
+  if(fnext)fnext.disabled=(curEx>=exs.length-1);
 }
 
 function adjRest(d){
@@ -1225,6 +1288,7 @@ function restDone(){
 function showBetweenPrompt(){
   var nx=exs[curEx+1];
   phase='between';updBtn();
+  updBtn();
   var sc=document.getElementById('sessionContent');
   if(!sc)return;
   var nxName=nx?nx.name:'Next exercise';
@@ -1337,7 +1401,7 @@ function finishWorkout(){
     var setsArr=ex.isPlank?[log.sets[0].time||'',log.sets[1].time||'']:log.sets.map(function(s,si){return s.reps||String(ex.rc[si]);});
     sd.exercises.push({name:ex.name,targetReps:ex.reps,sets:setsArr,result:res,feel:log.feel,notes:log.notes,restSecs:ex.rest,formCues:ex.form,tweak:ex.tweak||'',isPlank:ex.isPlank?'yes':'no'});
   });
-  if(!testMode)recSession(sd);
+  recSession(sd);
   var rows='';
   exs.forEach(function(ex,ei){
     var log=logs[ei];
@@ -1366,6 +1430,7 @@ function finishWorkout(){
   var rb=document.getElementById('recBadge');
   if(rec){rb.textContent=rec.label;rb.className='rec-badge '+rec.cls;rb.style.display='block';}
   sessionActive=false;
+  var sf=document.getElementById('sessionFooter');if(sf)sf.classList.remove('active');
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
   var dp=document.getElementById('page-done');dp.classList.remove('hidden');dp.classList.add('active');
   var durStr=dur>0?(dur+' min'):'-';
@@ -1415,23 +1480,19 @@ function copyResults(){
     var setsArr=ex.isPlank?[log.sets[0].time||'',log.sets[1].time||'']:log.sets.map(function(s,si){return s.reps||String(ex.rc[si]);});
     sd2.exercises.push({name:ex.name,targetReps:ex.reps,sets:setsArr,result:res,feel:log.feel,notes:log.notes,restSecs:ex.rest,formCues:ex.form,tweak:ex.tweak||'',isPlank:ex.isPlank?'yes':'no'});
   });
-  if(testMode){
-    var sb=document.getElementById('syncBadge');
-    if(sb){sb.textContent='TEST MODE - not saved to sheet';sb.style.background='#fff3e0';sb.style.color='var(--yellow)';}
-  } else {
-    syncData(sd2,'syncBadge');
-  }
+  syncData(sd2,'syncBadge');
   navigator.clipboard.writeText(txt).then(function(){document.getElementById('copyBtn').textContent='COPIED - PASTE INTO CLAUDE';document.getElementById('copyBtn').classList.add('copied');}).catch(function(){var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);document.getElementById('copyBtn').textContent='COPIED - PASTE INTO CLAUDE';document.getElementById('copyBtn').classList.add('copied');});
 }
 
 function switchLogTab(tab){
-  ['hiit','chol','body','last'].forEach(function(t){
+  ['hiit','chol','body','last','past'].forEach(function(t){
     document.getElementById('tab-'+t).classList.remove('active');
     document.getElementById('panel-'+t).classList.remove('active');
   });
   document.getElementById('tab-'+tab).classList.add('active');
   document.getElementById('panel-'+tab).classList.add('active');
   if(tab==='last')renderLastSession();
+  if(tab==='past')initPastSession();
 }
 
 var selEff=0;
@@ -1590,10 +1651,12 @@ function saveBody(){
 }
 
 function loadProgressData(){
-  var sessions=getAllSessions();
-  buildPullUpChart(sessions);
-  buildHeatmap(sessions);
-  buildPRs(sessions);
+  fetchHistory(function(sheetSessions){
+    var sessions=sheetSessions||getAllSessions();
+    buildPullUpChart(sessions);
+    buildHeatmap(sessions);
+    buildPRs(sessions);
+  });
   buildCholDisplay();
 }
 
@@ -1738,6 +1801,123 @@ function initDates(){
   document.getElementById('hiitDate').value=today;
   document.getElementById('cholDate').value=today;
   document.getElementById('bodyDate').value=today;
+}
+
+// PAST SESSION LOGGING
+var pastType='home';
+var pastBodyFeel='';
+
+function initPastSession(){
+  var today=new Date().toISOString().slice(0,10);
+  document.getElementById('pastDate').value=today;
+  setPastType('home');
+}
+
+function setPastType(type){
+  pastType=type;
+  var exList=type==='home'?homeEx:hotelEx;
+  document.getElementById('pastTypeHome').style.background=type==='home'?'var(--accent)':'#f8f9fa';
+  document.getElementById('pastTypeHome').style.color=type==='home'?'#fff':'var(--muted)';
+  document.getElementById('pastTypeHome').style.borderColor=type==='home'?'var(--accent)':'var(--border)';
+  document.getElementById('pastTypeHotel').style.background=type==='hotel'?'var(--accent2)':'#f8f9fa';
+  document.getElementById('pastTypeHotel').style.color=type==='hotel'?'#fff':'var(--muted)';
+  document.getElementById('pastTypeHotel').style.borderColor=type==='hotel'?'var(--accent2)':'var(--border)';
+  renderPastExercises(exList);
+}
+
+function renderPastExercises(exList){
+  var html='';
+  exList.forEach(function(ex,ei){
+    html+='<div style="margin-bottom:14px;">';
+    html+='<div style="font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px;">'+ex.name+'</div>';
+    if(ex.isPlank){
+      html+='<div style="display:flex;gap:8px;">';
+      html+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">LEFT (sec)</div><input type="number" inputmode="numeric" id="past_'+ei+'_0" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.6rem;text-align:center;border:2px solid var(--border);border-radius:8px;background:#f8f9fa;color:var(--blue);padding:6px;" placeholder="60"></div>';
+      html+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">RIGHT (sec)</div><input type="number" inputmode="numeric" id="past_'+ei+'_1" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.6rem;text-align:center;border:2px solid var(--border);border-radius:8px;background:#f8f9fa;color:var(--blue);padding:6px;" placeholder="60"></div>';
+      html+='</div>';
+    } else {
+      html+='<div style="display:flex;gap:6px;">';
+      ex.rc.forEach(function(target,si){
+        html+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">S'+(si+1)+' ('+target+')</div><input type="number" inputmode="numeric" id="past_'+ei+'_'+si+'" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.6rem;text-align:center;border:2px solid var(--border);border-radius:8px;background:#f8f9fa;color:var(--text);padding:6px;" placeholder="'+target+'"></div>';
+      });
+      html+='</div>';
+    }
+    // Feel
+    html+='<div style="display:flex;gap:6px;margin-top:6px;">';
+    ['Medium','Medium-hard','Hard'].forEach(function(f){
+      html+='<button class="feel-btn" id="past_feel_'+ei+'_'+f.replace('-','_')+'" data-ei="'+ei+'" data-feel="'+f+'" onclick="pastFeelClick(this)" style="font-size:0.65rem;">'+f+'</button>';
+    });
+    html+='</div>';
+    html+='</div>';
+  });
+  document.getElementById('pastExercises').innerHTML=html;
+}
+
+function pastFeelClick(btn){
+  var ei=parseInt(btn.dataset.ei);
+  var feel=btn.dataset.feel;
+  setPastExFeel(ei,feel);
+}
+function setPastExFeel(ei,feel){
+  ['Medium','Medium-hard','Hard'].forEach(function(f){
+    var btn=document.getElementById('past_feel_'+ei+'_'+f.replace('-','_'));
+    if(btn){btn.className='feel-btn';btn.style.fontSize='0.65rem';}
+  });
+  var on=document.getElementById('past_feel_'+ei+'_'+feel.replace('-','_'));
+  if(on){
+    var cls=feel==='Medium'?'on-m':feel==='Medium-hard'?'on-mh':'on-h';
+    on.className='feel-btn '+cls;on.style.fontSize='0.65rem';
+  }
+}
+
+function setPastBodyFeel(btn,label){
+  document.getElementById('pastFeelBtns').querySelectorAll('.feel-btn').forEach(function(b){b.className='feel-btn';});
+  btn.className='feel-btn on-m';
+  pastBodyFeel=label;
+}
+
+function savePastSession(){
+  var date=document.getElementById('pastDate').value||new Date().toISOString().slice(0,10);
+  var dur=document.getElementById('pastDur').value||0;
+  var exList=pastType==='home'?homeEx:hotelEx;
+  var wtLbl=pastType==='home'?'Home Strength':'Hotel Strength';
+  var d=new Date(date);d.setHours(0,0,0,0);d.setDate(d.getDate()+3-(d.getDay()+6)%7);
+  var w1=new Date(d.getFullYear(),0,4);var wn=1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7);
+
+  var sd={date:date,week:'Week '+wn,workoutType:wtLbl,bodyFeel:pastBodyFeel,duration:parseInt(dur)||0,exercises:[]};
+  exList.forEach(function(ex,ei){
+    var sets=[];
+    if(ex.isPlank){
+      var l=document.getElementById('past_'+ei+'_0');
+      var r=document.getElementById('past_'+ei+'_1');
+      sets=[l?l.value:'',r?r.value:''];
+    } else {
+      ex.rc.forEach(function(_,si){
+        var inp=document.getElementById('past_'+ei+'_'+si);
+        sets.push(inp?inp.value:'');
+      });
+    }
+    // Get feel
+    var feel='';
+    ['Medium','Medium-hard','Hard'].forEach(function(f){
+      var btn=document.getElementById('past_feel_'+ei+'_'+f.replace('-','_'));
+      if(btn&&btn.className.indexOf('on-')>=0)feel=f;
+    });
+    var res=ex.isPlank?'L:'+(sets[0]||'?')+'s/R:'+(sets[1]||'?')+'s':sets.join('/');
+    sd.exercises.push({name:ex.name,targetReps:ex.reps,sets:sets,result:res,feel:feel,notes:'',restSecs:ex.rest,formCues:ex.form,tweak:ex.tweak||'',isPlank:ex.isPlank?'yes':'no'});
+  });
+
+  // Save to localStorage and sync to sheet
+  recSession(sd);
+  syncData(sd,'pastMsg');
+  var msg=document.getElementById('pastMsg');
+  setTimeout(function(){
+    // Reset form
+    document.getElementById('pastDur').value='';
+    document.getElementById('pastExercises').innerHTML='';
+    setPastType(pastType);
+    loadHomeData();
+  },3000);
 }
 
 buildEffBtns();
