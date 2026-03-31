@@ -162,7 +162,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .pb-rest{background:#e3f2fd;color:var(--blue);}
 .pb-between{background:#f3e5f5;color:var(--purple);}
 .set-dots{display:flex;gap:6px;}
-.set-dot{width:10px;height:10px;border-radius:50%;background:var(--border);}
+.set-dot{width:14px;height:14px;border-radius:50%;background:var(--border);}
 .set-dot.dn{background:var(--green);}
 .set-dot.cu{background:var(--accent);box-shadow:0 0 0 3px rgba(44,62,80,0.2);}
 
@@ -1053,7 +1053,7 @@ function renderEx(){
   html+='<span class="phase-badge pb-ready" id="phBadge">READY</span>';
   html+='<div class="set-dots">';
   for(var di=0;di<ex.sets;di++){
-    html+='<div class="set-dot'+(di<curSet?' dn':di===curSet?' cu':'')+'"></div>';
+    html+='<div class="set-dot'+(di<curSet?' dn':di===curSet?' cu':'')+'" onclick="jumpToSet('+di+')" style="cursor:pointer;"></div>';
   }
   html+='</div></div>';
   html+='<div class="rest-adj hidden" id="restAdj"><button class="rest-adj" onclick="adjRest(-15)">-</button><div class="rest-lbl" id="restLbl">Rest</div><button class="rest-adj" onclick="adjRest(15)">+</button></div>';
@@ -1240,6 +1240,10 @@ function prevSet(){
   if(curSet>0){
     saveCurrentInputs();curSet--;phase='idle';updBtn();renderEx();
   }
+}
+function jumpToSet(idx){
+  if(idx===curSet)return;
+  saveCurrentInputs();curSet=idx;phase='idle';updBtn();renderEx();
 }
 
 // SWIPE DETECTION - attached once to page-session, never rebuilt
