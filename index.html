@@ -300,7 +300,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 <div class="page active" id="page-home">
   <div class="page-header">
     <div class="greeting" id="greeting">Good morning</div>
-    <h1>WORKOUT TRACKER <span style="font-size:0.9rem;opacity:0.5;letter-spacing:1px;">v1.4</span></h1>
+    <h1>WORKOUT TRACKER <span style="font-size:0.9rem;opacity:0.5;letter-spacing:1px;">v1.6</span></h1>
     <p id="todayDate"></p>
   </div>
   <div class="page-content">
@@ -862,7 +862,7 @@ var homeEx=[
   {name:'PULL-UPS',sets:4,reps:'4/4/4/3',rc:[4,4,4,3],rest:85,
    form:'Dead hang every rep * 1 sec hold at top * Chin clearly over bar * Controlled lower',
    watch:'Does set 3 feel slightly easier?\nSet 4 - clean reps or grind?\nQuality over forcing reps',tweak:null,isPlank:false,
-   seq:[{t:'r'},{t:'v',l:'Pull',n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300}]},
+   seq:[{t:'r'},{t:'v',l:'Pull',n:550},{t:'b',bc:1,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300}]},
   {name:'CLOSE-GRIP PUSH-UPS',sets:2,reps:'10/6',rc:[10,6],rest:90,
    form:'Thumbs touching * 2 sec lower * 1 sec pause * Stop 1 before failure',
    watch:'Expect a drop vs hotel - pull-up fatigue is normal',tweak:null,isPlank:false,
@@ -1204,9 +1204,12 @@ function restDone(){
 
 function runBetween(){
   clearInterval(timerInt);
-  var nx=exs[curEx+1];tLeft=120;tTotal=120;curRestSecs=120;phase='between';
+  var nx=exs[curEx+1];
+  tLeft=120;tTotal=120;curRestSecs=120;phase='between';
+  // Move to next exercise first, render it, THEN overlay the timer
   curEx++;curSet=0;
   renderEx();
+  // Now override the ready state with between-exercise timer
   updBtn();
   var pb=document.getElementById('phBadge');if(pb){pb.textContent='BETWEEN EXERCISES';pb.className='phase-badge pb-between';}
   var tl=document.getElementById('timerLbl');if(tl){tl.textContent='2 MIN REST';tl.style.color='var(--purple)';}
@@ -1214,9 +1217,12 @@ function runBetween(){
   var rl=document.getElementById('restLbl');if(rl)rl.textContent='120 sec rest';
   var tc=document.getElementById('tCount');if(tc)tc.textContent=tLeft;
   var ts=document.getElementById('tSub');if(ts)ts.textContent='seconds';
-  setRing(1,true);bRS();if(nx)speak('Rest. Next up: '+nx.name);
+  var mb=document.getElementById('mainBtn');if(mb){mb.textContent='RESTING...';mb.className='btn b-rest';mb.disabled=true;}
+  setRing(1,true);bRS();
+  if(nx)speak('Rest. Next up: '+nx.name);
   timerInt=setInterval(function(){
-    tLeft--;var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
+    tLeft--;
+    var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
     setRing(tLeft/tTotal,true);
     var rl2=document.getElementById('restLbl');if(rl2)rl2.textContent=tLeft+' sec left';
     if(tLeft<=3&&tLeft>0)bCD();
@@ -1224,6 +1230,11 @@ function runBetween(){
       clearInterval(timerInt);bRE();speak('Go');
       var ra2=document.getElementById('restAdj');if(ra2)ra2.classList.add('hidden');
       phase='idle';updBtn();
+      var pb2=document.getElementById('phBadge');if(pb2){pb2.textContent='READY';pb2.className='phase-badge pb-ready';}
+      var tl2=document.getElementById('timerLbl');if(tl2){tl2.textContent='TAP TO START';tl2.style.color='';}
+      var tc3=document.getElementById('tCount');if(tc3)tc3.textContent='-';
+      var ts2=document.getElementById('tSub');if(ts2)ts2.textContent='start set';
+      setRing(0,false);
     }
   },1000);
 }
