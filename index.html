@@ -1020,7 +1020,7 @@ var homeEx=[
   {name:'PULL-UPS',sets:4,reps:'4/4/4/3',rc:[4,4,4,3],rest:85,
    form:'Dead hang every rep * 1 sec hold at top * Chin clearly over bar * Controlled lower',
    watch:'Does set 3 feel slightly easier?\nSet 4 - clean reps or grind?\nQuality over forcing reps',tweak:null,isPlank:false,
-   seq:[{t:'r'},{t:'v',l:'Pull',n:550},{t:'b',bc:1,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300},{t:'b',bc:1,n:300}]},
+   repDelay:1000,seq:[{t:'r'},{t:'v',l:'Pull',n:550},{t:'b',bc:1,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300}]},
   {name:'CLOSE-GRIP PUSH-UPS',sets:2,reps:'10/6',rc:[10,6],rest:90,
    form:'Thumbs touching * 2 sec lower * 1 sec pause * Stop 1 before failure',
    watch:'Expect a drop vs hotel - pull-up fatigue is normal',tweak:null,isPlank:false,
@@ -1333,7 +1333,19 @@ function startRC(){
   mTOs.push(setTimeout(function(){if(!mRun)return;runNextRep(exs[curEx].rc[curSet]||10);},4000));
 }
 
-function runNextRep(total){if(!mRun)return;curRep++;if(curRep>total){mRun=false;setVW('Done!','');return;}runSeq(curRep,total,function(){if(mRun&&curRep<total)runNextRep(total);});}
+function runNextRep(total){
+  if(!mRun)return;curRep++;
+  if(curRep>total){mRun=false;setVW('Done!','');return;}
+  runSeq(curRep,total,function(){
+    if(!mRun||curRep>=total)return;
+    var delay=exs[curEx]&&exs[curEx].repDelay?exs[curEx].repDelay:0;
+    if(delay>0){
+      setTimeout(function(){if(mRun)runNextRep(total);},delay);
+    } else {
+      runNextRep(total);
+    }
+  });
+}
 function stopMetro(){clearMTOs();syn.cancel();setVW('\u00a0','');}
 function autoRest(){autoLog(curSet);runRestTimer(exs[curEx].rest);}
 
@@ -1933,24 +1945,53 @@ function initPlanPage(){
 function loadWeekPlan(){
   var el=document.getElementById('planSyncStatus');
   if(el){el.textContent='Syncing...';el.style.color='var(--blue)';}
-  var cbName='wt_plan_'+Date.now();
-  window[cbName]=function(result){
-    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
-    if(result&&result.plan){
-      _weekPlan=result.plan;
-      _cachedPlan=result.plan;
-    }
+  // Fetch plan and history in parallel, render when both done
+  var planDone=false,histDone=false;
+  var planData={};var histData=[];
+
+  function onBothDone(){
+    if(!planDone||!histDone)return;
+    // Overlay completed workouts from history onto plan
+    var weekDates=getWeekDates().map(function(d){return fmtDate(d);});
+    histData.forEach(function(sess){
+      if(weekDates.indexOf(sess.date)<0)return;
+      var wt=sess.workoutType||'';
+      var type=wt.indexOf('Home')>=0?'Home':wt.indexOf('Hotel')>=0?'Hotel':wt==='HIIT'?'HIIT':null;
+      if(type)planData[sess.date]=type; // actual workout overrides plan
+    });
+    _weekPlan=planData;_cachedPlan=planData;
     if(el){el.textContent='Last synced: just now (tap to refresh)';el.style.color='var(--muted)';}
     var days=getWeekDates();
     var today=fmtDate(new Date());
     renderPlanGrid(days,today);
     updateTodayCard(today);
+  }
+
+  // Fetch week plan
+  var cbP='wt_plan_'+Date.now();
+  window[cbP]=function(result){
+    window[cbP]=null;var s=document.getElementById('s_'+cbP);if(s)s.parentNode.removeChild(s);
+    if(result&&result.plan)planData=result.plan;
+    planDone=true;onBothDone();
   };
-  var url=CLOUD_URL+'?type=getWeekPlan&callback='+cbName;
-  var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
-  script.onerror=function(){if(el){el.textContent='Failed - tap to retry';el.style.color='var(--red)';}};
-  document.head.appendChild(script);
-  setTimeout(function(){if(window[cbName]){window[cbName]=null;if(el){el.textContent='Timed out - tap to retry';el.style.color='var(--red)';}}},20000);
+  var script1=document.createElement('script');script1.id='s_'+cbP;
+  script1.src=CLOUD_URL+'?type=getWeekPlan&callback='+cbP;
+  script1.onerror=function(){planDone=true;onBothDone();};
+  document.head.appendChild(script1);
+  setTimeout(function(){if(window[cbP]){window[cbP]=null;planDone=true;onBothDone();}},20000);
+
+  // Fetch history to overlay completed workouts
+  var cbH='wt_planh_'+Date.now();
+  window[cbH]=function(result){
+    window[cbH]=null;var s=document.getElementById('s_'+cbH);if(s)s.parentNode.removeChild(s);
+    if(result&&result.sessions)histData=result.sessions;
+    histDone=true;onBothDone();
+  };
+  var script2=document.createElement('script');script2.id='s_'+cbH;
+  script2.src=CLOUD_URL+'?type=getHistory&callback='+cbH;
+  script2.onerror=function(){histDone=true;onBothDone();};
+  document.head.appendChild(script2);
+  setTimeout(function(){if(window[cbH]){window[cbH]=null;histDone=true;onBothDone();}},20000);
 }
 
 function renderPlanGrid(days,today){
@@ -1963,6 +2004,7 @@ function renderPlanGrid(days,today){
     var isPast=ds<today;
     var cls='plan-day'+(isToday?' today':isPast?' past':'');
     var colorCls=PLAN_COLORS[type]||'pt-rest';
+    var isDone=histData&&histData.some(function(sess){return sess.date===ds&&sess.workoutType&&sess.workoutType!=='HIIT'||sess.date===ds&&sess.workoutType==='HIIT';});
     (function(d,dstr){html+='<div class="'+cls+'" onclick="cyclePlanType(\''+dstr+'\')">';})(d,ds);
     html+='<div class="plan-day-left">';
     html+='<div class="plan-day-name">'+dayNames[i]+'</div>';
@@ -1971,7 +2013,7 @@ function renderPlanGrid(days,today){
     html+='</div>';
     if(isToday)html+='<span class="plan-day-today-badge">TODAY</span>';
     html+='</div>';
-    html+='<div class="plan-type-btn '+colorCls+'">'+type.toUpperCase()+'</div>';
+    html+='<div class="plan-type-btn '+colorCls+'">'+(isDone?'&#10003; ':'')+type.toUpperCase()+'</div>';
     html+='</div>';
   });
   var grid=document.getElementById('planGrid');
