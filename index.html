@@ -870,14 +870,14 @@ var homeEx=[
   {name:'DIPS',sets:2,reps:'12/12',rc:[12,12],rest:85,
    form:'2 sec lower * 1 sec pause * 3 sec squeeze every rep',
    watch:'Will be harder than hotel (~12/9 expected) - normal',tweak:'3 sec squeeze every rep',isPlank:false,
-   seq:[{t:'r'},{t:'v',l:'Down',n:300},{t:'b',bc:2,n:300},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Squeeze',n:550},{t:'b',bc:3,n:550}]},
+   seq:[{t:'r'},{t:'v',l:'Down',n:300},{t:'b',bc:2,n:300},{t:'v',l:'Pause',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Up',n:550},{t:'b',bc:3,n:550}]},
   {name:'LEG RAISES',sets:2,reps:'20/20',rc:[20,20],rest:60,
    form:'Legs straight * 2 sec hold at top * 3 sec lower * No hip snap',
    watch:null,tweak:'2 sec hold at top',isPlank:false,
    seq:[{t:'r'},{t:'v',l:'Raise',n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:2,n:220},{t:'v',l:'Lower',n:300},{t:'b',bc:3,n:300}]},
   {name:'SINGLE-LEG GLUTE BRIDGES',sets:2,reps:'15/15',rc:[15,15],rest:45,
    form:'2 sec up * 2 sec squeeze * Full extension',watch:null,tweak:null,isPlank:false,
-   seq:[{t:'r'},{t:'v',l:'Up',n:550},{t:'b',bc:2,n:550},{t:'v',l:'Squeeze',n:220},{t:'b',bc:2,n:220}]},
+   seq:[{t:'r'},{t:'v',l:'Up',n:550},{t:'b',bc:2,n:550},{t:'v',l:'Squeeze',n:220},{t:'b',bc:2,n:220},{t:'v',l:'Down',n:300}]},
   {name:'SIDE PLANKS',sets:2,reps:'60 sec/side',rc:[60,60],rest:30,
    form:'Hips high * Straight body * Top arm + leg raised',
    watch:'Start LEFT side first',tweak:'Left side first',isPlank:true,seq:null},
@@ -894,14 +894,14 @@ var hotelEx=[
   {name:'DIPS',sets:2,reps:'12/12',rc:[12,12],rest:85,
    form:'2 sec lower * 1 sec pause * 3 sec squeeze every rep',
    watch:'Lock in 12/12 clean',tweak:'3 sec squeeze every rep',isPlank:false,
-   seq:[{t:'r'},{t:'v',l:'Down',n:300},{t:'b',bc:2,n:300},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Squeeze',n:550},{t:'b',bc:3,n:550}]},
+   seq:[{t:'r'},{t:'v',l:'Down',n:300},{t:'b',bc:2,n:300},{t:'v',l:'Pause',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Up',n:550},{t:'b',bc:3,n:550}]},
   {name:'LEG RAISES',sets:2,reps:'20/20',rc:[20,20],rest:60,
    form:'Legs straight * 2 sec hold at top * 3 sec lower * No hip snap',
    watch:null,tweak:'2 sec hold at top',isPlank:false,
    seq:[{t:'r'},{t:'v',l:'Raise',n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:2,n:220},{t:'v',l:'Lower',n:300},{t:'b',bc:3,n:300}]},
   {name:'SINGLE-LEG GLUTE BRIDGES',sets:2,reps:'15/15',rc:[15,15],rest:45,
    form:'2 sec up * 2 sec squeeze * Full extension',watch:null,tweak:null,isPlank:false,
-   seq:[{t:'r'},{t:'v',l:'Up',n:550},{t:'b',bc:2,n:550},{t:'v',l:'Squeeze',n:220},{t:'b',bc:2,n:220}]},
+   seq:[{t:'r'},{t:'v',l:'Up',n:550},{t:'b',bc:2,n:550},{t:'v',l:'Squeeze',n:220},{t:'b',bc:2,n:220},{t:'v',l:'Down',n:300}]},
   {name:'SIDE PLANKS',sets:2,reps:'60 sec/side',rc:[60,60],rest:30,
    form:'Hips high * Straight body * Top arm + leg raised',
    watch:'Start LEFT side first',tweak:'Left side first',isPlank:true,seq:null}
@@ -1206,37 +1206,38 @@ function runBetween(){
   clearInterval(timerInt);
   var nx=exs[curEx+1];
   tLeft=120;tTotal=120;curRestSecs=120;phase='between';
-  // Move to next exercise first, render it, THEN overlay the timer
   curEx++;curSet=0;
   renderEx();
-  // Now override the ready state with between-exercise timer
-  updBtn();
-  var pb=document.getElementById('phBadge');if(pb){pb.textContent='BETWEEN EXERCISES';pb.className='phase-badge pb-between';}
-  var tl=document.getElementById('timerLbl');if(tl){tl.textContent='2 MIN REST';tl.style.color='var(--purple)';}
-  var ra=document.getElementById('restAdj');if(ra)ra.classList.remove('hidden');
-  var rl=document.getElementById('restLbl');if(rl)rl.textContent='120 sec rest';
-  var tc=document.getElementById('tCount');if(tc)tc.textContent=tLeft;
-  var ts=document.getElementById('tSub');if(ts)ts.textContent='seconds';
-  var mb=document.getElementById('mainBtn');if(mb){mb.textContent='RESTING...';mb.className='btn b-rest';mb.disabled=true;}
-  setRing(1,true);bRS();
-  if(nx)speak('Rest. Next up: '+nx.name);
-  timerInt=setInterval(function(){
-    tLeft--;
-    var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
-    setRing(tLeft/tTotal,true);
-    var rl2=document.getElementById('restLbl');if(rl2)rl2.textContent=tLeft+' sec left';
-    if(tLeft<=3&&tLeft>0)bCD();
-    if(tLeft<=0){
-      clearInterval(timerInt);bRE();speak('Go');
-      var ra2=document.getElementById('restAdj');if(ra2)ra2.classList.add('hidden');
-      phase='idle';updBtn();
-      var pb2=document.getElementById('phBadge');if(pb2){pb2.textContent='READY';pb2.className='phase-badge pb-ready';}
-      var tl2=document.getElementById('timerLbl');if(tl2){tl2.textContent='TAP TO START';tl2.style.color='';}
-      var tc3=document.getElementById('tCount');if(tc3)tc3.textContent='-';
-      var ts2=document.getElementById('tSub');if(ts2)ts2.textContent='start set';
-      setRing(0,false);
-    }
-  },1000);
+  // Use setTimeout to ensure renderEx DOM is fully settled before overlaying timer
+  setTimeout(function(){
+    updBtn();
+    var pb=document.getElementById('phBadge');if(pb){pb.textContent='BETWEEN EXERCISES';pb.className='phase-badge pb-between';}
+    var tl=document.getElementById('timerLbl');if(tl){tl.textContent='2 MIN REST';tl.style.color='var(--purple)';}
+    var ra=document.getElementById('restAdj');if(ra)ra.classList.remove('hidden');
+    var rl=document.getElementById('restLbl');if(rl)rl.textContent='120 sec rest';
+    var tc=document.getElementById('tCount');if(tc)tc.textContent=tLeft;
+    var ts=document.getElementById('tSub');if(ts)ts.textContent='seconds';
+    var mb=document.getElementById('mainBtn');if(mb){mb.textContent='RESTING...';mb.className='btn b-rest';mb.disabled=true;}
+    setRing(1,true);bRS();
+    if(nx)speak('Rest. Next up: '+nx.name);
+    timerInt=setInterval(function(){
+      tLeft--;
+      var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
+      setRing(tLeft/tTotal,true);
+      var rl2=document.getElementById('restLbl');if(rl2)rl2.textContent=tLeft+' sec left';
+      if(tLeft<=3&&tLeft>0)bCD();
+      if(tLeft<=0){
+        clearInterval(timerInt);bRE();speak('Go');
+        var ra2=document.getElementById('restAdj');if(ra2)ra2.classList.add('hidden');
+        phase='idle';updBtn();
+        var pb2=document.getElementById('phBadge');if(pb2){pb2.textContent='READY';pb2.className='phase-badge pb-ready';}
+        var tl2=document.getElementById('timerLbl');if(tl2){tl2.textContent='TAP TO START';tl2.style.color='';}
+        var tc3=document.getElementById('tCount');if(tc3)tc3.textContent='-';
+        var ts2=document.getElementById('tSub');if(ts2)ts2.textContent='start set';
+        setRing(0,false);
+      }
+    },1000);
+  },50);
 }
 
 function nextEx(){saveCurrentInputs();clearInterval(timerInt);stopMetro();curSet=0;curEx=Math.min(curEx+1,exs.length-1);phase='idle';renderEx();}
