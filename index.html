@@ -992,7 +992,9 @@ function saveCurrentInputs(){
   if(ex.isPlank){
     for(var pi=0;pi<2;pi++){var inp=document.getElementById('pi'+pi);if(inp)logs[curEx].sets[pi].time=inp.value||logs[curEx].sets[pi].time;}
   } else {
-    for(var si=0;si<ex.rc.length;si++){var inp2=document.getElementById('si'+si);if(inp2)logs[curEx].sets[si].reps=inp2.value||logs[curEx].sets[si].reps;}
+    // Only one input visible at a time (si0 = current set)
+    var inp2=document.getElementById('si0');
+    if(inp2)logs[curEx].sets[curSet].reps=inp2.value||logs[curEx].sets[curSet].reps;
   }
   var n=document.getElementById('notesInp');if(n)logs[curEx].notes=n.value||logs[curEx].notes;
 }
@@ -1035,9 +1037,7 @@ function renderEx(){
     html+='</div>';
   } else {
     html+='<div class="log-sets-row">';
-    for(var li=0;li<ex.rc.length;li++){
-      html+='<div class="log-set-box"><label>Set '+(li+1)+' ('+ex.rc[li]+')</label><input type="number" inputmode="numeric" id="si'+li+'" placeholder="'+ex.rc[li]+'" value="'+(logs[curEx].sets[li].reps||'')+'" oninput="logs['+curEx+'].sets['+li+'].reps=this.value"></div>';
-    }
+    html+='<div class="log-set-box"><label>Set '+(curSet+1)+' of '+ex.sets+' &nbsp;(target: '+ex.rc[curSet]+')</label><input type="number" inputmode="numeric" id="si0" placeholder="'+ex.rc[curSet]+'" value="'+(logs[curEx].sets[curSet].reps||'')+'" oninput="logs['+curEx+'].sets['+curSet+'].reps=this.value"></div>';
     html+='</div>';
   }
   html+='<div class="feel-row">';
@@ -1077,7 +1077,11 @@ function saveNotes(){var n=document.getElementById('notesInp');if(n)logs[curEx].
 
 function autoLog(idx){
   var ex=exs[curEx];
-  if(!ex.isPlank){var inp=document.getElementById('si'+idx);if(inp&&!inp.value){inp.value=ex.rc[idx];logs[curEx].sets[idx].reps=String(ex.rc[idx]);}else if(inp)logs[curEx].sets[idx].reps=inp.value;}
+  if(!ex.isPlank){
+    var inp=document.getElementById('si0');
+    if(inp&&!inp.value){inp.value=ex.rc[idx];logs[curEx].sets[idx].reps=String(ex.rc[idx]);}
+    else if(inp)logs[curEx].sets[idx].reps=inp.value;
+  }
 }
 
 function clearMTOs(){for(var i=0;i<mTOs.length;i++){try{clearTimeout(mTOs[i]);clearInterval(mTOs[i]);}catch(e){}}mTOs=[];mRun=false;}
