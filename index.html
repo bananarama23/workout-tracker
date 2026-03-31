@@ -294,6 +294,23 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .bf-score{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;}
 
 .hidden{display:none!important;}
+.plan-day{background:var(--surface);border-radius:14px;padding:14px 16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:all 0.15s;}
+.plan-day:active{transform:scale(0.98);}
+.plan-day.today{border:2px solid var(--accent);background:#f0f3f7;}
+.plan-day.past{opacity:0.5;}
+.plan-day-left{display:flex;align-items:center;gap:12px;}
+.plan-day-name{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:1px;color:var(--accent);min-width:40px;}
+.plan-day-date{font-size:0.78rem;color:var(--muted);}
+.plan-day-today-badge{font-size:0.6rem;background:var(--accent);color:#fff;border-radius:10px;padding:2px 6px;margin-left:6px;font-weight:600;letter-spacing:1px;text-transform:uppercase;}
+.plan-type-btn{padding:8px 16px;border-radius:20px;font-family:'Bebas Neue',sans-serif;font-size:0.9rem;letter-spacing:1px;border:none;cursor:pointer;min-width:80px;text-align:center;}
+.pt-home{background:#e8f0fd;color:var(--accent);}
+.pt-hotel{background:#fff3e0;color:var(--accent2);}
+.pt-hiit{background:#e3f2fd;color:var(--blue);}
+.pt-rest{background:#f0f2f5;color:var(--muted);}
+.pt-travel{background:#f3e5f5;color:var(--purple);}
+.today-plan-card{background:linear-gradient(135deg,#2c3e50,#3d5166);border-radius:16px;padding:16px 20px;margin:16px 16px 0;color:#fff;}
+.today-plan-label{font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;opacity:0.7;margin-bottom:4px;}
+.today-plan-type{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:2px;}
 </style>
 </head>
 <body>
@@ -324,6 +341,13 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
         <div class="wb-label">Streak</div>
         <div class="wb-sub">weeks</div>
       </div>
+    </div>
+
+    <!-- Today Plan -->
+    <div id="todayPlanCard" class="today-plan-card" style="display:none;" onclick="navTo('workout')">
+      <div class="today-plan-label">Today's Plan</div>
+      <div class="today-plan-type" id="todayPlanType">REST</div>
+      <div style="font-size:0.75rem;opacity:0.7;margin-top:4px;">Tap to go to workout</div>
     </div>
 
     <!-- Milestone -->
@@ -381,15 +405,16 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     <p>Choose your session</p>
   </div>
   <div class="page-content">
+    <div id="planTodayBanner" style="display:none;margin:12px 16px 0;padding:12px 16px;background:#e8f0fd;border-radius:12px;font-size:0.82rem;color:var(--accent);font-weight:600;cursor:pointer;" onclick="navTo('plan')">&#128197; <span id="planTodayText">Today: Home</span> &nbsp;&#8250; Edit plan</div>
     <div class="workout-type-grid">
-      <div class="wt-card home-card" onclick="startSession('home')">
+      <div class="wt-card home-card" id="homeWtCard" onclick="startSession('home')">
         <div class="wt-icon">&#127968;</div>
         <div class="wt-title">HOME</div>
         <div class="wt-sub">Pull-up bar required</div>
         <div id="homeLoadedBadge" class="wt-loaded hidden">Workout loaded</div>
         <div id="homeLoadingMsg" class="wt-loading hidden">Loading...</div>
       </div>
-      <div class="wt-card hotel-card" onclick="startSession('hotel')">
+      <div class="wt-card hotel-card" id="hotelWtCard" onclick="startSession('hotel')">
         <div class="wt-icon">&#127976;</div>
         <div class="wt-title">HOTEL</div>
         <div class="wt-sub">No equipment needed</div>
@@ -634,6 +659,24 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   </div>
 </div>
 
+<!-- PLAN PAGE -->
+<div class="page" id="page-plan">
+  <div class="page-header">
+    <h1>WEEK PLAN</h1>
+    <p id="planWeekLabel">This week</p>
+    <div id="planSyncStatus" style="font-size:0.72rem;opacity:0.7;margin-top:6px;cursor:pointer;" onclick="loadWeekPlan()">&#8635; Tap to refresh</div>
+  </div>
+  <div class="page-content">
+    <div id="planGrid" style="padding:16px;display:flex;flex-direction:column;gap:10px;">
+      <div style="text-align:center;color:var(--muted);padding:40px 0;">Loading plan...</div>
+    </div>
+    <div style="padding:0 16px 16px;">
+      <button onclick="saveWeekPlan()" style="width:100%;padding:16px;background:var(--accent);color:#fff;border:none;border-radius:14px;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:1px;cursor:pointer;margin-bottom:10px;">SAVE PLAN TO SHEET</button>
+      <div id="planMsg" style="text-align:center;padding:8px;border-radius:10px;font-size:0.8rem;font-weight:600;min-height:20px;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- BOTTOM NAV -->
 <nav class="bottom-nav">
   <button class="nav-btn active" id="nav-home" onclick="navTo('home')">
@@ -651,6 +694,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <button class="nav-btn" id="nav-progress" onclick="navTo('progress')">
     <span class="nav-icon" style="font-size:20px;font-weight:bold;font-family:serif;">P</span>
     <span class="nav-label">Progress</span>
+  </button>
+  <button class="nav-btn" id="nav-plan" onclick="navTo('plan')">
+    <span class="nav-icon" style="font-size:20px;font-weight:bold;font-family:serif;">&#128197;</span>
+    <span class="nav-label">Plan</span>
   </button>
 </nav>
 
@@ -737,6 +784,7 @@ function navTo(page){
   if(page==='progress')loadProgressData();
   if(page==='home')loadHomeData();
   if(page==='workout')tryLoadWorkout();
+  if(page==='plan')initPlanPage();
 }
 
 // LOCAL HISTORY
@@ -922,6 +970,7 @@ function renderHomeData(sessions){
     var mt=document.getElementById('milestoneText');
     if(mt&&mt.textContent==='Loading...')mt.textContent='Complete a home workout to check pull-up progress';
   },500);
+  loadTodayPlan();
 }  // end renderHomeData
 
 function calcStreak(sessions){
@@ -1074,6 +1123,25 @@ function endSession(){
 function backToWorkout(){sessionActive=false;navTo('home');}
 
 function tryLoadWorkout(){
+  // Show plan banner if we have a planned workout type
+  var today=fmtDate(new Date());
+  var planned=_cachedPlan?_cachedPlan[today]:null;
+  var banner=document.getElementById('planTodayBanner');
+  var planText=document.getElementById('planTodayText');
+  if(banner&&planned&&planned!=='Rest'&&planned!=='Travel'){
+    banner.style.display='block';
+    if(planText)planText.textContent='Today: '+planned;
+    // Highlight the right card
+    var hc=document.getElementById('homeWtCard');
+    if(hc)hc.style.opacity=planned==='Home'?'1':'0.5';
+    var htc=document.getElementById('hotelWtCard');
+    if(htc)htc.style.opacity=planned==='Hotel'?'1':'0.5';
+  } else if(banner){
+    banner.style.display='none';
+    var hc2=document.getElementById('homeWtCard');if(hc2)hc2.style.opacity='1';
+    var htc2=document.getElementById('hotelWtCard');if(htc2)htc2.style.opacity='1';
+  }
+
   document.getElementById('currentWorkoutInfo').textContent='Loading from sheet...';
   document.getElementById('homeLoadedBadge').classList.add('hidden');
   document.getElementById('hotelLoadedBadge').classList.add('hidden');
@@ -1820,6 +1888,312 @@ function showHistory(type){
 function goEditSession(){closeHistory();navTo('log');switchLogTab('edit');}
 function closeHistory(){
   document.getElementById('historyOverlay').style.display='none';
+}
+
+// -- WEEK PLANNER ----------------------------------------------------------
+var PLAN_TYPES=['Home','Hotel','HIIT','Rest','Travel'];
+var PLAN_COLORS={'Home':'pt-home','Hotel':'pt-hotel','HIIT':'pt-hiit','Rest':'pt-rest','Travel':'pt-travel'};
+var _weekPlan={}; // {dateStr: type}
+var _cachedPlan=null;
+
+function getWeekDates(){
+  // Get Mon-Sun of current week
+  var today=new Date();
+  var day=today.getDay(); // 0=Sun
+  var mon=new Date(today);
+  mon.setDate(today.getDate()-(day===0?6:day-1));
+  mon.setHours(0,0,0,0);
+  var days=[];
+  for(var i=0;i<7;i++){
+    var d=new Date(mon);
+    d.setDate(mon.getDate()+i);
+    days.push(d);
+  }
+  return days;
+}
+
+function fmtDate(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function initPlanPage(){
+  var days=getWeekDates();
+  var today=fmtDate(new Date());
+  // Set week label
+  var mon=days[0],sun=days[6];
+  document.getElementById('planWeekLabel').textContent=
+    mon.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' - '+
+    sun.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  // Render with current plan data
+  renderPlanGrid(days,today);
+  // Fetch from sheet
+  loadWeekPlan();
+}
+
+function loadWeekPlan(){
+  var el=document.getElementById('planSyncStatus');
+  if(el){el.textContent='Syncing...';el.style.color='var(--blue)';}
+  var cbName='wt_plan_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    if(result&&result.plan){
+      _weekPlan=result.plan;
+      _cachedPlan=result.plan;
+    }
+    if(el){el.textContent='Last synced: just now (tap to refresh)';el.style.color='var(--muted)';}
+    var days=getWeekDates();
+    var today=fmtDate(new Date());
+    renderPlanGrid(days,today);
+    updateTodayCard(today);
+  };
+  var url=CLOUD_URL+'?type=getWeekPlan&callback='+cbName;
+  var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
+  script.onerror=function(){if(el){el.textContent='Failed - tap to retry';el.style.color='var(--red)';}};
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;if(el){el.textContent='Timed out - tap to retry';el.style.color='var(--red)';}}},20000);
+}
+
+function renderPlanGrid(days,today){
+  var html='';
+  var dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  days.forEach(function(d,i){
+    var ds=fmtDate(d);
+    var type=_weekPlan[ds]||'Rest';
+    var isToday=ds===today;
+    var isPast=ds<today;
+    var cls='plan-day'+(isToday?' today':isPast?' past':'');
+    var colorCls=PLAN_COLORS[type]||'pt-rest';
+    (function(d,dstr){html+='<div class="'+cls+'" onclick="cyclePlanType(\''+dstr+'\')">';})(d,ds);
+    html+='<div class="plan-day-left">';
+    html+='<div class="plan-day-name">'+dayNames[i]+'</div>';
+    html+='<div>';
+    html+='<div class="plan-day-date">'+d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</div>';
+    html+='</div>';
+    if(isToday)html+='<span class="plan-day-today-badge">TODAY</span>';
+    html+='</div>';
+    html+='<div class="plan-type-btn '+colorCls+'">'+type.toUpperCase()+'</div>';
+    html+='</div>';
+  });
+  var grid=document.getElementById('planGrid');
+  if(grid)grid.innerHTML=html;
+}
+
+function cyclePlanType(dateStr){
+  var current=_weekPlan[dateStr]||'Rest';
+  var idx=PLAN_TYPES.indexOf(current);
+  var next=PLAN_TYPES[(idx+1)%PLAN_TYPES.length];
+  _weekPlan[dateStr]=next;
+  var days=getWeekDates();
+  var today=fmtDate(new Date());
+  renderPlanGrid(days,today);
+  if(dateStr===today)updateTodayCard(today);
+}
+
+function saveWeekPlan(){
+  var msg=document.getElementById('planMsg');
+  if(msg){msg.textContent='Saving...';msg.style.background='#e3f2fd';msg.style.color='var(--blue)';}
+  var payload={type:'setWeekPlan',plan:_weekPlan};
+  var enc=encodeURIComponent(JSON.stringify(payload));
+  var cbName='wt_savep_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    if(msg){msg.textContent='Saved!';msg.style.background='#e8f5e9';msg.style.color='var(--green)';}
+    setTimeout(function(){if(msg)msg.textContent='';},3000);
+    updateTodayCard(fmtDate(new Date()));
+    loadHomeData();
+  };
+  var url=CLOUD_URL+'?payload='+enc+'&callback='+cbName;
+  var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
+  script.onerror=function(){if(msg){msg.textContent='Failed to save';msg.style.background='#fce4ec';msg.style.color='var(--red)';}};
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;if(msg){msg.textContent='Timed out';msg.style.background='#fce4ec';msg.style.color='var(--red)';}}},20000);
+}
+
+function updateTodayCard(today){
+  var type=_weekPlan[today]||null;
+  var card=document.getElementById('todayPlanCard');
+  var label=document.getElementById('todayPlanType');
+  if(!card||!label)return;
+  if(!type||type==='Rest'||type==='Travel'){
+    card.style.display='none';
+    return;
+  }
+  card.style.display='block';
+  label.textContent=type.toUpperCase()+' WORKOUT';
+  // Pre-select workout type on W page
+  if(type==='Home'||type==='Hotel'){
+    // Store for tryLoadWorkout to use
+    window._plannedWorkoutType=type.toLowerCase();
+  } else {
+    window._plannedWorkoutType=null;
+  }
+}
+
+function loadTodayPlan(){
+  // Called from loadHomeData to show today's plan
+  if(_cachedPlan){
+    updateTodayCard(fmtDate(new Date()));
+    return;
+  }
+  var cbName='wt_todayplan_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    if(result&&result.plan){
+      _weekPlan=result.plan;_cachedPlan=result.plan;
+      updateTodayCard(fmtDate(new Date()));
+    }
+  };
+  var url=CLOUD_URL+'?type=getWeekPlan&callback='+cbName;
+  var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
+  script.onerror=function(){};
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;}},20000);
+}
+
+function loadProgressData(){
+  fetchHistory(function(sheetSessions){
+    var sessions=sheetSessions&&sheetSessions.length>0?sheetSessions:[];
+    buildPullUpChart(sessions);
+    buildHeatmap(sessions);
+    buildPRs(sessions);
+  });
+  buildCholDisplay();
+}
+
+function buildPullUpChart(sessions){
+  var puData=[];
+  var cutoff=new Date();cutoff.setDate(cutoff.getDate()-56);
+  sessions.forEach(function(s){
+    if(parseLocalDate(s.date)<cutoff)return;
+    var exs2=s.exercises||[];
+    exs2.forEach(function(ex){
+      if(ex.name==='PULL-UPS'){
+        var sets=ex.sets||[];var tot=0;sets.forEach(function(v){tot+=parseInt(v)||0;});
+        if(tot>0)puData.push({date:s.date,total:tot,feel:ex.feel});
+      }
+    });
+  });
+  var canvas=document.getElementById('pullupCanvas');
+  var empty=document.getElementById('pullupEmpty');
+  if(puData.length<2){if(canvas)canvas.style.display='none';if(empty)empty.style.display='block';return;}
+  if(canvas)canvas.style.display='block';if(empty)empty.style.display='none';
+  drawLineChart(canvas,puData.map(function(d){return d.date;}),puData.map(function(d){return d.total;}),'Pull-Ups','#2c3e50',16,'4/4/4/4 goal');
+}
+
+function drawLineChart(canvas,labels,values,label,color,goalVal,goalLabel){
+  var ctx=canvas.getContext('2d');
+  var W=canvas.offsetWidth||300;var H=150;
+  canvas.width=W*window.devicePixelRatio;canvas.height=H*window.devicePixelRatio;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
+  ctx.clearRect(0,0,W,H);
+  if(!values.length)return;
+  var pad={top:16,right:16,bottom:28,left:28};
+  var cW=W-pad.left-pad.right,cH=H-pad.top-pad.bottom;
+  var min=Math.min.apply(null,values)-1,max=Math.max(Math.max.apply(null,values)+1,goalVal?goalVal+1:0);
+  var xStep=values.length>1?cW/(values.length-1):cW;
+  if(goalVal){
+    var gy=pad.top+cH-(goalVal-min)/(max-min)*cH;
+    ctx.strokeStyle='#e74c3c';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(pad.left,gy);ctx.lineTo(pad.left+cW,gy);ctx.stroke();
+    ctx.setLineDash([]);ctx.fillStyle='#e74c3c';ctx.font='10px DM Sans';ctx.fillText(goalLabel||'Goal',pad.left+cW-60,gy-4);
+  }
+  ctx.strokeStyle='#e8ecf0';ctx.lineWidth=1;
+  for(var g=0;g<=4;g++){var gy2=pad.top+cH*g/4;ctx.beginPath();ctx.moveTo(pad.left,gy2);ctx.lineTo(pad.left+cW,gy2);ctx.stroke();}
+  ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.lineJoin='round';
+  ctx.beginPath();
+  values.forEach(function(v,i){var x=pad.left+i*xStep,y=pad.top+cH-(v-min)/(max-min)*cH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+  ctx.stroke();
+  values.forEach(function(v,i){
+    var x=pad.left+i*xStep,y=pad.top+cH-(v-min)/(max-min)*cH;
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle=color;ctx.font='bold 10px DM Sans';ctx.textAlign='center';ctx.fillText(v,x,y-8);
+  });
+  ctx.fillStyle='#95a5a6';ctx.font='9px DM Sans';ctx.textAlign='center';
+  var step=Math.ceil(labels.length/4);
+  labels.forEach(function(l,i){if(i%step===0){var x=pad.left+i*xStep;var d=parseLocalDate(l);ctx.fillText((d.getMonth()+1)+'/'+(d.getDate()),x,H-6);}});
+}
+
+function buildHeatmap(sessions){
+  var cutoff=new Date();cutoff.setDate(cutoff.getDate()-56);
+  var exMap={};var dates=[];
+  sessions.forEach(function(s){
+    if(parseLocalDate(s.date)<cutoff)return;
+    if(dates.indexOf(s.date)<0)dates.push(s.date);
+    var exs2=s.exercises||[];
+    exs2.forEach(function(ex){
+      if(!exMap[ex.name])exMap[ex.name]=[];
+      exMap[ex.name].push({date:s.date,feel:ex.feel});
+    });
+  });
+  dates.sort();
+  var exNames=Object.keys(exMap);
+  if(!exNames.length){document.getElementById('heatmapContent').innerHTML='<div style="color:var(--muted);font-size:0.85rem;padding:10px;">Complete a few sessions to see your feel trend</div>';return;}
+  var html='<table class="heatmap-table"><thead><tr><th></th>';
+  dates.forEach(function(d){var dt=parseLocalDate(d);html+='<th class="hm-date-label">'+(dt.getMonth()+1)+'/'+(dt.getDate())+'</th>';});
+  html+='</tr></thead><tbody>';
+  exNames.forEach(function(name){
+    html+='<tr><td class="hm-ex-label">'+name.replace('SINGLE-LEG GLUTE BRIDGES','BRIDGES').replace('CLOSE-GRIP PUSH-UPS','PUSH-UPS').replace('SUPINATED PULL-UPS','SUP PU')+'</td>';
+    dates.forEach(function(d){
+      var entry=null;
+      exMap[name].forEach(function(e){if(e.date===d)entry=e;});
+      if(entry&&entry.feel){
+        var cls=entry.feel==='Medium'?'hm-m':entry.feel==='Medium-hard'?'hm-mh':'hm-h';
+        var abbr=entry.feel==='Medium'?'M':entry.feel==='Medium-hard'?'MH':'H';
+        html+='<td class="hm-cell '+cls+'">'+abbr+'</td>';
+      } else {
+        html+='<td class="hm-cell hm-empty"></td>';
+      }
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  html+='<div style="display:flex;gap:10px;margin-top:10px;font-size:0.72rem;">';
+  html+='<span class="hm-cell hm-m" style="width:auto;height:auto;padding:2px 8px;border-radius:4px;">M = Medium</span>';
+  html+='<span class="hm-cell hm-mh" style="width:auto;height:auto;padding:2px 8px;border-radius:4px;">MH = Medium-hard</span>';
+  html+='<span class="hm-cell hm-h" style="width:auto;height:auto;padding:2px 8px;border-radius:4px;">H = Hard</span>';
+  html+='</div>';
+  document.getElementById('heatmapContent').innerHTML=html;
+}
+
+function buildPRs(sessions){
+  var prs={};
+  sessions.forEach(function(s){
+    var exs2=s.exercises||[];
+    exs2.forEach(function(ex){
+      if(ex.isPlank==='yes'){
+        var l=parseInt(ex.sets[0])||0,r=parseInt(ex.sets[1])||0;
+        var key=ex.name+' hold';
+        if(!prs[key]||Math.max(l,r)>prs[key].val){prs[key]={val:Math.max(l,r),date:s.date,unit:'sec'};}
+      } else {
+        var sets=ex.sets||[];
+        sets.forEach(function(sv,si){
+          var v=parseInt(sv)||0;if(!v)return;
+          var key2=ex.name+' set '+(si+1);
+          if(!prs[key2]||v>prs[key2].val){prs[key2]={val:v,date:s.date,unit:'reps'};}
+        });
+      }
+    });
+  });
+  var keys=Object.keys(prs);
+  if(!keys.length){document.getElementById('prGrid').innerHTML='<div style="color:var(--muted);font-size:0.85rem;grid-column:1/-1;padding:10px;">No records yet</div>';return;}
+  var html='';
+  keys.forEach(function(k){
+    var pr=prs[k];var d=parseLocalDate(pr.date);
+    html+='<div class="pr-box"><div class="pr-name">'+k+'</div><div class="pr-val">'+pr.val+'<span style="font-size:0.8rem;color:var(--muted)"> '+pr.unit+'</span></div><div class="pr-date">'+(d.getMonth()+1)+'/'+(d.getDate())+'/'+d.getFullYear()+'</div></div>';
+  });
+  document.getElementById('prGrid').innerHTML=html;
+}
+
+function buildCholDisplay(){
+  var baseline={hdl:24,ldl:132,total:175,trig:97,ratio:7.3};
+  document.getElementById('cholRows').innerHTML=
+    '<div class="chol-row"><div class="chol-label">HDL (target 40+)</div><div class="chol-val" style="color:var(--red);">'+baseline.hdl+'</div><div class="chol-trend">Baseline</div></div>'+
+    '<div class="chol-row"><div class="chol-label">LDL</div><div class="chol-val" style="color:var(--yellow);">'+baseline.ldl+'</div><div class="chol-trend">Baseline</div></div>'+
+    '<div class="chol-row"><div class="chol-label">TC/HDL Ratio</div><div class="chol-val" style="color:var(--red);">'+baseline.ratio+'</div><div class="chol-trend">Target: <5</div></div>';
+  document.getElementById('cholEmpty').style.display='block';
+  document.getElementById('cholCanvas').style.display='none';
 }
 
 buildEffBtns();
