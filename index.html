@@ -304,6 +304,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     <div class="greeting" id="greeting">Good morning</div>
     <h1>WORKOUT TRACKER <span style="font-size:0.9rem;opacity:0.5;letter-spacing:1px;">v1.6</span></h1>
     <p id="todayDate"></p>
+    <div id="homeSyncStatus" onclick="loadHomeData()" style="font-size:0.72rem;opacity:0.7;margin-top:6px;cursor:pointer;">&#8635; Tap to refresh</div>
   </div>
   <div class="page-content">
     <!-- Week progress -->
@@ -611,6 +612,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <div class="page-header" style="background:linear-gradient(135deg,#2c3e50,#3d5166);">
     <h1>PROGRESS</h1>
     <p>Last 8 weeks</p>
+    <div id="progressSyncStatus" onclick="loadProgressData()" style="font-size:0.72rem;opacity:0.7;margin-top:6px;cursor:pointer;">&#8635; Tap to refresh</div>
   </div>
   <div class="page-content">
     <!-- Pull-up chart -->
@@ -793,19 +795,63 @@ function syncData(payload,msgId){
 }
 
 // FETCH FROM SHEET
-function fetchHistory(cb){
+var lastSyncTime=null;
+
+function setSyncStatus(elId, state, time){
+  var el=document.getElementById(elId);
+  if(!el)return;
+  if(state==='syncing'){el.textContent='Syncing...';}
+  else if(state==='ok'){
+    lastSyncTime=time||new Date();
+    el.textContent='Last synced: '+fmtAgo(lastSyncTime)+' (tap to refresh)';
+    // Update every minute
+    clearInterval(el._ticker);
+    el._ticker=setInterval(function(){el.textContent='Last synced: '+fmtAgo(lastSyncTime)+' (tap to refresh)';},60000);
+  }
+  else if(state==='fail'){el.textContent='Failed - tap to retry';}
+}
+
+function fmtAgo(d){
+  var secs=Math.round((new Date()-d)/1000);
+  if(secs<60)return 'just now';
+  if(secs<3600)return Math.floor(secs/60)+' min ago';
+  return Math.floor(secs/3600)+' hr ago';
+}
+
+function fetchHistory(cb,statusElId){
+  setSyncStatus(statusElId||'homeSyncStatus','syncing');
+  setSyncStatus('progressSyncStatus','syncing');
   var cbName='wt_hist_'+Date.now();
   window[cbName]=function(result){
     window[cbName]=null;var s=document.getElementById('s_'+cbName);
     if(s)s.parentNode.removeChild(s);
-    cb(result&&result.sessions?result.sessions:null);
+    var sessions=result&&result.sessions?result.sessions:null;
+    if(sessions){
+      setSyncStatus('homeSyncStatus','ok');
+      setSyncStatus('progressSyncStatus','ok');
+    } else {
+      setSyncStatus('homeSyncStatus','fail');
+      setSyncStatus('progressSyncStatus','fail');
+    }
+    cb(sessions);
   };
   var url=CLOUD_URL+'?type=getHistory&callback='+cbName;
   var script=document.createElement('script');
   script.id='s_'+cbName;script.src=url;
-  script.onerror=function(){cb(null);};
+  script.onerror=function(){
+    setSyncStatus('homeSyncStatus','fail');
+    setSyncStatus('progressSyncStatus','fail');
+    cb(null);
+  };
   document.head.appendChild(script);
-  setTimeout(function(){if(window[cbName]){window[cbName]=null;cb(null);}},8000);
+  setTimeout(function(){
+    if(window[cbName]){
+      window[cbName]=null;
+      setSyncStatus('homeSyncStatus','fail');
+      setSyncStatus('progressSyncStatus','fail');
+      cb(null);
+    }
+  },20000);
 }
 
 function fetchFromSheet(type,cb){
@@ -819,7 +865,7 @@ function fetchFromSheet(type,cb){
   script.id='s_'+cbName;script.src=url;
   script.onerror=function(){cb(null);};
   document.head.appendChild(script);
-  setTimeout(function(){if(window[cbName]){window[cbName]=null;cb(null);}},8000);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;cb(null);}},20000);
 }
 
 // HOME DATA
@@ -1859,7 +1905,7 @@ function loadPastForDate(date){
   var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
   script.onerror=function(){if(msg){msg.textContent='Could not reach sheet';msg.style.background='#fce4ec';msg.style.color='var(--red)';}};
   document.head.appendChild(script);
-  setTimeout(function(){if(window[cbName]){window[cbName]=null;if(msg){msg.textContent='Timed out';msg.style.background='#fce4ec';msg.style.color='var(--red)';}}},8000);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;if(msg){msg.textContent='Timed out';msg.style.background='#fce4ec';msg.style.color='var(--red)';}}},20000);
 }
 
 function prefillPastSession(session){
