@@ -1414,7 +1414,7 @@ function runBetween(){
   },50);
 }
 
-function nextEx(){saveCurrentInputs();clearInterval(timerInt);stopMetro();curSet=0;curEx=Math.min(curEx+1,exs.length-1);phase='idle';renderEx();}
+function nextEx(){saveCurrentInputs();clearInterval(timerInt);stopMetro();curSet=0;if(curEx<exs.length-1){curEx++;showBetweenPrompt();}}
 function prevEx(){saveCurrentInputs();clearInterval(timerInt);stopMetro();curSet=0;curEx=Math.max(curEx-1,0);phase='idle';renderEx();}
 
 function nextSet(){
