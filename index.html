@@ -903,7 +903,7 @@ function renderHomeData(sessions){
   document.getElementById('wkStreak').textContent=streak;
   if(sessions.length>0){
     var last=sessions[sessions.length-1];
-    var d=new Date(last.date);
+    var d=parseLocalDate(last.date);
     var dStr=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
     var rec=last.exercises&&last.exercises.length?last.exercises[0].feel:'';
     var feelCls=rec==='Medium'?'feel-good':rec==='Hard'?'feel-hard':'feel-ok';
@@ -913,7 +913,7 @@ function renderHomeData(sessions){
   var hiitWks=0,totalWks=0;
   var weekCounts={};
   for(var j=0;j<sessions.length;j++){
-    var s=sessions[j];var d2=new Date(s.date);
+    var s=sessions[j];var d2=parseLocalDate(s.date);
     var cutoff=new Date();cutoff.setDate(cutoff.getDate()-56);
     if(d2<cutoff)continue;
     if(!weekCounts[s.week])weekCounts[s.week]={str:0,hiit:0};
@@ -982,7 +982,7 @@ var homeEx=[
   {name:'PULL-UPS',sets:4,reps:'4/4/4/3',rc:[4,4,4,3],rest:85,
    form:'Dead hang every rep * 1 sec hold at top * Chin clearly over bar * Controlled lower',
    watch:'Does set 3 feel slightly easier?\nSet 4 - clean reps or grind?\nQuality over forcing reps',tweak:null,isPlank:false,
-   seq:[{t:'r'},{t:'v',l:'Pull',n:550},{t:'b',bc:2,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300},{t:'b',bc:1,n:300}]},
+   seq:[{t:'r'},{t:'v',l:'Pull',n:550},{t:'b',bc:1,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300},{t:'b',bc:1,n:300}]},
   {name:'CLOSE-GRIP PUSH-UPS',sets:2,reps:'10/6',rc:[10,6],rest:90,
    form:'Thumbs touching * 2 sec lower * 1 sec pause * Stop 1 before failure',
    watch:'Expect a drop vs hotel - pull-up fatigue is normal',tweak:null,isPlank:false,
@@ -1209,6 +1209,11 @@ function autoLog(idx){
 function clearMTOs(){for(var i=0;i<mTOs.length;i++){try{clearTimeout(mTOs[i]);clearInterval(mTOs[i]);}catch(e){}}mTOs=[];mRun=false;}
 function hiStep(idx){var ss=document.querySelectorAll('.seq-step');for(var i=0;i<ss.length;i++)ss[i].classList.toggle('act',i===idx);}
 function setVW(txt,cls){var el=document.getElementById('vWord');if(el){el.textContent=txt;el.className='voice-word'+(cls?' '+cls:'');}}
+function parseLocalDate(str){
+  if(!str)return new Date();
+  var p=str.split('-');
+  return new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2]));
+}
 var ords=['one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen','twenty'];
 
 function runSeq(repNum,total,onDone){
@@ -1414,6 +1419,7 @@ function prevEx(){saveCurrentInputs();clearInterval(timerInt);stopMetro();curSet
 
 function nextSet(){
   if(curSet<exs[curEx].sets-1){
+    stopMetro();clearInterval(timerInt);
     saveCurrentInputs();curSet++;phase='idle';updBtn();renderEx();
   }
 }
@@ -1614,7 +1620,7 @@ function renderLastSession(){
   if(!sessions.length){el.innerHTML='<div style="color:var(--muted);font-size:0.85rem;padding:20px 0;text-align:center;">No sessions logged yet</div>';return;}
   var last=sessions[sessions.length-1];
   var html='<div style="font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:4px;">'+last.workoutType+'</div>';
-  html+='<div style="font-size:0.85rem;color:var(--muted);margin-bottom:16px;">'+new Date(last.date).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'</div>';
+  html+='<div style="font-size:0.85rem;color:var(--muted);margin-bottom:16px;">'+parseLocalDate(last.date).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'</div>';
   var exs2=last.exercises||[];
   exs2.forEach(function(ex,ei){
     html+='<div style="margin-bottom:14px;">';
@@ -1730,7 +1736,7 @@ function buildPullUpChart(sessions){
   var puData=[];
   var cutoff=new Date();cutoff.setDate(cutoff.getDate()-56);
   sessions.forEach(function(s){
-    if(new Date(s.date)<cutoff)return;
+    if(parseLocalDate(s.date)<cutoff)return;
     var exs2=s.exercises||[];
     exs2.forEach(function(ex){
       if(ex.name==='PULL-UPS'){
@@ -1785,7 +1791,7 @@ function buildHeatmap(sessions){
   var cutoff=new Date();cutoff.setDate(cutoff.getDate()-56);
   var exMap={};var dates=[];
   sessions.forEach(function(s){
-    if(new Date(s.date)<cutoff)return;
+    if(parseLocalDate(s.date)<cutoff)return;
     if(dates.indexOf(s.date)<0)dates.push(s.date);
     var exs2=s.exercises||[];
     exs2.forEach(function(ex){
@@ -1846,7 +1852,7 @@ function buildPRs(sessions){
   if(!keys.length){document.getElementById('prGrid').innerHTML='<div style="color:var(--muted);font-size:0.85rem;grid-column:1/-1;padding:10px;">No records yet</div>';return;}
   var html='';
   keys.forEach(function(k){
-    var pr=prs[k];var d=new Date(pr.date);
+    var pr=prs[k];var d=parseLocalDate(pr.date);
     html+='<div class="pr-box"><div class="pr-name">'+k+'</div><div class="pr-val">'+pr.val+'<span style="font-size:0.8rem;color:var(--muted)"> '+pr.unit+'</span></div><div class="pr-date">'+(d.getMonth()+1)+'/'+(d.getDate())+'/'+d.getFullYear()+'</div></div>';
   });
   document.getElementById('prGrid').innerHTML=html;
