@@ -1242,11 +1242,12 @@ function prevSet(){
   }
 }
 
-// SWIPE DETECTION
+// SWIPE DETECTION - attached once to page-session, never rebuilt
 var swipeStartX=0,swipeStartY=0;
 function initSwipe(){
-  var el=document.getElementById('sessionContent');
-  if(!el)return;
+  var el=document.getElementById('page-session');
+  if(!el||el._swipeInit)return;
+  el._swipeInit=true;
   el.addEventListener('touchstart',function(e){
     swipeStartX=e.touches[0].clientX;
     swipeStartY=e.touches[0].clientY;
@@ -1254,7 +1255,6 @@ function initSwipe(){
   el.addEventListener('touchend',function(e){
     var dx=e.changedTouches[0].clientX-swipeStartX;
     var dy=e.changedTouches[0].clientY-swipeStartY;
-    // Only register horizontal swipe if it's clearly horizontal
     if(Math.abs(dx)<40||Math.abs(dx)<Math.abs(dy)*1.5)return;
     if(dx<0){nextSet();}else{prevSet();}
   },{passive:true});
