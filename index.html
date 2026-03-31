@@ -862,7 +862,7 @@ var homeEx=[
   {name:'PULL-UPS',sets:4,reps:'4/4/4/3',rc:[4,4,4,3],rest:85,
    form:'Dead hang every rep * 1 sec hold at top * Chin clearly over bar * Controlled lower',
    watch:'Does set 3 feel slightly easier?\nSet 4 - clean reps or grind?\nQuality over forcing reps',tweak:null,isPlank:false,
-   seq:[{t:'r'},{t:'v',l:'Pull',n:550},{t:'b',bc:1,n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300}]},
+   seq:[{t:'r'},{t:'v',l:'Pull',n:550},{t:'v',l:'Hold',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Lower',n:300}]},
   {name:'CLOSE-GRIP PUSH-UPS',sets:2,reps:'10/6',rc:[10,6],rest:90,
    form:'Thumbs touching * 2 sec lower * 1 sec pause * Stop 1 before failure',
    watch:'Expect a drop vs hotel - pull-up fatigue is normal',tweak:null,isPlank:false,
@@ -1098,7 +1098,7 @@ function runSeq(repNum,total,onDone){
       } else {i++;}
     } else if(step.t==='v'){
       (function(s2,idx2){tl.push({time:t,fn:function(){hiStep(idx2);setVW(s2.l,'');speak(s2.l);}});})(step,i);
-      t+=900;i++;
+      t+=500;i++;
     } else if(step.t==='b'){
       for(var b=0;b<step.bc;b++){
         (function(lb,lsi,s3){tl.push({time:t,fn:function(){if(lb===0)hiStep(lsi);setVW('*'.repeat(s3.bc),'bp');beep(s3.n||550,0.12);}});})(b,i,step);
