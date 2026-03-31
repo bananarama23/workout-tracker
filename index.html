@@ -442,7 +442,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <div class="session-footer active" id="sessionFooter">
     <button class="btn b-skip" id="footerPrev" onclick="prevEx()" style="flex:0 0 80px;">PREV</button>
     <button class="btn b-start" id="footerMain" onclick="handleMain()" style="flex:1;">START SET</button>
-    <button class="btn b-skip" id="footerNext" onclick="nextEx()" style="flex:0 0 80px;">NEXT EX</button>
+    <button class="btn b-skip" id="footerNext" onclick="footerNextAction()" style="flex:0 0 80px;">NEXT SET</button>
   </div>
 </div>
 
@@ -578,7 +578,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     <div class="log-panel" id="panel-past">
       <div class="log-field">
         <label>Date</label>
-        <input type="date" class="log-input" id="pastDate">
+        <input type="date" class="log-input" id="pastDate" onchange="loadPastForDate(this.value)">
       </div>
       <div class="log-field">
         <label>Type</label>
@@ -649,6 +649,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     </div>
 
     <div class="refresh-btn" onclick="loadProgressData()">&#8635; Refresh data</div>
+    <div style="text-align:center;padding:4px;"><button onclick="if(confirm('Clear all local session data?')){localStorage.removeItem('wt_hist_v3');loadHomeData();}" style="background:none;border:none;color:#e8ecf0;font-size:0.65rem;cursor:pointer;">clear local data</button></div>
   </div>
 </div>
 
@@ -828,8 +829,13 @@ function loadHomeData(){
   document.getElementById('greeting').textContent=greet;
   document.getElementById('todayDate').textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
   fetchHistory(function(sheetSessions){
-    var sessions=sheetSessions||getAllSessions();
-    renderHomeData(sessions);
+    // Always use sheet data. Fall back to localStorage ONLY if sheet completely fails.
+    if(sheetSessions&&sheetSessions.length>0){
+      renderHomeData(sheetSessions);
+    } else {
+      // Sheet returned nothing - show zeroes, don't use localStorage
+      renderHomeData([]);
+    }
   });
 }
 function renderHomeData(sessions){
@@ -1242,7 +1248,17 @@ function updBtn(){
   if(btn){btn.textContent=label;btn.className=cls;btn.disabled=dis;}
   if(fbtn){fbtn.textContent=label;fbtn.className='btn '+cls.split(' ')[1];fbtn.disabled=dis;}
   if(fprev)fprev.disabled=(curEx===0&&curSet===0);
-  if(fnext)fnext.disabled=(curEx>=exs.length-1);
+  // Next button: show NEXT SET if more sets remain, NEXT EX if on last set
+  if(fnext){
+    var onLastSet=!exs[curEx]||curSet>=exs[curEx].sets-1;
+    fnext.textContent=onLastSet?'NEXT EX':'NEXT SET';
+    fnext.disabled=onLastSet&&curEx>=exs.length-1;
+  }
+}
+
+function footerNextAction(){
+  var onLastSet=!exs[curEx]||curSet>=exs[curEx].sets-1;
+  if(onLastSet){nextEx();}else{nextSet();}
 }
 
 function adjRest(d){
@@ -1269,10 +1285,13 @@ function runRestTimer(secs){
   setRing(1,true);bRS();
   timerInt=setInterval(function(){
     tLeft--;var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
+    var fb=document.getElementById('footerMain');if(fb)fb.textContent=tLeft+'s';
     setRing(tLeft/tTotal,true);
     var rl2=document.getElementById('restLbl');if(rl2)rl2.textContent=tLeft+' sec left';
     if(tLeft<=3&&tLeft>0)bCD();
-    if(tLeft<=0){clearInterval(timerInt);bRE();speak('Go');restDone();}
+    if(tLeft<=0){clearInterval(timerInt);bRE();speak('Go');
+      var fb2=document.getElementById('footerMain');if(fb2){fb2.textContent='START SET';fb2.className='btn b-start';fb2.disabled=false;}
+      restDone();}
   },1000);
 }
 
@@ -1326,6 +1345,7 @@ function runBetween(){
     timerInt=setInterval(function(){
       tLeft--;
       var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
+      var fb=document.getElementById('footerMain');if(fb)fb.textContent=tLeft+'s';
       setRing(tLeft/tTotal,true);
       var rl2=document.getElementById('restLbl');if(rl2)rl2.textContent=tLeft+' sec left';
       if(tLeft<=3&&tLeft>0)bCD();
@@ -1652,7 +1672,7 @@ function saveBody(){
 
 function loadProgressData(){
   fetchHistory(function(sheetSessions){
-    var sessions=sheetSessions||getAllSessions();
+    var sessions=sheetSessions&&sheetSessions.length>0?sheetSessions:[];
     buildPullUpChart(sessions);
     buildHeatmap(sessions);
     buildPRs(sessions);
@@ -1811,6 +1831,59 @@ function initPastSession(){
   var today=new Date().toISOString().slice(0,10);
   document.getElementById('pastDate').value=today;
   setPastType('home');
+  loadPastForDate(today);
+}
+
+function loadPastForDate(date){
+  if(!date)return;
+  // Always fetch from sheet - never use localStorage
+  var msg=document.getElementById('pastMsg');
+  if(msg){msg.textContent='Loading...';msg.style.background='#e3f2fd';msg.style.color='var(--blue)';}
+  var cbName='wt_past_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    if(msg)msg.textContent='';
+    if(result&&result.sessions){
+      for(var i=0;i<result.sessions.length;i++){
+        var sess=result.sessions[i];
+        if(sess.date===date&&sess.workoutType&&sess.workoutType.indexOf('Strength')>=0){
+          prefillPastSession(sess);return;
+        }
+      }
+    }
+    // Nothing found for this date - just reset to defaults
+    if(msg){msg.textContent='No session found for this date';msg.style.background='#fff3e0';msg.style.color='var(--yellow)';}
+    setTimeout(function(){if(msg)msg.textContent='';},3000);
+  };
+  var url=CLOUD_URL+'?type=getHistory&callback='+cbName;
+  var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
+  script.onerror=function(){if(msg){msg.textContent='Could not reach sheet';msg.style.background='#fce4ec';msg.style.color='var(--red)';}};
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;if(msg){msg.textContent='Timed out';msg.style.background='#fce4ec';msg.style.color='var(--red)';}}},8000);
+}
+
+function prefillPastSession(session){
+  // Set workout type
+  var wt=(session.workoutType||'').toLowerCase();
+  setPastType(wt.indexOf('hotel')>=0?'hotel':'home');
+  // Fill in reps
+  var exArr=session.exercises||[];
+  exArr.forEach(function(ex,ei){
+    if(ex.isPlank==='yes'){
+      var l=document.getElementById('past_'+ei+'_0');
+      var r=document.getElementById('past_'+ei+'_1');
+      if(l)l.value=ex.sets[0]||'';
+      if(r)r.value=ex.sets[1]||'';
+    } else {
+      (ex.sets||[]).forEach(function(v,si){
+        var inp=document.getElementById('past_'+ei+'_'+si);
+        if(inp)inp.value=v||'';
+      });
+    }
+    // Feel
+    if(ex.feel)setPastExFeel(ei,ex.feel);
+  });
+  if(session.duration){document.getElementById('pastDur').value=session.duration;}
 }
 
 function setPastType(type){
