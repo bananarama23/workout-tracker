@@ -319,7 +319,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 <div class="page active" id="page-home">
   <div class="page-header">
     <div class="greeting" id="greeting">Good morning</div>
-    <h1>WORKOUT TRACKER <span style="font-size:0.9rem;opacity:0.5;letter-spacing:1px;">v1.6</span></h1>
+    <h1>WORKOUT TRACKER <span style="font-size:0.9rem;opacity:0.5;letter-spacing:1px;">v1.9</span></h1>
     <p id="todayDate"></p>
     <div id="homeSyncStatus" onclick="loadHomeData()" style="font-size:0.72rem;opacity:0.7;margin-top:6px;cursor:pointer;">&#8635; Tap to refresh</div>
   </div>
@@ -1333,14 +1333,19 @@ function startRC(){
   mTOs.push(setTimeout(function(){if(!mRun)return;runNextRep(exs[curEx].rc[curSet]||10);},4000));
 }
 
+// Rep delays by exercise - applied regardless of sheet or default loading
+var REP_DELAYS={'PULL-UPS':1000,'SUPINATED PULL-UPS':0};
+
 function runNextRep(total){
   if(!mRun)return;curRep++;
   if(curRep>total){mRun=false;setVW('Done!','');return;}
   runSeq(curRep,total,function(){
     if(!mRun||curRep>=total)return;
-    var delay=exs[curEx]&&exs[curEx].repDelay?exs[curEx].repDelay:0;
+    var name=exs[curEx]?exs[curEx].name:'';
+    var delay=REP_DELAYS.hasOwnProperty(name)?REP_DELAYS[name]:(exs[curEx]&&exs[curEx].repDelay?exs[curEx].repDelay:0);
     if(delay>0){
-      setTimeout(function(){if(mRun)runNextRep(total);},delay);
+      var t=setTimeout(function(){if(mRun)runNextRep(total);},delay);
+      mTOs.push(t);
     } else {
       runNextRep(total);
     }
@@ -1942,56 +1947,62 @@ function initPlanPage(){
   loadWeekPlan();
 }
 
+function overlayCompletedWorkouts(planData, sessions){
+  // Overlay any completed workouts from this week onto the plan
+  var weekDates=getWeekDates().map(function(d){return fmtDate(d);});
+  (sessions||[]).forEach(function(sess){
+    if(weekDates.indexOf(sess.date)<0)return;
+    var wt=sess.workoutType||'';
+    var type=wt.indexOf('Home')>=0?'Home':wt.indexOf('Hotel')>=0?'Hotel':wt==='HIIT'?'HIIT':null;
+    if(type)planData[sess.date]=type;
+  });
+  return planData;
+}
+
 function loadWeekPlan(){
   var el=document.getElementById('planSyncStatus');
   if(el){el.textContent='Syncing...';el.style.color='var(--blue)';}
-  // Fetch plan and history in parallel, render when both done
-  var planDone=false,histDone=false;
-  var planData={};var histData=[];
 
-  function onBothDone(){
-    if(!planDone||!histDone)return;
-    // Overlay completed workouts from history onto plan
-    var weekDates=getWeekDates().map(function(d){return fmtDate(d);});
-    histData.forEach(function(sess){
-      if(weekDates.indexOf(sess.date)<0)return;
-      var wt=sess.workoutType||'';
-      var type=wt.indexOf('Home')>=0?'Home':wt.indexOf('Hotel')>=0?'Hotel':wt==='HIIT'?'HIIT':null;
-      if(type)planData[sess.date]=type; // actual workout overrides plan
-    });
-    _weekPlan=planData;_cachedPlan=planData;
-    if(el){el.textContent='Last synced: just now (tap to refresh)';el.style.color='var(--muted)';}
-    var days=getWeekDates();
-    var today=fmtDate(new Date());
-    renderPlanGrid(days,today);
-    updateTodayCard(today);
-  }
-
-  // Fetch week plan
   var cbP='wt_plan_'+Date.now();
   window[cbP]=function(result){
     window[cbP]=null;var s=document.getElementById('s_'+cbP);if(s)s.parentNode.removeChild(s);
-    if(result&&result.plan)planData=result.plan;
-    planDone=true;onBothDone();
+    var planData=result&&result.plan?result.plan:{};
+    // Use cached sessions from H page if available, otherwise fetch
+    if(_cachedSessions&&_cachedSessions.length){
+      planData=overlayCompletedWorkouts(planData,_cachedSessions);
+      _weekPlan=planData;_cachedPlan=planData;
+      if(el){el.textContent='Last synced: just now (tap to refresh)';el.style.color='var(--muted)';}
+      renderPlanGrid(getWeekDates(),fmtDate(new Date()));
+      updateTodayCard(fmtDate(new Date()));
+    } else {
+      // No cached sessions - fetch history too
+      fetchHistory(function(sessions){
+        _cachedSessions=sessions||[];
+        planData=overlayCompletedWorkouts(planData,_cachedSessions);
+        _weekPlan=planData;_cachedPlan=planData;
+        if(el){el.textContent='Last synced: just now (tap to refresh)';el.style.color='var(--muted)';}
+        renderPlanGrid(getWeekDates(),fmtDate(new Date()));
+        updateTodayCard(fmtDate(new Date()));
+      });
+    }
   };
   var script1=document.createElement('script');script1.id='s_'+cbP;
   script1.src=CLOUD_URL+'?type=getWeekPlan&callback='+cbP;
-  script1.onerror=function(){planDone=true;onBothDone();};
-  document.head.appendChild(script1);
-  setTimeout(function(){if(window[cbP]){window[cbP]=null;planDone=true;onBothDone();}},20000);
-
-  // Fetch history to overlay completed workouts
-  var cbH='wt_planh_'+Date.now();
-  window[cbH]=function(result){
-    window[cbH]=null;var s=document.getElementById('s_'+cbH);if(s)s.parentNode.removeChild(s);
-    if(result&&result.sessions)histData=result.sessions;
-    histDone=true;onBothDone();
+  script1.onerror=function(){
+    if(el){el.textContent='Failed - tap to retry';el.style.color='var(--red)';}
+    // Still try to show completed workouts
+    var planData=overlayCompletedWorkouts({},_cachedSessions||[]);
+    _weekPlan=planData;_cachedPlan=planData;
+    renderPlanGrid(getWeekDates(),fmtDate(new Date()));
+    updateTodayCard(fmtDate(new Date()));
   };
-  var script2=document.createElement('script');script2.id='s_'+cbH;
-  script2.src=CLOUD_URL+'?type=getHistory&callback='+cbH;
-  script2.onerror=function(){histDone=true;onBothDone();};
-  document.head.appendChild(script2);
-  setTimeout(function(){if(window[cbH]){window[cbH]=null;histDone=true;onBothDone();}},20000);
+  document.head.appendChild(script1);
+  setTimeout(function(){if(window[cbP]){window[cbP]=null;if(el){el.textContent='Timed out - tap to retry';el.style.color='var(--red)';}
+    var planData=overlayCompletedWorkouts({},_cachedSessions||[]);
+    _weekPlan=planData;_cachedPlan=planData;
+    renderPlanGrid(getWeekDates(),fmtDate(new Date()));
+    updateTodayCard(fmtDate(new Date()));
+  }},20000);
 }
 
 function renderPlanGrid(days,today){
@@ -2072,24 +2083,38 @@ function updateTodayCard(today){
 }
 
 function loadTodayPlan(){
-  // Called from loadHomeData to show today's plan
+  // Always overlay completed workouts when checking today's plan
+  var today=fmtDate(new Date());
+  // If we have cached plan, overlay sessions and show
   if(_cachedPlan){
-    updateTodayCard(fmtDate(new Date()));
+    var plan=overlayCompletedWorkouts(JSON.parse(JSON.stringify(_cachedPlan)),_cachedSessions||[]);
+    _weekPlan=plan;_cachedPlan=plan;
+    updateTodayCard(today);
     return;
   }
+  // Fetch plan from sheet
   var cbName='wt_todayplan_'+Date.now();
   window[cbName]=function(result){
     window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
-    if(result&&result.plan){
-      _weekPlan=result.plan;_cachedPlan=result.plan;
-      updateTodayCard(fmtDate(new Date()));
-    }
+    var plan=result&&result.plan?result.plan:{};
+    plan=overlayCompletedWorkouts(plan,_cachedSessions||[]);
+    _weekPlan=plan;_cachedPlan=plan;
+    updateTodayCard(today);
   };
   var url=CLOUD_URL+'?type=getWeekPlan&callback='+cbName;
   var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
-  script.onerror=function(){};
+  script.onerror=function(){
+    // Even without plan, overlay completed workouts
+    var plan=overlayCompletedWorkouts({},_cachedSessions||[]);
+    _weekPlan=plan;_cachedPlan=plan;
+    updateTodayCard(today);
+  };
   document.head.appendChild(script);
-  setTimeout(function(){if(window[cbName]){window[cbName]=null;}},20000);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;
+    var plan=overlayCompletedWorkouts({},_cachedSessions||[]);
+    _weekPlan=plan;_cachedPlan=plan;
+    updateTodayCard(today);
+  }},20000);
 }
 
 function loadProgressData(){
