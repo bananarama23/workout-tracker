@@ -2025,7 +2025,7 @@ function renderPlanGrid(days,today){
     var isPast=ds<today;
     var cls='plan-day'+(isToday?' today':isPast?' past':'');
     var colorCls=PLAN_COLORS[type]||'pt-rest';
-    var isDone=histData&&histData.some(function(sess){return sess.date===ds&&sess.workoutType&&sess.workoutType!=='HIIT'||sess.date===ds&&sess.workoutType==='HIIT';});
+    var isDone=_cachedSessions&&_cachedSessions.some(function(sess){return sess.date===ds;});
     (function(d,dstr){html+='<div class="'+cls+'" onclick="cyclePlanType(\''+dstr+'\')">';})(d,ds);
     html+='<div class="plan-day-left">';
     html+='<div class="plan-day-name">'+dayNames[i]+'</div>';
