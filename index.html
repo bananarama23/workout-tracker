@@ -144,7 +144,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 
 /* WORKOUT PAGE */
 .workout-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px 16px 8px;}
-.wt-card{background:var(--surface);border-radius:var(--radius-lg);padding:28px 16px;text-align:center;cursor:pointer;transition:all 0.2s;border:2px solid var(--border);position:relative;overflow:hidden;}
+.wt-card{background:var(--surface);border-radius:var(--radius-lg);padding:28px 16px;text-align:center;cursor:pointer;transition:all 0.2s;border:1px solid var(--border);position:relative;overflow:hidden;}
 .wt-card:active{transform:scale(0.97);}
 .wt-card.home-card{border-color:var(--accent);background:linear-gradient(160deg,#1a1f00,var(--surface));}
 .wt-card.hotel-card{border-color:var(--orange);background:linear-gradient(160deg,#1f0f00,var(--surface));}
@@ -559,7 +559,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <div class="page-content" id="sessionContent" style="padding-top:8px;padding-bottom:80px;">
     <!-- Exercise card rendered here -->
   </div>
-  <div class="session-footer active" id="sessionFooter">
+  <div class="session-footer" id="sessionFooter">
     <button class="btn b-skip" id="footerPrev" onclick="prevEx()" style="flex:0 0 80px;">PREV</button>
     <button class="btn b-start" id="footerMain" onclick="handleMain()" style="flex:1;">START SET</button>
     <button class="btn b-skip" id="footerNext" onclick="footerNextAction()" style="flex:0 0 80px;">NEXT SET</button>
@@ -582,7 +582,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
         <div id="summaryRows"></div>
       </div>
       <button class="copy-btn" id="copyBtn" onclick="copyResults()">&#128203; COPY  -  PASTE INTO CLAUDE</button>
-      <button onclick="backToWorkout()" style="width:100%;padding:14px;background:#f8f9fa;border:2px solid var(--border);border-radius:14px;font-family:'DM Sans',sans-serif;font-size:0.9rem;color:var(--muted);cursor:pointer;">Back to Home</button>
+      <button onclick="backToWorkout()" style="width:100%;padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:14px;font-family:'DM Sans',sans-serif;font-size:0.88rem;color:var(--muted);cursor:pointer;font-weight:600;">Back to Home</button>
     </div>
   </div>
 </div>
@@ -689,7 +689,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
         <div>
           <div style="font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:4px;">Session Date</div>
-          <select id="editDatePicker" onchange="loadEditSession(this.value)" style="background:#f8f9fa;border:2px solid var(--border);border-radius:10px;padding:8px 12px;font-family:DM Sans,sans-serif;font-size:0.9rem;color:var(--text);width:100%;">
+          <select id="editDatePicker" onchange="loadEditSession(this.value)" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-family:DM Sans,sans-serif;font-size:0.9rem;color:var(--text);width:100%;">
             <option value="">Loading sessions...</option>
           </select>
         </div>
@@ -799,7 +799,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <div style="background:#fff;border-radius:20px 20px 0 0;padding:20px;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));width:100%;max-height:80vh;overflow-y:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent);" id="historyTitle">HISTORY</div>
-      <button onclick="closeHistory()" style="background:#f8f9fa;border:2px solid var(--border);border-radius:50%;width:32px;height:32px;font-size:1.2rem;cursor:pointer;color:var(--muted);">&#x2715;</button>
+      <button onclick="closeHistory()" style="background:var(--surface2);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;font-size:1.2rem;cursor:pointer;color:var(--muted);">&#x2715;</button>
     </div>
     <div id="historyContent" style="font-size:0.85rem;color:var(--muted);">Loading...</div>
   </div>
@@ -1013,6 +1013,7 @@ function navTo(page){
   if(page==='home')loadHomeData();
   if(page==='workout')tryLoadWorkout();
   if(page==='plan')initPlanPage();
+  if(page==='log')initEditTab();
 }
 
 // LOCAL HISTORY
@@ -1653,7 +1654,7 @@ function showBetweenPrompt(){
     +'<div style="font-family:Bebas Neue,sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent);text-align:center;">EXERCISE COMPLETE</div>'
     +'<div style="font-size:0.85rem;color:var(--muted);text-align:center;">Next up: <strong>'+nxName+'</strong></div>'
     +'<button onclick="runBetween()" style="width:100%;max-width:280px;padding:18px;background:var(--blue);color:#fff;border:none;border-radius:14px;font-family:Bebas Neue,sans-serif;font-size:1.2rem;letter-spacing:2px;cursor:pointer;">START 2 MIN REST</button>'
-    +'<button onclick="skipBetween()" style="width:100%;max-width:280px;padding:14px;background:#f8f9fa;color:var(--muted);border:2px solid var(--border);border-radius:14px;font-family:DM Sans,sans-serif;font-size:0.85rem;cursor:pointer;">Skip rest - go now</button>'
+    +'<button onclick="skipBetween()" style="width:100%;max-width:280px;padding:14px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);border-radius:14px;font-family:DM Sans,sans-serif;font-size:0.85rem;cursor:pointer;">Skip rest - go now</button>'
     +'</div>';
   bRE();speak('Exercise done. '+nxName+' is next.');
 }
@@ -1768,13 +1769,13 @@ function finishWorkout(){
     rows+='<div class="sum-row"><div style="flex:1"><div class="sum-name">'+ex.name+'</div>';
     if(ex.isPlank){
       rows+='<div style="display:flex;gap:6px;margin-top:4px;">';
-      rows+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">LEFT</div><input type="number" inputmode="numeric" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.4rem;text-align:center;border:2px solid var(--border);border-radius:8px;background:#f8f9fa;color:var(--text);" value="'+(log.sets[0].time||'')+'" oninput="logs['+ei+'].sets[0].time=this.value"></div>';
-      rows+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">RIGHT</div><input type="number" inputmode="numeric" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.4rem;text-align:center;border:2px solid var(--border);border-radius:8px;background:#f8f9fa;color:var(--text);" value="'+(log.sets[1].time||'')+'" oninput="logs['+ei+'].sets[1].time=this.value"></div>';
+      rows+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">LEFT</div><input type="number" inputmode="numeric" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.4rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);" value="'+(log.sets[0].time||'')+'" oninput="logs['+ei+'].sets[0].time=this.value"></div>';
+      rows+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">RIGHT</div><input type="number" inputmode="numeric" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.4rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);" value="'+(log.sets[1].time||'')+'" oninput="logs['+ei+'].sets[1].time=this.value"></div>';
       rows+='</div>';
     } else {
       rows+='<div style="display:flex;gap:6px;margin-top:4px;">';
       log.sets.forEach(function(s,si){
-        rows+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">S'+(si+1)+'</div><input type="number" inputmode="numeric" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.4rem;text-align:center;border:2px solid var(--border);border-radius:8px;background:#f8f9fa;color:var(--text);" value="'+(s.reps||'')+'" oninput="logs['+ei+'].sets['+si+'].reps=this.value"></div>';
+        rows+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">S'+(si+1)+'</div><input type="number" inputmode="numeric" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.4rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);" value="'+(s.reps||'')+'" oninput="logs['+ei+'].sets['+si+'].reps=this.value"></div>';
       });
       rows+='</div>';
     }
@@ -1979,13 +1980,13 @@ function loadEditSessionFromData(date,sessions){
     html+='<div style="font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px;">'+ex.name+'</div>';
     if(ex.isPlank==='yes'){
       html+='<div style="display:flex;gap:8px;">';
-      html+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">LEFT (sec)</div><input type="number" inputmode="numeric" data-ei="'+ei+'" data-si="0" data-plank="1" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.6rem;text-align:center;border:2px solid var(--border);border-radius:8px;background:#f8f9fa;color:var(--blue);padding:6px;" value="'+(ex.sets[0]||'')+'"></div>';
-      html+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">RIGHT (sec)</div><input type="number" inputmode="numeric" data-ei="'+ei+'" data-si="1" data-plank="1" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.6rem;text-align:center;border:2px solid var(--border);border-radius:8px;background:#f8f9fa;color:var(--blue);padding:6px;" value="'+(ex.sets[1]||'')+'"></div>';
+      html+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">LEFT (sec)</div><input type="number" inputmode="numeric" data-ei="'+ei+'" data-si="0" data-plank="1" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.6rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--blue);padding:6px;" value="'+(ex.sets[0]||'')+'"></div>';
+      html+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">RIGHT (sec)</div><input type="number" inputmode="numeric" data-ei="'+ei+'" data-si="1" data-plank="1" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.6rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--blue);padding:6px;" value="'+(ex.sets[1]||'')+'"></div>';
       html+='</div>';
     } else {
       html+='<div style="display:flex;gap:6px;">';
       (ex.sets||[]).forEach(function(v,si){
-        html+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">S'+(si+1)+'</div><input type="number" inputmode="numeric" data-ei="'+ei+'" data-si="'+si+'" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.6rem;text-align:center;border:2px solid var(--border);border-radius:8px;background:#f8f9fa;color:var(--text);padding:6px;" value="'+(v||'')+'"></div>';
+        html+='<div style="flex:1;text-align:center"><div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px;">S'+(si+1)+'</div><input type="number" inputmode="numeric" data-ei="'+ei+'" data-si="'+si+'" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.6rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);padding:6px;" value="'+(v||'')+'"></div>';
       });
       html+='</div>';
     }
@@ -1998,7 +1999,7 @@ function loadEditSessionFromData(date,sessions){
       html+='<button class="feel-btn'+(on?' '+cls:'')+'" data-ei="'+ei+'" data-feel="'+f+'" onclick="editFeelClick(this)" style="font-size:0.65rem;">'+f+'</button>';
     });
     html+='</div>';
-    html+='<textarea style="width:100%;margin-top:6px;background:#f8f9fa;border:2px solid var(--border);border-radius:8px;font-family:DM Sans,sans-serif;font-size:0.82rem;padding:8px;resize:none;height:36px;color:var(--text);" data-ei="'+ei+'" placeholder="Notes...">'+(ex.notes||'')+'</textarea>';
+    html+='<textarea style="width:100%;margin-top:6px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-family:DM Sans,sans-serif;font-size:0.82rem;padding:8px;resize:none;height:36px;color:var(--text);" data-ei="'+ei+'" placeholder="Notes...">'+(ex.notes||'')+'</textarea>';
     html+='</div>';
   });
   if(el)el.innerHTML=html;
@@ -2504,6 +2505,14 @@ function buildCholDisplay(){
     '<div class="chol-row"><div class="chol-label">TC/HDL Ratio</div><div class="chol-val" style="color:var(--red);">'+baseline.ratio+'</div><div class="chol-trend">Target: <5</div></div>';
   document.getElementById('cholEmpty').style.display='block';
   document.getElementById('cholCanvas').style.display='none';
+}
+
+function initDates(){
+  var today=new Date().toISOString().slice(0,10);
+  var hiitDate=document.getElementById('hiitDate');if(hiitDate)hiitDate.value=today;
+  var cholDate=document.getElementById('cholDate');if(cholDate)cholDate.value=today;
+  var bodyDate=document.getElementById('bodyDate');if(bodyDate)bodyDate.value=today;
+  var pastDate=document.getElementById('pastDate');if(pastDate)pastDate.value=today;
 }
 
 buildEffBtns();
