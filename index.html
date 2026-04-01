@@ -294,6 +294,17 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .bf-score{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;}
 
 .hidden{display:none!important;}
+.sync-badge-corner{position:absolute;top:12px;right:14px;padding:3px 8px;border-radius:10px;font-size:0.6rem;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;display:flex;align-items:center;gap:4px;}
+.sync-live{background:rgba(39,174,96,0.25);color:#27ae60;}
+.sync-loading{background:rgba(255,255,255,0.2);color:rgba(255,255,255,0.9);}
+.sync-cached{background:rgba(243,156,18,0.25);color:#f39c12;}
+.sync-offline{background:rgba(231,76,60,0.25);color:#e74c3c;}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+.sync-badge-corner{position:absolute;top:12px;right:12px;padding:3px 8px;border-radius:10px;font-size:0.6rem;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer;}
+.sbc-syncing{background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8);}
+.sbc-live{background:rgba(39,174,96,0.25);color:#a8e6c3;}
+.sbc-cached{background:rgba(243,156,18,0.25);color:#f9d98e;}
+.sbc-offline{background:rgba(231,76,60,0.25);color:#f5b7b1;}
 .plan-day{background:var(--surface);border-radius:14px;padding:14px 16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:all 0.15s;}
 .plan-day:active{transform:scale(0.98);}
 .plan-day.today{border:2px solid var(--accent);background:#f0f3f7;}
@@ -320,6 +331,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <div class="page-header">
     <div class="greeting" id="greeting">Good morning</div>
     <h1>WORKOUT TRACKER <span style="font-size:0.9rem;opacity:0.5;letter-spacing:1px;">v1.9</span></h1>
+    <div class="sync-badge-corner sync-loading" id="syncBadgeH"><div class="sync-dot"></div><span id="syncTextH">Syncing</span></div>
+    <div class="sync-badge-corner sbc-syncing" id="syncBadgeH" onclick="refreshAllData()">&#8635; Syncing</div>
     <p id="todayDate"></p>
     <div id="homeSyncStatus" onclick="loadHomeData()" style="font-size:0.72rem;opacity:0.7;margin-top:6px;cursor:pointer;">&#8635; Tap to refresh</div>
   </div>
@@ -403,6 +416,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <div class="page-header">
     <h1>WORKOUT</h1>
     <p>Choose your session</p>
+    <div class="sync-badge-corner sync-loading" id="syncBadgeW"><div class="sync-dot"></div><span id="syncTextW">Syncing</span></div>
+    <div class="sync-badge-corner sbc-syncing" id="syncBadgeW" onclick="refreshAllData()">&#8635; Syncing</div>
   </div>
   <div class="page-content">
     <div id="planTodayBanner" style="display:none;margin:12px 16px 0;padding:12px 16px;background:#e8f0fd;border-radius:12px;font-size:0.82rem;color:var(--accent);font-weight:600;cursor:pointer;" onclick="navTo('plan')">&#128197; <span id="planTodayText">Today: Home</span> &nbsp;&#8250; Edit plan</div>
@@ -616,6 +631,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <div class="page-header" style="background:linear-gradient(135deg,#2c3e50,#3d5166);">
     <h1>PROGRESS</h1>
     <p>Last 8 weeks</p>
+    <div class="sync-badge-corner sync-loading" id="syncBadgeP"><div class="sync-dot"></div><span id="syncTextP">Syncing</span></div>
     <div id="progressSyncStatus" onclick="loadProgressData()" style="font-size:0.72rem;opacity:0.7;margin-top:6px;cursor:pointer;">&#8635; Tap to refresh</div>
   </div>
   <div class="page-content">
@@ -664,6 +680,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <div class="page-header">
     <h1>WEEK PLAN</h1>
     <p id="planWeekLabel">This week</p>
+    <div class="sync-badge-corner sync-loading" id="syncBadgePlan"><div class="sync-dot"></div><span id="syncTextPlan">Syncing</span></div>
     <div id="planSyncStatus" style="font-size:0.72rem;opacity:0.7;margin-top:6px;cursor:pointer;" onclick="loadWeekPlan()">&#8635; Tap to refresh</div>
   </div>
   <div class="page-content">
@@ -725,6 +742,141 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 <script>
 var CLOUD_URL='https://script.google.com/macros/s/AKfycbyWZ1VoxhQ5OPgnWRIpnYgDw9RvjepJvZEKaycOJ807cpB_bwDA0rCwGj_W_ZVbWZ1t/exec';
 var HIST_KEY='wt_hist_v3';
+var CACHE_KEY='wt_sheet_cache';
+var CACHE_TTL=86400000; // 24 hours
+
+// -- SHEET CACHE --------------------------------------------------------
+function saveCache(sessions){
+  try{
+    localStorage.setItem(CACHE_KEY,JSON.stringify({
+      sessions:sessions,
+      ts:Date.now()
+    }));
+  }catch(e){}
+}
+
+function loadCache(){
+  try{
+    var raw=localStorage.getItem(CACHE_KEY);
+    if(!raw)return null;
+    var obj=JSON.parse(raw);
+    if(!obj||!obj.sessions)return null;
+    return obj; // {sessions, ts}
+  }catch(e){return null;}
+}
+
+function cacheAgeStr(ts){
+  var secs=Math.round((Date.now()-ts)/1000);
+  if(secs<60)return 'just now';
+  if(secs<3600)return Math.floor(secs/60)+' min ago';
+  if(secs<86400)return Math.floor(secs/3600)+' hr ago';
+  return Math.floor(secs/86400)+' days ago';
+}
+
+function setSyncBadges(state, detail){
+  var badges=['H','W','P','Plan'];
+  badges.forEach(function(id){
+    var badge=document.getElementById('syncBadge'+id);
+    var textEl=document.getElementById('syncText'+id);
+    if(!badge)return;
+    badge.className='sync-badge-corner';
+    if(state==='syncing'||state==='loading'){
+      badge.classList.add('sync-loading');
+      if(textEl)textEl.textContent='Syncing';
+    } else if(state==='live'){
+      badge.classList.add('sync-live');
+      if(textEl)textEl.textContent='Live';
+    } else if(state==='cached'){
+      badge.classList.add('sync-cached');
+      if(textEl)textEl.textContent='Cached'+(detail?' '+detail:'');
+    } else {
+      badge.classList.add('sync-offline');
+      if(textEl)textEl.textContent='Offline';
+    }
+  });
+}
+// Alias for consistency
+function setSyncBadge(state,detail){setSyncBadges(state,detail);}
+
+// Central data fetch - used by all pages
+var _sheetSessions=null;
+var _sheetFetchInProgress=false;
+var _sheetFetchCallbacks=[];
+
+function getSheetSessions(cb){
+  // If we have fresh live data, use it
+  if(_sheetSessions){cb(_sheetSessions);return;}
+  // Queue callback
+  _sheetFetchCallbacks.push(cb);
+  if(_sheetFetchInProgress)return;
+  _sheetFetchInProgress=true;
+  setSyncBadges('syncing');
+
+  var cbName='wt_sess_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;
+    var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    _sheetFetchInProgress=false;
+    if(result&&result.sessions&&result.sessions.length){
+      _sheetSessions=result.sessions;
+      saveCache(result.sessions);
+      setSyncBadges('live');
+    } else {
+      // Use cache
+      var cached=loadCache();
+      if(cached){
+        _sheetSessions=cached.sessions;
+        setSyncBadges('cached',cacheAgeStr(cached.ts));
+      } else {
+        _sheetSessions=[];
+        setSyncBadges('offline');
+      }
+    }
+    var cbs=_sheetFetchCallbacks.slice();
+    _sheetFetchCallbacks=[];
+    cbs.forEach(function(fn){fn(_sheetSessions);});
+  };
+  var url=CLOUD_URL+'?type=getHistory&callback='+cbName;
+  var script=document.createElement('script');
+  script.id='s_'+cbName;script.src=url;
+  script.onerror=function(){
+    _sheetFetchInProgress=false;
+    var cached=loadCache();
+    if(cached){_sheetSessions=cached.sessions;setSyncBadges('cached',cacheAgeStr(cached.ts));}
+    else{_sheetSessions=[];setSyncBadges('offline');}
+    var cbs=_sheetFetchCallbacks.slice();_sheetFetchCallbacks=[];
+    cbs.forEach(function(fn){fn(_sheetSessions);});
+  };
+  document.head.appendChild(script);
+  setTimeout(function(){
+    if(!window[cbName])return;
+    window[cbName]=null;_sheetFetchInProgress=false;
+    var cached=loadCache();
+    if(cached){_sheetSessions=cached.sessions;setSyncBadges('cached',cacheAgeStr(cached.ts));}
+    else{_sheetSessions=[];setSyncBadges('offline');}
+    var cbs=_sheetFetchCallbacks.slice();_sheetFetchCallbacks=[];
+    cbs.forEach(function(fn){fn(_sheetSessions);});
+  },20000);
+}
+
+function refreshAllData(){
+  // Force fresh fetch
+  _sheetSessions=null;
+  _cachedSessions=null;
+  _cachedPlan=null;
+  setSyncBadges('syncing');
+  getSheetSessions(function(sessions){
+    _cachedSessions=sessions;
+    renderHomeData(sessions);
+    buildPullUpChart(sessions);
+    buildHeatmap(sessions);
+    buildPRs(sessions);
+    var planData=overlayCompletedWorkouts(_cachedPlan?JSON.parse(JSON.stringify(_cachedPlan)):{},sessions);
+    _weekPlan=planData;
+    renderPlanGrid(getWeekDates(),fmtDate(new Date()));
+    updateTodayCard(fmtDate(new Date()));
+  });
+}
 
 // WAKE LOCK
 var wl=null;
@@ -809,6 +961,62 @@ function getWeekNum(d){
   return 1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7);
 }
 
+// SHEET CACHE
+var CACHE_KEY='wt_sheet_cache';
+var CACHE_TTL=24*60*60*1000; // 24 hours
+
+function saveCache(sessions){
+  try{
+    localStorage.setItem(CACHE_KEY,JSON.stringify({
+      sessions:sessions,
+      ts:Date.now()
+    }));
+  }catch(e){}
+}
+
+function loadCache(){
+  try{
+    var raw=localStorage.getItem(CACHE_KEY);
+    if(!raw)return null;
+    var d=JSON.parse(raw);
+    if(!d||!d.sessions)return null;
+    return d; // {sessions, ts}
+  }catch(e){return null;}
+}
+
+function cacheAgeStr(ts){
+  var secs=Math.round((Date.now()-ts)/1000);
+  if(secs<60)return 'just now';
+  if(secs<3600)return Math.floor(secs/60)+'m ago';
+  if(secs<86400)return Math.floor(secs/3600)+'h ago';
+  return Math.floor(secs/86400)+'d ago';
+}
+
+// Badge IDs for all 4 pages
+var SYNC_BADGES=['H','W','P','Plan'];
+
+function setSyncBadge(state, detail){
+  SYNC_BADGES.forEach(function(id){
+    var badge=document.getElementById('syncBadge'+id);
+    var text=document.getElementById('syncText'+id);
+    if(!badge)return;
+    badge.className='sync-badge-corner';
+    if(state==='loading'){
+      badge.classList.add('sync-loading');
+      if(text)text.textContent='Syncing';
+    } else if(state==='live'){
+      badge.classList.add('sync-live');
+      if(text)text.textContent='Live';
+    } else if(state==='cached'){
+      badge.classList.add('sync-cached');
+      if(text)text.textContent='Cached '+(detail||'');
+    } else if(state==='offline'){
+      badge.classList.add('sync-offline');
+      if(text)text.textContent='Offline';
+    }
+  });
+}
+
 // CLOUD SYNC
 function syncData(payload,msgId){
   var el=msgId?document.getElementById(msgId):null;
@@ -855,40 +1063,19 @@ function fmtAgo(d){
   return Math.floor(secs/3600)+' hr ago';
 }
 
-function fetchHistory(cb,statusElId){
-  setSyncStatus(statusElId||'homeSyncStatus','syncing');
-  setSyncStatus('progressSyncStatus','syncing');
-  var cbName='wt_hist_'+Date.now();
-  window[cbName]=function(result){
-    window[cbName]=null;var s=document.getElementById('s_'+cbName);
-    if(s)s.parentNode.removeChild(s);
-    var sessions=result&&result.sessions?result.sessions:null;
-    if(sessions){
-      setSyncStatus('homeSyncStatus','ok');
-      setSyncStatus('progressSyncStatus','ok');
-    } else {
-      setSyncStatus('homeSyncStatus','fail');
-      setSyncStatus('progressSyncStatus','fail');
-    }
-    cb(sessions);
-  };
-  var url=CLOUD_URL+'?type=getHistory&callback='+cbName;
-  var script=document.createElement('script');
-  script.id='s_'+cbName;script.src=url;
-  script.onerror=function(){
-    setSyncStatus('homeSyncStatus','fail');
-    setSyncStatus('progressSyncStatus','fail');
-    cb(null);
-  };
-  document.head.appendChild(script);
-  setTimeout(function(){
-    if(window[cbName]){
-      window[cbName]=null;
-      setSyncStatus('homeSyncStatus','fail');
-      setSyncStatus('progressSyncStatus','fail');
-      cb(null);
-    }
-  },20000);
+function fetchHistory(cb){
+  // Use cached data first if available
+  var cached=loadCache();
+  if(cached&&_sheetSessions){
+    cb(_sheetSessions);
+  } else if(cached){
+    // Show cached immediately, fetch in background
+    cb(cached.sessions);
+    setSyncBadges('cached',cacheAgeStr(cached.ts));
+    getSheetSessions(function(sessions){cb(sessions);});
+  } else {
+    getSheetSessions(function(sessions){cb(sessions);});
+  }
 }
 
 function fetchFromSheet(type,cb){
@@ -911,14 +1098,16 @@ function loadHomeData(){
   var greet=now.getHours()<12?'Good morning':now.getHours()<17?'Good afternoon':'Good evening';
   document.getElementById('greeting').textContent=greet;
   document.getElementById('todayDate').textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
-  fetchHistory(function(sheetSessions){
-    // Always use sheet data. Fall back to localStorage ONLY if sheet completely fails.
-    if(sheetSessions&&sheetSessions.length>0){
-      renderHomeData(sheetSessions);
-    } else {
-      // Sheet returned nothing - show zeroes, don't use localStorage
-      renderHomeData([]);
-    }
+  // Show cached data instantly, update when sheet responds
+  var cached=loadCache();
+  if(cached){
+    _cachedSessions=cached.sessions;
+    renderHomeData(cached.sessions);
+    setSyncBadges('cached',cacheAgeStr(cached.ts));
+  }
+  fetchHistory(function(sessions){
+    _cachedSessions=sessions||[];
+    renderHomeData(_cachedSessions);
   });
 }
 function renderHomeData(sessions){
@@ -1627,6 +1816,14 @@ function copyResults(){
     sd2.exercises.push({name:ex.name,targetReps:ex.reps,sets:setsArr,result:res,feel:log.feel,notes:log.notes,restSecs:ex.rest,formCues:ex.form,tweak:ex.tweak||'',isPlank:ex.isPlank?'yes':'no'});
   });
   syncData(sd2,'syncBadge');
+  // Update sheet cache with new session
+  var cached2=loadCache();
+  if(cached2){
+    cached2.sessions.push(sd2);
+    saveCache(cached2.sessions);
+    _sheetSessions=cached2.sessions;
+    setSyncBadges('live');
+  }
   navigator.clipboard.writeText(txt).then(function(){document.getElementById('copyBtn').textContent='COPIED - PASTE INTO CLAUDE';document.getElementById('copyBtn').classList.add('copied');}).catch(function(){var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);document.getElementById('copyBtn').textContent='COPIED - PASTE INTO CLAUDE';document.getElementById('copyBtn').classList.add('copied');});
 }
 
@@ -2128,11 +2325,19 @@ function loadTodayPlan(){
 }
 
 function loadProgressData(){
-  fetchHistory(function(sheetSessions){
-    var sessions=sheetSessions&&sheetSessions.length>0?sheetSessions:[];
-    buildPullUpChart(sessions);
-    buildHeatmap(sessions);
-    buildPRs(sessions);
+  // Show cached instantly, update when sheet responds
+  var cached=loadCache();
+  if(cached){
+    buildPullUpChart(cached.sessions);
+    buildHeatmap(cached.sessions);
+    buildPRs(cached.sessions);
+    setSyncBadges('cached',cacheAgeStr(cached.ts));
+  }
+  fetchHistory(function(sessions){
+    var s=sessions||[];
+    buildPullUpChart(s);
+    buildHeatmap(s);
+    buildPRs(s);
   });
   buildCholDisplay();
 }
@@ -2275,6 +2480,10 @@ function buildCholDisplay(){
 
 buildEffBtns();
 initDates();
+// Set initial badge state from cache
+var _initCache=loadCache();
+if(_initCache){setSyncBadge('cached',cacheAgeStr(_initCache.ts));}
+else{setSyncBadge('loading');}
 navTo('home');
 setTimeout(loadHomeData,200);
 </script>
