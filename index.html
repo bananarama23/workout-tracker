@@ -962,61 +962,6 @@ function getWeekNum(d){
 }
 
 // SHEET CACHE
-var CACHE_KEY='wt_sheet_cache';
-var CACHE_TTL=24*60*60*1000; // 24 hours
-
-function saveCache(sessions){
-  try{
-    localStorage.setItem(CACHE_KEY,JSON.stringify({
-      sessions:sessions,
-      ts:Date.now()
-    }));
-  }catch(e){}
-}
-
-function loadCache(){
-  try{
-    var raw=localStorage.getItem(CACHE_KEY);
-    if(!raw)return null;
-    var d=JSON.parse(raw);
-    if(!d||!d.sessions)return null;
-    return d; // {sessions, ts}
-  }catch(e){return null;}
-}
-
-function cacheAgeStr(ts){
-  var secs=Math.round((Date.now()-ts)/1000);
-  if(secs<60)return 'just now';
-  if(secs<3600)return Math.floor(secs/60)+'m ago';
-  if(secs<86400)return Math.floor(secs/3600)+'h ago';
-  return Math.floor(secs/86400)+'d ago';
-}
-
-// Badge IDs for all 4 pages
-var SYNC_BADGES=['H','W','P','Plan'];
-
-function setSyncBadge(state, detail){
-  SYNC_BADGES.forEach(function(id){
-    var badge=document.getElementById('syncBadge'+id);
-    var text=document.getElementById('syncText'+id);
-    if(!badge)return;
-    badge.className='sync-badge-corner';
-    if(state==='loading'){
-      badge.classList.add('sync-loading');
-      if(text)text.textContent='Syncing';
-    } else if(state==='live'){
-      badge.classList.add('sync-live');
-      if(text)text.textContent='Live';
-    } else if(state==='cached'){
-      badge.classList.add('sync-cached');
-      if(text)text.textContent='Cached '+(detail||'');
-    } else if(state==='offline'){
-      badge.classList.add('sync-offline');
-      if(text)text.textContent='Offline';
-    }
-  });
-}
-
 // CLOUD SYNC
 function syncData(payload,msgId){
   var el=msgId?document.getElementById(msgId):null;
