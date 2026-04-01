@@ -1936,14 +1936,24 @@ function fmtDate(d){
 function initPlanPage(){
   var days=getWeekDates();
   var today=fmtDate(new Date());
-  // Set week label
   var mon=days[0],sun=days[6];
   document.getElementById('planWeekLabel').textContent=
     mon.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' - '+
     sun.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
-  // Render with current plan data
-  renderPlanGrid(days,today);
-  // Fetch from sheet
+  // Render immediately with any cached data (don't wait for sheet)
+  if(_cachedSessions&&_cachedSessions.length){
+    var planData=overlayCompletedWorkouts(_cachedPlan?JSON.parse(JSON.stringify(_cachedPlan)):{},_cachedSessions);
+    _weekPlan=planData;
+    renderPlanGrid(days,today);
+    updateTodayCard(today);
+    var el=document.getElementById('planSyncStatus');
+    if(el){el.textContent='Shown from cache - syncing...';el.style.color='var(--muted)';}
+  } else {
+    // No cache yet - show empty grid so at least it's not stuck on "Loading..."
+    _weekPlan={};
+    renderPlanGrid(days,today);
+  }
+  // Always fetch fresh from sheet in background
   loadWeekPlan();
 }
 
