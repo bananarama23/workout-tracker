@@ -1009,18 +1009,20 @@ function fmtAgo(d){
 }
 
 function fetchHistory(cb){
-  // Use cached data first if available
-  var cached=loadCache();
-  if(cached&&_sheetSessions){
+  // Use in-memory sheet data if already fetched this session
+  if(_sheetSessions){
     cb(_sheetSessions);
-  } else if(cached){
-    // Show cached immediately, fetch in background
-    cb(cached.sessions);
-    setSyncBadges('cached',cacheAgeStr(cached.ts));
-    getSheetSessions(function(sessions){cb(sessions);});
-  } else {
-    getSheetSessions(function(sessions){cb(sessions);});
+    return;
   }
+  // Use cache for instant render while fetching fresh
+  var cached=loadCache();
+  if(cached){
+    cb(cached.sessions); // instant render
+  }
+  // Always fetch fresh from sheet (caller sets syncing badge)
+  getSheetSessions(function(sessions){
+    cb(sessions);
+  });
 }
 
 function fetchFromSheet(type,cb){
@@ -1048,8 +1050,9 @@ function loadHomeData(){
   if(cached){
     _cachedSessions=cached.sessions;
     renderHomeData(cached.sessions);
-    setSyncBadges('cached',cacheAgeStr(cached.ts));
   }
+  // Always show syncing while fetch is in progress
+  setSyncBadges('syncing');
   fetchHistory(function(sessions){
     _cachedSessions=sessions||[];
     renderHomeData(_cachedSessions);
