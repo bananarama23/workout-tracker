@@ -502,7 +502,7 @@ input[type=range]{flex:1;accent-color:var(–accent);height:4px;}
     <div class="milestone" id="milestoneCard">
       <div>
         <div class="ms-label">Next Milestone</div>
-        <div class="ms-text" id="milestoneText">Loading...</div>
+        <div class="ms-text" id="milestoneText">Complete a home workout</div>
         <div class="ms-sub" id="milestoneSub"></div>
       </div>
       <div class="ms-icon">&#127919;</div>
@@ -1098,12 +1098,16 @@ function loadHomeData(){
   document.getElementById('greeting').textContent=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
   document.getElementById('todayDate').textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
   var cached=loadCache();
-  if(cached){_cachedSessions=cached.sessions;renderHomeData(cached.sessions);}
-  setSyncBadges('syncing');
+  // Always render immediately — cached data or empty state
+  _cachedSessions=cached?cached.sessions:[];
+  renderHomeData(_cachedSessions);
+  setSyncBadges(cached?'cached':'loading', cached?cacheAgeStr(cached.ts):null);
+  // Fetch fresh in background — update when it arrives
   fetchHistory(function(sessions){_cachedSessions=sessions||[];renderHomeData(_cachedSessions);});
 }
 
 function renderHomeData(sessions){
+  sessions=sessions||[];
   var weekNum='Week '+getWeekNum();
   var wkStr=0,wkHIIT=0;
   sessions.forEach(function(s){
@@ -1167,7 +1171,7 @@ function calcStreak(sessions){
 
 function updateMilestone(sessions){
   var best=0;
-  sessions.forEach(function(s){
+  (sessions||[]).forEach(function(s){
     (s.exercises||[]).forEach(function(ex){
       if(ex.name==='PULL-UPS'){var t=0;(ex.sets||[]).forEach(function(v){t+=parseInt(v)||0;});if(t>best)best=t;}
     });
