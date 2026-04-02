@@ -2702,11 +2702,93 @@ function buildPRs(sessions){
 }
 
 function buildCholDisplay(){
+  // Show baseline while loading
   var baseline={hdl:24,ldl:132,total:175,ratio:7.3};
-  document.getElementById('cholRows').innerHTML=
-    '<div class="chol-row-item"><div class="cr-label">HDL <span style="color:var(--muted);font-size:0.65rem;">(target 40+)</span></div><div class="cr-val" style="color:var(--red);">'+baseline.hdl+'</div><div class="cr-trend">Baseline</div></div>'+
-    '<div class="chol-row-item"><div class="cr-label">LDL</div><div class="cr-val" style="color:var(--yellow);">'+baseline.ldl+'</div><div class="cr-trend">Baseline</div></div>'+
-    '<div class="chol-row-item"><div class="cr-label">TC/HDL Ratio</div><div class="cr-val" style="color:var(--red);">'+baseline.ratio+'</div><div class="cr-trend">Target < 5</div></div>';
+  renderCholRows([{date:'2024-11-05',hdl:baseline.hdl,ldl:baseline.ldl,total:baseline.total,ratio:baseline.ratio,isBaseline:true}]);
+
+  // Fetch cholesterol history from sheet
+  var cbName='wt_chol_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    if(result&&result.sessions){
+      var cholReadings=[];
+      result.sessions.forEach(function(s){
+        if(s.workoutType==='cholesterol'||s.type==='cholesterol'){
+          var hdl=parseFloat(s.hdl||s.HDL||0);
+          var ldl=parseFloat(s.ldl||s.LDL||0);
+          var total=parseFloat(s.total||s.Total||0);
+          var ratio=hdl>0&&total>0?Math.round((total/hdl)*10)/10:0;
+          if(hdl||ldl||total)cholReadings.push({date:s.date,hdl:hdl,ldl:ldl,total:total,ratio:ratio});
+        }
+      });
+      cholReadings.sort(function(a,b){return a.date<b.date?-1:1;});
+      // Prepend baseline
+      var allReadings=[{date:'2024-11-05',hdl:24,ldl:132,total:175,ratio:7.3,isBaseline:true}];
+      cholReadings.forEach(function(r){if(r.date!=='2024-11-05')allReadings.push(r);});
+      if(allReadings.length>0)renderCholRows(allReadings);
+    }
+  };
+  var script=document.createElement('script');script.id='s_'+cbName;
+  script.src=CLOUD_URL+'?type=getHistory&callback='+cbName;
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;}},15000);
+}
+
+function renderCholRows(readings){
+  if(!readings||!readings.length)return;
+  var latest=readings[readings.length-1];
+  var prev=readings.length>1?readings[readings.length-2]:null;
+
+  function trend(cur,old,lower){
+    if(!old||!cur)return '';
+    var delta=cur-old;
+    if(Math.abs(delta)<0.5)return '<span style="color:var(--muted);font-size:0.7rem;"> ±0</span>';
+    var up=delta>0;
+    // For HDL: up is good. For LDL/ratio: down is good.
+    var good=lower?(delta<0):(delta>0);
+    var col=good?'var(--green)':'var(--red)';
+    var arrow=up?'▲':'▼';
+    return '<span style="color:'+col+';font-size:0.72rem;"> '+arrow+Math.abs(delta).toFixed(1)+'</span>';
+  }
+
+  var hdlColor=latest.hdl>=40?'var(--green)':latest.hdl>=35?'var(--yellow)':'var(--red)';
+  var ldlColor=latest.ldl<100?'var(--green)':latest.ldl<130?'var(--yellow)':'var(--red)';
+  var ratioColor=latest.ratio<4?'var(--green)':latest.ratio<5?'var(--yellow)':'var(--red)';
+
+  var latestDate=parseLocalDate(latest.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  var isBaseline=latest.isBaseline;
+  var dateLabel=isBaseline?'Baseline':'Latest · '+latestDate;
+
+  var html='';
+  html+='<div class="chol-row-item"><div class="cr-label">HDL <span style="color:var(--muted);font-size:0.65rem;">(target 40+)</span></div>';
+  html+='<div style="text-align:right"><div class="cr-val" style="color:'+hdlColor+';">'+latest.hdl+(prev?trend(latest.hdl,prev.hdl,false):'')+'</div></div>';
+  html+='<div class="cr-trend">'+dateLabel+'</div></div>';
+
+  html+='<div class="chol-row-item"><div class="cr-label">LDL</div>';
+  html+='<div style="text-align:right"><div class="cr-val" style="color:'+ldlColor+';">'+latest.ldl+(prev?trend(latest.ldl,prev.ldl,true):'')+'</div></div>';
+  html+='<div class="cr-trend">'+dateLabel+'</div></div>';
+
+  html+='<div class="chol-row-item"><div class="cr-label">TC/HDL Ratio</div>';
+  html+='<div style="text-align:right"><div class="cr-val" style="color:'+ratioColor+';">'+latest.ratio+(prev?trend(latest.ratio,prev.ratio,true):'')+'</div></div>';
+  html+='<div class="cr-trend">Target &lt; 5</div></div>';
+
+  // If more than 1 reading, show history
+  if(readings.length>1){
+    html+='<div style="margin-top:10px;font-size:0.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;">History</div>';
+    var hist=readings.slice().reverse();
+    hist.forEach(function(r){
+      var d=r.isBaseline?'Nov 2024 (baseline)':parseLocalDate(r.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+      html+='<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.78rem;">';
+      html+='<div style="color:var(--muted);">'+d+'</div>';
+      html+='<div style="display:flex;gap:12px;">';
+      if(r.hdl)html+='<span>HDL <strong>'+r.hdl+'</strong></span>';
+      if(r.ldl)html+='<span>LDL <strong>'+r.ldl+'</strong></span>';
+      if(r.ratio)html+='<span>Ratio <strong>'+r.ratio+'</strong></span>';
+      html+='</div></div>';
+    });
+  }
+
+  document.getElementById('cholRows').innerHTML=html;
   document.getElementById('cholEmpty').style.display='none';
   document.getElementById('cholCanvas').style.display='none';
 }
