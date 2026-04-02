@@ -205,7 +205,10 @@ input[type=range]{flex:1;accent-color:var(–accent);height:4px;}
 .seq-step.act{transform:scale(1.1);box-shadow:0 0 0 1px currentColor;}
 /* Edit mode step controls */
 .seq-edit-wrap{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;}
-.seq-edit-step{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.seq-edit-step{display:flex;flex-direction:column;align-items:center;gap:3px;touch-action:none;transition:opacity 0.15s;}
+.seq-edit-step.dragging{opacity:0.3;}
+.seq-edit-step.drag-over{outline:2px dashed var(–accent);border-radius:12px;}
+.seq-drag-handle{font-size:0.8rem;color:var(–muted);cursor:grab;padding:1px 4px;line-height:1;user-select:none;-webkit-user-select:none;}
 .seq-edit-chip{display:flex;align-items:center;gap:0;border-radius:20px;overflow:hidden;border:1px solid var(–border2);}
 .seq-edit-chip .sep-minus{background:var(–card3);color:var(–muted);border:none;width:24px;height:26px;font-size:0.85rem;cursor:pointer;font-weight:bold;line-height:1;}
 .seq-edit-chip .sep-plus{background:var(–card3);color:var(–muted);border:none;width:24px;height:26px;font-size:0.85rem;cursor:pointer;font-weight:bold;line-height:1;}
@@ -216,6 +219,10 @@ input[type=range]{flex:1;accent-color:var(–accent);height:4px;}
 .seq-edit-chip.er{background:var(–blue-dim);color:var(–blue);border-color:rgba(59,131,246,0.3);}
 .seq-del-btn{font-size:0.55rem;color:var(–muted);cursor:pointer;background:none;border:none;padding:0 2px;line-height:1;}
 .seq-add-row{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;}
+.seq-voice-input-row{display:flex;gap:6px;margin-top:6px;align-items:center;}
+.seq-voice-inp{flex:1;background:var(–card2);border:1px solid var(–accent);border-radius:20px;color:var(–text);font-size:0.85rem;padding:5px 12px;outline:none;}
+.seq-voice-confirm{background:var(–accent);color:#000;border:none;border-radius:20px;padding:5px 14px;font-weight:700;font-size:0.78rem;cursor:pointer;white-space:nowrap;}
+.seq-voice-cancel{background:var(–card2);color:var(–muted);border:1px solid var(–border2);border-radius:20px;padding:5px 10px;font-size:0.78rem;cursor:pointer;}
 .seq-add-btn{font-size:0.65rem;font-weight:700;padding:4px 10px;border-radius:20px;border:1px dashed var(–border2);background:transparent;color:var(–muted);cursor:pointer;transition:all 0.15s;letter-spacing:0.3px;}
 .seq-add-btn:active{transform:scale(0.96);}
 .seq-add-btn.add-v{border-color:rgba(0,212,138,0.4);color:var(–green);}
@@ -1505,42 +1512,50 @@ function renderEx(){
     } else {
       h+='<div class="seq-edit-wrap" id="seqSteps">';
       ex.seq.forEach(function(step,si){
-        h+='<div class="seq-edit-step">';
-        if(step.t==='v'){
-          h+='<div class="seq-edit-chip ev">';
-          h+='<button class="sep-minus" onclick="seqToggleVoice('+si+')" title="Toggle">&#x2715;</button>';
-          h+='<span class="sep-val">'+step.l+'</span>';
-          h+='<button class="sep-plus" onclick="seqEditVoice('+si+')" title="Edit">&#9998;</button>';
-          h+='</div>';
-        } else if(step.t==='b'){
-          h+='<div class="seq-edit-chip eb">';
-          h+='<button class="sep-minus" onclick="seqAdj('+si+',-1)">-</button>';
-          h+='<span class="sep-val">'+step.bc+'x</span>';
-          h+='<button class="sep-plus" onclick="seqAdj('+si+',1)">+</button>';
-          h+='</div>';
-        } else if(step.t==='p'){
-          var psec=Math.round((step.ms||500)/100)/10;
-          h+='<div class="seq-edit-chip ep">';
-          h+='<button class="sep-minus" onclick="seqAdjPause('+si+',-500)">-</button>';
-          h+='<span class="sep-val">'+psec+'s</span>';
-          h+='<button class="sep-plus" onclick="seqAdjPause('+si+',500)">+</button>';
-          h+='</div>';
-        } else {
+        h+='<div class="seq-edit-step" data-si="'+si+'">';
+        if(step.t==='r'){
           h+='<div class="seq-edit-chip er"><span class="sep-val">#rep</span></div>';
-        }
-        if(step.t!=='r'){
+        } else {
+          h+='<div class="seq-drag-handle" title="Drag to reorder">&#8801;</div>';
+          if(step.t==='v'){
+            h+='<div class="seq-edit-chip ev">';
+            h+='<button class="sep-minus" onclick="seqToggleVoice('+si+')" title="Remove">&#x2715;</button>';
+            h+='<span class="sep-val">'+step.l+'</span>';
+            h+='<button class="sep-plus" onclick="seqEditVoice('+si+')" title="Edit">&#9998;</button>';
+            h+='</div>';
+          } else if(step.t==='b'){
+            h+='<div class="seq-edit-chip eb">';
+            h+='<button class="sep-minus" onclick="seqAdj('+si+',-1)">-</button>';
+            h+='<span class="sep-val">'+step.bc+'x</span>';
+            h+='<button class="sep-plus" onclick="seqAdj('+si+',1)">+</button>';
+            h+='</div>';
+          } else if(step.t==='p'){
+            var psec=Math.round((step.ms||500)/100)/10;
+            h+='<div class="seq-edit-chip ep">';
+            h+='<button class="sep-minus" onclick="seqAdjPause('+si+',-500)">-</button>';
+            h+='<span class="sep-val">'+psec+'s</span>';
+            h+='<button class="sep-plus" onclick="seqAdjPause('+si+',500)">+</button>';
+            h+='</div>';
+          }
           h+='<button class="seq-del-btn" onclick="seqRemove('+si+')" title="Remove">&#128465;</button>';
         }
         h+='</div>';
       });
       h+='</div>';
+      // Inline voice input row (hidden until +Voice tapped)
+      h+='<div class="seq-voice-input-row" id="seqVoiceRow" style="display:none;">';
+      h+='<input class="seq-voice-inp" id="seqVoiceInp" type="text" placeholder="e.g. Hold" maxlength="12">';
+      h+='<button class="seq-voice-confirm" onclick="seqConfirmVoice()">Add</button>';
+      h+='<button class="seq-voice-cancel" onclick="seqCancelVoice()">&#x2715;</button>';
+      h+='</div>';
       h+='<div class="seq-add-row">';
-      h+='<button class="seq-add-btn add-v" onclick="seqAddVoice()">+ Voice</button>';
+      h+='<button class="seq-add-btn add-v" onclick="seqShowVoiceInput()">+ Voice</button>';
       h+='<button class="seq-add-btn add-b" onclick="seqAddBeep()">+ Beep</button>';
       h+='<button class="seq-add-btn add-p" onclick="seqAddPause()">+ Pause</button>';
       h+='<button class="seq-add-btn" onclick="seqReset()" style="border-color:rgba(255,204,0,0.4);color:var(--yellow);">Reset</button>';
       h+='</div>';
       h+='<div class="seq-add-row" style="margin-top:4px;">';
+      h+='<button class="seq-add-btn" id="seqPlayBtn" onclick="seqPlay()" style="border-color:rgba(59,131,246,0.5);color:var(--blue);background:var(--blue-dim);">&#9654; Play</button>';
       h+='<button class="seq-add-btn" onclick="saveSeqAsDefault()" style="border-color:rgba(200,255,0,0.5);color:var(--accent);background:var(--accent-dim);flex:1;">&#128190; Save as my default</button>';
       h+='</div>';
     }
@@ -1580,6 +1595,7 @@ var bh=’<div class="btn-row"><button class="btn b-skip" onclick="reqSkip()">Sk
 if(curEx===exs.length-1)bh+=’<div class="btn-row"><button class="btn b-finish" onclick="finishWorkout()">FINISH WORKOUT</button></div>’;
 document.getElementById(‘sessionContent’).innerHTML+=bh;
 initSwipe();
+if(_seqEditMode)initSeqDrag();
 }
 
 function setFeel(v){
@@ -1721,8 +1737,24 @@ seqRemove(si);
 function seqEditVoice(si){
 var ex=exs[curEx];if(!ex||!ex.seq||!ex.seq[si])return;
 var step=ex.seq[si];if(step.t!==‘v’)return;
-var newLabel=prompt(‘Voice cue text:’,step.l);
-if(newLabel&&newLabel.trim()){step.l=newLabel.trim();}
+var row=document.getElementById(‘seqVoiceRow’);
+var inp=document.getElementById(‘seqVoiceInp’);
+if(!row||!inp)return;
+row.style.display=‘flex’;
+inp.value=step.l;
+inp.focus();inp.select();
+inp.onkeydown=function(e){if(e.key===‘Enter’)confirmEditVoice(si);if(e.key===‘Escape’)seqCancelVoice();};
+// Swap confirm button action
+var btn=row.querySelector(’.seq-voice-confirm’);
+if(btn)btn.onclick=function(){confirmEditVoice(si);};
+}
+
+function confirmEditVoice(si){
+var inp=document.getElementById(‘seqVoiceInp’);
+var label=inp?inp.value.trim():’’;
+if(!label)return;
+var ex=exs[curEx];if(!ex||!ex.seq||!ex.seq[si])return;
+ex.seq[si].l=label;
 _seqChanged();
 }
 
@@ -1732,14 +1764,33 @@ ex.seq.splice(si,1);
 _seqChanged();
 }
 
-function seqAddVoice(){
+function seqShowVoiceInput(){
+var row=document.getElementById(‘seqVoiceRow’);
+var inp=document.getElementById(‘seqVoiceInp’);
+if(!row||!inp)return;
+row.style.display=‘flex’;
+inp.value=’’;
+inp.focus();
+// Allow Enter key to confirm
+inp.onkeydown=function(e){if(e.key===‘Enter’)seqConfirmVoice();if(e.key===‘Escape’)seqCancelVoice();};
+}
+
+function seqConfirmVoice(){
+var inp=document.getElementById(‘seqVoiceInp’);
+var label=inp?inp.value.trim():’’;
+if(!label)return;
 var ex=exs[curEx];if(!ex)return;
-var label=prompt(‘Voice cue text (e.g. Hold):’,‘Hold’);
-if(!label||!label.trim())return;
 if(!ex.seq)ex.seq=[];
-ex.seq.push({t:‘v’,l:label.trim(),n:550});
+ex.seq.push({t:‘v’,l:label,n:550});
 _seqChanged();
 }
+
+function seqCancelVoice(){
+var row=document.getElementById(‘seqVoiceRow’);
+if(row)row.style.display=‘none’;
+}
+
+function seqAddVoice(){seqShowVoiceInput();}  // keep legacy calls working
 
 function seqAddBeep(){
 var ex=exs[curEx];if(!ex)return;
@@ -1755,6 +1806,78 @@ ex.seq.push({t:‘p’,ms:1000});
 _seqChanged();
 }
 
+// ─── TOUCH DRAG-DROP REORDER ──────────────────────────────────────
+var _dragSi=-1,_dragEl=null,_dragGhost=null,_dragOverSi=-1;
+
+function initSeqDrag(){
+var wrap=document.getElementById(‘seqSteps’);
+if(!wrap||wrap._dragInit)return;
+wrap._dragInit=true;
+
+wrap.addEventListener(‘touchstart’,function(e){
+var handle=e.target.closest(’.seq-drag-handle’);
+if(!handle)return;
+var step=handle.closest(’.seq-edit-step’);
+if(!step)return;
+_dragSi=parseInt(step.dataset.si);
+_dragEl=step;
+_dragEl.classList.add(‘dragging’);
+
+```
+// Create ghost
+_dragGhost=_dragEl.cloneNode(true);
+_dragGhost.style.cssText='position:fixed;z-index:9999;pointer-events:none;opacity:0.85;transform:scale(1.08);transition:none;background:var(--card2);border-radius:12px;padding:4px;';
+var r=_dragEl.getBoundingClientRect();
+_dragGhost.style.left=r.left+'px';
+_dragGhost.style.top=r.top+'px';
+_dragGhost.style.width=r.width+'px';
+document.body.appendChild(_dragGhost);
+e.preventDefault();
+```
+
+},{passive:false});
+
+wrap.addEventListener(‘touchmove’,function(e){
+if(_dragSi<0||!_dragGhost)return;
+var t=e.touches[0];
+_dragGhost.style.left=(t.clientX-_dragGhost.offsetWidth/2)+‘px’;
+_dragGhost.style.top=(t.clientY-_dragGhost.offsetHeight/2)+‘px’;
+
+```
+// Find which step we're over
+document.querySelectorAll('.seq-edit-step').forEach(function(el){el.classList.remove('drag-over');});
+var el=document.elementFromPoint(t.clientX,t.clientY);
+var overStep=el?el.closest('.seq-edit-step'):null;
+if(overStep&&overStep!==_dragEl){
+  var overSi=parseInt(overStep.dataset.si);
+  if(!isNaN(overSi)&&overSi!==_dragSi){
+    _dragOverSi=overSi;
+    overStep.classList.add('drag-over');
+  }
+}
+e.preventDefault();
+```
+
+},{passive:false});
+
+wrap.addEventListener(‘touchend’,function(e){
+if(_dragSi<0)return;
+// Clean up ghost
+if(_dragGhost){_dragGhost.parentNode.removeChild(_dragGhost);_dragGhost=null;}
+document.querySelectorAll(’.seq-edit-step’).forEach(function(el){el.classList.remove(‘dragging’,‘drag-over’);});
+// Commit reorder if valid drop
+if(_dragOverSi>=0&&_dragOverSi!==_dragSi){
+var ex=exs[curEx];
+if(ex&&ex.seq){
+var moved=ex.seq.splice(_dragSi,1)[0];
+ex.seq.splice(_dragOverSi,0,moved);
+_seqChanged();
+}
+}
+_dragSi=-1;_dragEl=null;_dragOverSi=-1;
+},{passive:true});
+}
+
 function seqReset(){
 var ex=exs[curEx];if(!ex)return;
 // Reset to default from homeEx/hotelEx
@@ -1766,6 +1889,55 @@ _seqChanged();
 }
 
 var SEQ_DEFAULTS_KEY=‘wt_seq_defaults’;
+
+function seqPlay(){
+var ex=exs[curEx];if(!ex||!ex.seq)return;
+resAC();
+var btn=document.getElementById(‘seqPlayBtn’);
+if(btn){btn.textContent=’\u25a0 Stop’;btn.onclick=function(){seqPlayStop();};btn.style.borderColor=‘rgba(255,58,92,0.5)’;btn.style.color=‘var(–red)’;btn.style.background=‘var(–red-dim)’;}
+// Build a timeline identical to runSeq but for rep 1 of 1, no autoRest at end
+var steps=ex.seq,tl=[],t=0,i=0;
+var repWord=‘one’;
+while(i<steps.length){
+var step=steps[i];
+if(step.t===‘r’){
+if(i+1<steps.length&&steps[i+1].t===‘v’){
+(function(w,rn,ns,ni2){tl.push({time:t,fn:function(){setVW(rn+’ ‘+ns.l,‘rn’);speak(w+’ ‘+ns.l,1.0);}});})(repWord,‘1’,steps[i+1],i+1);
+t+=900;i+=2;
+} else {i++;}
+} else if(step.t===‘v’){
+(function(s2){tl.push({time:t,fn:function(){setVW(s2.l,’’);speak(s2.l);}});})(step);
+t+=500;i++;
+} else if(step.t===‘b’){
+for(var b=0;b<step.bc;b++){
+(function(lb,s3){tl.push({time:t,fn:function(){if(lb===0)setVW(’*’.repeat(s3.bc),‘bp’);beep(s3.n||550,0.12);}});})(b,step);
+t+=900;
+}
+i++;
+} else if(step.t===‘p’){
+(function(){tl.push({time:t,fn:function(){setVW(’…’,’’);}});})();
+t+=(step.ms||1000);i++;
+} else {i++;}
+}
+// Done
+tl.push({time:t,fn:function(){setVW(‘Done!’,’’);seqPlayDone();}});
+// Store timeouts so we can cancel
+window._seqPlayTOs=[];
+tl.forEach(function(item){window._seqPlayTOs.push(setTimeout(item.fn,item.time));});
+}
+
+function seqPlayStop(){
+(window._seqPlayTOs||[]).forEach(function(t){clearTimeout(t);});
+window._seqPlayTOs=[];
+syn.cancel();
+setVW(’\u00a0’,’’);
+seqPlayDone();
+}
+
+function seqPlayDone(){
+var btn=document.getElementById(‘seqPlayBtn’);
+if(btn){btn.textContent=’\u25b6 Play’;btn.onclick=function(){seqPlay();};btn.style.borderColor=‘rgba(59,131,246,0.5)’;btn.style.color=‘var(–blue)’;btn.style.background=‘var(–blue-dim)’;}
+}
 
 function saveSeqAsDefault(){
 var ex=exs[curEx];if(!ex||!ex.seq)return;
