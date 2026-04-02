@@ -413,6 +413,34 @@ input[type=range]{flex:1;accent-color:var(–accent);height:4px;}
 .pt-travel{background:var(–purple-dim);color:var(–purple);}
 .plan-msg{text-align:center;padding:8px;font-size:0.78rem;font-weight:600;min-height:20px;color:var(–muted);}
 
+/* PREVIEW PAGE */
+.preview-ex{background:var(–card);border:1px solid var(–border);border-radius:var(–r);margin:0 16px 10px;overflow:hidden;}
+.preview-ex.skipped{opacity:0.35;}
+.preview-ex-head{background:var(–card2);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(–border);}
+.preview-ex-name{font-family:‘Bebas Neue’,sans-serif;font-size:1.3rem;letter-spacing:2px;line-height:1;}
+.preview-skip-btn{font-size:0.62rem;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(–border2);background:var(–card3);color:var(–muted);cursor:pointer;transition:all 0.15s;letter-spacing:0.5px;}
+.preview-skip-btn.skipped{background:var(–red-dim);border-color:var(–red);color:var(–red);}
+.preview-ex-body{padding:12px 16px;}
+.preview-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.preview-row:last-child{margin-bottom:0;}
+.preview-lbl{font-size:0.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(–muted);font-weight:700;}
+.preview-ctrl{display:flex;align-items:center;border-radius:20px;overflow:hidden;border:1px solid var(–border2);}
+.preview-ctrl button{background:var(–card3);color:var(–text2);border:none;width:30px;height:28px;font-size:0.9rem;cursor:pointer;font-weight:bold;}
+.preview-ctrl button:active{background:var(–card2);}
+.preview-ctrl span{font-family:‘Bebas Neue’,sans-serif;font-size:0.95rem;padding:0 8px;min-width:32px;text-align:center;line-height:28px;color:var(–text);}
+.preview-sets-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.preview-set-chip{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.preview-set-ctrl{display:flex;align-items:center;border-radius:16px;overflow:hidden;border:1px solid rgba(200,255,0,0.3);background:var(–accent-dim);}
+.preview-set-ctrl button{background:rgba(0,0,0,0.2);color:var(–accent);border:none;width:24px;height:26px;font-size:0.85rem;cursor:pointer;font-weight:bold;}
+.preview-set-ctrl span{font-family:‘Bebas Neue’,sans-serif;font-size:0.9rem;color:var(–accent);padding:0 5px;min-width:22px;text-align:center;line-height:26px;}
+.preview-set-lbl{font-size:0.52rem;color:var(–muted);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;}
+.preview-form{font-size:0.72rem;color:var(–text2);line-height:1.6;background:var(–card2);border-left:2px solid var(–muted);border-radius:0 6px 6px 0;padding:7px 10px;margin-top:8px;}
+.preview-sets-adj{display:flex;align-items:center;gap:8px;}
+.preview-sets-adj button{background:var(–card3);border:1px solid var(–border2);color:var(–text2);width:28px;height:28px;border-radius:50%;font-size:0.9rem;cursor:pointer;font-weight:bold;display:flex;align-items:center;justify-content:center;}
+.preview-sets-adj span{font-size:0.82rem;color:var(–text);font-weight:600;min-width:60px;text-align:center;}
+.preview-start-btn{width:100%;padding:16px;background:var(–accent);color:#000;border:none;border-radius:var(–r);font-family:‘Bebas Neue’,sans-serif;font-size:1.2rem;letter-spacing:3px;font-weight:900;cursor:pointer;margin-bottom:10px;transition:transform 0.15s;}
+.preview-start-btn:active{transform:scale(0.98);}
+
 /* OVERLAYS */
 .hist-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:3000;align-items:flex-end;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
 .hist-sheet{background:var(–card);border-radius:22px 22px 0 0;padding:20px 20px calc(20px + var(–safe-b));width:100%;max-height:80vh;overflow-y:auto;border-top:1px solid var(–border);}
@@ -515,13 +543,13 @@ input[type=range]{flex:1;accent-color:var(–accent);height:4px;}
   <div class="page-body">
     <div id="planTodayBanner" style="display:none;margin:12px 16px 0;padding:12px 16px;background:var(--blue-dim);border-radius:var(--r-sm);font-size:0.82rem;color:var(--blue);font-weight:600;cursor:pointer;border:1px solid rgba(59,131,246,0.2);" onclick="navTo('plan')">&#128197; <span id="planTodayText">Today: Home</span> &nbsp;&#8250; Edit plan</div>
     <div class="wt-grid">
-      <div class="wt-card home-c" id="homeWtCard" onclick="startSession('home')">
+      <div class="wt-card home-c" id="homeWtCard" onclick="showWorkoutPreview('home')">
         <span class="wt-icon">&#127968;</span>
         <div class="wt-title">HOME</div>
         <div class="wt-sub">Pull-up bar required</div>
         <div id="homeLoadedBadge" class="wt-loaded hidden">Workout loaded ✓</div>
       </div>
-      <div class="wt-card hotel-c" id="hotelWtCard" onclick="startSession('hotel')">
+      <div class="wt-card hotel-c" id="hotelWtCard" onclick="showWorkoutPreview('hotel')">
         <span class="wt-icon">&#127976;</span>
         <div class="wt-title">HOTEL</div>
         <div class="wt-sub">No equipment needed</div>
@@ -540,6 +568,17 @@ input[type=range]{flex:1;accent-color:var(–accent);height:4px;}
       </div>
     </div>
   </div>
+</div>
+
+<!-- WORKOUT PREVIEW PAGE -->
+
+<div class="page hidden" id="page-preview">
+  <div class="ph">
+    <button onclick="navTo('workout')" style="position:absolute;top:calc(var(--safe-t)+14px);left:16px;background:var(--card2);border:1px solid var(--border);width:34px;height:34px;border-radius:50%;font-size:15px;color:var(--text2);display:flex;align-items:center;justify-content:center;cursor:pointer;">&#8592;</button>
+    <h1 id="previewTitle" style="padding-left:44px;">HOME WORKOUT</h1>
+    <p class="ph-sub" id="previewSub" style="padding-left:44px;">Review and edit before starting</p>
+  </div>
+  <div class="page-body" id="previewContent" style="padding-top:8px;"></div>
 </div>
 
 <!-- PRE-SCREEN -->
@@ -1189,22 +1228,157 @@ var bodyFeel='',bfScore=0,wkStart=null;
 var CIRC=2*Math.PI*40;
 var sheetWorkout=null;
 
-function startSession(type){
+var _previewSkipped=[]; // boolean array, one per exercise
+
+function showWorkoutPreview(type){
   wType=type;
+  // Load exercises (same logic as before)
   if(sheetWorkout&&sheetWorkout.exercises&&sheetWorkout.exercises.length){
     exs=parseSheetExercises(sheetWorkout);
+    // Sheet sequences take priority — don't apply local defaults
   } else {
-    exs=type==='home'?homeEx.map(function(e){return Object.assign({},e);}):hotelEx.map(function(e){return Object.assign({},e);});
+    exs=type==='home'
+      ?homeEx.map(function(e){return JSON.parse(JSON.stringify(e));})
+      :hotelEx.map(function(e){return JSON.parse(JSON.stringify(e));});
+    // Apply user-saved seq defaults (overrides hardcoded defaults)
+    exs=applySeqDefaults(exs);
   }
+  _previewSkipped=exs.map(function(){return false;});
+  // Show preview page
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
+  var pg=document.getElementById('page-preview');pg.classList.remove('hidden');pg.classList.add('active');
+  document.getElementById('previewTitle').textContent=(type==='home'?'HOME':'HOTEL')+' WORKOUT';
+  renderPreview();
+}
+
+function renderPreview(){
+  var html='';
+  exs.forEach(function(ex,ei){
+    var skipped=_previewSkipped[ei];
+    html+='<div class="preview-ex'+(skipped?' skipped':'')+'">';
+    // Header
+    html+='<div class="preview-ex-head">';
+    html+='<div class="preview-ex-name">'+ex.name+'</div>';
+    html+='<button class="preview-skip-btn'+(skipped?' skipped':'')+'" onclick="previewToggleSkip('+ei+')">'+(skipped?'Skipped':'Skip')+'</button>';
+    html+='</div>';
+    if(!skipped){
+      html+='<div class="preview-ex-body">';
+      if(ex.isPlank){
+        // Plank: hold time per side
+        html+='<div class="preview-row"><div class="preview-lbl">Hold per side</div>';
+        html+='<div class="preview-ctrl">';
+        html+='<button onclick="previewAdjPlank('+ei+',-5)">-</button>';
+        html+='<span>'+ex.rc[0]+'s</span>';
+        html+='<button onclick="previewAdjPlank('+ei+',5)">+</button>';
+        html+='</div></div>';
+      } else {
+        // Sets count
+        html+='<div class="preview-row"><div class="preview-lbl">Sets</div>';
+        html+='<div class="preview-sets-adj">';
+        html+='<button onclick="previewAdjSets('+ei+',-1)">-</button>';
+        html+='<span>'+ex.sets+' set'+(ex.sets>1?'s':'')+'</span>';
+        html+='<button onclick="previewAdjSets('+ei+',1)">+</button>';
+        html+='</div></div>';
+        // Reps per set
+        html+='<div class="preview-lbl" style="margin-bottom:6px;">Reps per set</div>';
+        html+='<div class="preview-sets-row">';
+        for(var si=0;si<ex.sets;si++){
+          html+='<div class="preview-set-chip">';
+          html+='<div class="preview-set-ctrl">';
+          html+='<button onclick="previewAdjRep('+ei+','+si+',-1)">-</button>';
+          html+='<span>'+ex.rc[si]+'</span>';
+          html+='<button onclick="previewAdjRep('+ei+','+si+',1)">+</button>';
+          html+='</div>';
+          html+='<div class="preview-set-lbl">S'+(si+1)+'</div>';
+          html+='</div>';
+        }
+        html+='</div>';
+      }
+      // Rest time
+      html+='<div class="preview-row" style="margin-top:10px;"><div class="preview-lbl">Rest</div>';
+      html+='<div class="preview-ctrl">';
+      html+='<button onclick="previewAdjRest('+ei+',-5)">-</button>';
+      html+='<span>'+ex.rest+'s</span>';
+      html+='<button onclick="previewAdjRest('+ei+',5)">+</button>';
+      html+='</div></div>';
+      // Form cue (read-only)
+      if(ex.form){
+        html+='<div class="preview-form">'+ex.form+'</div>';
+      }
+      if(ex.tweak){
+        html+='<div style="font-size:0.7rem;color:var(--orange);margin-top:6px;font-weight:600;">! '+ex.tweak+'</div>';
+      }
+      html+='</div>'; // preview-ex-body
+    }
+    html+='</div>'; // preview-ex
+  });
+  // Start button
+  html+='<div style="padding:0 16px 8px;">';
+  var activeCount=exs.filter(function(_,ei){return !_previewSkipped[ei];}).length;
+  html+='<button class="preview-start-btn" onclick="startFromPreview()">START WORKOUT &nbsp;('+activeCount+' exercises)</button>';
+  html+='</div>';
+  document.getElementById('previewContent').innerHTML=html;
+}
+
+function previewToggleSkip(ei){
+  _previewSkipped[ei]=!_previewSkipped[ei];
+  renderPreview();
+}
+
+function previewAdjRep(ei,si,delta){
+  var ex=exs[ei];if(!ex)return;
+  ex.rc[si]=Math.max(1,Math.min(50,(ex.rc[si]||1)+delta));
+  ex.reps=ex.rc.slice(0,ex.sets).join('/');
+  renderPreview();
+}
+
+function previewAdjPlank(ei,delta){
+  var ex=exs[ei];if(!ex)return;
+  var newVal=Math.max(5,Math.min(300,(ex.rc[0]||60)+delta));
+  ex.rc=[newVal,newVal];
+  ex.reps=newVal+' sec/side';
+  renderPreview();
+}
+
+function previewAdjRest(ei,delta){
+  var ex=exs[ei];if(!ex)return;
+  ex.rest=Math.max(5,Math.min(300,(ex.rest||60)+delta));
+  renderPreview();
+}
+
+function previewAdjSets(ei,delta){
+  var ex=exs[ei];if(!ex)return;
+  var newSets=Math.max(1,Math.min(6,ex.sets+delta));
+  if(newSets>ex.sets){
+    // Add set — copy last target
+    ex.rc.push(ex.rc[ex.rc.length-1]||10);
+  } else if(newSets<ex.sets){
+    ex.rc=ex.rc.slice(0,newSets);
+  }
+  ex.sets=newSets;
+  ex.reps=ex.rc.join('/');
+  renderPreview();
+}
+
+function startFromPreview(){
+  // Filter out skipped exercises
+  exs=exs.filter(function(_,ei){return !_previewSkipped[ei];});
+  if(!exs.length){alert('No exercises selected!');return;}
+  // Initialise logs
   logs=[];
   exs.forEach(function(ex){
     var lg={sets:[],feel:'',notes:''};
     for(var j=0;j<ex.sets;j++)lg.sets.push({reps:'',time:''});
     logs.push(lg);
   });
-  curEx=0;curSet=0;phase='idle';bodyFeel='';bfScore=0;
+  curEx=0;curSet=0;phase='idle';bodyFeel='';bfScore=0;_seqEditMode=false;_targetEditMode=false;
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
   var pre=document.getElementById('page-pre');pre.classList.remove('hidden');pre.classList.add('active');
+}
+
+function startSession(type){
+  // Kept for any legacy calls — now routes through preview
+  showWorkoutPreview(type);
 }
 
 function parseSheetExercises(data){
@@ -1365,6 +1539,9 @@ function renderEx(){
       h+='<button class="seq-add-btn add-b" onclick="seqAddBeep()">+ Beep</button>';
       h+='<button class="seq-add-btn add-p" onclick="seqAddPause()">+ Pause</button>';
       h+='<button class="seq-add-btn" onclick="seqReset()" style="border-color:rgba(255,204,0,0.4);color:var(--yellow);">Reset</button>';
+      h+='</div>';
+      h+='<div class="seq-add-row" style="margin-top:4px;">';
+      h+='<button class="seq-add-btn" onclick="saveSeqAsDefault()" style="border-color:rgba(200,255,0,0.5);color:var(--accent);background:var(--accent-dim);flex:1;">&#128190; Save as my default</button>';
       h+='</div>';
     }
     h+='</div>';
@@ -1586,6 +1763,38 @@ var orig=defaults.find(function(d){return d.name===ex.name;});
 if(!orig){alert(‘No default found for this exercise’);return;}
 ex.seq=orig.seq?JSON.parse(JSON.stringify(orig.seq)):null;
 _seqChanged();
+}
+
+var SEQ_DEFAULTS_KEY=‘wt_seq_defaults’;
+
+function saveSeqAsDefault(){
+var ex=exs[curEx];if(!ex||!ex.seq)return;
+try{
+var stored=JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||’{}’);
+stored[ex.name]=JSON.parse(JSON.stringify(ex.seq));
+localStorage.setItem(SEQ_DEFAULTS_KEY,JSON.stringify(stored));
+// Visual feedback
+var btn=document.querySelector(’.seq-add-btn[onclick=“saveSeqAsDefault()”]’);
+if(btn){var orig=btn.textContent;btn.textContent=‘Saved!’;setTimeout(function(){btn.textContent=orig;},1500);}
+}catch(e){alert(’Could not save: ’+e.message);}
+}
+
+function loadSeqDefaults(){
+try{return JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||’{}’);}
+catch(e){return {};}
+}
+
+function applySeqDefaults(exercises){
+var defaults=loadSeqDefaults();
+if(!Object.keys(defaults).length)return exercises;
+return exercises.map(function(ex){
+if(defaults[ex.name]&&ex.seq){
+// Only apply if sheet hasn’t provided a custom sequence
+// (sheet sequences come through parseSheetExercises which always sets seq explicitly)
+ex.seq=JSON.parse(JSON.stringify(defaults[ex.name]));
+}
+return ex;
+});
 }
 function runNextRep(total){
 if(!mRun)return;curRep++;
