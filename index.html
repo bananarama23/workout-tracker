@@ -204,30 +204,35 @@ input[type=range]{flex:1;accent-color:var(–accent);height:4px;}
 .ss-p{background:var(–purple-dim);color:var(–purple);}
 .seq-step.act{transform:scale(1.1);box-shadow:0 0 0 1px currentColor;}
 /* Edit mode step controls */
-.seq-edit-wrap{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;}
-.seq-edit-step{display:flex;flex-direction:column;align-items:center;gap:3px;touch-action:none;transition:opacity 0.15s;}
-.seq-edit-step.dragging{opacity:0.3;}
-.seq-edit-step.drag-over{outline:2px dashed var(–accent);border-radius:12px;}
-.seq-drag-handle{font-size:0.8rem;color:var(–muted);cursor:grab;padding:1px 4px;line-height:1;user-select:none;-webkit-user-select:none;}
-.seq-edit-chip{display:flex;align-items:center;gap:0;border-radius:20px;overflow:hidden;border:1px solid var(–border2);}
-.seq-edit-chip .sep-minus{background:var(–card3);color:var(–muted);border:none;width:24px;height:26px;font-size:0.85rem;cursor:pointer;font-weight:bold;line-height:1;}
-.seq-edit-chip .sep-plus{background:var(–card3);color:var(–muted);border:none;width:24px;height:26px;font-size:0.85rem;cursor:pointer;font-weight:bold;line-height:1;}
-.seq-edit-chip .sep-val{font-size:0.72rem;font-weight:700;padding:0 6px;line-height:26px;min-width:28px;text-align:center;}
-.seq-edit-chip.ev{background:var(–green-dim);color:var(–green);border-color:rgba(0,212,138,0.3);}
-.seq-edit-chip.eb{background:var(–red-dim);color:var(–red);border-color:rgba(255,58,92,0.3);}
-.seq-edit-chip.ep{background:var(–purple-dim);color:var(–purple);border-color:rgba(155,85,255,0.3);}
-.seq-edit-chip.er{background:var(–blue-dim);color:var(–blue);border-color:rgba(59,131,246,0.3);}
-.seq-del-btn{font-size:0.55rem;color:var(–muted);cursor:pointer;background:none;border:none;padding:0 2px;line-height:1;}
-.seq-add-row{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;}
-.seq-voice-input-row{display:flex;gap:6px;margin-top:6px;align-items:center;}
-.seq-voice-inp{flex:1;background:var(–card2);border:1px solid var(–accent);border-radius:20px;color:var(–text);font-size:0.85rem;padding:5px 12px;outline:none;}
-.seq-voice-confirm{background:var(–accent);color:#000;border:none;border-radius:20px;padding:5px 14px;font-weight:700;font-size:0.78rem;cursor:pointer;white-space:nowrap;}
-.seq-voice-cancel{background:var(–card2);color:var(–muted);border:1px solid var(–border2);border-radius:20px;padding:5px 10px;font-size:0.78rem;cursor:pointer;}
-.seq-add-btn{font-size:0.65rem;font-weight:700;padding:4px 10px;border-radius:20px;border:1px dashed var(–border2);background:transparent;color:var(–muted);cursor:pointer;transition:all 0.15s;letter-spacing:0.3px;}
+.seq-edit-list{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
+.seq-edit-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid var(–border);background:var(–card2);touch-action:none;transition:opacity 0.15s;}
+.seq-edit-row.dragging{opacity:0.25;}
+.seq-edit-row.drag-over{border-color:var(–accent);background:var(–accent-dim);}
+.seq-edit-row.is-rep{opacity:0.45;border-style:dashed;}
+.seq-drag-handle{color:var(–muted);font-size:1rem;padding:0 2px;cursor:grab;user-select:none;-webkit-user-select:none;flex-shrink:0;}
+.seq-type-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.std-v{background:var(–green);}
+.std-b{background:var(–red);}
+.std-p{background:var(–purple);}
+.std-r{background:var(–muted);}
+.seq-row-label{flex:1;font-size:0.82rem;font-weight:600;color:var(–text);}
+.seq-row-ctrl{display:flex;align-items:center;border-radius:14px;overflow:hidden;border:1px solid var(–border2);flex-shrink:0;}
+.src-btn{background:var(–card3);color:var(–text2);border:none;width:26px;height:26px;font-size:0.9rem;cursor:pointer;font-weight:bold;}
+.src-btn:active{background:var(–border);}
+.src-val{font-family:‘Bebas Neue’,sans-serif;font-size:0.88rem;padding:0 7px;min-width:28px;text-align:center;line-height:26px;color:var(–text);}
+.seq-row-edit{background:none;border:none;color:var(–muted);font-size:0.82rem;cursor:pointer;padding:0 4px;flex-shrink:0;}
+.seq-row-del{background:none;border:none;color:var(–muted);font-size:0.82rem;cursor:pointer;padding:0 2px;flex-shrink:0;}
+.seq-row-del:active,.seq-row-edit:active{color:var(–red);}
+.seq-add-row{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;}
+.seq-voice-input-row{display:flex;gap:6px;margin-bottom:8px;align-items:center;}
+.seq-voice-inp{flex:1;background:var(–card2);border:1px solid var(–accent);border-radius:10px;color:var(–text);font-size:0.9rem;padding:8px 12px;outline:none;}
+.seq-voice-confirm{background:var(–accent);color:#000;border:none;border-radius:10px;padding:8px 16px;font-weight:700;font-size:0.82rem;cursor:pointer;white-space:nowrap;}
+.seq-voice-cancel{background:none;color:var(–muted);border:1px solid var(–border2);border-radius:10px;padding:8px 10px;font-size:0.82rem;cursor:pointer;}
+.seq-add-btn{font-size:0.65rem;font-weight:700;padding:5px 12px;border-radius:20px;border:1px solid var(–border2);background:var(–card2);color:var(–muted);cursor:pointer;transition:all 0.15s;}
 .seq-add-btn:active{transform:scale(0.96);}
-.seq-add-btn.add-v{border-color:rgba(0,212,138,0.4);color:var(–green);}
-.seq-add-btn.add-b{border-color:rgba(255,58,92,0.4);color:var(–red);}
-.seq-add-btn.add-p{border-color:rgba(155,85,255,0.4);color:var(–purple);}
+.seq-add-btn.add-v{border-color:rgba(0,212,138,0.4);color:var(–green);background:var(–green-dim);}
+.seq-add-btn.add-b{border-color:rgba(255,58,92,0.4);color:var(–red);background:var(–red-dim);}
+.seq-add-btn.add-p{border-color:rgba(155,85,255,0.4);color:var(–purple);background:var(–purple-dim);}
 
 .voice-wrap{text-align:center;padding:8px 0 4px;min-height:44px;display:flex;align-items:center;justify-content:center;}
 .voice-word{font-family:‘Bebas Neue’,sans-serif;font-size:2.4rem;letter-spacing:4px;transition:color 0.1s;}
@@ -1510,39 +1515,41 @@ function renderEx(){
       });
       h+='</div>';
     } else {
-      h+='<div class="seq-edit-wrap" id="seqSteps">';
+      h+='<div class="seq-edit-list" id="seqSteps">';
       ex.seq.forEach(function(step,si){
-        h+='<div class="seq-edit-step" data-si="'+si+'">';
         if(step.t==='r'){
-          h+='<div class="seq-edit-chip er"><span class="sep-val">#rep</span></div>';
+          h+='<div class="seq-edit-row is-rep" data-si="'+si+'">';
+          h+='<div class="seq-type-dot std-r"></div>';
+          h+='<div class="seq-row-label">Rep count</div>';
+          h+='</div>';
         } else {
-          h+='<div class="seq-drag-handle" title="Drag to reorder">&#8801;</div>';
-          if(step.t==='v'){
-            h+='<div class="seq-edit-chip ev">';
-            h+='<button class="sep-minus" onclick="seqToggleVoice('+si+')" title="Remove">&#x2715;</button>';
-            h+='<span class="sep-val">'+step.l+'</span>';
-            h+='<button class="sep-plus" onclick="seqEditVoice('+si+')" title="Edit">&#9998;</button>';
-            h+='</div>';
-          } else if(step.t==='b'){
-            h+='<div class="seq-edit-chip eb">';
-            h+='<button class="sep-minus" onclick="seqAdj('+si+',-1)">-</button>';
-            h+='<span class="sep-val">'+step.bc+'x</span>';
-            h+='<button class="sep-plus" onclick="seqAdj('+si+',1)">+</button>';
+          var dotCls=step.t==='v'?'std-v':step.t==='b'?'std-b':'std-p';
+          var label=step.t==='v'?'"'+step.l+'"':step.t==='b'?(step.bc+' beep'+(step.bc>1?'s':'')):((Math.round((step.ms||1000)/100)/10)+'s pause');
+          h+='<div class="seq-edit-row" data-si="'+si+'">';
+          h+='<div class="seq-drag-handle">&#8801;</div>';
+          h+='<div class="seq-type-dot '+dotCls+'"></div>';
+          h+='<div class="seq-row-label">'+label+'</div>';
+          if(step.t==='b'){
+            h+='<div class="seq-row-ctrl">';
+            h+='<button class="src-btn" onclick="seqAdj('+si+',-1)">-</button>';
+            h+='<span class="src-val">'+step.bc+'x</span>';
+            h+='<button class="src-btn" onclick="seqAdj('+si+',1)">+</button>';
             h+='</div>';
           } else if(step.t==='p'){
-            var psec=Math.round((step.ms||500)/100)/10;
-            h+='<div class="seq-edit-chip ep">';
-            h+='<button class="sep-minus" onclick="seqAdjPause('+si+',-500)">-</button>';
-            h+='<span class="sep-val">'+psec+'s</span>';
-            h+='<button class="sep-plus" onclick="seqAdjPause('+si+',500)">+</button>';
+            var psec=Math.round((step.ms||1000)/100)/10;
+            h+='<div class="seq-row-ctrl">';
+            h+='<button class="src-btn" onclick="seqAdjPause('+si+',-500)">-</button>';
+            h+='<span class="src-val">'+psec+'s</span>';
+            h+='<button class="src-btn" onclick="seqAdjPause('+si+',500)">+</button>';
             h+='</div>';
+          } else if(step.t==='v'){
+            h+='<button class="seq-row-edit" onclick="seqEditVoice('+si+')" title="Edit">&#9998;</button>';
           }
-          h+='<button class="seq-del-btn" onclick="seqRemove('+si+')" title="Remove">&#128465;</button>';
+          h+='<button class="seq-row-del" onclick="seqRemove('+si+')" title="Delete">&#10005;</button>';
+          h+='</div>';
         }
-        h+='</div>';
       });
       h+='</div>';
-      // Inline voice input row (hidden until +Voice tapped)
       h+='<div class="seq-voice-input-row" id="seqVoiceRow" style="display:none;">';
       h+='<input class="seq-voice-inp" id="seqVoiceInp" type="text" placeholder="e.g. Hold" maxlength="12">';
       h+='<button class="seq-voice-confirm" onclick="seqConfirmVoice()">Add</button>';
@@ -1817,55 +1824,36 @@ wrap._dragInit=true;
 wrap.addEventListener(‘touchstart’,function(e){
 var handle=e.target.closest(’.seq-drag-handle’);
 if(!handle)return;
-var step=handle.closest(’.seq-edit-step’);
-if(!step)return;
-_dragSi=parseInt(step.dataset.si);
-_dragEl=step;
+var row=handle.closest(’.seq-edit-row’);
+if(!row||row.classList.contains(‘is-rep’))return;
+_dragSi=parseInt(row.dataset.si);
+_dragEl=row;
 _dragEl.classList.add(‘dragging’);
-
-```
-// Create ghost
-_dragGhost=_dragEl.cloneNode(true);
-_dragGhost.style.cssText='position:fixed;z-index:9999;pointer-events:none;opacity:0.85;transform:scale(1.08);transition:none;background:var(--card2);border-radius:12px;padding:4px;';
 var r=_dragEl.getBoundingClientRect();
-_dragGhost.style.left=r.left+'px';
-_dragGhost.style.top=r.top+'px';
-_dragGhost.style.width=r.width+'px';
+_dragGhost=_dragEl.cloneNode(true);
+_dragGhost.style.cssText=‘position:fixed;z-index:9999;pointer-events:none;opacity:0.9;transform:scale(1.03);left:’+r.left+‘px;top:’+r.top+‘px;width:’+r.width+‘px;border-radius:10px;padding:8px 10px;background:var(–card3);border:1px solid var(–accent);’;
 document.body.appendChild(_dragGhost);
 e.preventDefault();
-```
-
 },{passive:false});
 
 wrap.addEventListener(‘touchmove’,function(e){
 if(_dragSi<0||!_dragGhost)return;
 var t=e.touches[0];
-_dragGhost.style.left=(t.clientX-_dragGhost.offsetWidth/2)+‘px’;
 _dragGhost.style.top=(t.clientY-_dragGhost.offsetHeight/2)+‘px’;
-
-```
-// Find which step we're over
-document.querySelectorAll('.seq-edit-step').forEach(function(el){el.classList.remove('drag-over');});
+_dragGhost.style.left=(t.clientX-_dragGhost.offsetWidth/2)+‘px’;
+document.querySelectorAll(’.seq-edit-row’).forEach(function(el){el.classList.remove(‘drag-over’);});
 var el=document.elementFromPoint(t.clientX,t.clientY);
-var overStep=el?el.closest('.seq-edit-step'):null;
-if(overStep&&overStep!==_dragEl){
-  var overSi=parseInt(overStep.dataset.si);
-  if(!isNaN(overSi)&&overSi!==_dragSi){
-    _dragOverSi=overSi;
-    overStep.classList.add('drag-over');
-  }
+var overRow=el?el.closest(’.seq-edit-row’):null;
+if(overRow&&overRow!==_dragEl&&!overRow.classList.contains(‘is-rep’)){
+var overSi=parseInt(overRow.dataset.si);
+if(!isNaN(overSi)){_dragOverSi=overSi;overRow.classList.add(‘drag-over’);}
 }
 e.preventDefault();
-```
-
 },{passive:false});
 
-wrap.addEventListener(‘touchend’,function(e){
-if(_dragSi<0)return;
-// Clean up ghost
+wrap.addEventListener(‘touchend’,function(){
 if(_dragGhost){_dragGhost.parentNode.removeChild(_dragGhost);_dragGhost=null;}
-document.querySelectorAll(’.seq-edit-step’).forEach(function(el){el.classList.remove(‘dragging’,‘drag-over’);});
-// Commit reorder if valid drop
+document.querySelectorAll(’.seq-edit-row’).forEach(function(el){el.classList.remove(‘dragging’,‘drag-over’);});
 if(_dragOverSi>=0&&_dragOverSi!==_dragSi){
 var ex=exs[curEx];
 if(ex&&ex.seq){
