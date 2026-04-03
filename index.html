@@ -380,31 +380,57 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 .edit-sync{font-size:0.7rem;color:var(--muted);margin-bottom:10px;cursor:pointer;}
 
 /* PROGRESS */
-.prog-section{margin:16px 16px 0;}
-.prog-section-lbl{font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:10px;}
-.prog-chart-box{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;}
-.chart-canvas{width:100%;height:160px;display:block;}
-.hm-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;overflow-x:auto;}
-.hm-table{min-width:100%;border-collapse:collapse;}
-.hm-ex{font-size:0.58rem;color:var(--muted);white-space:nowrap;padding-right:8px;font-weight:700;text-align:right;text-transform:uppercase;letter-spacing:0.5px;}
-.hm-cell{width:26px;height:26px;border-radius:6px;text-align:center;line-height:26px;font-size:0.65rem;font-weight:700;}
+.prog-section{margin:0 16px 12px;}
+.prog-section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-left:2px;}
+.prog-section-lbl{font-size:0.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);font-weight:700;}
+.prog-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+.prog-card-pad{padding:16px;}
+.chart-canvas{width:100%;height:150px;display:block;}
+/* Cholesterol */
+.chol-big-row{display:flex;gap:8px;margin-bottom:12px;}
+.chol-big-box{flex:1;background:var(--card2);border-radius:var(--r-sm);padding:12px 8px;text-align:center;}
+.chol-big-lbl{font-size:0.55rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;}
+.chol-big-val{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;line-height:1;}
+.chol-big-delta{font-size:0.68rem;margin-top:3px;font-weight:700;}
+.chol-date-lbl{font-size:0.7rem;color:var(--muted);text-align:center;margin-bottom:12px;}
+.chol-divider{border:none;border-top:1px solid var(--border);margin:12px 0;}
+.chol-hist-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);}
+.chol-hist-row:last-child{border-bottom:none;}
+.chol-hist-date{font-size:0.75rem;color:var(--text2);font-weight:600;}
+.chol-hist-vals{display:flex;gap:16px;}
+.chol-hist-item{text-align:right;}
+.chol-hist-item-lbl{font-size:0.52rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;}
+.chol-hist-item-val{font-family:'Bebas Neue',sans-serif;font-size:1.05rem;line-height:1.2;}
+/* Heatmap */
+.hm-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.hm-table{border-collapse:collapse;white-space:nowrap;}
+.hm-ex{font-size:0.58rem;color:var(--muted);white-space:nowrap;padding-right:10px;font-weight:700;text-align:right;text-transform:uppercase;letter-spacing:0.5px;vertical-align:middle;}
+.hm-cell{width:28px;height:28px;border-radius:6px;text-align:center;line-height:28px;font-size:0.62rem;font-weight:700;}
 .hm-empty{background:var(--card2);}
-.hm-m{background:rgba(0,212,138,0.2);color:var(--green);}
-.hm-mh{background:rgba(255,204,0,0.2);color:var(--yellow);}
-.hm-h{background:rgba(255,58,92,0.2);color:var(--red);}
-.hm-date{font-size:0.58rem;color:var(--muted);text-align:center;padding:4px 2px;}
-.pr-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.pr-box{background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px;}
-.pr-name{font-size:0.58rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;}
-.pr-val{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:var(--accent);}
+.hm-m{background:rgba(0,212,138,0.25);color:var(--green);}
+.hm-mh{background:rgba(255,204,0,0.25);color:var(--yellow);}
+.hm-h{background:rgba(255,58,92,0.25);color:var(--red);}
+.hm-date{font-size:0.55rem;color:var(--muted);text-align:center;padding:4px 2px;}
+.hm-legend{display:flex;gap:10px;padding:10px 16px 0;flex-wrap:wrap;}
+.hm-leg-item{display:flex;align-items:center;gap:5px;font-size:0.67rem;color:var(--text2);}
+.hm-leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+/* PRs */
+.pr-list{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+.pr-row{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);}
+.pr-row:last-child{border-bottom:none;}
+.pr-name{font-size:0.75rem;color:var(--text2);font-weight:600;}
+.pr-right{display:flex;align-items:baseline;gap:10px;}
+.pr-val{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--accent);line-height:1;}
+.pr-unit{font-size:0.62rem;color:var(--muted);}
 .pr-date{font-size:0.62rem;color:var(--muted);}
-.chol-row-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);}
-.chol-row-item:last-child{border-bottom:none;}
-.cr-label{font-size:0.78rem;color:var(--text2);font-weight:600;}
-.cr-val{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;}
-.cr-trend{font-size:0.68rem;color:var(--muted);}
-.refresh-link{text-align:center;padding:16px;color:var(--muted);font-size:0.75rem;cursor:pointer;font-weight:600;}
-.clear-link{text-align:center;padding:4px;}
+/* Pull-up stat strip */
+.pu-stat-strip{display:flex;border-bottom:1px solid var(--border);}
+.pu-stat{flex:1;text-align:center;padding:14px 4px;}
+.pu-stat+.pu-stat{border-left:1px solid var(--border);}
+.pu-stat-val{font-family:'Bebas Neue',sans-serif;font-size:1.9rem;color:var(--accent);line-height:1;}
+.pu-stat-lbl{font-size:0.55rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-top:3px;}
+.refresh-link{text-align:center;padding:14px;color:var(--muted);font-size:0.75rem;cursor:pointer;font-weight:600;}
+.clear-link{text-align:center;padding:0 0 16px;}
 .clear-link button{background:none;border:none;color:var(--border2);font-size:0.62rem;cursor:pointer;}
 
 /* PLAN */
@@ -616,9 +642,10 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   <div class="prog-wrap"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
   <div class="page-body" id="sessionContent" style="padding-top:8px;padding-bottom:90px;"></div>
   <div class="sess-footer" id="sessionFooter">
-    <button class="btn b-skip" id="footerPrev" onclick="prevEx()" style="flex:0 0 80px;">PREV</button>
+    <button class="btn b-skip" id="footerPrev" onclick="prevEx()" style="flex:0 0 72px;">PREV</button>
     <button class="btn b-start" id="footerMain" onclick="handleMain()" style="flex:1;">START SET</button>
-    <button class="btn b-skip" id="footerNext" onclick="footerNextAction()" style="flex:0 0 80px;">NEXT</button>
+    <button class="btn b-skip" id="footerSkip" onclick="reqSkip()" style="flex:0 0 72px;display:none;background:var(--orange-dim);color:var(--orange);border-color:rgba(255,104,48,0.3);">SKIP</button>
+    <button class="btn b-skip" id="footerNext" onclick="footerNextAction()" style="flex:0 0 72px;">NEXT</button>
   </div>
 </div>
 
@@ -805,34 +832,65 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <h1>PROGRESS</h1>
     <p class="ph-sub">Last 8 weeks</p>
   </div>
-  <div class="page-body">
+  <div class="page-body" style="padding-top:16px;">
+
+    <!-- Pull-Ups -->
     <div class="prog-section">
-      <div class="prog-section-lbl">Pull-Up Total Per Session</div>
-      <div class="prog-chart-box">
-        <canvas id="pullupCanvas" class="chart-canvas"></canvas>
-        <div id="pullupEmpty" style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">Complete a home workout to see pull-up progression</div>
+      <div class="prog-section-hdr">
+        <div class="prog-section-lbl">Pull-Up Progress</div>
+      </div>
+      <div class="prog-card">
+        <div id="puStatStrip" style="display:none;" class="pu-stat-strip">
+          <div class="pu-stat"><div class="pu-stat-val" id="puBest">-</div><div class="pu-stat-lbl">Best</div></div>
+          <div class="pu-stat"><div class="pu-stat-val" id="puLast">-</div><div class="pu-stat-lbl">Last</div></div>
+          <div class="pu-stat"><div class="pu-stat-val" id="puTarget" style="color:var(--muted);">16</div><div class="pu-stat-lbl">Target</div></div>
+        </div>
+        <div class="prog-card-pad" style="padding-top:12px;" id="puChartWrap">
+          <canvas id="pullupCanvas" class="chart-canvas" style="display:none;"></canvas>
+          <div id="pullupEmpty" style="text-align:center;color:var(--muted);padding:20px 0;font-size:0.85rem;">Complete a home workout to see pull-up progression</div>
+        </div>
       </div>
     </div>
+
+    <!-- Cholesterol -->
     <div class="prog-section">
-      <div class="prog-section-lbl">Cholesterol</div>
-      <div class="prog-chart-box">
+      <div class="prog-section-hdr">
+        <div class="prog-section-lbl">Cholesterol</div>
+      </div>
+      <div class="prog-card prog-card-pad">
         <div id="cholRows"></div>
-        <canvas id="cholCanvas" class="chart-canvas" style="margin-top:12px;display:none;"></canvas>
         <div id="cholEmpty" style="text-align:center;color:var(--muted);padding:10px 0;font-size:0.85rem;"></div>
       </div>
     </div>
+
+    <!-- Heatmap -->
     <div class="prog-section">
-      <div class="prog-section-lbl">Exercise Feel Heatmap</div>
-      <div class="hm-wrap">
-        <div id="heatmapContent" style="color:var(--muted);font-size:0.85rem;padding:10px;">Complete a few sessions to see your feel trend</div>
+      <div class="prog-section-hdr">
+        <div class="prog-section-lbl">Exercise Feel</div>
+      </div>
+      <div class="prog-card">
+        <div class="hm-scroll prog-card-pad" style="padding-bottom:8px;">
+          <div id="heatmapContent" style="color:var(--muted);font-size:0.85rem;padding:8px 0;">Complete a few sessions to see your feel trend</div>
+        </div>
+        <div class="hm-legend" id="hmLegend" style="display:none;">
+          <div class="hm-leg-item"><div class="hm-leg-dot hm-m"></div>Medium</div>
+          <div class="hm-leg-item"><div class="hm-leg-dot hm-mh"></div>Med-hard</div>
+          <div class="hm-leg-item"><div class="hm-leg-dot hm-h"></div>Hard</div>
+        </div>
+        <div style="height:12px;"></div>
       </div>
     </div>
-    <div class="prog-section" style="margin-bottom:16px;">
-      <div class="prog-section-lbl">Personal Records</div>
-      <div class="pr-grid" id="prGrid">
-        <div style="color:var(--muted);font-size:0.85rem;grid-column:1/-1;padding:10px;">No records yet</div>
+
+    <!-- Personal Records -->
+    <div class="prog-section" style="margin-bottom:6px;">
+      <div class="prog-section-hdr">
+        <div class="prog-section-lbl">Personal Records</div>
+      </div>
+      <div class="pr-list" id="prGrid">
+        <div class="pr-row"><div class="pr-name" style="color:var(--muted);">No records yet</div></div>
       </div>
     </div>
+
     <div class="refresh-link" onclick="loadProgressData()">↻ Refresh</div>
     <div class="clear-link"><button onclick="if(confirm('Clear all local data?')){localStorage.removeItem('wt_hist_v3');loadHomeData();}">clear local data</button></div>
   </div>
@@ -890,6 +948,10 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 var CLOUD_URL='https://script.google.com/macros/s/AKfycbyWZ1VoxhQ5OPgnWRIpnYgDw9RvjepJvZEKaycOJ807cpB_bwDA0rCwGj_W_ZVbWZ1t/exec';
 var HIST_KEY='wt_hist_v3';
 var CACHE_KEY='wt_sheet_cache';
+function localDateStr(){
+  var d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 
 // ─── CACHE ────────────────────────────────────────────────────────
 function saveCache(s){try{localStorage.setItem(CACHE_KEY,JSON.stringify({sessions:s,ts:Date.now()}));}catch(e){}}
@@ -1233,15 +1295,18 @@ var _previewSkipped=[]; // boolean array, one per exercise
 
 function showWorkoutPreview(type){
   wType=type;
-  // Load exercises (same logic as before)
-  if(sheetWorkout&&sheetWorkout.exercises&&sheetWorkout.exercises.length){
+  // Only use sheet workout if its type explicitly matches what user tapped
+  var sheetType=(sheetWorkout&&sheetWorkout.workoutType)?sheetWorkout.workoutType.toLowerCase():'';
+  var sheetMatchesType=sheetWorkout&&sheetWorkout.exercises&&sheetWorkout.exercises.length&&(
+    (type==='home'&&sheetType.indexOf('home')>=0&&sheetType.indexOf('hotel')<0)||
+    (type==='hotel'&&sheetType.indexOf('hotel')>=0)
+  );
+  if(sheetMatchesType){
     exs=parseSheetExercises(sheetWorkout);
-    // Sheet sequences take priority — don't apply local defaults
   } else {
     exs=type==='home'
       ?homeEx.map(function(e){return JSON.parse(JSON.stringify(e));})
       :hotelEx.map(function(e){return JSON.parse(JSON.stringify(e));});
-    // Apply user-saved seq defaults (overrides hardcoded defaults)
     exs=applySeqDefaults(exs);
   }
   _previewSkipped=exs.map(function(){return false;});
@@ -1957,7 +2022,17 @@ function runNextRep(total){
 }
 
 function stopMetro(){clearMTOs();syn.cancel();setVW('\u00a0','');}
-function autoRest(){autoLog(curSet);runRestTimer(exs[curEx].rest);}
+function autoRest(){
+  var ex=exs[curEx];
+  autoLog(curSet);
+  // After the last set of an exercise, skip the in-set rest and go straight to next
+  if(curSet>=ex.sets-1){
+    if(curEx<exs.length-1){showBetweenPrompt();}
+    else{finishWorkout();}
+    return;
+  }
+  runRestTimer(ex.rest);
+}
 
 function handleMain(){
   resAC();
@@ -1969,20 +2044,45 @@ function updBtn(){
   var fb=document.getElementById('footerMain');
   var fp=document.getElementById('footerPrev');
   var fn=document.getElementById('footerNext');
+  var fs=document.getElementById('footerSkip');
   var label,cls,dis;
+  if(phase==='between'){
+    // Between exercises: main = disabled timer, next = "Start Now"
+    label='RESTING...';cls='btn b-rest';dis=true;
+    if(fb){fb.textContent=label;fb.className=cls;fb.disabled=dis;}
+    if(fp)fp.disabled=true;
+    if(fn){fn.textContent='Start Now';fn.disabled=false;}
+    if(fs){fs.style.display='block';fs.disabled=false;}
+    return;
+  }
   if(phase==='idle'||phase==='ready'){label='START SET';cls='btn b-start';dis=false;}
   else if(phase==='active'){label='SET DONE';cls='btn b-done';dis=false;}
   else{label='RESTING...';cls='btn b-rest';dis=true;}
   if(fb){fb.textContent=label;fb.className=cls;fb.disabled=dis;}
-  if(fp)fp.disabled=(curEx===0&&curSet===0);
+  if(fp)fp.disabled=(curEx===0&&curSet===0&&phase!=='resting');
   if(fn){
-    var last=!exs[curEx]||curSet>=exs[curEx].sets-1;
+    var ex=exs[curEx];
+    var last=!ex||curSet>=ex.sets-1;
+    var isActivePlank=ex&&ex.isPlank&&phase==='active';
     fn.textContent=last?'NEXT EX':'NEXT SET';
-    fn.disabled=last&&curEx>=exs.length-1;
+    fn.disabled=(last&&curEx>=exs.length-1)||isActivePlank;
+  }
+  // Skip: visible and clickable during in-set rest OR between-exercise rest
+  if(fs){
+    var isResting=(phase==='resting'||phase==='between');
+    fs.style.display=isResting?'block':'none';
+    fs.disabled=!isResting;
   }
 }
 
 function footerNextAction(){
+  if(phase==='between'){
+    // curEx already incremented by showBetweenPrompt — just skip the 2-min timer
+    clearInterval(timerInt);
+    var ra=document.getElementById('restAdj');if(ra)ra.classList.add('hidden');
+    phase='idle';updBtn();renderEx();
+    return;
+  }
   var last=!exs[curEx]||curSet>=exs[curEx].sets-1;
   if(last){nextEx();}else{nextSet();}
 }
@@ -1996,7 +2096,17 @@ function adjRest(d){
 }
 
 function reqSkip(){if(phase==='resting'||phase==='between')document.getElementById('skipOverlay').classList.add('show');}
-function confSkip(){document.getElementById('skipOverlay').classList.remove('show');clearInterval(timerInt);restDone();}
+function confSkip(){
+  document.getElementById('skipOverlay').classList.remove('show');
+  clearInterval(timerInt);
+  var ra=document.getElementById('restAdj');if(ra)ra.classList.add('hidden');
+  if(phase==='between'){
+    // Already incremented curEx in showBetweenPrompt — just go to idle
+    phase='idle';updBtn();renderEx();
+  } else {
+    restDone();
+  }
+}
 function cancSkip(){document.getElementById('skipOverlay').classList.remove('show');}
 
 function runRestTimer(secs){
@@ -2027,39 +2137,33 @@ function runRestTimer(secs){
 function restDone(){
   var ra=document.getElementById('restAdj');if(ra)ra.classList.add('hidden');
   curSet++;
-  if(curSet>=exs[curEx].sets){if(curEx<exs.length-1){showBetweenPrompt();}else{finishWorkout();}return;}
+  if(curSet>=exs[curEx].sets){
+    // All sets for this exercise done
+    if(curEx<exs.length-1){showBetweenPrompt();}
+    else{finishWorkout();}
+    return;
+  }
+  // More sets to do — just go to next set
   phase='idle';updBtn();saveCurrentInputs();renderEx();
 }
 
 function showBetweenPrompt(){
-  var nx=exs[curEx+1];phase='between';updBtn();
-  var sc=document.getElementById('sessionContent');if(!sc)return;
-  var nxName=nx?nx.name:'Next exercise';
-  sc.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;min-height:300px;gap:20px;">'
-    +'<div style="font-family:Bebas Neue,sans-serif;font-size:1.5rem;letter-spacing:3px;color:var(--accent);text-align:center;">EXERCISE COMPLETE</div>'
-    +'<div style="font-size:0.85rem;color:var(--text2);text-align:center;">Next: <strong style="color:var(--text);">'+nxName+'</strong></div>'
-    +'<button onclick="runBetween()" style="width:100%;max-width:260px;padding:18px;background:var(--blue);color:#fff;border:none;border-radius:14px;font-family:Bebas Neue,sans-serif;font-size:1.15rem;letter-spacing:2px;cursor:pointer;">START 2 MIN REST</button>'
-    +'<button onclick="skipBetween()" style="width:100%;max-width:260px;padding:13px;background:var(--card2);color:var(--muted);border:1px solid var(--border);border-radius:14px;font-size:0.85rem;font-weight:600;cursor:pointer;">Skip - go now</button>'
-    +'</div>';
-  bRE();speak('Exercise done. '+nxName+' is next.');
-}
-
-function skipBetween(){curEx++;curSet=0;phase='idle';renderEx();}
-
-function runBetween(){
-  clearInterval(timerInt);
-  var nx=exs[curEx+1];
-  tLeft=120;tTotal=120;phase='between';
-  curEx++;curSet=0;renderEx();
+  if(curEx>=exs.length-1){finishWorkout();return;}
+  curEx++;curSet=0;phase='between';
+  renderEx();
   setTimeout(function(){
     updBtn();
-    var pb=document.getElementById('phBadge');if(pb){pb.textContent='BETWEEN';pb.className='ph-badge phb-between';}
-    var tl=document.getElementById('timerLbl');if(tl)tl.textContent='2 MIN REST';
+    var nx=exs[curEx];
+    tLeft=120;tTotal=120;
+    var pb=document.getElementById('phBadge');if(pb){pb.textContent='2 MIN REST';pb.className='ph-badge phb-between';}
+    var tl=document.getElementById('timerLbl');if(tl)tl.textContent='BETWEEN EXERCISES';
     var ra=document.getElementById('restAdj');if(ra)ra.classList.remove('hidden');
     var rl=document.getElementById('restLbl');if(rl)rl.textContent='120 sec rest';
     var tc=document.getElementById('tCount');if(tc)tc.textContent=tLeft;
+    var ts=document.getElementById('tSub');if(ts)ts.textContent='seconds';
     setRing(1,true);bRS();
-    if(nx)speak('Rest. Next: '+nx.name);
+    if(nx)speak('Exercise done. Rest 2 minutes. '+nx.name+' is next.');
+    clearInterval(timerInt);
     timerInt=setInterval(function(){
       tLeft--;
       var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
@@ -2074,13 +2178,23 @@ function runBetween(){
         var pb2=document.getElementById('phBadge');if(pb2){pb2.textContent='READY';pb2.className='ph-badge phb-ready';}
         var tl2=document.getElementById('timerLbl');if(tl2)tl2.textContent='TAP TO START';
         var tc3=document.getElementById('tCount');if(tc3)tc3.textContent='-';
+        var ts2=document.getElementById('tSub');if(ts2)ts2.textContent='start';
         setRing(0,false);
       }
     },1000);
   },50);
 }
 
-function nextEx(){saveCurrentInputs();clearInterval(timerInt);stopMetro();curSet=0;_seqEditMode=false;_targetEditMode=false;if(curEx<exs.length-1){curEx++;showBetweenPrompt();}}
+function nextEx(){
+  saveCurrentInputs();clearInterval(timerInt);stopMetro();
+  curSet=0;_seqEditMode=false;_targetEditMode=false;
+  if(phase==='between'){
+    // curEx already incremented — just start the exercise
+    phase='idle';updBtn();renderEx();
+  } else {
+    if(curEx<exs.length-1){curEx++;showBetweenPrompt();}
+  }
+}
 function prevEx(){saveCurrentInputs();clearInterval(timerInt);stopMetro();curSet=0;_seqEditMode=false;_targetEditMode=false;curEx=Math.max(curEx-1,0);phase='idle';renderEx();}
 function nextSet(){if(curSet<exs[curEx].sets-1){stopMetro();clearInterval(timerInt);saveCurrentInputs();curSet++;phase='idle';updBtn();renderEx();}}
 function prevSet(){if(curSet>0){saveCurrentInputs();curSet--;phase='idle';updBtn();renderEx();}}
@@ -2114,7 +2228,7 @@ function finishWorkout(){
   });
   var week='Week '+getWeekNum();
   var wtLbl=wType==='home'?'Home Strength':'Hotel Strength';
-  var sd={date:new Date().toISOString().slice(0,10),week:week,workoutType:wtLbl,bodyFeel:bodyFeel,duration:dur,exercises:[]};
+  var sd={date:localDateStr(),week:week,workoutType:wtLbl,bodyFeel:bodyFeel,duration:dur,exercises:[]};
   exs.forEach(function(ex,ei){
     var log=logs[ei];
     var res=ex.isPlank?'L:'+(log.sets[0].time||'?')+'s/R:'+(log.sets[1].time||'?')+'s':log.sets.map(function(s,si){return s.reps||ex.rc[si];}).join('/');
@@ -2185,7 +2299,7 @@ function copyResults(){
   var txt=buildCopyTxt();
   var week='Week '+getWeekNum();
   var wtLbl=wType==='home'?'Home Strength':'Hotel Strength';
-  var sd2={date:new Date().toISOString().slice(0,10),week:week,workoutType:wtLbl,bodyFeel:bodyFeel,duration:0,exercises:[]};
+  var sd2={date:localDateStr(),week:week,workoutType:wtLbl,bodyFeel:bodyFeel,duration:0,exercises:[]};
   exs.forEach(function(ex,ei){
     var log=logs[ei];
     var res=ex.isPlank?'L:'+(log.sets[0].time||'?')+'s/R:'+(log.sets[1].time||'?')+'s':log.sets.map(function(s,si){return s.reps||ex.rc[si];}).join('/');
@@ -2194,7 +2308,16 @@ function copyResults(){
   });
   syncData(sd2,'syncBadge');
   var c=loadCache();
-  if(c){c.sessions.push(sd2);saveCache(c.sessions);_sheetSessions=c.sessions;setSyncBadges('live');}
+  if(c){
+    // Deduplicate: remove any same-date same-type entry before adding
+    c.sessions=c.sessions.filter(function(s){
+      return !(s.date===sd2.date&&s.workoutType===sd2.workoutType);
+    });
+    c.sessions.push(sd2);
+    saveCache(c.sessions);
+    _sheetSessions=c.sessions;
+    setSyncBadges('live');
+  }
   navigator.clipboard.writeText(txt).then(function(){
     document.getElementById('copyBtn').textContent='COPIED \u2014 PASTE INTO CLAUDE';
     document.getElementById('copyBtn').classList.add('copied');
@@ -2257,7 +2380,7 @@ function saveHIIT(){
   resAC();
   var dur=document.getElementById('hiitDur').value;
   var notes=document.getElementById('hiitNotes').value;
-  var date=document.getElementById('hiitDate').value||new Date().toISOString().slice(0,10);
+  var date=document.getElementById('hiitDate').value||localDateStr();
   var el=document.getElementById('hiitMsg');
   if(!dur||!selEff){el.textContent='Please enter duration and effort';el.style.background='var(--red-dim)';el.style.color='var(--red)';return;}
   var d=new Date(date+'T12:00');d.setDate(d.getDate()+3-(d.getDay()+6)%7);
@@ -2274,7 +2397,7 @@ function saveHIIT(){
   setTimeout(function(){
     document.getElementById('hiitDur').value='';
     document.getElementById('hiitNotes').value='';
-    document.getElementById('hiitDate').value=new Date().toISOString().slice(0,10);
+    document.getElementById('hiitDate').value=localDateStr();
     selEff=0;document.getElementById('effBtns').querySelectorAll('.eff-btn').forEach(function(b){b.classList.remove('on');});
     setHIITPreset(20,8);
   },3500);
@@ -2292,7 +2415,7 @@ function saveChol(){
   resAC();
   var hdl=document.getElementById('cHDL').value,ldl=document.getElementById('cLDL').value,tot=document.getElementById('cTotal').value;
   var trig=document.getElementById('cTrig').value,notes=document.getElementById('cNotes').value;
-  var date=document.getElementById('cholDate').value||new Date().toISOString().slice(0,10);
+  var date=document.getElementById('cholDate').value||localDateStr();
   var el=document.getElementById('cholMsg');
   if(!hdl||!ldl||!tot){el.textContent='Enter HDL, LDL and Total';el.style.background='var(--red-dim)';el.style.color='var(--red)';return;}
   syncData({type:'cholesterol',date:date,hdl:hdl,ldl:ldl,total:tot,triglycerides:trig,notes:notes},'cholMsg');
@@ -2304,7 +2427,7 @@ function saveBody(){
   resAC();
   var wt=document.getElementById('bWt').value,waist=document.getElementById('bWaist').value;
   var arm=document.getElementById('bArm').value,notes=document.getElementById('bNotes').value;
-  var date=document.getElementById('bodyDate').value||new Date().toISOString().slice(0,10);
+  var date=document.getElementById('bodyDate').value||localDateStr();
   var el=document.getElementById('bodyMsg');
   if(!wt&&!waist&&!arm){el.textContent='Enter at least one measurement';el.style.background='var(--red-dim)';el.style.color='var(--red)';return;}
   syncData({type:'body',date:date,weight:wt,waist:waist,arm:arm,notes:notes},'bodyMsg');
@@ -2316,13 +2439,13 @@ function saveWalk(){
   resAC();
   var dur=document.getElementById('walkDur').value,dist=document.getElementById('walkDist').value;
   var notes=document.getElementById('walkNotes').value;
-  var date=document.getElementById('walkDate').value||new Date().toISOString().slice(0,10);
+  var date=document.getElementById('walkDate').value||localDateStr();
   syncData({type:'walk',date:date,duration:dur,distance:dist,notes:notes},'walkMsg');
   setTimeout(function(){
     document.getElementById('walkDur').value='';
     document.getElementById('walkDist').value='';
     document.getElementById('walkNotes').value='';
-    document.getElementById('walkDate').value=new Date().toISOString().slice(0,10);
+    document.getElementById('walkDate').value=localDateStr();
   },3500);
 }
 
@@ -2619,9 +2742,28 @@ function buildPullUpChart(sessions){
     });
   });
   var canvas=document.getElementById('pullupCanvas'),empty=document.getElementById('pullupEmpty');
-  if(puData.length<2){if(canvas)canvas.style.display='none';if(empty)empty.style.display='block';return;}
-  if(canvas)canvas.style.display='block';if(empty)empty.style.display='none';
-  drawLineChart(canvas,puData.map(function(d){return d.date;}),puData.map(function(d){return d.total;}),16,'4/4/4/4 goal');
+  var strip=document.getElementById('puStatStrip');
+  if(puData.length===0){
+    if(canvas)canvas.style.display='none';
+    if(empty){empty.style.display='block';}
+    if(strip)strip.style.display='none';
+    return;
+  }
+  // Fill stat strip
+  if(strip)strip.style.display='flex';
+  var best=Math.max.apply(null,puData.map(function(d){return d.total;}));
+  var last=puData[puData.length-1].total;
+  var pb=document.getElementById('puBest'),pl=document.getElementById('puLast');
+  if(pb){pb.textContent=best;pb.style.color=best>=16?'var(--green)':'var(--accent)';}
+  if(pl){pl.textContent=last;pl.style.color=last>=16?'var(--green)':last===best?'var(--accent)':'var(--text)';}
+  if(puData.length<2){
+    if(canvas)canvas.style.display='none';
+    if(empty){empty.style.display='block';empty.textContent='One session recorded — keep going!';}
+    return;
+  }
+  if(canvas)canvas.style.display='block';
+  if(empty)empty.style.display='none';
+  drawLineChart(canvas,puData.map(function(d){return d.date;}),puData.map(function(d){return d.total;}),16,'Target');
 }
 
 function drawLineChart(canvas,labels,values,goalVal,goalLabel){
@@ -2660,18 +2802,28 @@ function drawLineChart(canvas,labels,values,goalVal,goalLabel){
 function buildHeatmap(sessions){
   var cutoff=new Date();cutoff.setDate(cutoff.getDate()-56);
   var exMap={},dates=[];
+  // Only include strength sessions for heatmap
   sessions.forEach(function(s){
+    if(s.workoutType==='HIIT'||s.workoutType==='Walk')return;
     if(parseLocalDate(s.date)<cutoff)return;
     if(dates.indexOf(s.date)<0)dates.push(s.date);
     (s.exercises||[]).forEach(function(ex){if(!exMap[ex.name])exMap[ex.name]=[];exMap[ex.name].push({date:s.date,feel:ex.feel});});
   });
   dates.sort();var exNames=Object.keys(exMap);
-  if(!exNames.length){document.getElementById('heatmapContent').innerHTML='<div style="color:var(--muted);font-size:0.85rem;padding:10px;">Complete a few sessions to see your feel trend</div>';return;}
-  var html='<table class="hm-table"><thead><tr><th></th>';
+  var hc=document.getElementById('heatmapContent');
+  var leg=document.getElementById('hmLegend');
+  if(!exNames.length){
+    if(hc)hc.innerHTML='<div style="color:var(--muted);font-size:0.85rem;padding:10px 0;">Complete a few sessions to see your feel trend</div>';
+    if(leg)leg.style.display='none';
+    return;
+  }
+  if(leg)leg.style.display='flex';
+  var shortName=function(n){return n.replace('SINGLE-LEG GLUTE BRIDGES','BRIDGES').replace('CLOSE-GRIP PUSH-UPS','PUSH-UPS').replace('SUPINATED PULL-UPS','SUP PU');};
+  var html='<table class="hm-table"><thead><tr><th style="min-width:70px;"></th>';
   dates.forEach(function(d){var dt=parseLocalDate(d);html+='<th class="hm-date">'+(dt.getMonth()+1)+'/'+(dt.getDate())+'</th>';});
   html+='</tr></thead><tbody>';
   exNames.forEach(function(name){
-    html+='<tr><td class="hm-ex">'+name.replace('SINGLE-LEG GLUTE BRIDGES','BRIDGES').replace('CLOSE-GRIP PUSH-UPS','PUSH-UPS').replace('SUPINATED PULL-UPS','SUP PU')+'</td>';
+    html+='<tr><td class="hm-ex">'+shortName(name)+'</td>';
     dates.forEach(function(d){
       var entry=null;exMap[name].forEach(function(e){if(e.date===d)entry=e;});
       if(entry&&entry.feel){var cls=entry.feel==='Medium'?'hm-m':entry.feel==='Medium-hard'?'hm-mh':'hm-h';var abbr=entry.feel==='Medium'?'M':entry.feel==='Medium-hard'?'MH':'H';html+='<td class="hm-cell '+cls+'">'+abbr+'</td>';}
@@ -2680,58 +2832,116 @@ function buildHeatmap(sessions){
     html+='</tr>';
   });
   html+='</tbody></table>';
-  html+='<div style="display:flex;gap:8px;margin-top:10px;font-size:0.68rem;">';
-  ['hm-m','hm-mh','hm-h'].forEach(function(cls,i){var lbl=['M = Medium','MH = Med-hard','H = Hard'][i];html+='<span class="hm-cell '+cls+'" style="width:auto;height:auto;padding:2px 8px;border-radius:4px;">'+lbl+'</span>';});
-  html+='</div>';
-  document.getElementById('heatmapContent').innerHTML=html;
+  if(hc)hc.innerHTML=html;
 }
 
 function buildPRs(sessions){
   var prs={};
+  // Track best per exercise (total reps across all sets) + per-set PRs for pull-ups
   sessions.forEach(function(s){
     (s.exercises||[]).forEach(function(ex){
-      if(ex.isPlank==='yes'){var l=parseInt(ex.sets[0])||0,r=parseInt(ex.sets[1])||0;var key=ex.name+' hold';if(!prs[key]||Math.max(l,r)>prs[key].val)prs[key]={val:Math.max(l,r),date:s.date,unit:'sec'};}
-      else{(ex.sets||[]).forEach(function(sv,si){var v=parseInt(sv)||0;if(!v)return;var key2=ex.name+' S'+(si+1);if(!prs[key2]||v>prs[key2].val)prs[key2]={val:v,date:s.date,unit:'reps'};});}
+      if(ex.isPlank==='yes'){
+        var l=parseInt(ex.sets[0])||0,r=parseInt(ex.sets[1])||0;
+        var key=ex.name+' HOLD';
+        if(!prs[key]||Math.max(l,r)>prs[key].val)prs[key]={val:Math.max(l,r),date:s.date,unit:'sec best side'};
+      } else {
+        // Best single set
+        var bestSet=0;
+        (ex.sets||[]).forEach(function(sv){var v=parseInt(sv)||0;if(v>bestSet)bestSet=v;});
+        if(bestSet>0){
+          var kBest=ex.name+' BEST SET';
+          if(!prs[kBest]||bestSet>prs[kBest].val)prs[kBest]={val:bestSet,date:s.date,unit:'reps'};
+        }
+        // Total reps (for pull-ups)
+        if(ex.name==='PULL-UPS'||ex.name==='SUPINATED PULL-UPS'){
+          var tot=0;(ex.sets||[]).forEach(function(sv){tot+=parseInt(sv)||0;});
+          if(tot>0){var kTot=ex.name+' TOTAL';if(!prs[kTot]||tot>prs[kTot].val)prs[kTot]={val:tot,date:s.date,unit:'total reps'};}
+        }
+      }
     });
   });
   var keys=Object.keys(prs);
-  if(!keys.length){document.getElementById('prGrid').innerHTML='<div style="color:var(--muted);font-size:0.85rem;grid-column:1/-1;padding:10px;">No records yet</div>';return;}
+  var el=document.getElementById('prGrid');
+  if(!keys.length){
+    if(el)el.innerHTML='<div class="pr-row"><div class="pr-name" style="color:var(--muted);">No records yet</div></div>';
+    return;
+  }
+  // Sort: pull-ups first, then alphabetical
+  keys.sort(function(a,b){
+    var ap=a.indexOf('PULL')>=0?0:1,bp=b.indexOf('PULL')>=0?0:1;
+    if(ap!==bp)return ap-bp;return a<b?-1:1;
+  });
   var html='';
-  keys.forEach(function(k){var pr=prs[k],d=parseLocalDate(pr.date);html+='<div class="pr-box"><div class="pr-name">'+k+'</div><div class="pr-val">'+pr.val+'<span style="font-size:0.75rem;color:var(--muted);"> '+pr.unit+'</span></div><div class="pr-date">'+(d.getMonth()+1)+'/'+(d.getDate())+'/'+d.getFullYear()+'</div></div>';});
-  document.getElementById('prGrid').innerHTML=html;
+  keys.forEach(function(k){
+    var pr=prs[k];
+    var d=parseLocalDate(pr.date);
+    var ds=(d.getMonth()+1)+'/'+(d.getDate())+'/'+d.getFullYear();
+    var shortKey=k.replace(' BEST SET','').replace(' TOTAL',' total').replace(' HOLD',' hold');
+    shortKey=shortKey.replace('SINGLE-LEG GLUTE BRIDGES','BRIDGES').replace('CLOSE-GRIP PUSH-UPS','PUSH-UPS').replace('SUPINATED PULL-UPS','SUP PULL-UPS');
+    html+='<div class="pr-row">';
+    html+='<div class="pr-name">'+shortKey+'</div>';
+    html+='<div class="pr-right">';
+    html+='<div class="pr-val">'+pr.val+'</div>';
+    html+='<div style="text-align:right"><div class="pr-unit">'+pr.unit+'</div><div class="pr-date">'+ds+'</div></div>';
+    html+='</div></div>';
+  });
+  if(el)el.innerHTML=html;
 }
 
 function buildCholDisplay(){
-  // Show baseline while loading
-  var baseline={hdl:24,ldl:132,total:175,ratio:7.3};
-  renderCholRows([{date:'2024-11-05',hdl:baseline.hdl,ldl:baseline.ldl,total:baseline.total,ratio:baseline.ratio,isBaseline:true}]);
+  // Known readings — always shown immediately as fallback
+  var knownReadings=[
+    {date:'2024-11-05',hdl:24,ldl:132,total:175,ratio:7.3,isBaseline:true},
+    {date:'2026-04-02',hdl:37,ldl:95,total:149,ratio:4.0}
+  ];
+  renderCholRows(knownReadings);
 
-  // Fetch cholesterol history from sheet
+  // Fetch live data from getCholesterol endpoint
   var cbName='wt_chol_'+Date.now();
   window[cbName]=function(result){
     window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
-    if(result&&result.sessions){
-      var cholReadings=[];
-      result.sessions.forEach(function(s){
-        if(s.workoutType==='cholesterol'||s.type==='cholesterol'){
-          var hdl=parseFloat(s.hdl||s.HDL||0);
-          var ldl=parseFloat(s.ldl||s.LDL||0);
-          var total=parseFloat(s.total||s.Total||0);
-          var ratio=hdl>0&&total>0?Math.round((total/hdl)*10)/10:0;
-          if(hdl||ldl||total)cholReadings.push({date:s.date,hdl:hdl,ldl:ldl,total:total,ratio:ratio});
-        }
-      });
-      cholReadings.sort(function(a,b){return a.date<b.date?-1:1;});
-      // Prepend baseline
-      var allReadings=[{date:'2024-11-05',hdl:24,ldl:132,total:175,ratio:7.3,isBaseline:true}];
-      cholReadings.forEach(function(r){if(r.date!=='2024-11-05')allReadings.push(r);});
-      if(allReadings.length>0)renderCholRows(allReadings);
-    }
+    var rows=(result&&result.rows)?result.rows:(result&&result.sessions)?result.sessions:[];
+    var cholReadings=[];
+    rows.forEach(function(r){
+      var hdl=parseFloat(r.hdl||r.HDL||0);
+      var ldl=parseFloat(r.ldl||r.LDL||0);
+      var total=parseFloat(r.total||r.Total||0);
+      var ratio=hdl>0&&total>0?Math.round((total/hdl)*10)/10:0;
+      if(hdl||ldl||total)cholReadings.push({date:r.date,hdl:hdl,ldl:ldl,total:total,ratio:ratio});
+    });
+    // Merge with known readings
+    var merged=knownReadings.slice();
+    cholReadings.forEach(function(r){
+      if(!merged.some(function(m){return m.date===r.date;}))merged.push(r);
+    });
+    merged.sort(function(a,b){return a.date<b.date?-1:1;});
+    if(merged.length>0)renderCholRows(merged);
   };
   var script=document.createElement('script');script.id='s_'+cbName;
-  script.src=CLOUD_URL+'?type=getHistory&callback='+cbName;
+  script.src=CLOUD_URL+'?type=getCholesterol&callback='+cbName;
+  script.onerror=function(){
+    var chol=extractCholFromSessions(_cachedSessions||[]);
+    if(chol.length>knownReadings.length)renderCholRows(chol);
+  };
   document.head.appendChild(script);
   setTimeout(function(){if(window[cbName]){window[cbName]=null;}},15000);
+}
+
+function extractCholFromSessions(sessions){
+  var cholReadings=[];
+  (sessions||[]).forEach(function(s){
+    if(s.workoutType==='cholesterol'||s.type==='cholesterol'){
+      var hdl=parseFloat(s.hdl||s.HDL||0);
+      var ldl=parseFloat(s.ldl||s.LDL||0);
+      var total=parseFloat(s.total||s.Total||0);
+      var ratio=hdl>0&&total>0?Math.round((total/hdl)*10)/10:0;
+      if(hdl||ldl||total)cholReadings.push({date:s.date,hdl:hdl,ldl:ldl,total:total,ratio:ratio});
+    }
+  });
+  cholReadings.sort(function(a,b){return a.date<b.date?-1:1;});
+  var allReadings=[{date:'2024-11-05',hdl:24,ldl:132,total:175,ratio:7.3,isBaseline:true}];
+  cholReadings.forEach(function(r){if(r.date!=='2024-11-05')allReadings.push(r);});
+  return allReadings;
 }
 
 function renderCholRows(readings){
@@ -2739,63 +2949,72 @@ function renderCholRows(readings){
   var latest=readings[readings.length-1];
   var prev=readings.length>1?readings[readings.length-2]:null;
 
-  function trend(cur,old,lower){
-    if(!old||!cur)return '';
-    var delta=cur-old;
-    if(Math.abs(delta)<0.5)return '<span style="color:var(--muted);font-size:0.7rem;"> ±0</span>';
-    var up=delta>0;
-    // For HDL: up is good. For LDL/ratio: down is good.
-    var good=lower?(delta<0):(delta>0);
+  function delta(cur,old){
+    if(!old||!cur)return null;
+    return Math.round((cur-old)*10)/10;
+  }
+  function deltaHtml(d,lower){
+    if(d===null)return '';
+    if(Math.abs(d)<0.5)return '<div class="chol-big-delta" style="color:var(--muted);">±0</div>';
+    var good=lower?(d<0):(d>0);
     var col=good?'var(--green)':'var(--red)';
-    var arrow=up?'▲':'▼';
-    return '<span style="color:'+col+';font-size:0.72rem;"> '+arrow+Math.abs(delta).toFixed(1)+'</span>';
+    var arrow=d>0?'▲':'▼';
+    return '<div class="chol-big-delta" style="color:'+col+';">'+arrow+Math.abs(d)+'</div>';
   }
 
   var hdlColor=latest.hdl>=40?'var(--green)':latest.hdl>=35?'var(--yellow)':'var(--red)';
   var ldlColor=latest.ldl<100?'var(--green)':latest.ldl<130?'var(--yellow)':'var(--red)';
   var ratioColor=latest.ratio<4?'var(--green)':latest.ratio<5?'var(--yellow)':'var(--red)';
-
-  var latestDate=parseLocalDate(latest.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
-  var isBaseline=latest.isBaseline;
-  var dateLabel=isBaseline?'Baseline':'Latest · '+latestDate;
+  var latestDate=latest.isBaseline?'Nov 2024 baseline':parseLocalDate(latest.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
 
   var html='';
-  html+='<div class="chol-row-item"><div class="cr-label">HDL <span style="color:var(--muted);font-size:0.65rem;">(target 40+)</span></div>';
-  html+='<div style="text-align:right"><div class="cr-val" style="color:'+hdlColor+';">'+latest.hdl+(prev?trend(latest.hdl,prev.hdl,false):'')+'</div></div>';
-  html+='<div class="cr-trend">'+dateLabel+'</div></div>';
+  html+='<div class="chol-date-lbl">'+latestDate+'</div>';
+  html+='<div class="chol-big-row">';
+  html+='<div class="chol-big-box">';
+  html+='<div class="chol-big-lbl">HDL <span style="font-weight:400;letter-spacing:0;">(40+)</span></div>';
+  html+='<div class="chol-big-val" style="color:'+hdlColor+';">'+latest.hdl+'</div>';
+  html+=deltaHtml(delta(latest.hdl,prev?prev.hdl:null),true);
+  html+='</div>';
+  html+='<div class="chol-big-box">';
+  html+='<div class="chol-big-lbl">LDL</div>';
+  html+='<div class="chol-big-val" style="color:'+ldlColor+';">'+latest.ldl+'</div>';
+  html+=deltaHtml(delta(latest.ldl,prev?prev.ldl:null),false);
+  html+='</div>';
+  html+='<div class="chol-big-box">';
+  html+='<div class="chol-big-lbl">TC/HDL <span style="font-weight:400;letter-spacing:0;">(&lt;5)</span></div>';
+  html+='<div class="chol-big-val" style="color:'+ratioColor+';">'+latest.ratio+'</div>';
+  html+=deltaHtml(delta(latest.ratio,prev?prev.ratio:null),false);
+  html+='</div>';
+  html+='</div>';
 
-  html+='<div class="chol-row-item"><div class="cr-label">LDL</div>';
-  html+='<div style="text-align:right"><div class="cr-val" style="color:'+ldlColor+';">'+latest.ldl+(prev?trend(latest.ldl,prev.ldl,true):'')+'</div></div>';
-  html+='<div class="cr-trend">'+dateLabel+'</div></div>';
-
-  html+='<div class="chol-row-item"><div class="cr-label">TC/HDL Ratio</div>';
-  html+='<div style="text-align:right"><div class="cr-val" style="color:'+ratioColor+';">'+latest.ratio+(prev?trend(latest.ratio,prev.ratio,true):'')+'</div></div>';
-  html+='<div class="cr-trend">Target &lt; 5</div></div>';
-
-  // If more than 1 reading, show history
+  // History table
   if(readings.length>1){
-    html+='<div style="margin-top:10px;font-size:0.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;">History</div>';
+    html+='<hr class="chol-divider">';
+    html+='<div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;">History</div>';
     var hist=readings.slice().reverse();
     hist.forEach(function(r){
-      var d=r.isBaseline?'Nov 2024 (baseline)':parseLocalDate(r.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
-      html+='<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.78rem;">';
-      html+='<div style="color:var(--muted);">'+d+'</div>';
-      html+='<div style="display:flex;gap:12px;">';
-      if(r.hdl)html+='<span>HDL <strong>'+r.hdl+'</strong></span>';
-      if(r.ldl)html+='<span>LDL <strong>'+r.ldl+'</strong></span>';
-      if(r.ratio)html+='<span>Ratio <strong>'+r.ratio+'</strong></span>';
+      var d=r.isBaseline?'Nov 2024':parseLocalDate(r.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+      var rHdlC=r.hdl>=40?'var(--green)':r.hdl>=35?'var(--yellow)':'var(--red)';
+      var rLdlC=r.ldl<100?'var(--green)':r.ldl<130?'var(--yellow)':'var(--red)';
+      var rRatC=r.ratio<4?'var(--green)':r.ratio<5?'var(--yellow)':'var(--red)';
+      html+='<div class="chol-hist-row">';
+      html+='<div class="chol-hist-date">'+d+(r.isBaseline?' <span style="font-size:0.6rem;color:var(--muted);">(baseline)</span>':'')+'</div>';
+      html+='<div class="chol-hist-vals">';
+      if(r.hdl)html+='<div class="chol-hist-item"><div class="chol-hist-item-lbl">HDL</div><div class="chol-hist-item-val" style="color:'+rHdlC+';">'+r.hdl+'</div></div>';
+      if(r.ldl)html+='<div class="chol-hist-item"><div class="chol-hist-item-lbl">LDL</div><div class="chol-hist-item-val" style="color:'+rLdlC+';">'+r.ldl+'</div></div>';
+      if(r.ratio)html+='<div class="chol-hist-item"><div class="chol-hist-item-lbl">Ratio</div><div class="chol-hist-item-val" style="color:'+rRatC+';">'+r.ratio+'</div></div>';
       html+='</div></div>';
     });
   }
 
   document.getElementById('cholRows').innerHTML=html;
   document.getElementById('cholEmpty').style.display='none';
-  document.getElementById('cholCanvas').style.display='none';
+
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────
 function initDates(){
-  var today=new Date().toISOString().slice(0,10);
+  var today=localDateStr();
   ['hiitDate','cholDate','bodyDate','walkDate'].forEach(function(id){var el=document.getElementById(id);if(el)el.value=today;});
 }
 
