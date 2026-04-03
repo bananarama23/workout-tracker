@@ -3041,7 +3041,10 @@ function initDates(){
 
 // ─── SHARE MODE ───────────────────────────────────────────────────
 function initShareMode(){
-  // Hide the full app, show share view
+  // Reset body scroll (main app locks it to prevent bounce)
+  document.documentElement.style.cssText='height:auto;overflow:auto;position:static;';
+  document.body.style.cssText='height:auto;overflow:auto;position:static;width:100%;background:var(--bg);color:var(--text);font-family:\'DM Sans\',system-ui,sans-serif;';
+  // Hide the full app chrome
   document.querySelectorAll('.page,.nav').forEach(function(el){el.style.display='none';});
   var wrap=document.createElement('div');
   wrap.id='shareWrap';
