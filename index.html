@@ -925,6 +925,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 <!-- BUDGET PAGE -->
 <div class="page" id="page-budget">
   <div class="ph">
+    <div class="sync-pill sp-load" id="syncBadgeBud"><div class="sp-dot"></div><span id="syncTextBud">Syncing</span></div>
     <h1>BUDGET</h1>
     <p class="ph-sub" id="budgetUpdated">Tap values to edit</p>
   </div>
@@ -1088,6 +1089,10 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
     </div>
 
+    <div style="padding:0 16px 8px;">
+      <button onclick="budSaveToSheet()" id="budSaveBtn" style="width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:2px;font-weight:900;transition:all 0.15s;cursor:pointer;">SAVE TO SHEET</button>
+      <div class="log-msg" id="budMsg" style="margin-top:8px;"></div>
+    </div>
     <div style="height:16px;"></div>
   </div>
 </div>
@@ -3243,26 +3248,66 @@ var BUD_KEY='wt_budget';
 var BUD_MONTHS=['December','January','February','March','April','May','June','July','August','September','October','November'];
 var BUD_DEFAULT_HOURS=[70.46,95.11,79.43,65.14,66,70,70,70,70,70,70,70];
 
-function budLoad(){
+function budSyncBadge(state,detail){
+  var b=document.getElementById('syncBadgeBud'),t=document.getElementById('syncTextBud');
+  if(!b)return;
+  b.className='sync-pill';
+  if(state==='loading'){b.classList.add('sp-load');if(t)t.textContent='Syncing';}
+  else if(state==='live'){b.classList.add('sp-live');if(t)t.textContent='Live';}
+  else if(state==='cached'){b.classList.add('sp-cache');if(t)t.textContent='Cached'+(detail?' '+detail:'');}
+  else{b.classList.add('sp-off');if(t)t.textContent='Offline';}
+}
+
+function budApplyStored(){
   try{
     var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
-    // Restore editable fields
     function rv(id,def){var el=document.getElementById(id);if(el&&stored[id]!==undefined)el.value=stored[id];else if(el)el.value=def;}
     rv('bHousePrice',744000);rv('bDownPayment',500000);rv('bEquity',0);rv('bBank',-500000);
     rv('bPayRate',231);rv('bThisMonth','');
     rv('vElec',300);rv('vHoa',206);rv('vTmobile',80);rv('vApa',47);rv('vAtt',55);rv('vChase',2000);
     rv('vCarIns',2514);rv('vUmbrella',503);rv('vPropTax',8541);rv('vHouseIns',2450);rv('bInterest',1098);
-    // Restore historical hours
     if(stored.monthHours){
       stored.monthHours.forEach(function(v,i){
         var el=document.getElementById('bHours_'+i);if(el)el.value=v;
       });
     }
   }catch(e){}
+}
+
+function budLoad(){
+  // 1. Show localStorage immediately so UI is never blank
+  budApplyStored();
   budCalc();
+  // 2. Fetch from sheet in background
+  budSyncBadge('loading');
+  var cbName='wt_bud_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    if(result&&result.status==='ok'&&result.data&&Object.keys(result.data).length){
+      try{
+        var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
+        Object.keys(result.data).forEach(function(k){stored[k]=result.data[k];});
+        // monthHours comes as a JSON string from the sheet key/value store
+        if(typeof stored.monthHours==='string'){try{stored.monthHours=JSON.parse(stored.monthHours);}catch(e){}}
+        localStorage.setItem(BUD_KEY,JSON.stringify(stored));
+      }catch(e){}
+      budApplyStored();
+      budCalc();
+      budSyncBadge('live');
+      var upd=document.getElementById('budgetUpdated');if(upd)upd.textContent='Synced from sheet';
+    }else{
+      budSyncBadge('cached','local');
+    }
+  };
+  var script=document.createElement('script');script.id='s_'+cbName;
+  script.src=CLOUD_URL+'?type=getBudget&callback='+cbName;
+  script.onerror=function(){budSyncBadge('offline');};
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;budSyncBadge('cached','local');}},12000);
 }
 
 function budSave(){
+  // Saves to localStorage on every input change (instant, no network)
   try{
     var data={};
     ['bHousePrice','bDownPayment','bEquity','bBank','bPayRate','bThisMonth',
@@ -3275,6 +3320,53 @@ function budSave(){
     });
     localStorage.setItem(BUD_KEY,JSON.stringify(data));
   }catch(e){}
+}
+
+function budSaveToSheet(){
+  budSave();
+  var el=document.getElementById('budMsg'),btn=document.getElementById('budSaveBtn');
+  if(el){el.textContent='Saving to sheet...';el.style.background='var(--blue-dim)';el.style.color='var(--blue)';}
+  if(btn)btn.disabled=true;
+  budSyncBadge('loading');
+  var stored={};try{stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');}catch(e){}
+  // monthHours array needs to survive as JSON string in sheet key/value store
+  var sheetData={};
+  Object.keys(stored).forEach(function(k){
+    sheetData[k]=(k==='monthHours'&&Array.isArray(stored[k]))?JSON.stringify(stored[k]):stored[k];
+  });
+  var payload={type:'budget',data:sheetData};
+  var enc=encodeURIComponent(JSON.stringify(payload));
+  var cbName='wt_budsave_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    if(btn)btn.disabled=false;
+    if(result&&result.status==='ok'){
+      if(el){el.textContent='Saved to Google Sheets \u2713';el.style.background='var(--green-dim)';el.style.color='var(--green)';}
+      budSyncBadge('live');
+      var upd=document.getElementById('budgetUpdated');if(upd)upd.textContent='Saved to sheet';
+    }else{
+      if(el){el.textContent='Failed \u2014 saved locally only';el.style.background='var(--yellow-dim)';el.style.color='var(--yellow)';}
+      budSyncBadge('offline');
+    }
+    setTimeout(function(){if(el)el.textContent='';},4000);
+  };
+  var script=document.createElement('script');script.id='s_'+cbName;
+  script.src=CLOUD_URL+'?payload='+enc+'&callback='+cbName;
+  script.onerror=function(){
+    if(btn)btn.disabled=false;
+    if(el){el.textContent='Offline \u2014 saved locally only';el.style.background='var(--yellow-dim)';el.style.color='var(--yellow)';}
+    budSyncBadge('offline');
+    setTimeout(function(){if(el)el.textContent='';},4000);
+  };
+  document.head.appendChild(script);
+  setTimeout(function(){
+    if(window[cbName]){
+      window[cbName]=null;
+      if(btn)btn.disabled=false;
+      if(el){el.textContent='Timed out \u2014 saved locally';el.style.background='var(--yellow-dim)';el.style.color='var(--yellow)';}
+      budSyncBadge('cached','local');
+    }
+  },15000);
 }
 
 function fmt(n,prefix){
