@@ -661,9 +661,10 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <span class="sync-pill-center sp-load" id="syncBadge"><div class="sp-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);margin-right:4px;animation:blink 1.2s ease infinite;"></div>Syncing...</span>
       </div>
       <div class="rec-strip rec-good" id="recBadge" style="display:none;"></div>
-      <div class="card" style="margin-bottom:14px;">
+      <div class="card" style="margin-bottom:10px;">
         <div id="summaryRows"></div>
       </div>
+      <textarea id="sessionNote" class="notes-inp" placeholder="Session note (optional) — e.g. felt strong, slept badly..." style="width:100%;margin-bottom:10px;height:44px;resize:none;"></textarea>
       <button class="copy-btn" id="copyBtn" onclick="copyResults()">&#128203; COPY — PASTE INTO CLAUDE</button>
       <button class="back-home-btn" onclick="backToWorkout()">Back to Home</button>
     </div>
@@ -1437,7 +1438,7 @@ function startFromPreview(){
     for(var j=0;j<ex.sets;j++)lg.sets.push({reps:'',time:''});
     logs.push(lg);
   });
-  curEx=0;curSet=0;phase='idle';bodyFeel='';bfScore=0;_seqEditMode=false;_targetEditMode=false;
+  curEx=0;curSet=0;phase='idle';bodyFeel='';bfScore=0;_seqEditMode=false;_targetEditMode=false;_hasSynced=false;
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
   var pre=document.getElementById('page-pre');pre.classList.remove('hidden');pre.classList.add('active');
 }
@@ -2165,7 +2166,8 @@ function showBetweenPrompt(){
     var nx=exs[curEx];
     tLeft=120;tTotal=120;
     var pb=document.getElementById('phBadge');if(pb){pb.textContent='2 MIN REST';pb.className='ph-badge phb-between';}
-    var tl=document.getElementById('timerLbl');if(tl)tl.textContent='BETWEEN EXERCISES';
+    var tl=document.getElementById('timerLbl');
+    if(tl)tl.innerHTML='BETWEEN EXERCISES'+(nx?'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent);margin-top:3px;">NEXT: '+nx.name+'</div>':'');
     var ra=document.getElementById('restAdj');if(ra)ra.classList.remove('hidden');
     var rl=document.getElementById('restLbl');if(rl)rl.textContent='120 sec rest';
     var tc=document.getElementById('tCount');if(tc)tc.textContent=tLeft;
@@ -2288,10 +2290,11 @@ function calcRec(logs){
   return{label:'Overreach risk \u2014 rest tomorrow',cls:'rec-over'};
 }
 
-function buildCopyTxt(){
+function buildCopyTxt(sessionNote){
   var today=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
   var txt=(wType==='home'?'HOME':'HOTEL')+' STRENGTH - '+today.toUpperCase()+' (WEEK '+getWeekNum()+')\n';
   if(bodyFeel)txt+='Body feel: '+bfScore+'/5 '+bodyFeel+'\n';
+  if(sessionNote)txt+='Session note: '+sessionNote+'\n';
   txt+='\n';
   exs.forEach(function(ex,ei){
     var log=logs[ei];txt+=ex.name+'\n';
@@ -2304,29 +2307,38 @@ function buildCopyTxt(){
   return txt.trim();
 }
 
+var _hasSynced=false; // prevent re-syncing on multiple Copy taps
+
 function copyResults(){
-  var txt=buildCopyTxt();
-  var week='Week '+getWeekNum();
-  var wtLbl=wType==='home'?'Home Strength':'Hotel Strength';
-  var sd2={date:localDateStr(),week:week,workoutType:wtLbl,bodyFeel:bodyFeel,duration:0,exercises:[]};
-  exs.forEach(function(ex,ei){
-    var log=logs[ei];
-    var res=ex.isPlank?'L:'+(log.sets[0].time||'?')+'s/R:'+(log.sets[1].time||'?')+'s':log.sets.map(function(s,si){return s.reps||ex.rc[si];}).join('/');
-    var setsArr=ex.isPlank?[log.sets[0].time||'',log.sets[1].time||'']:log.sets.map(function(s,si){return s.reps||String(ex.rc[si]);});
-    sd2.exercises.push({name:ex.name,targetReps:ex.reps,sets:setsArr,result:res,feel:log.feel,notes:log.notes,restSecs:ex.rest,formCues:ex.form,tweak:ex.tweak||'',isPlank:ex.isPlank?'yes':'no'});
-  });
-  syncData(sd2,'syncBadge');
-  var c=loadCache();
-  if(c){
-    // Deduplicate: remove any same-date same-type entry before adding
-    c.sessions=c.sessions.filter(function(s){
-      return !(s.date===sd2.date&&s.workoutType===sd2.workoutType);
+  var sessionNote=document.getElementById('sessionNote');
+  var noteVal=sessionNote?sessionNote.value.trim():'';
+  var txt=buildCopyTxt(noteVal);
+
+  // Only sync to sheet once per session
+  if(!_hasSynced){
+    _hasSynced=true;
+    var week='Week '+getWeekNum();
+    var wtLbl=wType==='home'?'Home Strength':'Hotel Strength';
+    var sd2={date:localDateStr(),week:week,workoutType:wtLbl,bodyFeel:bodyFeel,duration:0,notes:noteVal,exercises:[]};
+    exs.forEach(function(ex,ei){
+      var log=logs[ei];
+      var res=ex.isPlank?'L:'+(log.sets[0].time||'?')+'s/R:'+(log.sets[1].time||'?')+'s':log.sets.map(function(s,si){return s.reps||ex.rc[si];}).join('/');
+      var setsArr=ex.isPlank?[log.sets[0].time||'',log.sets[1].time||'']:log.sets.map(function(s,si){return s.reps||String(ex.rc[si]);});
+      sd2.exercises.push({name:ex.name,targetReps:ex.reps,sets:setsArr,result:res,feel:log.feel,notes:log.notes,restSecs:ex.rest,formCues:ex.form,tweak:ex.tweak||'',isPlank:ex.isPlank?'yes':'no'});
     });
-    c.sessions.push(sd2);
-    saveCache(c.sessions);
-    _sheetSessions=c.sessions;
-    setSyncBadges('live');
+    syncData(sd2,'syncBadge');
+    var c=loadCache();
+    if(c){
+      c.sessions=c.sessions.filter(function(s){
+        return !(s.date===sd2.date&&s.workoutType===sd2.workoutType);
+      });
+      c.sessions.push(sd2);
+      saveCache(c.sessions);
+      _sheetSessions=c.sessions;
+      setSyncBadges('live');
+    }
   }
+
   navigator.clipboard.writeText(txt).then(function(){
     document.getElementById('copyBtn').textContent='COPIED \u2014 PASTE INTO CLAUDE';
     document.getElementById('copyBtn').classList.add('copied');
@@ -3027,13 +3039,186 @@ function initDates(){
   ['hiitDate','cholDate','bodyDate','walkDate'].forEach(function(id){var el=document.getElementById(id);if(el)el.value=today;});
 }
 
+// ─── SHARE MODE ───────────────────────────────────────────────────
+function initShareMode(){
+  // Hide the full app, show share view
+  document.querySelectorAll('.page,.nav').forEach(function(el){el.style.display='none';});
+  var wrap=document.createElement('div');
+  wrap.id='shareWrap';
+  wrap.style.cssText='min-height:100vh;background:var(--bg);color:var(--text);font-family:\'DM Sans\',system-ui,sans-serif;padding:0 0 40px;';
+  document.body.appendChild(wrap);
+  wrap.innerHTML='<div style="text-align:center;padding:60px 20px 20px;color:var(--muted);font-size:0.85rem;">Loading...</div>';
+  fetchHistory(function(sessions){
+    renderShareView(sessions||[]);
+  });
+}
+
+function renderShareView(sessions){
+  var wrap=document.getElementById('shareWrap');if(!wrap)return;
+  sessions=sessions||[];
+
+  // Week stats
+  var weekNum='Week '+getWeekNum();
+  var wkStr=0,wkHIIT=0;
+  sessions.forEach(function(s){
+    if(s.week===weekNum){
+      if(s.workoutType==='HIIT')wkHIIT++;
+      else if(s.workoutType!=='Walk')wkStr++;
+    }
+  });
+
+  // Pull-up best
+  var puBest=0,puLast=0,puLastDate='';
+  sessions.forEach(function(s){
+    (s.exercises||[]).forEach(function(ex){
+      if(ex.name==='PULL-UPS'){
+        var tot=0;(ex.sets||[]).forEach(function(v){tot+=parseInt(v)||0;});
+        if(tot>puBest){puBest=tot;}
+        if(tot>0&&s.date>puLastDate){puLast=tot;puLastDate=s.date;}
+      }
+    });
+  });
+
+  // Streak
+  var streak=calcStreak(sessions);
+
+  // Last session
+  var lastStrength=null;
+  for(var i=sessions.length-1;i>=0;i--){
+    if(sessions[i].workoutType&&sessions[i].workoutType.indexOf('Strength')>=0){lastStrength=sessions[i];break;}
+  }
+
+  // Total sessions
+  var totalStr=sessions.filter(function(s){return s.workoutType&&s.workoutType.indexOf('Strength')>=0;}).length;
+  var totalHIIT=sessions.filter(function(s){return s.workoutType==='HIIT';}).length;
+
+  var strPct=Math.min(100,Math.round((wkStr/3)*100));
+  var hiitPct=Math.min(100,Math.round((wkHIIT/2)*100));
+
+  function bar(pct,color){
+    return '<div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden;margin-top:6px;">'
+      +'<div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:4px;transition:width 0.8s;"></div></div>';
+  }
+
+  var html='';
+  // Header
+  html+='<div style="background:linear-gradient(135deg,#0A0F00,#07090C);border-bottom:1px solid var(--border);padding:calc(env(safe-area-inset-top,44px) + 20px) 20px 24px;text-align:center;">';
+  html+='<div style="font-size:0.65rem;letter-spacing:3px;text-transform:uppercase;color:rgba(200,255,0,0.6);margin-bottom:6px;font-weight:700;">Phil\'s Training</div>';
+  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2.8rem;letter-spacing:4px;color:var(--accent);line-height:1;">PROGRESS</div>';
+  html+='<div style="font-size:0.75rem;color:var(--muted);margin-top:4px;">'+new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</div>';
+  html+='</div>';
+
+  // This week
+  html+='<div style="padding:20px 20px 0;">';
+  html+='<div style="font-size:0.62rem;letter-spacing:2px;text-transform:uppercase;color:var(--text2);font-weight:700;margin-bottom:12px;">This week</div>';
+  html+='<div style="display:flex;gap:10px;margin-bottom:16px;">';
+  // Strength card
+  html+='<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;">';
+  html+='<div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">Strength</div>';
+  html+='<div style="display:flex;align-items:baseline;gap:4px;">';
+  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2.4rem;color:'+(wkStr>=3?'var(--green)':wkStr>=2?'var(--yellow)':'var(--text)')+';line-height:1;">'+wkStr+'</div>';
+  html+='<div style="font-size:0.75rem;color:var(--muted);">/ 3</div></div>';
+  html+=bar(strPct,wkStr>=3?'var(--green)':wkStr>=2?'var(--yellow)':'var(--muted)');
+  html+='</div>';
+  // HIIT card
+  html+='<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;">';
+  html+='<div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">HIIT</div>';
+  html+='<div style="display:flex;align-items:baseline;gap:4px;">';
+  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2.4rem;color:'+(wkHIIT>=2?'var(--green)':wkHIIT>=1?'var(--yellow)':'var(--text)')+';line-height:1;">'+wkHIIT+'</div>';
+  html+='<div style="font-size:0.75rem;color:var(--muted);">/ 2</div></div>';
+  html+=bar(hiitPct,wkHIIT>=2?'var(--green)':wkHIIT>=1?'var(--yellow)':'var(--muted)');
+  html+='</div>';
+  html+='</div>';
+
+  // Streak + totals row
+  html+='<div style="display:flex;gap:10px;margin-bottom:20px;">';
+  html+='<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;text-align:center;">';
+  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2rem;color:var(--accent);line-height:1;">'+streak+'</div>';
+  html+='<div style="font-size:0.6rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-top:3px;">Week streak</div>';
+  html+='</div>';
+  html+='<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;text-align:center;">';
+  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2rem;color:var(--text);line-height:1;">'+totalStr+'</div>';
+  html+='<div style="font-size:0.6rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-top:3px;">Strength total</div>';
+  html+='</div>';
+  html+='<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;text-align:center;">';
+  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2rem;color:var(--text);line-height:1;">'+totalHIIT+'</div>';
+  html+='<div style="font-size:0.6rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-top:3px;">HIIT total</div>';
+  html+='</div>';
+  html+='</div>';
+
+  // Pull-up milestone
+  html+='<div style="background:linear-gradient(135deg,#111900,#0A0F00);border:1px solid rgba(200,255,0,0.2);border-radius:var(--r);padding:20px;margin-bottom:20px;">';
+  html+='<div style="font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:rgba(200,255,0,0.5);font-weight:700;margin-bottom:8px;">Pull-Up Goal</div>';
+  if(puBest===0){
+    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--text);">Getting started</div>';
+    html+='<div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">Target: 4 sets of 4 clean reps</div>';
+  } else {
+    var target=16;
+    var progPct=Math.min(100,Math.round((puBest/target)*100));
+    html+='<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:8px;">';
+    html+='<div>';
+    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2.6rem;color:var(--accent);line-height:1;">'+puBest+'<span style="font-size:1.2rem;color:rgba(200,255,0,0.5);">/'+target+'</span></div>';
+    html+='<div style="font-size:0.72rem;color:var(--muted);">total reps per session</div>';
+    html+='</div>';
+    html+='<div style="text-align:right;">';
+    html+='<div style="font-size:1.8rem;">'+(puBest>=target?'🏆':puBest>=12?'💪':puBest>=8?'📈':'🎯')+'</div>';
+    html+='</div></div>';
+    // Progress bar
+    html+='<div style="height:10px;background:rgba(200,255,0,0.1);border-radius:5px;overflow:hidden;">';
+    html+='<div style="height:100%;width:'+progPct+'%;background:var(--accent);border-radius:5px;"></div></div>';
+    html+='<div style="display:flex;justify-content:space-between;margin-top:5px;font-size:0.62rem;color:var(--muted);">';
+    html+='<span>0</span><span>Target: 4/4/4/4</span></div>';
+  }
+  html+='</div>';
+
+  // Last session
+  if(lastStrength){
+    var dt=parseLocalDate(lastStrength.date);
+    var ds=dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+    html+='<div style="font-size:0.62rem;letter-spacing:2px;text-transform:uppercase;color:var(--text2);font-weight:700;margin-bottom:10px;">Last session</div>';
+    html+='<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:20px;">';
+    html+='<div style="background:var(--card2);padding:12px 16px;border-bottom:1px solid var(--border);">';
+    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;letter-spacing:2px;">'+lastStrength.workoutType+'</div>';
+    html+='<div style="font-size:0.72rem;color:var(--muted);margin-top:2px;">'+ds+'</div>';
+    html+='</div>';
+    html+='<div style="padding:12px 16px;">';
+    (lastStrength.exercises||[]).forEach(function(ex){
+      var feel=ex.feel||'';
+      var feelCol=feel==='Medium'?'var(--green)':feel==='Medium-hard'?'var(--yellow)':'var(--red)';
+      var rs=ex.isPlank==='yes'?'L:'+(ex.sets[0]||'?')+'s / R:'+(ex.sets[1]||'?')+'s':(ex.sets||[]).join(' / ')+' reps';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);">';
+      html+='<div style="font-size:0.72rem;color:var(--text2);font-weight:600;">'+ex.name.replace('SINGLE-LEG GLUTE BRIDGES','BRIDGES').replace('CLOSE-GRIP PUSH-UPS','PUSH-UPS').replace('SUPINATED PULL-UPS','SUP PULL-UPS')+'</div>';
+      html+='<div style="text-align:right">';
+      html+='<div style="font-size:0.82rem;font-weight:700;">'+rs+'</div>';
+      if(feel)html+='<div style="font-size:0.62rem;color:'+feelCol+';font-weight:700;margin-top:1px;">'+feel+'</div>';
+      html+='</div></div>';
+    });
+    html+='</div></div>';
+  }
+
+  // Footer
+  html+='<div style="text-align:center;padding:10px 0;">';
+  html+='<div style="font-size:0.65rem;color:var(--muted);">Updated live · <a href="'+window.location.href.split('?')[0]+'" style="color:var(--muted);">Full app</a></div>';
+  html+='</div>';
+
+  html+='</div>'; // padding wrap
+
+  wrap.innerHTML=html;
+}
+
 buildEffBtns();
 initDates();
 setHIITPreset(20,8);
 var _ic=loadCache();
 setSyncBadge(_ic?'cached':'loading',_ic?cacheAgeStr(_ic.ts):null);
-navTo('home');
-setTimeout(loadHomeData,200);
+
+// Check for share mode (?share in URL)
+if(window.location.search.indexOf('share')>=0){
+  initShareMode();
+} else {
+  navTo('home');
+  setTimeout(loadHomeData,200);
+}
 </script>
 </body>
 </html>
