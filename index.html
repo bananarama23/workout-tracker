@@ -1489,7 +1489,7 @@ function tryLoadWorkout(){
     if(hc)hc.style.opacity='1';
     if(htc)htc.style.opacity='1';
   }
-  document.getElementById('currentWorkoutInfo').textContent='Loading...';
+  document.getElementById('currentWorkoutInfo').textContent='Checking sheet...';
   document.getElementById('homeLoadedBadge').classList.add('hidden');
   document.getElementById('hotelLoadedBadge').classList.add('hidden');
   var cbName='wt_load_'+Date.now();
@@ -1499,16 +1499,25 @@ function tryLoadWorkout(){
       sheetWorkout=result;
       var wt=(result.workoutType||'').toLowerCase();
       var isHome=wt.indexOf('home')>=0;
+      var isHotel=wt.indexOf('hotel')>=0;
       document.getElementById('homeLoadedBadge').classList.toggle('hidden',!isHome);
-      document.getElementById('hotelLoadedBadge').classList.toggle('hidden',isHome);
-      document.getElementById('currentWorkoutInfo').textContent=(result.title||result.workoutType)+' ready';
+      document.getElementById('hotelLoadedBadge').classList.toggle('hidden',!isHotel);
+      // Clear info - status is shown per card via badges
+      var infoEl=document.getElementById('currentWorkoutInfo');
+      if(isHome)infoEl.textContent='Sheet: Home workout \u2713 \u00b7 Hotel: using defaults';
+      else if(isHotel)infoEl.textContent='Sheet: Hotel workout \u2713 \u00b7 Home: using defaults';
+      else infoEl.textContent='Sheet workout loaded';
     } else {
-      document.getElementById('currentWorkoutInfo').textContent='Using default plan';
+      sheetWorkout=null;
+      document.getElementById('currentWorkoutInfo').textContent='Using built-in defaults for both';
     }
   };
   var url=CLOUD_URL+'?type=getWorkout&callback='+cbName;
   var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
-  script.onerror=function(){document.getElementById('currentWorkoutInfo').textContent='Using default plan';};
+  script.onerror=function(){
+    sheetWorkout=null;
+    document.getElementById('currentWorkoutInfo').textContent='Using built-in defaults for both';
+  };
   document.head.appendChild(script);
 }
 
