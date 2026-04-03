@@ -3047,15 +3047,32 @@ function initShareMode(){
   wrap.id='shareWrap';
   wrap.style.cssText='min-height:100vh;background:var(--bg);color:var(--text);font-family:\'DM Sans\',system-ui,sans-serif;padding:0 0 40px;';
   document.body.appendChild(wrap);
-  wrap.innerHTML='<div style="text-align:center;padding:60px 20px 20px;color:var(--muted);font-size:0.85rem;">Loading...</div>';
-  fetchHistory(function(sessions){
-    renderShareView(sessions||[]);
-  });
+
+  // Render immediately with whatever is available — never show a frozen loading screen
+  var cached=loadCache();
+  renderShareView(cached?cached.sessions:[]);
+
+  // Then fetch live data and re-render if it differs
+  var cbName='wt_share_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    if(result&&result.sessions&&result.sessions.length){
+      saveCache(result.sessions);
+      renderShareView(result.sessions);
+    }
+  };
+  var script=document.createElement('script');script.id='s_'+cbName;
+  script.src=CLOUD_URL+'?type=getHistory&callback='+cbName;
+  script.onerror=function(){/* already rendered with cache */};
+  document.head.appendChild(script);
+  // Hard timeout — give up after 12s, leave existing render as-is
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;}},12000);
 }
 
 function renderShareView(sessions){
   var wrap=document.getElementById('shareWrap');if(!wrap)return;
   sessions=sessions||[];
+  var hasData=sessions.length>0;
 
   // Week stats
   var weekNum='Week '+getWeekNum();
@@ -3198,7 +3215,9 @@ function renderShareView(sessions){
 
   // Footer
   html+='<div style="text-align:center;padding:10px 0;">';
-  html+='<div style="font-size:0.65rem;color:var(--muted);">Updated live · <a href="'+window.location.href.split('?')[0]+'" style="color:var(--muted);">Full app</a></div>';
+  var c=loadCache();
+  var freshness=c?'Updated '+cacheAgeStr(c.ts):'Live data';
+  html+='<div style="font-size:0.65rem;color:var(--muted);">'+freshness+(hasData?' · ':' · No data yet')+'<a href="'+window.location.href.split('?')[0]+'" style="color:var(--muted);">Full app</a></div>';
   html+='</div>';
 
   html+='</div>'; // padding wrap
