@@ -3261,14 +3261,17 @@ function budSyncBadge(state,detail){
 function budApplyStored(){
   try{
     var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
-    function rv(id,def){var el=document.getElementById(id);if(el&&stored[id]!==undefined)el.value=stored[id];else if(el)el.value=def;}
-    rv('bHousePrice',744000);rv('bDownPayment',500000);rv('bEquity',0);rv('bBank',-500000);
+    function rv(id,def){var el=document.getElementById(id);if(el&&stored[id]!==undefined&&stored[id]!==null)el.value=stored[id];else if(el&&def!==undefined)el.value=def;}
+    rv('bHousePrice',744000);rv('bDownPayment',500000);rv('bEquity',0);rv('bBank',-35605);
     rv('bPayRate',231);rv('bThisMonth','');
     rv('vElec',300);rv('vHoa',206);rv('vTmobile',80);rv('vApa',47);rv('vAtt',55);rv('vChase',2000);
     rv('vCarIns',2514);rv('vUmbrella',503);rv('vPropTax',8541);rv('vHouseIns',2450);rv('bInterest',1098);
-    if(stored.monthHours){
-      stored.monthHours.forEach(function(v,i){
-        var el=document.getElementById('bHours_'+i);if(el)el.value=v;
+    // monthHours: array stored directly (not JSON string)
+    var hours=stored.monthHours;
+    if(typeof hours==='string'){try{hours=JSON.parse(hours);}catch(e){hours=null;}}
+    if(Array.isArray(hours)){
+      hours.forEach(function(v,i){
+        var el=document.getElementById('bHours_'+i);if(el&&v)el.value=v;
       });
     }
   }catch(e){}
@@ -3278,17 +3281,21 @@ function budLoad(){
   // 1. Show localStorage immediately so UI is never blank
   budApplyStored();
   budCalc();
-  // 2. Fetch from sheet in background
+  // 2. Fetch from sheet in background — reads actual cell values
   budSyncBadge('loading');
   var cbName='wt_bud_'+Date.now();
   window[cbName]=function(result){
     window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
     if(result&&result.status==='ok'&&result.data&&Object.keys(result.data).length){
       try{
+        // Merge sheet data into localStorage — sheet is source of truth
         var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
-        Object.keys(result.data).forEach(function(k){stored[k]=result.data[k];});
-        // monthHours comes as a JSON string from the sheet key/value store
-        if(typeof stored.monthHours==='string'){try{stored.monthHours=JSON.parse(stored.monthHours);}catch(e){}}
+        var d=result.data;
+        var fields=['bHousePrice','bDownPayment','bEquity','bBank','bPayRate','bInterest',
+                    'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
+                    'vCarIns','vUmbrella','vPropTax','vHouseIns'];
+        fields.forEach(function(k){if(d[k]!==null&&d[k]!==undefined)stored[k]=d[k];});
+        if(Array.isArray(d.monthHours))stored.monthHours=d.monthHours;
         localStorage.setItem(BUD_KEY,JSON.stringify(stored));
       }catch(e){}
       budApplyStored();
@@ -3329,7 +3336,7 @@ function budSaveToSheet(){
   if(btn)btn.disabled=true;
   budSyncBadge('loading');
   var stored={};try{stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');}catch(e){}
-  // monthHours array needs to survive as JSON string in sheet key/value store
+  // monthHours: send as JSON string so it survives URL encoding
   var sheetData={};
   Object.keys(stored).forEach(function(k){
     sheetData[k]=(k==='monthHours'&&Array.isArray(stored[k]))?JSON.stringify(stored[k]):stored[k];
