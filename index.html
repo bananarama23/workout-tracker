@@ -3237,15 +3237,9 @@ var BUD_KEY='wt_budget';
 var BUD_MONTHS=['December','January','February','March','April','May','June','July','August','September','October','November'];
 var BUD_DEFAULT_HOURS=[70.46,95.11,79.43,65.14,66,70,70,70,70,70,70,70];
 
-// Sheet-sourced data (populated on load from sheet)
-var _budSheetData={
-  monthRows:[],   // [{label,equity}, ...] for month dropdown
-  spare:null,     // F4
-  house:null,     // H8
-  totalBills:null,// H20
-  globalBank:null // F3
-};
-var _budSelectedMonthIdx=-1; // which row is selected in dropdown
+// Sheet data: only monthRows needed (equity/bank per month for dropdown)
+var _budSheetData={monthRows:[]};
+var _budSelectedMonthIdx=-1;
 
 function budSyncBadge(state,detail){
   var b=document.getElementById('syncBadgeBud'),t=document.getElementById('syncTextBud');
@@ -3293,9 +3287,8 @@ function budUpdateEquityBank(monthRows,idx){
   var row=monthRows[idx]||monthRows[0];
   // Equity = selected month's projection from col B
   s('bEquity',row.equity!==null?fmt(Math.round(row.equity)):'—');
-  // Bank = global F3 value (same regardless of month)
-  var bank=_budSheetData.globalBank;
-  s('bBank',bank!==null?fmt(Math.round(bank)):'—');
+  // Bank = selected month's col F value
+  s('bBank',row.bank!==null?fmt(Math.round(row.bank)):'—');
 }
 
 function budApplyStored(){
@@ -3329,10 +3322,11 @@ function budFetchFromSheet(){
     window[cbName]=null;var sc=document.getElementById('s_'+cbName);if(sc)sc.parentNode.removeChild(sc);
     if(result&&result.status==='ok'&&result.data){
       var d=result.data;
-      // Save editable fields to localStorage
+      // Populate all editable inputs from sheet — sheet is source of truth on load
       try{
         var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
-        ['bPayRate','bInterest','vElec','vHoa','vTmobile','vApa','vAtt','vChase',
+        ['bHousePrice','bDownPayment','bPayRate','bInterest',
+         'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
          'vCarIns','vUmbrella','vPropTax','vHouseIns'].forEach(function(k){
           if(d[k]!==null&&d[k]!==undefined)stored[k]=d[k];
         });
@@ -3341,15 +3335,12 @@ function budFetchFromSheet(){
       }catch(e){}
       budApplyStored();
 
-      // Store sheet-only read-only values
-      _budSheetData.spare     = d.spare!==null     ? parseFloat(d.spare)||null     : null;
-      _budSheetData.house     = d.house!==null     ? parseFloat(d.house)||null     : null;
-      _budSheetData.totalBills= d.totalBills!==null? parseFloat(d.totalBills)||null: null;
-      _budSheetData.globalBank= d.globalBank!==null? parseFloat(d.globalBank)||null: null;
-      _budSheetData.monthRows = Array.isArray(d.monthRows)?d.monthRows:[];
+      // Store read-only sheet values (month dropdown data only — not used in calc)
+      _budSheetData.monthRows=Array.isArray(d.monthRows)?d.monthRows:[];
 
-      // Build month dropdown with real data
+      // Build month dropdown
       budBuildMonthDropdown(_budSheetData.monthRows);
+      // Run calc — everything derives from inputs now
       budCalc();
       budSyncBadge('live');
       var upd=document.getElementById('budgetUpdated');if(upd)upd.textContent='Synced from sheet';
@@ -3367,7 +3358,7 @@ function budFetchFromSheet(){
 function budReset(){
   // Clear local cache and force fresh fetch from sheet
   try{localStorage.removeItem(BUD_KEY);}catch(e){}
-  _budSheetData={monthRows:[],spare:null,house:null,totalBills:null};
+  _budSheetData={monthRows:[]};
   _budSelectedMonthIdx=-1;
   var upd=document.getElementById('budgetUpdated');if(upd)upd.textContent='Tap values to edit';
   var el=document.getElementById('budMsg');
@@ -3457,79 +3448,72 @@ function s(id,val,color){
 function budCalc(){
   budSave();
 
-  // Property
+  // ── Property ──────────────────────────────────────────────────
   var housePrice=g('bHousePrice');
   var downPayment=g('bDownPayment');
   var mortgage=housePrice-downPayment;
   s('bMortgage',fmt(mortgage),mortgage>0?'var(--text)':'var(--green)');
 
-  // Equity/Bank come from sheet month rows (read-only display, updated by dropdown)
+  // Equity/Bank: always read from selected month row (sheet data, read-only)
   if(_budSheetData.monthRows&&_budSheetData.monthRows.length){
-    var idx=_budSelectedMonthIdx>=0?_budSelectedMonthIdx:budCurrentMonthIdx();
-    budUpdateEquityBank(_budSheetData.monthRows,idx);
+    budUpdateEquityBank(_budSheetData.monthRows,_budSelectedMonthIdx>=0?_budSelectedMonthIdx:budCurrentMonthIdx());
   }
 
-  // House payment from sheet (H8), falls back to bInterest input
+  // ── Bills — always calculate live from inputs ──────────────────
   var interest=g('bInterest');
-  var mortgagePayment=(_budSheetData.house!==null)?Math.round(_budSheetData.house):interest;
-  s('vHouse',fmt(Math.round(mortgagePayment)));
-
-  // Editable bills
   var elec=g('vElec'),hoa=g('vHoa'),tmobile=g('vTmobile'),apa=g('vApa'),att=g('vAtt'),chase=g('vChase');
   var carIns=g('vCarIns'),umbrella=g('vUmbrella'),propTax=g('vPropTax'),houseIns=g('vHouseIns');
-  var oneOffPM=(carIns+umbrella+propTax+houseIns)/12;
-  s('vInsurances',fmt(Math.round(oneOffPM)));
-  s('vOneOffPM',fmt(Math.round(oneOffPM)),'var(--red)');
 
-  // Total bills: use sheet H20 if available, else calculate
-  var totalMonthlyBills;
-  if(_budSheetData.totalBills!==null){
-    totalMonthlyBills=Math.round(_budSheetData.totalBills);
-  } else {
-    totalMonthlyBills=Math.round(mortgagePayment+elec+hoa+tmobile+apa+att+chase+oneOffPM);
-  }
+  // House/mortgage payment: use interest input (H8 in sheet is just this same value)
+  var mortgagePayment=Math.round(interest);
+  s('vHouse',fmt(mortgagePayment));
+
+  // Insurances amortised monthly
+  var oneOffPM=Math.round((carIns+umbrella+propTax+houseIns)/12);
+  s('vInsurances',fmt(oneOffPM));
+  s('vOneOffPM',fmt(oneOffPM),'var(--red)');
+
+  // Total bills — always calculated, never locked to sheet
+  var totalMonthlyBills=Math.round(mortgagePayment+elec+hoa+tmobile+apa+att+chase+oneOffPM);
   s('vTotalBills',fmt(totalMonthlyBills),'var(--red)');
   s('bTotalBills',fmt(totalMonthlyBills),'var(--red)');
   s('bIncBills',fmt(totalMonthlyBills),'var(--red)');
 
-  // Hours
+  // ── Hours ─────────────────────────────────────────────────────
   var thisMonth=g('bThisMonth');
   var storedHours=BUD_MONTHS.map(function(_,i){
     var el=document.getElementById('bHours_'+i);return el&&el.value?parseFloat(el.value)||0:BUD_DEFAULT_HOURS[i];
   });
   var allHours=storedHours.slice();
   if(thisMonth>0){
-    var currentMonthIdx=new Date().getMonth();
-    var arrIdx=currentMonthIdx===11?0:currentMonthIdx+1;
+    var arrIdx=new Date().getMonth()===11?0:new Date().getMonth()+1;
     allHours[arrIdx]=thisMonth;
   }
   var avgHours=allHours.reduce(function(a,b){return a+b;},0)/allHours.length;
 
-  // Income
+  // ── Income — always calculated live ───────────────────────────
   var payRate=g('bPayRate');
-  var gross=avgHours*payRate;
-  var afterTax=gross*0.74;
-  var leftOver=afterTax-totalMonthlyBills;
+  var gross=Math.round(avgHours*payRate);
+  var afterTax=Math.round(gross*0.74);
+  var leftOver=Math.round(afterTax-totalMonthlyBills);
 
   s('bIncAvgHours',avgHours.toFixed(2)+' hrs');
-  s('bIncGross',fmt(Math.round(gross)));
-  s('bIncAfterTax',fmt(Math.round(afterTax)));
-  s('bLeftOver',fmt(Math.round(leftOver)),leftOver>=0?'var(--green)':'var(--red)');
-  s('bGross',fmt(Math.round(gross)));
-  s('bAfterTax',fmt(Math.round(afterTax)));
+  s('bAvgHours',avgHours.toFixed(2));
+  s('bIncGross',fmt(gross));
+  s('bIncAfterTax',fmt(afterTax));
+  s('bGross',fmt(gross));
+  s('bAfterTax',fmt(afterTax));
+  s('bLeftOver',fmt(leftOver),leftOver>=0?'var(--green)':'var(--red)');
 
-  // Spare: use sheet F4 if available, else calculate
-  var spare=(_budSheetData.spare!==null)?Math.round(_budSheetData.spare):Math.round(leftOver);
-  var spareColor=spare>=0?'var(--green)':'var(--red)';
-  s('bSpareVal',fmt(spare),spareColor);
-  s('bVegasSpare',fmt(spare),spare>=0?'var(--accent)':'var(--red)');
+  // ── Spare — always = leftOver (same calculation the sheet does) ─
+  var spareColor=leftOver>=0?'var(--green)':'var(--red)';
+  s('bSpareVal',fmt(leftOver),spareColor);
+  s('bVegasSpare',fmt(leftOver),leftOver>=0?'var(--accent)':'var(--red)');
 
-  // Hours display
+  // Hours input colour
   var thEl=document.getElementById('bThisMonth');
   if(thEl){thEl.style.color=thisMonth>=70?'var(--green)':thisMonth>0?'var(--red)':'var(--accent)';}
-  s('bAvgHours',avgHours.toFixed(2));
 
-  // Render hours table
   budRenderHours(allHours,avgHours);
 }
 
