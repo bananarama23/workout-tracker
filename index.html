@@ -936,11 +936,11 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div class="prog-card prog-card-pad">
         <div class="bud-row">
           <div class="bud-lbl">House Price</div>
-          <div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input" id="bHousePrice" type="number" inputmode="numeric" value="744000" oninput="budCalc()"></div>
+          <div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input" id="bHousePrice" type="number" inputmode="numeric" value="744000" oninput="budUserEdit()"></div>
         </div>
         <div class="bud-row">
           <div class="bud-lbl">Down Payment</div>
-          <div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input" id="bDownPayment" type="number" inputmode="numeric" value="500000" oninput="budCalc()"></div>
+          <div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input" id="bDownPayment" type="number" inputmode="numeric" value="500000" oninput="budUserEdit()"></div>
         </div>
         <div class="bud-row bud-result-row">
           <div class="bud-lbl">Mortgage</div>
@@ -994,7 +994,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <div>
             <div class="bud-spare-lbl">This Month</div>
             <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px;">
-              <input class="bud-hours-big" id="bThisMonth" type="number" inputmode="decimal" step="0.01" placeholder="0.00" oninput="budCalc()">
+              <input class="bud-hours-big" id="bThisMonth" type="number" inputmode="decimal" step="0.01" placeholder="0.00" oninput="budUserEdit()">
               <div style="font-size:0.75rem;color:var(--muted);">hrs</div>
             </div>
           </div>
@@ -1021,23 +1021,23 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <div class="bud-divider"></div>
         <div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin:8px 0 6px;">Monthly Bills</div>
         <div class="bud-row bud-result-row"><div class="bud-lbl">House / Mortgage</div><div class="bud-result" id="vHouse">—</div></div>
-        <div class="bud-row bud-result-row"><div class="bud-lbl">Electricity</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vElec" type="number" inputmode="numeric" value="300" oninput="budCalc()"></div></div>
-        <div class="bud-row bud-result-row"><div class="bud-lbl">HOA</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vHoa" type="number" inputmode="numeric" value="206" oninput="budCalc()"></div></div>
-        <div class="bud-row bud-result-row"><div class="bud-lbl">T-Mobile</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vTmobile" type="number" inputmode="numeric" value="80" oninput="budCalc()"></div></div>
-        <div class="bud-row bud-result-row"><div class="bud-lbl">Apa</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vApa" type="number" inputmode="numeric" value="47" oninput="budCalc()"></div></div>
-        <div class="bud-row bud-result-row"><div class="bud-lbl">AT&T</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vAtt" type="number" inputmode="numeric" value="55" oninput="budCalc()"></div></div>
+        <div class="bud-row bud-result-row"><div class="bud-lbl">Electricity</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vElec" type="number" inputmode="numeric" value="300" oninput="budUserEdit()"></div></div>
+        <div class="bud-row bud-result-row"><div class="bud-lbl">HOA</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vHoa" type="number" inputmode="numeric" value="206" oninput="budUserEdit()"></div></div>
+        <div class="bud-row bud-result-row"><div class="bud-lbl">T-Mobile</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vTmobile" type="number" inputmode="numeric" value="80" oninput="budUserEdit()"></div></div>
+        <div class="bud-row bud-result-row"><div class="bud-lbl">Apa</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vApa" type="number" inputmode="numeric" value="47" oninput="budUserEdit()"></div></div>
+        <div class="bud-row bud-result-row"><div class="bud-lbl">AT&T</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vAtt" type="number" inputmode="numeric" value="55" oninput="budUserEdit()"></div></div>
         <div class="bud-row bud-result-row"><div class="bud-lbl">Insurances</div><div class="bud-result" id="vInsurances">—</div></div>
-        <div class="bud-row bud-result-row"><div class="bud-lbl">Chase</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vChase" type="number" inputmode="numeric" value="2000" oninput="budCalc()"></div></div>
+        <div class="bud-row bud-result-row"><div class="bud-lbl">Chase</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vChase" type="number" inputmode="numeric" value="2000" oninput="budUserEdit()"></div></div>
         <div class="bud-row bud-result-row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:8px;">
           <div class="bud-lbl" style="font-weight:700;">Total Bills</div>
           <div class="bud-result" id="vTotalBills" style="color:var(--red);">—</div>
         </div>
         <div class="bud-divider"></div>
         <div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin:8px 0 6px;">One-Off Annuals</div>
-        <div class="bud-row bud-result-row"><div class="bud-lbl">Car Insurance</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vCarIns" type="number" inputmode="numeric" value="2514" oninput="budCalc()"></div></div>
-        <div class="bud-row bud-result-row"><div class="bud-lbl">Umbrella</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vUmbrella" type="number" inputmode="numeric" value="503" oninput="budCalc()"></div></div>
-        <div class="bud-row bud-result-row"><div class="bud-lbl">Property Tax</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vPropTax" type="number" inputmode="numeric" value="8541" oninput="budCalc()"></div></div>
-        <div class="bud-row bud-result-row"><div class="bud-lbl">House Insurance</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vHouseIns" type="number" inputmode="numeric" value="2450" oninput="budCalc()"></div></div>
+        <div class="bud-row bud-result-row"><div class="bud-lbl">Car Insurance</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vCarIns" type="number" inputmode="numeric" value="2514" oninput="budUserEdit()"></div></div>
+        <div class="bud-row bud-result-row"><div class="bud-lbl">Umbrella</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vUmbrella" type="number" inputmode="numeric" value="503" oninput="budUserEdit()"></div></div>
+        <div class="bud-row bud-result-row"><div class="bud-lbl">Property Tax</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vPropTax" type="number" inputmode="numeric" value="8541" oninput="budUserEdit()"></div></div>
+        <div class="bud-row bud-result-row"><div class="bud-lbl">House Insurance</div><div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="vHouseIns" type="number" inputmode="numeric" value="2450" oninput="budUserEdit()"></div></div>
         <div class="bud-row bud-result-row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:8px;">
           <div class="bud-lbl" style="font-weight:700;">Per Month</div>
           <div class="bud-result" id="vOneOffPM" style="color:var(--red);">—</div>
@@ -1051,7 +1051,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div class="prog-card prog-card-pad">
         <div class="bud-row">
           <div class="bud-lbl">Hourly Rate</div>
-          <div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input" id="bPayRate" type="number" inputmode="numeric" value="231" oninput="budCalc()"></div>
+          <div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input" id="bPayRate" type="number" inputmode="numeric" value="231" oninput="budUserEdit()"></div>
         </div>
         <div class="bud-row bud-result-row"><div class="bud-lbl">Avg Hours/Month</div><div class="bud-result" id="bIncAvgHours">—</div></div>
         <div class="bud-row bud-result-row"><div class="bud-lbl">Monthly Gross</div><div class="bud-result" id="bIncGross">—</div></div>
@@ -1071,7 +1071,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div class="prog-card prog-card-pad">
         <div class="bud-row bud-result-row">
           <div class="bud-lbl">Mortgage Interest</div>
-          <div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="bInterest" type="number" inputmode="numeric" value="1098" oninput="budCalc()"></div>
+          <div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="bInterest" type="number" inputmode="numeric" value="1098" oninput="budUserEdit()"></div>
         </div>
       </div>
     </div>
@@ -3282,13 +3282,34 @@ function budPickMonth(){
   budCalc();
 }
 
+function budSetStatus(state){
+  var el=document.getElementById('budgetUpdated');
+  if(!el)return;
+  if(state==='synced')el.textContent='Synced from sheet';
+  else if(state==='saved')el.textContent='Saved to sheet';
+  else if(state==='edited')el.textContent='Edited on device \u2014 not yet saved';
+}
+
 function budUpdateEquityBank(monthRows,idx){
-  if(!monthRows||!monthRows.length)return;
+  if(!monthRows||!monthRows.length){
+    // Fall back to stored values if sheet hasn't loaded yet
+    try{
+      var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
+      s('bEquity',stored.lastEquity?fmt(Math.round(stored.lastEquity)):'—');
+      s('bBank',stored.lastBank?fmt(Math.round(stored.lastBank)):'—');
+    }catch(e){}
+    return;
+  }
   var row=monthRows[idx]||monthRows[0];
-  // Equity = selected month's projection from col B
   s('bEquity',row.equity!==null?fmt(Math.round(row.equity)):'—');
-  // Bank = selected month's col F value
   s('bBank',row.bank!==null?fmt(Math.round(row.bank)):'—');
+  // Cache for offline fallback
+  try{
+    var st=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
+    if(row.equity!==null)st.lastEquity=row.equity;
+    if(row.bank!==null)st.lastBank=row.bank;
+    localStorage.setItem(BUD_KEY,JSON.stringify(st));
+  }catch(e){}
 }
 
 function budApplyStored(){
@@ -3308,6 +3329,9 @@ function budApplyStored(){
     }
   }catch(e){}
 }
+
+// Called by oninput on all budget inputs — marks as edited on device
+function budUserEdit(){budCalc();budSetStatus('edited');}
 
 function budLoad(){
   budApplyStored();
@@ -3343,7 +3367,7 @@ function budFetchFromSheet(){
       // Run calc — everything derives from inputs now
       budCalc();
       budSyncBadge('live');
-      var upd=document.getElementById('budgetUpdated');if(upd)upd.textContent='Synced from sheet';
+      budSetStatus('synced');
     }else{
       budSyncBadge('cached','local');
     }
@@ -3404,7 +3428,7 @@ function budSaveToSheet(){
     if(result&&result.status==='ok'){
       if(el){el.textContent='Saved to Google Sheets \u2713';el.style.background='var(--green-dim)';el.style.color='var(--green)';}
       budSyncBadge('live');
-      var upd=document.getElementById('budgetUpdated');if(upd)upd.textContent='Saved to sheet';
+      budSetStatus('saved');
     }else{
       if(el){el.textContent='Failed \u2014 saved locally only';el.style.background='var(--yellow-dim)';el.style.color='var(--yellow)';}
       budSyncBadge('offline');
@@ -3454,26 +3478,24 @@ function budCalc(){
   var mortgage=housePrice-downPayment;
   s('bMortgage',fmt(mortgage),mortgage>0?'var(--text)':'var(--green)');
 
-  // Equity/Bank: always read from selected month row (sheet data, read-only)
+  // Equity/Bank: read from selected month row (sheet projection data)
   if(_budSheetData.monthRows&&_budSheetData.monthRows.length){
     budUpdateEquityBank(_budSheetData.monthRows,_budSelectedMonthIdx>=0?_budSelectedMonthIdx:budCurrentMonthIdx());
   }
 
-  // ── Bills — always calculate live from inputs ──────────────────
-  var interest=g('bInterest');
-  var elec=g('vElec'),hoa=g('vHoa'),tmobile=g('vTmobile'),apa=g('vApa'),att=g('vAtt'),chase=g('vChase');
-  var carIns=g('vCarIns'),umbrella=g('vUmbrella'),propTax=g('vPropTax'),houseIns=g('vHouseIns');
-
-  // House/mortgage payment: use interest input (H8 in sheet is just this same value)
-  var mortgagePayment=Math.round(interest);
+  // ── Mortgage payment — PMT formula matching sheet H8 ──────────
+  // =PMT(0.065/12, 30*12, -mortgage)  →  monthly payment
+  var rate=0.065/12, nper=360;
+  var mortgagePayment=(mortgage>0)?Math.round(mortgage*rate/(1-Math.pow(1+rate,-nper))):0;
   s('vHouse',fmt(mortgagePayment));
 
-  // Insurances amortised monthly
+  // ── Bills — always calculated live from inputs ─────────────────
+  var elec=g('vElec'),hoa=g('vHoa'),tmobile=g('vTmobile'),apa=g('vApa'),att=g('vAtt'),chase=g('vChase');
+  var carIns=g('vCarIns'),umbrella=g('vUmbrella'),propTax=g('vPropTax'),houseIns=g('vHouseIns');
   var oneOffPM=Math.round((carIns+umbrella+propTax+houseIns)/12);
   s('vInsurances',fmt(oneOffPM));
   s('vOneOffPM',fmt(oneOffPM),'var(--red)');
 
-  // Total bills — always calculated, never locked to sheet
   var totalMonthlyBills=Math.round(mortgagePayment+elec+hoa+tmobile+apa+att+chase+oneOffPM);
   s('vTotalBills',fmt(totalMonthlyBills),'var(--red)');
   s('bTotalBills',fmt(totalMonthlyBills),'var(--red)');
@@ -3505,12 +3527,10 @@ function budCalc(){
   s('bAfterTax',fmt(afterTax));
   s('bLeftOver',fmt(leftOver),leftOver>=0?'var(--green)':'var(--red)');
 
-  // ── Spare — always = leftOver (same calculation the sheet does) ─
-  var spareColor=leftOver>=0?'var(--green)':'var(--red)';
-  s('bSpareVal',fmt(leftOver),spareColor);
+  // ── Spare = left over ─────────────────────────────────────────
+  s('bSpareVal',fmt(leftOver),leftOver>=0?'var(--green)':'var(--red)');
   s('bVegasSpare',fmt(leftOver),leftOver>=0?'var(--accent)':'var(--red)');
 
-  // Hours input colour
   var thEl=document.getElementById('bThisMonth');
   if(thEl){thEl.style.color=thisMonth>=70?'var(--green)':thisMonth>0?'var(--red)':'var(--accent)';}
 
@@ -3528,7 +3548,7 @@ function budRenderHours(hours,avg){
     html+='<div class="bud-month-row">';
     html+='<div class="bud-month-lbl">'+month+'</div>';
     html+='<div class="bud-month-bar"><div class="bud-month-bar-fill" style="width:'+barPct+'%;background:'+barCol+';"></div></div>';
-    html+='<input class="bud-month-val" id="bHours_'+i+'" type="number" inputmode="decimal" step="0.01" value="'+(v||'')+'" placeholder="0" style="color:'+col+';background:transparent;border:none;width:60px;text-align:right;outline:none;font-family:\'Bebas Neue\',sans-serif;font-size:1.05rem;" oninput="budCalc()">';
+    html+='<input class="bud-month-val" id="bHours_'+i+'" type="number" inputmode="decimal" step="0.01" value="'+(v||'')+'" placeholder="0" style="color:'+col+';background:transparent;border:none;width:60px;text-align:right;outline:none;font-family:\'Bebas Neue\',sans-serif;font-size:1.05rem;" oninput="budUserEdit()">';
     html+='<div style="font-size:0.62rem;color:var(--muted);width:24px;text-align:right;">h</div>';
     html+='</div>';
   });
