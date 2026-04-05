@@ -918,8 +918,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div class="prog-section-hdr">
         <div class="prog-section-lbl">Personal Records</div>
       </div>
-      <div class="pr-list" id="prGrid">
-        <div class="pr-row"><div class="pr-name" style="color:var(--muted);">No records yet</div></div>
+      <div id="prGrid" style="margin:0 16px;">
+        <div style="text-align:center;color:var(--muted);padding:20px 0;font-size:0.85rem;">No records yet</div>
       </div>
     </div>
 
@@ -931,29 +931,25 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 <!-- BUDGET PAGE -->
 <div class="page" id="page-budget">
 
-  <!-- Hero header — full bleed, no standard .ph -->
+  <!-- Hero header -->
   <div style="background:linear-gradient(160deg,#0a0f00 0%,#07090C 100%);padding:calc(var(--safe-t) + 16px) 20px 0;border-bottom:1px solid var(--border);position:relative;">
     <div class="sync-pill sp-load" id="syncBadgeBud" style="position:absolute;top:calc(var(--safe-t)+14px);right:16px;"><div class="sp-dot"></div><span id="syncTextBud">Syncing</span></div>
-    <div style="font-size:0.6rem;letter-spacing:3px;text-transform:uppercase;color:rgba(200,255,0,0.5);font-weight:700;margin-bottom:4px;">Monthly</div>
+    <div style="font-size:0.6rem;letter-spacing:3px;text-transform:uppercase;color:rgba(200,255,0,0.5);font-weight:700;margin-bottom:4px;">Saving for a house</div>
     <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;line-height:1;margin-bottom:2px;">BUDGET</div>
     <p style="font-size:0.72rem;color:var(--muted);margin:0 0 18px;" id="budgetUpdated">Tap values to edit</p>
-
-    <!-- Hero spare number -->
     <div style="display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:20px;">
       <div>
-        <div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;">Money spare / month</div>
+        <div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;">Monthly spare</div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:3.4rem;letter-spacing:2px;line-height:1;" id="bSpareVal">—</div>
       </div>
       <div style="text-align:right;padding-bottom:6px;">
-        <div style="font-size:0.58rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Left over</div>
+        <div style="font-size:0.58rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">After bills</div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;line-height:1;" id="bLeftOver">—</div>
       </div>
     </div>
-
-    <!-- Income / Bills / Spare bar -->
-    <div id="budSplitBar" style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:0;display:flex;">
-      <div id="budBarBills" style="height:100%;background:var(--red);transition:width 0.6s;"></div>
-      <div id="budBarSpare" style="height:100%;background:var(--green);transition:width 0.6s;"></div>
+    <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;display:flex;margin-bottom:0;">
+      <div id="budBarBills" style="height:100%;background:var(--red);transition:width 0.6s;width:0%;"></div>
+      <div id="budBarSpare" style="height:100%;background:var(--green);transition:width 0.6s;width:0%;"></div>
     </div>
     <div style="display:flex;justify-content:space-between;padding:6px 0 18px;">
       <div style="display:flex;align-items:center;gap:5px;"><div style="width:8px;height:8px;border-radius:2px;background:var(--red);flex-shrink:0;"></div><span style="font-size:0.62rem;color:var(--muted);">Bills <span id="budBarBillsPct" style="color:var(--text2);">—</span></span></div>
@@ -963,10 +959,58 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
   <div class="page-body" style="padding-top:0;">
 
-    <!-- ── INCOME ─────────────────────────────────── -->
+    <!-- HOUSE GOAL -->
+    <div style="padding:20px 20px 0;">
+      <div style="font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:14px;">House Goal</div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:10px;">
+        <div style="padding:4px 0;">
+          <div class="bud2-line"><span class="bud2-lbl">Target price</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="bHousePrice" type="number" inputmode="numeric" value="744000" oninput="budUserEdit()"></div></div>
+          <div class="bud2-line"><span class="bud2-lbl">Down payment saved</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="bDownPayment" type="number" inputmode="numeric" value="500000" oninput="budUserEdit()"></div></div>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid var(--border);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:0.68rem;color:var(--text2);">Progress to 20% down</span>
+            <span style="font-size:0.68rem;font-weight:700;" id="bDpPct">—</span>
+          </div>
+          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+            <div id="bDpBar" style="height:100%;background:var(--accent);border-radius:3px;transition:width 0.6s;width:0%;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:5px;">
+            <span style="font-size:0.62rem;color:var(--muted);">Still needed: <span id="bDpNeeded" style="color:var(--text2);">—</span></span>
+            <span style="font-size:0.62rem;color:var(--muted);">20% = <span id="bDp20" style="color:var(--text2);">—</span></span>
+          </div>
+        </div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <span style="font-size:0.75rem;color:var(--text2);">View month</span>
+          <select id="bMonthPicker" onchange="budPickMonth()" style="background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:0.82rem;padding:5px 10px;outline:none;"></select>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:12px;">
+          <div style="flex:1;background:var(--card2);border-radius:var(--r-sm);padding:12px;">
+            <div style="font-size:0.55rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Equity</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;line-height:1;" id="bEquity">—</div>
+          </div>
+          <div style="flex:1;background:var(--card2);border-radius:var(--r-sm);padding:12px;">
+            <div style="font-size:0.55rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Bank</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;line-height:1;" id="bBank">—</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:10px;">
+          <span style="font-size:0.75rem;color:var(--text2);">Future mortgage payment</span>
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--orange);" id="vHouse">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;">
+          <span style="font-size:0.75rem;color:var(--text2);">Loan amount</span>
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;" id="bMortgage">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- INCOME -->
     <div style="padding:20px 20px 0;">
       <div style="font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:14px;">Income</div>
-      <div style="display:flex;gap:10px;margin-bottom:16px;">
+      <div style="display:flex;gap:10px;margin-bottom:10px;">
         <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;">
           <div style="font-size:0.58rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;">Gross</div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;line-height:1;" id="bIncGross">—</div>
@@ -976,9 +1020,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;line-height:1;" id="bIncAfterTax">—</div>
         </div>
       </div>
-
-      <!-- Rate + hours inline -->
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:16px;">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:10px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
           <span style="font-size:0.75rem;color:var(--text2);">Hourly rate</span>
           <div style="display:flex;align-items:center;background:var(--card2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;">
@@ -991,8 +1033,6 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <span style="font-size:0.88rem;font-weight:600;" id="bIncAvgHours">—</span>
         </div>
       </div>
-
-      <!-- Hours this month -->
       <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:6px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
           <div>
@@ -1009,22 +1049,16 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
     </div>
 
-    <!-- ── BILLS ──────────────────────────────────── -->
+    <!-- BILLS -->
     <div style="padding:20px 20px 0;">
       <div style="font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:14px;">Monthly Bills</div>
-
-      <!-- Bill line items -->
       <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:16px;">
-        <div style="background:var(--card2);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:0.78rem;color:var(--text2);">House / Mortgage</span>
-          <span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;" id="vHouse">—</span>
-        </div>
         <div style="padding:4px 0;">
           <div class="bud2-line"><span class="bud2-lbl">Electricity</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="vElec" type="number" inputmode="numeric" value="300" oninput="budUserEdit()"></div></div>
           <div class="bud2-line"><span class="bud2-lbl">HOA</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="vHoa" type="number" inputmode="numeric" value="206" oninput="budUserEdit()"></div></div>
           <div class="bud2-line"><span class="bud2-lbl">T-Mobile</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="vTmobile" type="number" inputmode="numeric" value="80" oninput="budUserEdit()"></div></div>
           <div class="bud2-line"><span class="bud2-lbl">Apa</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="vApa" type="number" inputmode="numeric" value="47" oninput="budUserEdit()"></div></div>
-          <div class="bud2-line"><span class="bud2-lbl">AT&T</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="vAtt" type="number" inputmode="numeric" value="55" oninput="budUserEdit()"></div></div>
+          <div class="bud2-line"><span class="bud2-lbl">AT&amp;T</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="vAtt" type="number" inputmode="numeric" value="55" oninput="budUserEdit()"></div></div>
           <div class="bud2-line"><span class="bud2-lbl">Chase</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="vChase" type="number" inputmode="numeric" value="2000" oninput="budUserEdit()"></div></div>
           <div class="bud2-line"><span class="bud2-lbl">Insurances (p/m)</span><span style="font-size:0.88rem;font-weight:600;color:var(--text2);" id="vInsurances">—</span></div>
         </div>
@@ -1033,10 +1067,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <span style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--red);" id="vTotalBills">—</span>
         </div>
       </div>
-
-      <!-- Annuals -->
       <div style="font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:10px;">One-off Annuals</div>
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:16px;">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:6px;">
         <div style="padding:4px 0;">
           <div class="bud2-line"><span class="bud2-lbl">Car Insurance</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="vCarIns" type="number" inputmode="numeric" value="2514" oninput="budUserEdit()"></div></div>
           <div class="bud2-line"><span class="bud2-lbl">Umbrella</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="vUmbrella" type="number" inputmode="numeric" value="503" oninput="budUserEdit()"></div></div>
@@ -1050,52 +1082,12 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
     </div>
 
-    <!-- ── PROPERTY ───────────────────────────────── -->
-    <div style="padding:0 20px;">
-      <div style="font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:14px;">Property</div>
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:10px;">
-        <div style="padding:4px 0;">
-          <div class="bud2-line">
-            <span class="bud2-lbl">House Price</span>
-            <div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="bHousePrice" type="number" inputmode="numeric" value="744000" oninput="budUserEdit()"></div>
-          </div>
-          <div class="bud2-line">
-            <span class="bud2-lbl">Down Payment</span>
-            <div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="bDownPayment" type="number" inputmode="numeric" value="500000" oninput="budUserEdit()"></div>
-          </div>
-        </div>
-        <div style="border-top:1px solid var(--border);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:0.75rem;color:var(--text2);">Mortgage</span>
-          <span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;" id="bMortgage">—</span>
-        </div>
-      </div>
-
-      <!-- Equity / Bank - month picker -->
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:24px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-          <span style="font-size:0.75rem;color:var(--text2);">View month</span>
-          <select id="bMonthPicker" onchange="budPickMonth()" style="background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:0.82rem;padding:5px 10px;outline:none;"></select>
-        </div>
-        <div style="display:flex;gap:10px;">
-          <div style="flex:1;background:var(--card2);border-radius:var(--r-sm);padding:12px;">
-            <div style="font-size:0.58rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Equity</div>
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;line-height:1;" id="bEquity">—</div>
-          </div>
-          <div style="flex:1;background:var(--card2);border-radius:var(--r-sm);padding:12px;">
-            <div style="font-size:0.58rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Bank</div>
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;line-height:1;" id="bBank">—</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── ACTIONS ─────────────────────────────────── -->
-    <div style="padding:0 20px 8px;">
+    <!-- ACTIONS -->
+    <div style="padding:20px 20px 8px;">
       <button onclick="budSaveToSheet()" id="budSaveBtn" style="width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:2px;font-weight:900;transition:all 0.15s;cursor:pointer;margin-bottom:8px;">SAVE TO SHEET</button>
       <button onclick="budReset()" style="width:100%;padding:12px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:0.85rem;letter-spacing:2px;font-weight:700;transition:all 0.15s;cursor:pointer;">RESET — RESYNC FROM SHEET</button>
       <div class="log-msg" id="budMsg" style="margin-top:8px;"></div>
     </div>
-    <!-- hidden result fields kept for JS compat -->
     <div style="display:none;">
       <span id="bGross"></span><span id="bAfterTax"></span><span id="bTotalBills"></span>
       <span id="bIncBills"></span><span id="bVegasSpare"></span>
@@ -2248,15 +2240,24 @@ function runNextRep(total){
 }
 
 function stopMetro(){clearMTOs();syn.cancel();setVW('\u00a0','');}
+
 function autoRest(){
   var ex=exs[curEx];
   autoLog(curSet);
-  // Always run the in-set rest timer first so user has time to log
-  // The rest timer's done callback (restDone) handles moving to next exercise
   if(curSet>=ex.sets-1){
-    // Last set — show a shorter rest then prompt, or let user tap NEXT EX
-    // Run the normal rest so they can log, then restDone will call showBetweenPrompt
-    runRestTimer(ex.rest);
+    // Last set of this exercise — stop everything and show a PAUSE state
+    // User fills in their log, then taps "START REST" to kick off the 2-min between timer
+    stopMetro();clearInterval(timerInt);
+    phase='logged'; // new phase: waiting for user to confirm done
+    // Update UI
+    var pb=document.getElementById('phBadge');if(pb){pb.textContent='LOG IT';pb.className='ph-badge phb-active';}
+    var tl=document.getElementById('timerLbl');if(tl)tl.textContent='FILL IN YOUR REPS';
+    var tc=document.getElementById('tCount');if(tc)tc.textContent='\u2713';
+    var ts=document.getElementById('tSub');if(ts)ts.textContent='done';
+    setRing(0,false);
+    var ra=document.getElementById('restAdj');if(ra)ra.classList.add('hidden');
+    speak('Set done. Log your reps.');
+    updBtn();
   } else {
     runRestTimer(ex.rest);
   }
@@ -2266,6 +2267,11 @@ function handleMain(){
   resAC();
   if(phase==='idle'||phase==='ready')startRC();
   else if(phase==='active'){stopMetro();autoRest();}
+  else if(phase==='logged'){
+    // User tapped "START 2 MIN REST" — kick off between-exercise timer
+    if(curEx<exs.length-1){showBetweenPrompt();}
+    else{finishWorkout();}
+  }
 }
 
 function updBtn(){
@@ -2275,12 +2281,22 @@ function updBtn(){
   var fs=document.getElementById('footerSkip');
   var label,cls,dis;
   if(phase==='between'){
-    // Between exercises: main = disabled timer, next = "Start Now"
     label='RESTING...';cls='btn b-rest';dis=true;
     if(fb){fb.textContent=label;fb.className=cls;fb.disabled=dis;}
     if(fp)fp.disabled=true;
     if(fn){fn.textContent='Start Now';fn.disabled=false;}
     if(fs){fs.style.display='block';fs.disabled=false;}
+    return;
+  }
+  if(phase==='logged'){
+    // After last set: big green button to start the 2-min rest
+    var isLast=curEx>=exs.length-1;
+    label=isLast?'FINISH WORKOUT':'START 2 MIN REST';
+    cls='btn b-finish';dis=false;
+    if(fb){fb.textContent=label;fb.className=cls;fb.disabled=dis;}
+    if(fp)fp.disabled=true;
+    if(fn)fn.disabled=true;
+    if(fs){fs.style.display='none';fs.disabled=true;}
     return;
   }
   if(phase==='idle'||phase==='ready'){label='START SET';cls='btn b-start';dis=false;}
@@ -2295,7 +2311,6 @@ function updBtn(){
     fn.textContent=last?'NEXT EX':'NEXT SET';
     fn.disabled=(last&&curEx>=exs.length-1)||isActivePlank;
   }
-  // Skip: visible and clickable during in-set rest OR between-exercise rest
   if(fs){
     var isResting=(phase==='resting'||phase==='between');
     fs.style.display=isResting?'block':'none';
@@ -2366,12 +2381,10 @@ function restDone(){
   var ra=document.getElementById('restAdj');if(ra)ra.classList.add('hidden');
   curSet++;
   if(curSet>=exs[curEx].sets){
-    // All sets for this exercise done
     if(curEx<exs.length-1){showBetweenPrompt();}
     else{finishWorkout();}
     return;
   }
-  // More sets to do — just go to next set
   phase='idle';updBtn();saveCurrentInputs();renderEx();
 }
 
@@ -3223,55 +3236,137 @@ function buildHeatmap(sessions){
 }
 
 function buildPRs(sessions){
-  var prs={};
-  // Track best per exercise (total reps across all sets) + per-set PRs for pull-ups
+  var el=document.getElementById('prGrid');
+  if(!sessions||!sessions.length){
+    if(el)el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px 0;font-size:0.85rem;">No records yet</div>';
+    return;
+  }
+
+  // Build per-exercise history: {name: [{date, sets[], total, feel}]}
+  var exHistory={};
   sessions.forEach(function(s){
-    (s.exercises||[]).forEach(function(ex){
-      if(ex.isPlank==='yes'){
-        var l=parseInt(ex.sets[0])||0,r=parseInt(ex.sets[1])||0;
-        var key=ex.name+' HOLD';
-        if(!prs[key]||Math.max(l,r)>prs[key].val)prs[key]={val:Math.max(l,r),date:s.date,unit:'sec best side'};
-      } else {
-        // Best single set
-        var bestSet=0;
-        (ex.sets||[]).forEach(function(sv){var v=parseInt(sv)||0;if(v>bestSet)bestSet=v;});
-        if(bestSet>0){
-          var kBest=ex.name+' BEST SET';
-          if(!prs[kBest]||bestSet>prs[kBest].val)prs[kBest]={val:bestSet,date:s.date,unit:'reps'};
-        }
-        // Total reps (for pull-ups)
-        if(ex.name==='PULL-UPS'||ex.name==='SUPINATED PULL-UPS'){
-          var tot=0;(ex.sets||[]).forEach(function(sv){tot+=parseInt(sv)||0;});
-          if(tot>0){var kTot=ex.name+' TOTAL';if(!prs[kTot]||tot>prs[kTot].val)prs[kTot]={val:tot,date:s.date,unit:'total reps'};}
-        }
+    if(!s.exercises)return;
+    s.exercises.forEach(function(ex){
+      if(!ex.name)return;
+      if(!exHistory[ex.name])exHistory[ex.name]=[];
+      var sets=(ex.sets||[]).map(function(v){return parseInt(v)||0;});
+      var total=sets.reduce(function(a,b){return a+b;},0);
+      if(total>0||sets.length>0){
+        exHistory[ex.name].push({date:s.date,sets:sets,total:total,feel:ex.feel||'',isPlank:ex.isPlank==='yes'});
       }
     });
   });
-  var keys=Object.keys(prs);
-  var el=document.getElementById('prGrid');
-  if(!keys.length){
-    if(el)el.innerHTML='<div class="pr-row"><div class="pr-name" style="color:var(--muted);">No records yet</div></div>';
+
+  // For each exercise compute: best session, last session, trend
+  var exerciseNames=Object.keys(exHistory);
+  if(!exerciseNames.length){
+    if(el)el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px 0;font-size:0.85rem;">No records yet</div>';
     return;
   }
-  // Sort: pull-ups first, then alphabetical
-  keys.sort(function(a,b){
+
+  // Sort: pull-ups first, then by name
+  exerciseNames.sort(function(a,b){
     var ap=a.indexOf('PULL')>=0?0:1,bp=b.indexOf('PULL')>=0?0:1;
     if(ap!==bp)return ap-bp;return a<b?-1:1;
   });
+
+  function shortName(n){
+    return n.replace('SINGLE-LEG GLUTE BRIDGES','Glute Bridges').replace('CLOSE-GRIP PUSH-UPS','Push-Ups').replace('SUPINATED PULL-UPS','Sup. Pull-Ups').replace('SIDE PLANKS','Side Planks').replace('LEG RAISES','Leg Raises').replace('PULL-UPS','Pull-Ups').replace('DIPS','Dips');
+  }
+  function feelCol(f){return f==='Medium'?'var(--green)':f==='Medium-hard'?'var(--yellow)':f==='Hard'?'var(--red)':'var(--muted)';}
+  function fmtDate(d){var dt=parseLocalDate(d);return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
+
   var html='';
-  keys.forEach(function(k){
-    var pr=prs[k];
-    var d=parseLocalDate(pr.date);
-    var ds=(d.getMonth()+1)+'/'+(d.getDate())+'/'+d.getFullYear();
-    var shortKey=k.replace(' BEST SET','').replace(' TOTAL',' total').replace(' HOLD',' hold');
-    shortKey=shortKey.replace('SINGLE-LEG GLUTE BRIDGES','BRIDGES').replace('CLOSE-GRIP PUSH-UPS','PUSH-UPS').replace('SUPINATED PULL-UPS','SUP PULL-UPS');
-    html+='<div class="pr-row">';
-    html+='<div class="pr-name">'+shortKey+'</div>';
-    html+='<div class="pr-right">';
-    html+='<div class="pr-val">'+pr.val+'</div>';
-    html+='<div style="text-align:right"><div class="pr-unit">'+pr.unit+'</div><div class="pr-date">'+ds+'</div></div>';
-    html+='</div></div>';
+  exerciseNames.forEach(function(name){
+    var hist=exHistory[name];
+    if(!hist.length)return;
+    var last=hist[hist.length-1];
+    var prev=hist.length>1?hist[hist.length-2]:null;
+    var isPlank=last.isPlank;
+
+    // Find best
+    var best=hist.reduce(function(b,h){return h.total>b.total?h:b;},hist[0]);
+
+    // Trend vs previous session
+    var trend='';
+    if(prev){
+      if(last.total>prev.total)trend='up';
+      else if(last.total<prev.total)trend='down';
+      else trend='same';
+    }
+
+    html+='<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin:0 16px 10px;">';
+
+    // Header row
+    html+='<div style="background:var(--card2);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">';
+    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.15rem;letter-spacing:2px;">'+shortName(name)+'</div>';
+    // Trend badge
+    if(trend==='up')html+='<div style="background:rgba(0,212,138,0.15);color:var(--green);font-size:0.65rem;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:0.5px;">▲ Improving</div>';
+    else if(trend==='down')html+='<div style="background:rgba(255,58,92,0.12);color:var(--red);font-size:0.65rem;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:0.5px;">▼ Down</div>';
+    else if(trend==='same')html+='<div style="background:rgba(255,204,0,0.12);color:var(--yellow);font-size:0.65rem;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:0.5px;">→ Holding</div>';
+    html+='</div>';
+
+    // Stats row
+    html+='<div style="display:flex;border-bottom:1px solid var(--border);">';
+
+    if(isPlank){
+      // Plank: show L and R seconds
+      var lSec=last.sets[0]||0, rSec=last.sets[1]||0;
+      var bestL=0,bestR=0;
+      hist.forEach(function(h){if((h.sets[0]||0)>bestL)bestL=h.sets[0]||0;if((h.sets[1]||0)>bestR)bestR=h.sets[1]||0;});
+      html+='<div style="flex:1;padding:12px 16px;border-right:1px solid var(--border);text-align:center;">';
+      html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:4px;">Left</div>';
+      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.9rem;line-height:1;color:var(--accent);">'+lSec+'<span style="font-size:0.9rem;color:var(--muted);">s</span></div>';
+      html+='<div style="font-size:0.62rem;color:var(--muted);margin-top:2px;">best '+bestL+'s</div>';
+      html+='</div>';
+      html+='<div style="flex:1;padding:12px 16px;text-align:center;">';
+      html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:4px;">Right</div>';
+      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.9rem;line-height:1;color:var(--accent);">'+rSec+'<span style="font-size:0.9rem;color:var(--muted);">s</span></div>';
+      html+='<div style="font-size:0.62rem;color:var(--muted);margin-top:2px;">best '+bestR+'s</div>';
+      html+='</div>';
+    } else {
+      // Show last session total + best total
+      html+='<div style="flex:1;padding:12px 16px;border-right:1px solid var(--border);text-align:center;">';
+      html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:4px;">Last session</div>';
+      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.9rem;line-height:1;color:var(--accent);">'+last.total+'<span style="font-size:0.9rem;color:var(--muted);"> reps</span></div>';
+      // Set breakdown
+      if(last.sets.length>1){
+        html+='<div style="font-size:0.68rem;color:var(--muted);margin-top:3px;">'+last.sets.join(' / ')+'</div>';
+      }
+      html+='</div>';
+      html+='<div style="flex:1;padding:12px 16px;text-align:center;">';
+      html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:4px;">Personal best</div>';
+      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.9rem;line-height:1;color:'+(last.total>=best.total?'var(--green)':'var(--text)')+';">'+best.total+'<span style="font-size:0.9rem;color:var(--muted);"> reps</span></div>';
+      html+='<div style="font-size:0.62rem;color:var(--muted);margin-top:3px;">'+fmtDate(best.date)+'</div>';
+      html+='</div>';
+    }
+    html+='</div>';
+
+    // Footer: feel + date + session count
+    html+='<div style="padding:8px 16px;display:flex;align-items:center;justify-content:space-between;">';
+    html+='<div style="display:flex;align-items:center;gap:8px;">';
+    if(last.feel){html+='<span style="font-size:0.65rem;font-weight:700;color:'+feelCol(last.feel)+';">'+last.feel+'</span>';}
+    html+='<span style="font-size:0.65rem;color:var(--muted);">'+fmtDate(last.date)+'</span>';
+    html+='</div>';
+    html+='<span style="font-size:0.65rem;color:var(--muted);">'+hist.length+' session'+(hist.length!==1?'s':'')+'</span>';
+    html+='</div>';
+
+    // Mini progress bar if we have multiple sessions
+    if(hist.length>=2&&!isPlank){
+      var maxT=Math.max.apply(null,hist.map(function(h){return h.total;}));
+      var recentSessions=hist.slice(-8);
+      html+='<div style="padding:0 16px 12px;display:flex;align-items:flex-end;gap:3px;height:36px;">';
+      recentSessions.forEach(function(h){
+        var pct=maxT>0?Math.round((h.total/maxT)*100):0;
+        var col=h===best?'var(--green)':h===last?'var(--accent)':'var(--border2)';
+        html+='<div style="flex:1;background:'+col+';border-radius:2px 2px 0 0;height:'+Math.max(4,pct)+'%;min-height:4px;"></div>';
+      });
+      html+='</div>';
+    }
+
+    html+='</div>';
   });
+
   if(el)el.innerHTML=html;
 }
 
@@ -3662,6 +3757,21 @@ function budCalc(){
   var downPayment=g('bDownPayment');
   var mortgage=housePrice-downPayment;
   s('bMortgage',fmt(mortgage),mortgage>0?'var(--text)':'var(--green)');
+
+  // ── Down payment progress bar ─────────────────────────────────
+  var target20=Math.round(housePrice*0.20);
+  var dpPct=housePrice>0?Math.min(100,Math.round((downPayment/target20)*100)):0;
+  var dpNeeded=Math.max(0,target20-downPayment);
+  var dpBar=document.getElementById('bDpBar');
+  if(dpBar)dpBar.style.width=dpPct+'%';
+  var dpBarCol=dpPct>=100?'var(--green)':dpPct>=50?'var(--accent)':'var(--orange)';
+  if(dpBar)dpBar.style.background=dpBarCol;
+  var dpPctEl=document.getElementById('bDpPct');
+  if(dpPctEl){dpPctEl.textContent=dpPct+'%';dpPctEl.style.color=dpBarCol;}
+  var dpNeededEl=document.getElementById('bDpNeeded');
+  if(dpNeededEl)dpNeededEl.textContent=dpNeeded>0?fmt(dpNeeded):'Reached!';
+  var dp20El=document.getElementById('bDp20');
+  if(dp20El)dp20El.textContent=fmt(target20);
 
   // Equity/Bank: read from selected month row (sheet projection data)
   if(_budSheetData.monthRows&&_budSheetData.monthRows.length){
