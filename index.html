@@ -3292,24 +3292,33 @@ function budSetStatus(state){
 
 function budUpdateEquityBank(monthRows,idx){
   if(!monthRows||!monthRows.length){
-    // Fall back to stored values if sheet hasn't loaded yet
+    // Fall back to stored equity if sheet hasn't loaded yet
     try{
       var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
-      s('bEquity',stored.lastEquity?fmt(Math.round(stored.lastEquity)):'—');
-      s('bBank',stored.lastBank?fmt(Math.round(stored.lastBank)):'—');
+      if(stored.lastEquity){
+        var eq=Math.round(stored.lastEquity);
+        var dp=g('bDownPayment');
+        var bk=eq-dp;
+        s('bEquity',fmt(eq));
+        s('bBank',fmt(bk),bk>=0?'var(--green)':'var(--red)');
+      }
     }catch(e){}
     return;
   }
   var row=monthRows[idx]||monthRows[0];
-  s('bEquity',row.equity!==null?fmt(Math.round(row.equity)):'—');
-  s('bBank',row.bank!==null?fmt(Math.round(row.bank)):'—');
-  // Cache for offline fallback
-  try{
-    var st=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
-    if(row.equity!==null)st.lastEquity=row.equity;
-    if(row.bank!==null)st.lastBank=row.bank;
-    localStorage.setItem(BUD_KEY,JSON.stringify(st));
-  }catch(e){}
+  if(row.equity!==null){
+    var eq2=Math.round(row.equity);
+    var dp2=g('bDownPayment');
+    var bk2=eq2-dp2;
+    s('bEquity',fmt(eq2));
+    s('bBank',fmt(bk2),bk2>=0?'var(--green)':'var(--red)');
+    // Cache equity for offline fallback
+    try{
+      var st=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
+      st.lastEquity=row.equity;
+      localStorage.setItem(BUD_KEY,JSON.stringify(st));
+    }catch(e){}
+  }
 }
 
 function budApplyStored(){
