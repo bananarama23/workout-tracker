@@ -478,6 +478,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 .pt-home{background:var(--accent-dim);color:var(--accent);}
 .pt-hotel{background:var(--orange-dim);color:var(--orange);}
 .pt-hiit{background:var(--blue-dim);color:var(--blue);}
+.pt-hiit8{background:var(--purple-dim);color:var(--purple);}
 .pt-rest{background:var(--card2);color:var(--muted);}
 .pt-travel{background:var(--purple-dim);color:var(--purple);}
 .plan-msg{text-align:center;padding:8px;font-size:0.78rem;font-weight:600;min-height:20px;color:var(--muted);}
@@ -534,7 +535,13 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <div id="todayPlanCard" class="today-hero" style="display:none;" onclick="todayCardTap()">
       <div class="th-label">Today's Plan</div>
       <div class="th-type" id="todayPlanType">HOME WORKOUT</div>
-      <div class="th-tap" id="todayCardTapHint">Tap to begin ›</div>
+      <div id="todayTomorrowRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+        <div class="th-tap" id="todayCardTapHint">Tap to begin ›</div>
+        <div id="tomorrowBadge" style="display:none;background:rgba(255,255,255,0.08);border-radius:20px;padding:4px 12px;backdrop-filter:blur(4px);">
+          <div style="font-size:0.52rem;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.4);font-weight:700;">Tomorrow</div>
+          <div style="font-size:0.78rem;font-weight:700;color:rgba(255,255,255,0.7);margin-top:1px;" id="tomorrowType">Rest</div>
+        </div>
+      </div>
     </div>
     <div class="week-strip">
       <div class="week-stat" onclick="showHistory('strength')">
@@ -722,15 +729,15 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div class="log-field">
         <label>Select Video</label>
         <div class="hiit-presets">
-          <div class="hiit-preset" id="preset17" onclick="setHIITPreset(17,6)">
-            <div class="hp-dur" id="hp17dur">17</div>
-            <div class="hp-eff" id="hp17eff">EFFORT 6/10</div>
-            <div class="hp-badge hpb-default" id="hp17badge">Option A</div>
+          <div class="hiit-preset selected" id="preset17" onclick="setHIITPreset(17,6)">
+            <div class="hp-dur hp-dur-selected" id="hp17dur">17</div>
+            <div class="hp-eff hp-eff-selected" id="hp17eff">EFFORT 6/10</div>
+            <div class="hp-badge hpb-selected" id="hp17badge">HIIT</div>
           </div>
-          <div class="hiit-preset selected" id="preset20" onclick="setHIITPreset(20,8)">
-            <div class="hp-dur hp-dur-selected" id="hp20dur">20</div>
-            <div class="hp-eff hp-eff-selected" id="hp20eff">EFFORT 8/10</div>
-            <div class="hp-badge hpb-selected" id="hp20badge">Default</div>
+          <div class="hiit-preset" id="preset20" onclick="setHIITPreset(20,8)">
+            <div class="hp-dur" id="hp20dur">20</div>
+            <div class="hp-eff" id="hp20eff">EFFORT 8/10</div>
+            <div class="hp-badge hpb-default" id="hp20badge">HIIT 8</div>
           </div>
         </div>
       </div>
@@ -866,53 +873,6 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   </div>
   <div class="page-body" style="padding-top:16px;">
 
-    <!-- Pull-Ups -->
-    <div class="prog-section">
-      <div class="prog-section-hdr">
-        <div class="prog-section-lbl">Pull-Up Progress</div>
-      </div>
-      <div class="prog-card">
-        <div id="puStatStrip" style="display:none;" class="pu-stat-strip">
-          <div class="pu-stat"><div class="pu-stat-val" id="puBest">-</div><div class="pu-stat-lbl">Best</div></div>
-          <div class="pu-stat"><div class="pu-stat-val" id="puLast">-</div><div class="pu-stat-lbl">Last</div></div>
-          <div class="pu-stat"><div class="pu-stat-val" id="puTarget" style="color:var(--muted);">16</div><div class="pu-stat-lbl">Target</div></div>
-        </div>
-        <div class="prog-card-pad" style="padding-top:12px;" id="puChartWrap">
-          <canvas id="pullupCanvas" class="chart-canvas" style="display:none;"></canvas>
-          <div id="pullupEmpty" style="text-align:center;color:var(--muted);padding:20px 0;font-size:0.85rem;">Complete a home workout to see pull-up progression</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Cholesterol -->
-    <div class="prog-section">
-      <div class="prog-section-hdr">
-        <div class="prog-section-lbl">Cholesterol</div>
-      </div>
-      <div class="prog-card prog-card-pad">
-        <div id="cholRows"></div>
-        <div id="cholEmpty" style="text-align:center;color:var(--muted);padding:10px 0;font-size:0.85rem;"></div>
-      </div>
-    </div>
-
-    <!-- Heatmap -->
-    <div class="prog-section">
-      <div class="prog-section-hdr">
-        <div class="prog-section-lbl">Exercise Feel</div>
-      </div>
-      <div class="prog-card">
-        <div class="hm-scroll prog-card-pad" style="padding-bottom:8px;">
-          <div id="heatmapContent" style="color:var(--muted);font-size:0.85rem;padding:8px 0;">Complete a few sessions to see your feel trend</div>
-        </div>
-        <div class="hm-legend" id="hmLegend" style="display:none;">
-          <div class="hm-leg-item"><div class="hm-leg-dot hm-m"></div>Medium</div>
-          <div class="hm-leg-item"><div class="hm-leg-dot hm-mh"></div>Med-hard</div>
-          <div class="hm-leg-item"><div class="hm-leg-dot hm-h"></div>Hard</div>
-        </div>
-        <div style="height:12px;"></div>
-      </div>
-    </div>
-
     <!-- Personal Records -->
     <div class="prog-section" style="margin-bottom:6px;">
       <div class="prog-section-hdr">
@@ -920,6 +880,17 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
       <div id="prGrid" style="margin:0 16px;">
         <div style="text-align:center;color:var(--muted);padding:20px 0;font-size:0.85rem;">No records yet</div>
+      </div>
+    </div>
+
+    <!-- Cholesterol -->
+    <div class="prog-section" style="margin-bottom:6px;">
+      <div class="prog-section-hdr">
+        <div class="prog-section-lbl">Cholesterol</div>
+      </div>
+      <div class="prog-card prog-card-pad">
+        <div id="cholRows"></div>
+        <div id="cholEmpty" style="text-align:center;color:var(--muted);padding:10px 0;font-size:0.85rem;"></div>
       </div>
     </div>
 
@@ -965,19 +936,19 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:10px;">
         <div style="padding:4px 0;">
           <div class="bud2-line"><span class="bud2-lbl">Target price</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="bHousePrice" type="number" inputmode="numeric" value="744000" oninput="budUserEdit()"></div></div>
-          <div class="bud2-line"><span class="bud2-lbl">Down payment saved</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="bDownPayment" type="number" inputmode="numeric" value="500000" oninput="budUserEdit()"></div></div>
+          <div class="bud2-line"><span class="bud2-lbl">Down payment needed</span><div class="bud2-inp-wrap"><span class="bud2-pfx">$</span><input class="bud2-inp" id="bDownPayment" type="number" inputmode="numeric" value="500000" oninput="budUserEdit()"></div></div>
         </div>
         <div style="padding:12px 16px;border-top:1px solid var(--border);">
           <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-            <span style="font-size:0.68rem;color:var(--text2);">Progress to 20% down</span>
+            <span style="font-size:0.68rem;color:var(--text2);">Progress to down payment</span>
             <span style="font-size:0.68rem;font-weight:700;" id="bDpPct">—</span>
           </div>
           <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
             <div id="bDpBar" style="height:100%;background:var(--accent);border-radius:3px;transition:width 0.6s;width:0%;"></div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:5px;">
-            <span style="font-size:0.62rem;color:var(--muted);">Still needed: <span id="bDpNeeded" style="color:var(--text2);">—</span></span>
-            <span style="font-size:0.62rem;color:var(--muted);">20% = <span id="bDp20" style="color:var(--text2);">—</span></span>
+            <span style="font-size:0.62rem;color:var(--muted);">Have (equity): <span id="bDpHave" style="color:var(--text2);">—</span></span>
+            <span style="font-size:0.62rem;color:var(--muted);">Still need: <span id="bDpNeeded" style="color:var(--text2);">—</span></span>
           </div>
         </div>
       </div>
@@ -1367,7 +1338,7 @@ function renderHomeData(sessions){
   var wkStr=0,wkHIIT=0;
   sessions.forEach(function(s){
     if(s.week===weekNum){
-      if(s.workoutType==='HIIT')wkHIIT++;
+      if(isHIIT(s.workoutType))wkHIIT++;
       else if(s.workoutType!=='Walk')wkStr++;
     }
   });
@@ -1394,7 +1365,7 @@ function renderHomeData(sessions){
     var d2=parseLocalDate(s.date);var cut=new Date();cut.setDate(cut.getDate()-56);
     if(d2<cut)return;
     if(!weekCounts[s.week])weekCounts[s.week]={str:0,hiit:0};
-    if(s.workoutType==='HIIT')weekCounts[s.week].hiit++;
+    if(isHIIT(s.workoutType))weekCounts[s.week].hiit++;
     else if(s.workoutType!=='Walk')weekCounts[s.week].str++;
   });
   var wks=Object.keys(weekCounts);
@@ -1416,7 +1387,7 @@ function calcStreak(sessions){
   var wc={};
   sessions.forEach(function(s){
     if(!wc[s.week])wc[s.week]={str:0,hiit:0};
-    if(s.workoutType==='HIIT')wc[s.week].hiit++;
+    if(isHIIT(s.workoutType))wc[s.week].hiit++;
     else if(s.workoutType!=='Walk')wc[s.week].str++;
   });
   var weeks=Object.keys(wc).sort().reverse(),streak=0;
@@ -1425,17 +1396,63 @@ function calcStreak(sessions){
 }
 
 function updateMilestone(sessions){
-  var best=0;
+  var mt=document.getElementById('milestoneText'),ms=document.getElementById('milestoneSub'),mi=document.getElementById('milestoneCard')&&document.querySelector('#milestoneCard .ms-icon');
+  if(!mt)return;
+
+  // Find most recent PR improvement: compare last 2 sessions per exercise
+  var exHistory={};
   (sessions||[]).forEach(function(s){
+    if(isHIIT(s.workoutType)||s.workoutType==='Walk')return;
     (s.exercises||[]).forEach(function(ex){
-      if(ex.name==='PULL-UPS'){var t=0;(ex.sets||[]).forEach(function(v){t+=parseInt(v)||0;});if(t>best)best=t;}
+      if(!ex.name)return;
+      if(!exHistory[ex.name])exHistory[ex.name]=[];
+      var sets=(ex.sets||[]).map(function(v){return parseInt(v)||0;});
+      var total=sets.reduce(function(a,b){return a+b;},0);
+      if(total>0)exHistory[ex.name].push({date:s.date,total:total,sets:sets,isPlank:ex.isPlank==='yes'});
     });
   });
-  var mt=document.getElementById('milestoneText'),ms=document.getElementById('milestoneSub');
-  if(!mt)return;
-  if(best===0){mt.textContent='Complete a home workout';ms.textContent='Target: 4/4/4/4 (16 total reps)';}
-  else if(best<16){mt.textContent=(16-best)+' rep'+(16-best>1?'s':'')+' to 4/4/4/4';ms.textContent='Current best: '+best+' reps per session';}
-  else{mt.textContent='4/4/4/4 ACHIEVED!';ms.textContent='Next: 5/5/5/5';}
+
+  // Find the most recent exercise where last session beat previous best
+  var celebrations=[];
+  Object.keys(exHistory).forEach(function(name){
+    var hist=exHistory[name];
+    if(hist.length<2)return;
+    var last=hist[hist.length-1];
+    var prevBest=0;
+    for(var i=0;i<hist.length-1;i++){if(hist[i].total>prevBest)prevBest=hist[i].total;}
+    if(last.total>prevBest){
+      celebrations.push({name:name,total:last.total,prev:prevBest,date:last.date,isPlank:last.isPlank,sets:last.sets});
+    }
+  });
+
+  function shortName(n){return n.replace('SINGLE-LEG GLUTE BRIDGES','Bridges').replace('CLOSE-GRIP PUSH-UPS','Push-Ups').replace('SUPINATED PULL-UPS','Sup. Pull-Ups').replace('SIDE PLANKS','Planks').replace('LEG RAISES','Leg Raises').replace('PULL-UPS','Pull-Ups').replace('DIPS','Dips');}
+
+  if(celebrations.length>0){
+    // Show most recent celebration
+    celebrations.sort(function(a,b){return a.date>b.date?-1:1;});
+    var c=celebrations[0];
+    var label=document.querySelector('#milestoneCard .ms-label');
+    if(label)label.textContent='New Personal Best';
+    if(c.isPlank){
+      mt.textContent=shortName(c.name)+' — '+c.total+'s';
+    } else if(c.name==='PULL-UPS'||c.name==='SUPINATED PULL-UPS'){
+      mt.textContent=shortName(c.name)+' — '+c.sets.join('/')+' ('+c.total+' total)';
+    } else {
+      mt.textContent=shortName(c.name)+' — '+c.sets.join('/');
+    }
+    ms.textContent='Up from '+c.prev+' \u2192 '+c.total+' \uD83C\uDF89';
+    if(mi)mi.textContent='🏆';
+  } else {
+    // Fall back to pull-up goal progress
+    var best=0;
+    (exHistory['PULL-UPS']||[]).forEach(function(h){if(h.total>best)best=h.total;});
+    var label2=document.querySelector('#milestoneCard .ms-label');
+    if(label2)label2.textContent='Next Milestone';
+    if(mi)mi.textContent='🎯';
+    if(best===0){mt.textContent='Complete a home workout';ms.textContent='Target: 4/4/4/4 (16 total reps)';}
+    else if(best<16){mt.textContent=(16-best)+' rep'+(16-best>1?'s':'')+' to 4/4/4/4';ms.textContent='Pull-up best: '+best+' reps per session';}
+    else{mt.textContent='Pull-ups 4/4/4/4 done!';ms.textContent='Keep the streak going';}
+  }
 }
 
 // ─── EXERCISES ────────────────────────────────────────────────────
@@ -2592,7 +2609,7 @@ function switchLogTab(tab){
 }
 
 // ─── HIIT ─────────────────────────────────────────────────────────
-var selEff=0,hiitVideo='20 min HIIT';
+var selEff=0,hiitVideo='HIIT';
 function buildEffBtns(){
   var c=document.getElementById('effBtns');if(!c)return;c.innerHTML='';
   for(var i=1;i<=10;i++){
@@ -2603,28 +2620,28 @@ function buildEffBtns(){
 }
 
 function setHIITPreset(dur,effort){
-  hiitVideo=dur===20?'20 min HIIT':'17 min HIIT';
+  // HIIT = 17min/effort 6 (lighter), HIIT 8 = 20min/effort 8 (harder)
+  hiitVideo=(dur===20)?'HIIT 8':'HIIT';
   document.getElementById('hiitDur').value=dur;
   selEff=effort;
   document.getElementById('effBtns').querySelectorAll('.eff-btn').forEach(function(x){x.classList.remove('on');});
   var btns=document.getElementById('effBtns').querySelectorAll('.eff-btn');
   if(btns[effort-1])btns[effort-1].classList.add('on');
-  // Update preset cards
   var p17=document.getElementById('preset17'),p20=document.getElementById('preset20');
-  var sel=dur===17;
+  var is17=(dur===17);
   if(p17){
-    p17.classList.toggle('selected',sel);
-    document.getElementById('hp17dur').className='hp-dur'+(sel?' hp-dur-selected':'');
-    document.getElementById('hp17eff').className='hp-eff'+(sel?' hp-eff-selected':'');
-    document.getElementById('hp17badge').className='hp-badge'+(sel?' hpb-selected':' hpb-default');
-    document.getElementById('hp17badge').textContent=sel?'Selected':'Option A';
+    p17.classList.toggle('selected',is17);
+    document.getElementById('hp17dur').className='hp-dur'+(is17?' hp-dur-selected':'');
+    document.getElementById('hp17eff').className='hp-eff'+(is17?' hp-eff-selected':'');
+    document.getElementById('hp17badge').className='hp-badge'+(is17?' hpb-selected':' hpb-default');
+    document.getElementById('hp17badge').textContent='HIIT';
   }
   if(p20){
-    p20.classList.toggle('selected',!sel);
-    document.getElementById('hp20dur').className='hp-dur'+(!sel?' hp-dur-selected':'');
-    document.getElementById('hp20eff').className='hp-eff'+(!sel?' hp-eff-selected':'');
-    document.getElementById('hp20badge').className='hp-badge'+(!sel?' hpb-selected':' hpb-default');
-    document.getElementById('hp20badge').textContent=!sel?'Selected':'Default';
+    p20.classList.toggle('selected',!is17);
+    document.getElementById('hp20dur').className='hp-dur'+((!is17)?' hp-dur-selected':'');
+    document.getElementById('hp20eff').className='hp-eff'+((!is17)?' hp-eff-selected':'');
+    document.getElementById('hp20badge').className='hp-badge'+((!is17)?' hpb-selected':' hpb-default');
+    document.getElementById('hp20badge').textContent='HIIT 8';
   }
 }
 
@@ -2639,8 +2656,8 @@ function saveHIIT(){
   var w1=new Date(d.getFullYear(),0,4);
   var wn=1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7);
   var payload={type:'hiit',date:date,week:'Week '+wn,duration:dur,effort:selEff,notes:notes,video:hiitVideo};
-  // Record locally and update home immediately
-  var localSd={date:date,week:'Week '+wn,workoutType:'HIIT',exercises:[{name:'HIIT',feel:'',notes:notes+(hiitVideo?' - '+hiitVideo:'')}]};
+  // hiitVideo is 'HIIT' or 'HIIT 8' — use as the workoutType
+  var localSd={date:date,week:'Week '+wn,workoutType:hiitVideo,exercises:[{name:'HIIT',feel:'',notes:notes+(hiitVideo?' - '+hiitVideo:'')}]};
   recSession(localSd);
   if(_sheetSessions){_sheetSessions.push(localSd);_cachedSessions=_sheetSessions;}
   else if(_cachedSessions){_cachedSessions.push(localSd);}
@@ -2651,7 +2668,7 @@ function saveHIIT(){
     document.getElementById('hiitNotes').value='';
     document.getElementById('hiitDate').value=localDateStr();
     selEff=0;document.getElementById('effBtns').querySelectorAll('.eff-btn').forEach(function(b){b.classList.remove('on');});
-    setHIITPreset(20,8);
+    setHIITPreset(17,6);
   },3500);
 }
 
@@ -2797,7 +2814,7 @@ function openLastSession(){
   var found=null;
   for(var i=_cachedSessions.length-1;i>=0;i--){
     var wt=_cachedSessions[i].workoutType||'';
-    if(wt.indexOf('Strength')>=0||wt==='HIIT'){found=_cachedSessions[i];break;}
+    if(wt.indexOf('Strength')>=0||isHIIT(wt)){found=_cachedSessions[i];break;}
   }
   if(!found){
     document.getElementById('historyTitle').textContent='LAST SESSION';
@@ -2809,7 +2826,7 @@ function openLastSession(){
   var dt=parseLocalDate(found.date);
   var ds=dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
   var html='<div style="font-size:0.75rem;color:var(--muted);margin-bottom:14px;">'+found.workoutType+' \u2014 '+ds+'</div>';
-  if(found.workoutType==='HIIT'){
+  if(isHIIT(found.workoutType)){
     var ex=(found.exercises||[])[0]||{};
     var notes=ex.notes||'';
     html+='<div style="padding:10px 0;">';
@@ -2834,7 +2851,7 @@ function showHistory(type){
   document.getElementById('historyContent').innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);">Loading...</div>';
   document.getElementById('historyOverlay').style.display='flex';
   function render(sessions){
-    var filtered=(sessions||[]).filter(function(s){return type==='strength'?s.workoutType&&s.workoutType.indexOf('Strength')>=0:s.workoutType==='HIIT';}).slice().reverse().slice(0,20);
+    var filtered=(sessions||[]).filter(function(s){return type==='strength'?s.workoutType&&s.workoutType.indexOf('Strength')>=0:isHIIT(s.workoutType);}).slice().reverse().slice(0,20);
     if(!filtered.length){document.getElementById('historyContent').innerHTML='<div style="color:var(--muted);text-align:center;padding:20px;">No sessions found</div>';return;}
     var html='';
     filtered.forEach(function(sess){
@@ -2862,10 +2879,11 @@ function goEditSession(){closeHistory();navTo('log');switchLogTab('edit');}
 function closeHistory(){document.getElementById('historyOverlay').style.display='none';}
 
 // ─── PLAN ─────────────────────────────────────────────────────────
-var PLAN_TYPES=['Home','Hotel','HIIT','Rest','Travel'];
-var PLAN_COLORS={'Home':'pt-home','Hotel':'pt-hotel','HIIT':'pt-hiit','Rest':'pt-rest','Travel':'pt-travel'};
+var PLAN_TYPES=['Home','Hotel','HIIT','HIIT 8','Rest','Travel'];
+var PLAN_COLORS={'Home':'pt-home','Hotel':'pt-hotel','HIIT':'pt-hiit','HIIT 8':'pt-hiit8','Rest':'pt-rest','Travel':'pt-travel'};
 var _weekPlan={},_cachedPlan=null;
-var _planWeekOffset=0; // 0=this week, 1=next week
+var _planWeekOffset=0;
+function isHIIT(wt){return wt==='HIIT'||wt==='HIIT 8';} // 0=this week, 1=next week
 
 function switchPlanWeek(offset){
   _planWeekOffset=offset;
@@ -2911,7 +2929,7 @@ function overlayCompletedWorkouts(planData,sessions){
   (sessions||[]).forEach(function(sess){
     if(weekDates.indexOf(sess.date)<0)return;
     var wt=sess.workoutType||'';
-    var type=wt.indexOf('Home')>=0?'Home':wt.indexOf('Hotel')>=0?'Hotel':wt==='HIIT'?'HIIT':null;
+    var type=wt.indexOf('Home')>=0?'Home':wt.indexOf('Hotel')>=0?'Hotel':wt==='HIIT'?'HIIT':wt==='HIIT 8'?'HIIT 8':null;
     if(type)planData[sess.date]=type;
   });
   return planData;
@@ -3006,7 +3024,7 @@ function copyWeekSummary(){
     var sessions=(_cachedSessions||[]).filter(function(s){return s.date===ds;});
 
     // Check what actually happened
-    var hiitSess=sessions.find(function(s){return s.workoutType==='HIIT';});
+    var hiitSess=sessions.find(function(s){return isHIIT(s.workoutType);});
     var strSess=sessions.find(function(s){return s.workoutType&&s.workoutType.indexOf('Strength')>=0;});
     var walkSess=sessions.find(function(s){return s.workoutType==='Walk';});
 
@@ -3069,40 +3087,69 @@ function updateTodayCard(today){
   var label=document.getElementById('todayPlanType');
   var tap=document.getElementById('todayCardTapHint');
   if(!card||!label)return;
-  if(!type||type==='Rest'||type==='Travel'){card.style.display='none';return;}
-  // Check if today's workout is already done
-  var done=_cachedSessions&&_cachedSessions.some(function(s){
+
+  // Tomorrow
+  var todayDate=new Date();
+  var tomorrowDate=new Date(todayDate);tomorrowDate.setDate(todayDate.getDate()+1);
+  var tomorrowStr=fmtDate(tomorrowDate);
+  var tomorrowType=_weekPlan[tomorrowStr]||null;
+  var tmBadge=document.getElementById('tomorrowBadge');
+  var tmType=document.getElementById('tomorrowType');
+  if(tmBadge&&tomorrowType){
+    tmBadge.style.display='block';
+    if(tmType)tmType.textContent=tomorrowType;
+  } else if(tmBadge){
+    tmBadge.style.display='none';
+  }
+
+  // Always show the card — Rest links to plan, workout types to workout/log
+  card.style.display='block';
+
+  // Check if done
+  var done=type&&type!=='Rest'&&type!=='Travel'&&_cachedSessions&&_cachedSessions.some(function(s){
     if(s.date!==today)return false;
     var wt=s.workoutType||'';
-    if(type==='HIIT')return wt==='HIIT';
+    if(isHIIT(type))return isHIIT(wt);
     return wt.indexOf('Strength')>=0;
   });
-  card.style.display='block';
-  if(done){
+
+  if(!type||type==='Rest'){
+    label.textContent='REST DAY';
+    label.style.color='var(--text2)';
+    card.style.background='linear-gradient(135deg,#0D1117 0%,#07090C 100%)';
+    card.style.borderColor='rgba(255,255,255,0.08)';
+    if(tap)tap.textContent='Tap to plan week ›';
+  } else if(type==='Travel'){
+    label.textContent='TRAVEL';
+    label.style.color='var(--purple)';
+    card.style.background='';card.style.borderColor='';
+    if(tap)tap.textContent='Tap to plan week ›';
+  } else if(done){
     label.textContent=type.toUpperCase()+' DONE \u2713';
     label.style.color='var(--green)';
     card.style.background='linear-gradient(135deg,#001a0a 0%,#0A0F00 100%)';
     card.style.borderColor='rgba(0,212,138,0.3)';
-    if(tap)tap.textContent='Tap to view session \u203a';
+    if(tap)tap.textContent='Tap to view session ›';
   } else {
     label.textContent=type.toUpperCase()+' WORKOUT';
     label.style.color='var(--accent)';
-    card.style.background='';
-    card.style.borderColor='';
-    if(tap)tap.textContent='Tap to begin \u203a';
+    card.style.background='';card.style.borderColor='';
+    if(tap)tap.textContent='Tap to begin ›';
   }
 }
 
 function todayCardTap(){
   var today=fmtDate(new Date()),type=_weekPlan[today]||null;
+  if(!type||type==='Rest'||type==='Travel'){navTo('plan');return;}
   var done=_cachedSessions&&_cachedSessions.some(function(s){
     if(s.date!==today)return false;
     var wt=s.workoutType||'';
-    if(type==='HIIT')return wt==='HIIT';
+    if(isHIIT(type))return isHIIT(wt);
     return wt.indexOf('Strength')>=0;
   });
   if(done){openLastSession();return;}
-  if(type==='HIIT'){navTo('log');switchLogTab('hiit');}
+  if(type==='HIIT'){navTo('log');switchLogTab('hiit');setHIITPreset(17,6);}
+  else if(type==='HIIT 8'){navTo('log');switchLogTab('hiit');setHIITPreset(20,8);}
   else{navTo('workout');}
 }
 
@@ -3128,8 +3175,8 @@ function loadTodayPlan(){
 // ─── PROGRESS ─────────────────────────────────────────────────────
 function loadProgressData(){
   var cached=loadCache();
-  if(cached){buildPullUpChart(cached.sessions);buildHeatmap(cached.sessions);buildPRs(cached.sessions);setSyncBadges('cached',cacheAgeStr(cached.ts));}
-  fetchHistory(function(sessions){buildPullUpChart(sessions||[]);buildHeatmap(sessions||[]);buildPRs(sessions||[]);});
+  if(cached){buildPRs(cached.sessions);setSyncBadges('cached',cacheAgeStr(cached.ts));}
+  fetchHistory(function(sessions){buildPRs(sessions||[]);});
   buildCholDisplay();
 }
 
@@ -3204,7 +3251,7 @@ function buildHeatmap(sessions){
   var exMap={},dates=[];
   // Only include strength sessions for heatmap
   sessions.forEach(function(s){
-    if(s.workoutType==='HIIT'||s.workoutType==='Walk')return;
+    if(isHIIT(s.workoutType)||s.workoutType==='Walk')return;
     if(parseLocalDate(s.date)<cutoff)return;
     if(dates.indexOf(s.date)<0)dates.push(s.date);
     (s.exercises||[]).forEach(function(ex){if(!exMap[ex.name])exMap[ex.name]=[];exMap[ex.name].push({date:s.date,feel:ex.feel});});
@@ -3246,8 +3293,10 @@ function buildPRs(sessions){
   var exHistory={};
   sessions.forEach(function(s){
     if(!s.exercises)return;
+    // Only track strength sessions — skip HIIT and walks
+    if(isHIIT(s.workoutType)||s.workoutType==='Walk')return;
     s.exercises.forEach(function(ex){
-      if(!ex.name)return;
+      if(!ex.name||ex.name==='HIIT'||ex.name==='Walk')return;
       if(!exHistory[ex.name])exHistory[ex.name]=[];
       var sets=(ex.sets||[]).map(function(v){return parseInt(v)||0;});
       var total=sets.reduce(function(a,b){return a+b;},0);
@@ -3597,7 +3646,9 @@ function budApplyStored(){
     var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
     function rv(id,def){var el=document.getElementById(id);if(el&&stored[id]!==undefined&&stored[id]!==null)el.value=stored[id];else if(el&&def!==undefined)el.value=def;}
     rv('bHousePrice',744000);rv('bDownPayment',500000);
-    rv('bPayRate',231);rv('bThisMonth','');
+    rv('bPayRate',231);
+    // bThisMonth: only restore if actually stored, never default to empty (wipes entered value)
+    if(stored.bThisMonth!==undefined&&stored.bThisMonth!==null){var thEl=document.getElementById('bThisMonth');if(thEl)thEl.value=stored.bThisMonth;}
     rv('vElec',300);rv('vHoa',206);rv('vTmobile',80);rv('vApa',47);rv('vAtt',55);rv('vChase',2000);
     rv('vCarIns',2514);rv('vUmbrella',503);rv('vPropTax',8541);rv('vHouseIns',2450);
     var hours=stored.monthHours;
@@ -3675,11 +3726,14 @@ function budReset(){
 function budSave(){
   try{
     var data={};
-    ['bHousePrice','bDownPayment','bPayRate','bThisMonth',
+    ['bHousePrice','bDownPayment','bPayRate',
      'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
      'vCarIns','vUmbrella','vPropTax','vHouseIns'].forEach(function(id){
       var el=document.getElementById(id);if(el)data[id]=el.value;
     });
+    // Only save bThisMonth if user has actually entered a value
+    var tmEl=document.getElementById('bThisMonth');
+    if(tmEl&&tmEl.value&&parseFloat(tmEl.value)>0)data.bThisMonth=tmEl.value;
     data.monthHours=BUD_MONTHS.map(function(_,i){
       var el=document.getElementById('bHours_'+i);return el?parseFloat(el.value)||0:BUD_DEFAULT_HOURS[i];
     });
@@ -3759,24 +3813,33 @@ function budCalc(){
   s('bMortgage',fmt(mortgage),mortgage>0?'var(--text)':'var(--green)');
 
   // ── Down payment progress bar ─────────────────────────────────
-  var target20=Math.round(housePrice*0.20);
-  var dpPct=housePrice>0?Math.min(100,Math.round((downPayment/target20)*100)):0;
-  var dpNeeded=Math.max(0,target20-downPayment);
+  // bDownPayment = target down payment needed
+  // Equity/Bank: read from selected month row (sheet projection data)
+  // Do this first so equity is available for the down payment progress bar
+  var currentEquity=0;
+  if(_budSheetData.monthRows&&_budSheetData.monthRows.length){
+    var midx=_budSelectedMonthIdx>=0?_budSelectedMonthIdx:budCurrentMonthIdx();
+    budUpdateEquityBank(_budSheetData.monthRows,midx);
+    var mrow=_budSheetData.monthRows[midx]||_budSheetData.monthRows[0];
+    if(mrow&&mrow.equity!==null)currentEquity=Math.round(mrow.equity);
+  } else {
+    // Try stored fallback
+    try{var st=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');if(st.lastEquity)currentEquity=Math.round(st.lastEquity);}catch(e){}
+  }
+
+  // Down payment progress: equity (what we have) vs downPayment input (target)
+  var dpTarget=downPayment>0?downPayment:1;
+  var dpPct=Math.min(100,Math.round((currentEquity/dpTarget)*100));
+  var dpNeeded=Math.max(0,dpTarget-currentEquity);
+  var dpBarCol=dpPct>=100?'var(--green)':dpPct>=75?'var(--accent)':'var(--orange)';
   var dpBar=document.getElementById('bDpBar');
-  if(dpBar)dpBar.style.width=dpPct+'%';
-  var dpBarCol=dpPct>=100?'var(--green)':dpPct>=50?'var(--accent)':'var(--orange)';
-  if(dpBar)dpBar.style.background=dpBarCol;
+  if(dpBar){dpBar.style.width=dpPct+'%';dpBar.style.background=dpBarCol;}
   var dpPctEl=document.getElementById('bDpPct');
   if(dpPctEl){dpPctEl.textContent=dpPct+'%';dpPctEl.style.color=dpBarCol;}
+  var dpHaveEl=document.getElementById('bDpHave');
+  if(dpHaveEl)dpHaveEl.textContent=currentEquity>0?fmt(currentEquity):'—';
   var dpNeededEl=document.getElementById('bDpNeeded');
-  if(dpNeededEl)dpNeededEl.textContent=dpNeeded>0?fmt(dpNeeded):'Reached!';
-  var dp20El=document.getElementById('bDp20');
-  if(dp20El)dp20El.textContent=fmt(target20);
-
-  // Equity/Bank: read from selected month row (sheet projection data)
-  if(_budSheetData.monthRows&&_budSheetData.monthRows.length){
-    budUpdateEquityBank(_budSheetData.monthRows,_budSelectedMonthIdx>=0?_budSelectedMonthIdx:budCurrentMonthIdx());
-  }
+  if(dpNeededEl)dpNeededEl.textContent=dpNeeded>0?fmt(dpNeeded):'Reached! \u2713';
 
   // ── Mortgage payment — PMT formula matching sheet H8 ──────────
   // =PMT(0.065/12, 30*12, -mortgage)  →  monthly payment
@@ -3905,7 +3968,7 @@ function renderShareView(sessions){
   var wkStr=0,wkHIIT=0;
   sessions.forEach(function(s){
     if(s.week===weekNum){
-      if(s.workoutType==='HIIT')wkHIIT++;
+      if(isHIIT(s.workoutType))wkHIIT++;
       else if(s.workoutType!=='Walk')wkStr++;
     }
   });
@@ -3933,7 +3996,7 @@ function renderShareView(sessions){
 
   // Total sessions
   var totalStr=sessions.filter(function(s){return s.workoutType&&s.workoutType.indexOf('Strength')>=0;}).length;
-  var totalHIIT=sessions.filter(function(s){return s.workoutType==='HIIT';}).length;
+  var totalHIIT=sessions.filter(function(s){return isHIIT(s.workoutType);}).length;
 
   var strPct=Math.min(100,Math.round((wkStr/3)*100));
   var hiitPct=Math.min(100,Math.round((wkHIIT/2)*100));
@@ -4053,7 +4116,7 @@ function renderShareView(sessions){
 
 buildEffBtns();
 initDates();
-setHIITPreset(20,8);
+setHIITPreset(17,6);
 var _ic=loadCache();
 setSyncBadge(_ic?'cached':'loading',_ic?cacheAgeStr(_ic.ts):null);
 
