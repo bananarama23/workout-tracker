@@ -1065,17 +1065,6 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
     </div>
 
-    <!-- Mortgage Interest (kept as editable input) -->
-    <div class="prog-section" style="margin-bottom:6px;">
-      <div class="prog-section-hdr"><div class="prog-section-lbl">Interest</div></div>
-      <div class="prog-card prog-card-pad">
-        <div class="bud-row bud-result-row">
-          <div class="bud-lbl">Mortgage Interest</div>
-          <div class="bud-input-wrap"><span class="bud-prefix">$</span><input class="bud-input bud-input-sm" id="bInterest" type="number" inputmode="numeric" value="1098" oninput="budUserEdit()"></div>
-        </div>
-      </div>
-    </div>
-
     <div style="padding:0 16px 8px;">
       <button onclick="budSaveToSheet()" id="budSaveBtn" style="width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:2px;font-weight:900;transition:all 0.15s;cursor:pointer;margin-bottom:8px;">SAVE TO SHEET</button>
       <button onclick="budReset()" style="width:100%;padding:13px;background:var(--card2);color:var(--text2);border:1px solid var(--border);border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:0.9rem;letter-spacing:2px;font-weight:700;transition:all 0.15s;cursor:pointer;">RESET — RESYNC FROM SHEET</button>
@@ -1287,7 +1276,7 @@ function navTo(page){
   if(page==='workout')tryLoadWorkout();
   if(page==='plan')initPlanPage();
   if(page==='log')initEditTab();
-  if(page==='budget'){budRenderHours(BUD_DEFAULT_HOURS,72.18);budLoad();}
+  if(page==='budget'){budLoad();}
 }
 
 // ─── LOCAL HISTORY ────────────────────────────────────────────────
@@ -3328,7 +3317,7 @@ function budApplyStored(){
     rv('bHousePrice',744000);rv('bDownPayment',500000);
     rv('bPayRate',231);rv('bThisMonth','');
     rv('vElec',300);rv('vHoa',206);rv('vTmobile',80);rv('vApa',47);rv('vAtt',55);rv('vChase',2000);
-    rv('vCarIns',2514);rv('vUmbrella',503);rv('vPropTax',8541);rv('vHouseIns',2450);rv('bInterest',1098);
+    rv('vCarIns',2514);rv('vUmbrella',503);rv('vPropTax',8541);rv('vHouseIns',2450);
     var hours=stored.monthHours;
     if(typeof hours==='string'){try{hours=JSON.parse(hours);}catch(e){hours=null;}}
     if(Array.isArray(hours)){
@@ -3358,7 +3347,7 @@ function budFetchFromSheet(){
       // Populate all editable inputs from sheet — sheet is source of truth on load
       try{
         var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
-        ['bHousePrice','bDownPayment','bPayRate','bInterest',
+        ['bHousePrice','bDownPayment','bPayRate',
          'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
          'vCarIns','vUmbrella','vPropTax','vHouseIns'].forEach(function(k){
           if(d[k]!==null&&d[k]!==undefined)stored[k]=d[k];
@@ -3406,7 +3395,7 @@ function budSave(){
     var data={};
     ['bHousePrice','bDownPayment','bPayRate','bThisMonth',
      'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
-     'vCarIns','vUmbrella','vPropTax','vHouseIns','bInterest'].forEach(function(id){
+     'vCarIns','vUmbrella','vPropTax','vHouseIns'].forEach(function(id){
       var el=document.getElementById(id);if(el)data[id]=el.value;
     });
     data.monthHours=BUD_MONTHS.map(function(_,i){
@@ -3554,25 +3543,15 @@ function budRenderHours(hours,avg){
     var col=v>=70?'var(--green)':v>0?'var(--red)':'var(--muted)';
     var barPct=Math.min(100,Math.round((v/100)*100));
     var barCol=v>=70?'var(--green)':'var(--red)';
+    var displayVal=v>0?v:'';
     html+='<div class="bud-month-row">';
     html+='<div class="bud-month-lbl">'+month+'</div>';
     html+='<div class="bud-month-bar"><div class="bud-month-bar-fill" style="width:'+barPct+'%;background:'+barCol+';"></div></div>';
-    html+='<input class="bud-month-val" id="bHours_'+i+'" type="number" inputmode="decimal" step="0.01" value="'+(v||'')+'" placeholder="0" style="color:'+col+';background:transparent;border:none;width:60px;text-align:right;outline:none;font-family:\'Bebas Neue\',sans-serif;font-size:1.05rem;" oninput="budUserEdit()">';
+    html+='<input class="bud-month-val" id="bHours_'+i+'" type="number" inputmode="decimal" step="0.01" value="'+displayVal+'" placeholder="0" style="color:'+col+';background:transparent;border:none;width:60px;text-align:right;outline:none;font-family:\'Bebas Neue\',sans-serif;font-size:1.05rem;" oninput="budUserEdit()">';
     html+='<div style="font-size:0.62rem;color:var(--muted);width:24px;text-align:right;">h</div>';
     html+='</div>';
   });
   el.innerHTML=html;
-
-  // Restore stored values into newly created inputs
-  try{
-    var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
-    if(stored.monthHours){
-      stored.monthHours.forEach(function(v,i){
-        var inp=document.getElementById('bHours_'+i);
-        if(inp&&v)inp.value=v;
-      });
-    }
-  }catch(e){}
 }
 
 // ─── SHARE MODE ───────────────────────────────────────────────────
