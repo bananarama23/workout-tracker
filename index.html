@@ -4833,11 +4833,15 @@ function nutCamCapture(){
   if(!_camStream)return;
   var vid=document.getElementById('nutCamVideo'),canvas=document.getElementById('nutCamCanvas');
   if(!vid||!canvas)return;
+  // Capture at full res then scale down
   canvas.width=vid.videoWidth||1280;canvas.height=vid.videoHeight||720;
   var ctx=canvas.getContext('2d');ctx.drawImage(vid,0,0,canvas.width,canvas.height);
-  // Compress to JPEG at 70% quality to keep payload manageable
-  var dataUrl=canvas.toDataURL('image/jpeg',0.7);
-  var base64=dataUrl.split(',')[1];
+  // Scale to max 800px
+  var maxW=800,scale=Math.min(1,maxW/canvas.width);
+  var cvs2=document.createElement('canvas');
+  cvs2.width=Math.round(canvas.width*scale);cvs2.height=Math.round(canvas.height*scale);
+  cvs2.getContext('2d').drawImage(canvas,0,0,cvs2.width,cvs2.height);
+  var base64=cvs2.toDataURL('image/jpeg',0.7).split(',')[1];
   nutCamSetStatus('Scanning with AI...');
   nutCamClose();
   var status=document.getElementById('nutScanStatus');
@@ -4854,15 +4858,16 @@ function nutHandlePhoto(input){
   if(status){status.style.display='block';status.style.color='var(--muted)';status.textContent='Reading...';}
   var reader=new FileReader();
   reader.onload=function(e){
-    // Compress via canvas before sending
     var img=new Image();
     img.onload=function(){
       var cvs=document.createElement('canvas');
-      var maxW=1024,maxH=1024;
+      // Max 800px — enough for Gemini to read labels, small enough to send fast
+      var maxW=800,maxH=800;
       var scale=Math.min(1,maxW/img.width,maxH/img.height);
-      cvs.width=img.width*scale;cvs.height=img.height*scale;
+      cvs.width=Math.round(img.width*scale);
+      cvs.height=Math.round(img.height*scale);
       cvs.getContext('2d').drawImage(img,0,0,cvs.width,cvs.height);
-      var base64=cvs.toDataURL('image/jpeg',0.75).split(',')[1];
+      var base64=cvs.toDataURL('image/jpeg',0.7).split(',')[1];
       nutCallVision(base64,'image/jpeg',status);
     };
     img.src=e.target.result;
@@ -4871,56 +4876,75 @@ function nutHandlePhoto(input){
   input.value='';
 }
 
-// Send image to GAS which calls Gemini then Claude as fallback
-// GAS endpoint handles the actual API calls — avoids browser CORS issues
 function nutCallVision(base64,mediaType,statusEl){
   if(statusEl){statusEl.style.display='block';statusEl.style.color='var(--muted)';statusEl.textContent='Scanning with AI...';}
-  // Get Gemini key — stored in localStorage after user enters it once
   var geminiKey=localStorage.getItem('wt_gemini_key')||'';
   if(!geminiKey){
-    // Prompt user for key first time
-    geminiKey=prompt('Enter your Gemini API key to enable scanning.\n\nGet one free at: aistudio.google.com/apikey\n\nIt will be saved locally on your device.');
+    geminiKey=prompt('Enter your Gemini API key.\n\nGet one free at aistudio.google.com/apikey\n\nSaved locally — only asked once.');
     if(!geminiKey){
-      if(statusEl){statusEl.textContent='No API key — enter one to enable scanning';statusEl.style.color='var(--orange)';}
+      if(statusEl){statusEl.textContent='No key — fill in manually';statusEl.style.color='var(--orange)';}
       return;
     }
     localStorage.setItem('wt_gemini_key',geminiKey.trim());
     geminiKey=geminiKey.trim();
   }
-  var prompt_text='This is a nutrition label or food packaging. Extract the nutrition information and return ONLY a JSON object with these exact keys (use null if not found): {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All numbers per serving. Sodium in mg. Return raw JSON only, no markdown, no explanation.';
+  var promptText='This is a nutrition label or food packaging. Extract and return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per serving. Sodium in mg. Use null for unknown fields.';
   var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key='+geminiKey;
   fetch(url,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[
       {inline_data:{mime_type:mediaType,data:base64}},
-      {text:prompt_text}
-    ]}]})
+      {text:promptText}
+    ]}],generationConfig:{temperature:0,maxOutputTokens:300}})
   })
-  .then(function(r){return r.json();})
+  .then(function(r){
+    if(!r.ok){
+      return r.json().then(function(err){
+        var msg=err&&err.error&&err.error.message||('HTTP '+r.status);
+        if(r.status===400||r.status===401||r.status===403){
+          localStorage.removeItem('wt_gemini_key');
+          throw new Error('BAD_KEY:'+msg);
+        }
+        throw new Error(msg);
+      });
+    }
+    return r.json();
+  })
   .then(function(data){
-    // Check for API error (bad key etc)
     if(data.error){
-      if(data.error.code===400||data.error.code===401||data.error.code===403){
-        localStorage.removeItem('wt_gemini_key');
-        if(statusEl){statusEl.textContent='Invalid API key — tap SCAN to try again';statusEl.style.color='var(--orange)';}
-      } else {
-        if(statusEl){statusEl.textContent='Scan failed \u2014 fill in manually';statusEl.style.color='var(--orange)';}
-      }
+      if(statusEl){statusEl.textContent='API error: '+data.error.message;statusEl.style.color='var(--orange)';}
       return;
     }
-    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0].text;
-    if(!text){if(statusEl){statusEl.textContent='Could not read \u2014 fill in manually';statusEl.style.color='var(--orange)';}return;}
+    var text=data.candidates&&data.candidates[0]&&
+             data.candidates[0].content&&data.candidates[0].content.parts&&
+             data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
+    if(!text){
+      // Show finish reason if available
+      var reason=data.candidates&&data.candidates[0]&&data.candidates[0].finishReason;
+      if(statusEl){statusEl.textContent='No result from Gemini'+(reason?' ('+reason+')':'')+' \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}
+      return;
+    }
     text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    // Find the JSON object in the response
+    var jsonStart=text.indexOf('{'),jsonEnd=text.lastIndexOf('}');
+    if(jsonStart>=0&&jsonEnd>jsonStart)text=text.slice(jsonStart,jsonEnd+1);
     try{
       var parsed=JSON.parse(text);
       nutFillFromScan(parsed,statusEl);
     }catch(e){
-      if(statusEl){statusEl.textContent='Could not parse \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}
+      if(statusEl){statusEl.textContent='Parse error \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}
     }
   })
-  .catch(function(){
-    if(statusEl){statusEl.textContent='Scan failed \u2014 check your connection';statusEl.style.color='var(--orange)';}
+  .catch(function(err){
+    var msg=err&&err.message||'';
+    if(msg.indexOf('BAD_KEY')>=0){
+      if(statusEl){statusEl.textContent='Invalid key \u2014 tap SCAN to re-enter';statusEl.style.color='var(--orange)';}
+    } else if(msg.indexOf('Failed to fetch')>=0||msg.indexOf('NetworkError')>=0||msg===''){
+      if(statusEl){statusEl.textContent='Network error \u2014 check connection and try again';statusEl.style.color='var(--orange)';}
+    } else {
+      if(statusEl){statusEl.textContent='Error: '+(msg||'unknown')+' \u2014 fill in manually';statusEl.style.color='var(--orange)';}
+    }
   });
 }
 
