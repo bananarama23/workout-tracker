@@ -1189,8 +1189,14 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   <div style="background:var(--bg);border-radius:var(--r-lg);margin:40px 12px 24px;padding:20px;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutFoodFormTitle">ADD FOOD</div>
-      <button onclick="nutCloseFoodForm()" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="nutScanPhoto()" style="background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);padding:6px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;cursor:pointer;">📷 SCAN</button>
+        <button onclick="nutCloseFoodForm()" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
+      </div>
     </div>
+    <!-- Scan status -->
+    <div id="nutScanStatus" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;font-size:0.82rem;color:var(--muted);text-align:center;"></div>
+    <input type="file" id="nutPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="nutHandlePhoto(this)">
     <div class="log-field"><label>Food Name</label><input id="nff_name" type="text" class="log-input" placeholder="e.g. Chicken Breast"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div class="log-field"><label>Serving size</label><input id="nff_serving" type="number" inputmode="decimal" class="log-input" placeholder="100"></div>
@@ -3880,9 +3886,19 @@ function budApplyStored(){
     function rv(id,def){var el=document.getElementById(id);if(el&&stored[id]!==undefined&&stored[id]!==null)el.value=stored[id];else if(el&&def!==undefined)el.value=def;}
     rv('bHousePrice',744000);rv('bDownPayment',500000);
     rv('bPayRate',231);
-    // bThisMonth: restore from budget store or dedicated key
+    // bThisMonth: restore from stored, dedicated key, OR auto-seed from current month's hours
     var tmVal=stored.bThisMonth;
     if(!tmVal||tmVal===''){try{tmVal=localStorage.getItem('wt_thismonth')||'';}catch(e){}}
+    if(!tmVal||tmVal===''){
+      // Auto-seed from the current month in the stored hours array
+      var hours2=stored.monthHours;
+      if(typeof hours2==='string'){try{hours2=JSON.parse(hours2);}catch(e){hours2=null;}}
+      if(Array.isArray(hours2)){
+        var curIdx=budCurrentMonthIdx();
+        var curVal=hours2[curIdx];
+        if(curVal&&parseFloat(curVal)>0)tmVal=String(curVal);
+      }
+    }
     if(tmVal&&tmVal!==''){var thEl=document.getElementById('bThisMonth');if(thEl)thEl.value=tmVal;}
     rv('vElec',300);rv('vHoa',206);rv('vTmobile',80);rv('vApa',47);rv('vAtt',55);rv('vChase',2000);
     rv('vCarIns',2514);rv('vUmbrella',503);rv('vPropTax',8541);rv('vHouseIns',2450);
@@ -4574,14 +4590,14 @@ function nutRenderDay(){
     if(me.length===0){h+='<div style="padding:13px 16px;font-size:0.8rem;color:var(--muted);">Nothing logged yet</div>';}
     me.forEach(function(e){
       var gIdx=_nutEntries.indexOf(e);
-      h+='<div class="sum-row" style="padding:10px 16px;">';
+      h+='<div class="sum-row" style="padding:10px 16px;cursor:pointer;" onclick="nutEditEntry('+gIdx+')">';
       h+='<div style="flex:1;min-width:0;">';
       h+='<div class="sum-name" style="font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+e.food+'</div>';
-      h+='<div class="sum-result" style="font-size:0.62rem;margin-top:2px;">P\u202f'+Math.round(e.protein||0)+'g \u00b7 C\u202f'+Math.round(e.carbs||0)+'g \u00b7 F\u202f'+Math.round(e.fat||0)+'g'+(e.sodium?(' \u00b7 Na\u202f'+Math.round(e.sodium)+'mg'):'')+((e.servings&&e.servings!==1)?' \u00b7 \u00d7'+e.servings:'')+'</div>';
+      h+='<div class="sum-result" style="font-size:0.62rem;margin-top:2px;">P\u202f'+Math.round(e.protein||0)+'g \u00b7 C\u202f'+Math.round(e.carbs||0)+'g \u00b7 F\u202f'+Math.round(e.fat||0)+'g'+(e.sodium?(' \u00b7 Sodium\u202f'+Math.round(e.sodium)+'mg'):'')+((e.servings&&e.servings!==1)?' \u00b7 \u00d7'+e.servings:'')+'</div>';
       h+='</div>';
       h+='<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;padding-left:12px;">';
       h+='<span style="font-family:Bebas Neue,sans-serif;font-size:1.05rem;">'+Math.round(e.calories||0)+'</span>';
-      h+='<button onclick="nutDelEntry('+gIdx+')" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;line-height:1;">\u00d7</button>';
+      h+='<button onclick="event.stopPropagation();nutDelEntry('+gIdx+')" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;line-height:1;">\u00d7</button>';
       h+='</div></div>';
     });
     h+='</div></div>';
@@ -4641,7 +4657,7 @@ function nutRenderFoodList(){
     return '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">'+
       '<div style="flex:1;min-width:0;">'+
         '<div style="font-size:0.88rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+f.name+'</div>'+
-        '<div style="font-size:0.62rem;color:var(--muted);margin-top:2px;">'+Math.round(f.calories)+' kcal \u00b7 P '+Math.round(f.protein)+'g \u00b7 Na '+Math.round(f.sodium||0)+'mg \u00b7 per '+f.serving+f.unit+'</div>'+
+        '<div style="font-size:0.62rem;color:var(--muted);margin-top:2px;">'+Math.round(f.calories)+' kcal \u00b7 P '+Math.round(f.protein)+'g \u00b7 Sodium '+Math.round(f.sodium||0)+'mg \u00b7 per '+f.serving+f.unit+'</div>'+
       '</div>'+
       '<button onclick="nutEditFood('+fi+')" style="background:none;border:1px solid var(--border);border-radius:var(--r-sm);padding:5px 10px;color:var(--muted);font-size:0.72rem;cursor:pointer;flex-shrink:0;margin-left:10px;">Edit</button>'+
     '</div>';
@@ -4673,6 +4689,81 @@ function nutOpenFoodForm(idx){
 }
 function nutCloseFoodForm(){var ov=document.getElementById('nutFoodFormOverlay');if(ov)ov.style.display='none';}
 
+// ── Photo scan ─────────────────────────────────────────────────────
+function nutScanPhoto(){
+  var inp=document.getElementById('nutPhotoInput');
+  if(inp)inp.click();
+}
+
+function nutHandlePhoto(input){
+  var file=input.files&&input.files[0];
+  if(!file)return;
+  var status=document.getElementById('nutScanStatus');
+  if(status){status.style.display='block';status.textContent='Reading nutrition label...';}
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var base64=e.target.result.split(',')[1];
+    var mediaType=file.type||'image/jpeg';
+    nutCallVision(base64,mediaType,status);
+  };
+  reader.readAsDataURL(file);
+  // Reset input so same file can be re-selected
+  input.value='';
+}
+
+function nutCallVision(base64,mediaType,statusEl){
+  if(statusEl)statusEl.textContent='Analysing with AI...';
+  fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',
+      max_tokens:1000,
+      messages:[{
+        role:'user',
+        content:[
+          {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+          {type:'text',text:'This is a nutrition label or food log screenshot. Extract the nutrition information and return ONLY a JSON object with these exact keys (use null if not found): {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All numbers should be per serving. For sodium convert to mg if given in g. Return raw JSON only, no markdown, no explanation.'}
+        ]
+      }]
+    })
+  })
+  .then(function(r){return r.json();})
+  .then(function(data){
+    var text='';
+    if(data.content&&data.content[0]&&data.content[0].text){
+      text=data.content[0].text.trim();
+    }
+    // Strip markdown fences if present
+    text=text.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    var parsed=JSON.parse(text);
+    nutFillFromScan(parsed,statusEl);
+  })
+  .catch(function(err){
+    if(statusEl){statusEl.textContent='Could not read label \u2014 please fill in manually';statusEl.style.color='var(--orange)';}
+  });
+}
+
+function nutFillFromScan(d,statusEl){
+  if(!d){if(statusEl)statusEl.textContent='Could not parse \u2014 try a clearer photo';return;}
+  function setVal(id,val){var el=document.getElementById(id);if(el&&val!==null&&val!==undefined)el.value=val;}
+  if(d.name)setVal('nff_name',d.name);
+  if(d.serving)setVal('nff_serving',d.serving);
+  if(d.unit){var unitEl=document.getElementById('nff_unit');if(unitEl)unitEl.value=d.unit;}
+  setVal('nff_cal',d.calories!==null?Math.round(d.calories):'');
+  setVal('nff_prot',d.protein!==null?Math.round(d.protein*10)/10:'');
+  setVal('nff_carb',d.carbs!==null?Math.round(d.carbs*10)/10:'');
+  setVal('nff_fat',d.fat!==null?Math.round(d.fat*10)/10:'');
+  setVal('nff_fib',d.fibre!==null?Math.round(d.fibre*10)/10:'');
+  setVal('nff_satfat',d.satFat!==null?Math.round(d.satFat*10)/10:'');
+  setVal('nff_sodium',d.sodium!==null?Math.round(d.sodium):'');
+  if(statusEl){
+    statusEl.textContent='\u2713 Label read \u2014 check values and save';
+    statusEl.style.color='var(--green)';
+    setTimeout(function(){if(statusEl){statusEl.style.display='none';statusEl.style.color='';}},4000);
+  }
+}
+// ── End photo scan ─────────────────────────────────────────────────
 function nutSaveFood(){
   var name=(document.getElementById('nff_name').value||'').trim();
   var msg=document.getElementById('nutFoodFormMsg');
@@ -4744,7 +4835,7 @@ function nutFilterAddList(){
     var fi=_nutFoods.indexOf(f);
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="nutPickFood('+fi+')">'+
       '<div><div style="font-size:0.88rem;font-weight:600;">'+f.name+'</div>'+
-      '<div style="font-size:0.62rem;color:var(--muted);">'+Math.round(f.calories)+' kcal \u00b7 P '+Math.round(f.protein)+'g \u00b7 Na '+Math.round(f.sodium||0)+'mg \u00b7 per '+f.serving+f.unit+'</div></div>'+
+      '<div style="font-size:0.62rem;color:var(--muted);">'+Math.round(f.calories)+' kcal \u00b7 P '+Math.round(f.protein)+'g \u00b7 Sodium '+Math.round(f.sodium||0)+'mg \u00b7 per '+f.serving+f.unit+'</div></div>'+
       '<div style="color:var(--accent);font-size:1.4rem;padding:0 6px;font-weight:900;">+</div>'+
     '</div>';
   }).join('');
@@ -4753,6 +4844,7 @@ function nutFilterAddList(){
 function nutPickFood(idx){
   var f=_nutFoods[idx];if(!f)return;
   _nutServingFood=f;
+  _nutEditingEntryIdx=-1;
   nutCloseAdd();
   document.getElementById('nutServingFoodName').textContent=f.name;
   document.getElementById('nutServingDefault').textContent='Macros per '+f.serving+f.unit+' serving';
@@ -4815,25 +4907,81 @@ function nutConfirmServing(){
     calories:rn(f.calories),protein:rn(f.protein),carbs:rn(f.carbs),
     fat:rn(f.fat),fibre:rn(f.fibre),satFat:rn(f.satFat),
     sodium:rn(f.sodium||0),servings:Math.round(qty*100)/100};
-  _nutEntries.push(entry);
+
+  var isEdit=(_nutEditingEntryIdx>=0&&_nutEditingEntryIdx<_nutEntries.length);
+  var oldEntry=isEdit?_nutEntries[_nutEditingEntryIdx]:null;
+  if(isEdit){
+    _nutEntries[_nutEditingEntryIdx]=entry;
+  } else {
+    _nutEntries.push(entry);
+  }
+  _nutEditingEntryIdx=-1;
+
   var ov=document.getElementById('nutServingOverlay');if(ov)ov.style.display='none';
   nutRenderDay();
   nutBadge('load','Saving');
   nutMsg('Saving to sheet...');
-  var cb='wt_ln_'+Date.now();
-  window[cb]=function(res){
-    window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
-    var ok=res&&res.status==='ok';
-    nutBadge(ok?'live':'cached',ok?'Live':'Cached');
-    nutMsg(ok?'Saved to Google Sheets \u2713':'Saved locally',ok?'var(--green)':'var(--yellow)');
-    setTimeout(function(){nutMsg('');},2500);
-  };
-  var sc=document.createElement('script');sc.id='s_'+cb;
-  sc.onerror=function(){window[cb]=null;nutBadge('cached','Offline');nutMsg('Saved locally','var(--yellow)');setTimeout(function(){nutMsg('');},3000);};
-  sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'logNutrition',entries:[entry]}))+'&callback='+cb;
-  document.head.appendChild(sc);
-  setTimeout(function(){if(window[cb]){window[cb]=null;nutBadge('cached','Timeout');nutMsg('Saved locally (timeout)','var(--yellow)');setTimeout(function(){nutMsg('');},3000);}},10000);
+
+  var syncActions=[];
+  if(isEdit&&oldEntry){
+    // Delete old then add new
+    syncActions.push({type:'deleteNutritionRow',date:oldEntry.date,meal:oldEntry.meal,food:oldEntry.food});
+  }
+  syncActions.push({type:'logNutrition',entries:[entry]});
+
+  function runNext(i){
+    if(i>=syncActions.length){
+      nutBadge('live','Live');
+      nutMsg('Saved to Google Sheets \u2713','var(--green)');
+      setTimeout(function(){nutMsg('');},2500);
+      return;
+    }
+    var action=syncActions[i];
+    var cb='wt_cs_'+Date.now()+'_'+i;
+    window[cb]=function(res){
+      window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
+      runNext(i+1);
+    };
+    var sc=document.createElement('script');sc.id='s_'+cb;
+    sc.onerror=function(){window[cb]=null;nutBadge('cached','Offline');nutMsg('Saved locally','var(--yellow)');};
+    sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify(action))+'&callback='+cb;
+    document.head.appendChild(sc);
+    setTimeout(function(){if(window[cb]){window[cb]=null;runNext(i+1);}},8000);
+  }
+  runNext(0);
 }
+
+function nutEditEntry(idx){
+  var e=_nutEntries[idx];if(!e)return;
+  // Find the food in the database to get base macros
+  var food=_nutFoods.find(function(f){return f.name===e.food;});
+  if(!food){
+    // Food not in DB — create a temporary food object from the entry
+    // Reverse-calculate per-serving values from the logged amount
+    var servings=e.servings||1;
+    food={name:e.food,calories:e.calories/servings,protein:e.protein/servings,
+      carbs:e.carbs/servings,fat:e.fat/servings,fibre:e.fibre/servings,
+      satFat:e.satFat/servings,sodium:(e.sodium||0)/servings,serving:100,unit:'g'};
+  }
+  // Store the index so we can replace (not add) on confirm
+  _nutServingFood=food;
+  _nutEditingEntryIdx=idx;
+  _nutAddMeal=e.meal;
+  document.getElementById('nutServingFoodName').textContent=food.name;
+  document.getElementById('nutServingDefault').textContent='Macros per '+food.serving+food.unit+' serving';
+  var lbl=document.getElementById('nutServingAmtLabel');
+  if(lbl)lbl.textContent='Amount ('+food.unit+')';
+  // Pre-fill with current logged amount
+  var amtEl=document.getElementById('nutServingAmt');
+  var qtyEl=document.getElementById('nutServingQty');
+  var currentServings=e.servings||1;
+  if(amtEl)amtEl.value=Math.round(currentServings*food.serving*10)/10;
+  if(qtyEl)qtyEl.value=currentServings;
+  nutServingPreview();
+  var ov=document.getElementById('nutServingOverlay');
+  if(ov){ov.style.display='flex';ov.scrollTop=0;}
+}
+var _nutEditingEntryIdx=-1;
 
 function nutDelEntry(idx){
   var e=_nutEntries[idx];if(!e)return;
