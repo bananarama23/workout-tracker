@@ -4573,7 +4573,7 @@ function nutRenderDay(){
     var h='<div class="prog-section" style="margin-bottom:8px;">';
     h+='<div class="prog-section-hdr">';
     h+='<div class="prog-section-lbl">'+meal+(mc>0?' — '+mc+' kcal':'')+'</div>';
-    h+='<button onclick="nutOpenAdd(''+meal+'')" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:4px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">+ ADD</button>';
+    h+='<button onclick="nutOpenAdd(\''+meal+'\')" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:4px 12px;font-family:Bebas Neue,sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">+ ADD</button>';
     h+='</div>';
     h+='<div class="prog-card">';
     if(me.length===0){h+='<div style="padding:13px 16px;font-size:0.8rem;color:var(--muted);">Nothing logged yet</div>';}
@@ -4585,7 +4585,7 @@ function nutRenderDay(){
       h+='<div class="sum-result" style="font-size:0.62rem;margin-top:2px;">P '+Math.round(e.protein||0)+'g · C '+Math.round(e.carbs||0)+'g · F '+Math.round(e.fat||0)+'g'+(e.servings&&e.servings!==1?' · ×'+e.servings:'')+'</div>';
       h+='</div>';
       h+='<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;padding-left:12px;">';
-      h+='<span style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;">'+Math.round(e.calories||0)+'</span>';
+      h+='<span style="font-family:Bebas Neue,sans-serif;font-size:1.05rem;">'+Math.round(e.calories||0)+'</span>';
       h+='<button onclick="nutDelEntry('+gIdx+')" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;line-height:1;">×</button>';
       h+='</div></div>';
     });
