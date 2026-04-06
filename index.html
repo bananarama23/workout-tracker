@@ -3571,12 +3571,14 @@ function budRenderHours(hours,avg){
 
 // ─── NUTRITION ────────────────────────────────────────────────────
 var NUT_FOODS_KEY='wt_foods_v1';
+var NUT_ENTRIES_KEY='wt_nut_entries_v1';
 var NUT_TARGETS_KEY='wt_nut_targets';
 var NUT_DEFAULTS={cal:2497,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000};
 var _nutDate=localDateStr();
 var _nutTab='day';
 var _nutFoods=[];
 var _nutEntries=[];
+var _nutEntriesTs=0; // timestamp of last fetch
 var _nutAddMeal='';
 var _nutServingFood=null;
 var _nutTargets={};
@@ -3590,10 +3592,14 @@ var NUT_MACRO_DEFS=[
 ];
 
 function nutBadge(state,txt){
+  // Use the same pill as all other pages — just drive syncBadgeNut directly
   var pill=document.getElementById('syncBadgeNut'),span=document.getElementById('syncTextNut');
   if(!pill)return;
-  pill.className='sync-pill '+(state==='live'?'sp-live':state==='cached'?'sp-cache':'sp-load');
-  if(span)span.textContent=txt||state;
+  pill.className='sync-pill';
+  if(state==='live'){pill.classList.add('sp-live');if(span)span.textContent=txt||'Live';}
+  else if(state==='cached'){pill.classList.add('sp-cache');if(span)span.textContent=txt||'Cached';}
+  else if(state==='offline'){pill.classList.add('sp-off');if(span)span.textContent=txt||'Offline';}
+  else{pill.classList.add('sp-load');if(span)span.textContent=txt||'Syncing';}
 }
 function nutMsg(txt,col){var el=document.getElementById('nutSyncMsg');if(!el)return;el.textContent=txt||'';el.style.color=col||'var(--muted)';}
 
@@ -3615,14 +3621,27 @@ function nutRenderTargetInputs(){
   c.innerHTML=fields.map(function(f){return '<div><div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">'+f[1]+'</div><input id="nutT_'+f[0]+'" type="number" inputmode="numeric" value="'+(_nutTargets[f[0]]||0)+'" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;outline:none;box-sizing:border-box;"></div>';}).join('');
 }
 
+function nutSaveEntriesCache(){try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify({entries:_nutEntries,ts:Date.now()}));}catch(e){}}
+function nutLoadEntriesCache(){try{var r=localStorage.getItem(NUT_ENTRIES_KEY);if(!r)return null;return JSON.parse(r);}catch(e){return null;}}
+
 function nutInit(){
   nutLoadTargets();
   try{_nutFoods=JSON.parse(localStorage.getItem(NUT_FOODS_KEY)||'[]');}catch(e){_nutFoods=[];}
+  // Render immediately with cached entries — never show a blank screen
+  var cached=nutLoadEntriesCache();
+  if(cached&&cached.entries){
+    _nutEntries=cached.entries;
+    _nutEntriesTs=cached.ts||0;
+    nutBadge('cached','Cached '+cacheAgeStr(cached.ts));
+    nutMsg('');
+  } else {
+    nutBadge('load','Syncing');
+    nutMsg('Loading from sheet...');
+  }
   _nutDate=localDateStr();
   nutSetDateLabel();
   switchNutTab('day');
-  nutBadge('load','Syncing');
-  nutMsg('Loading from sheet...');
+  nutRenderDay(); // immediate render with whatever we have
   nutFetchFoods();
   nutFetchEntries();
 }
@@ -3677,19 +3696,37 @@ function nutFetchEntries(){
     window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
     if(res&&res.status==='ok'){
       _nutEntries=res.entries||[];
+      _nutEntriesTs=Date.now();
+      nutSaveEntriesCache();
       nutBadge('live','Live');
       nutMsg('');
     } else {
-      nutBadge('cached','Cached');
+      var c=nutLoadEntriesCache();
+      nutBadge('cached','Cached'+(c?' '+cacheAgeStr(c.ts):''));
+      nutMsg('');
     }
     nutRenderDay();
     if(_nutTab==='week')nutRenderWeek();
   };
   var sc=document.createElement('script');sc.id='s_'+cb;
-  sc.onerror=function(){window[cb]=null;nutBadge('cached','Offline');nutRenderDay();};
+  sc.onerror=function(){
+    window[cb]=null;
+    var c=nutLoadEntriesCache();
+    nutBadge('offline','Offline');
+    nutMsg('');
+    nutRenderDay();
+  };
   sc.src=CLOUD_URL+'?type=getNutrition&from='+from+'&to='+to+'&callback='+cb;
   document.head.appendChild(sc);
-  setTimeout(function(){if(window[cb]){window[cb]=null;nutBadge('cached','Timeout');nutRenderDay();}},12000);
+  setTimeout(function(){
+    if(window[cb]){
+      window[cb]=null;
+      var c=nutLoadEntriesCache();
+      nutBadge('cached','Cached'+(c?' '+cacheAgeStr(c.ts):''));
+      nutMsg('');
+      nutRenderDay();
+    }
+  },12000);
 }
 
 function nutDayEntries(date){return _nutEntries.filter(function(e){return e.date===(date||_nutDate);});}
@@ -3721,7 +3758,7 @@ function nutRenderDay(){
       var gIdx=_nutEntries.indexOf(e);
       h+='<div class="sum-row" style="padding:10px 16px;cursor:pointer;" onclick="nutEditEntry('+gIdx+')">';
       h+='<div style="flex:1;min-width:0;"><div class="sum-name" style="font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+e.food+'</div>';
-      h+='<div class="sum-result" style="font-size:0.62rem;margin-top:2px;">P\u202f'+Math.round(e.protein||0)+'g \u00b7 C\u202f'+Math.round(e.carbs||0)+'g \u00b7 F\u202f'+Math.round(e.fat||0)+'g'+(e.sodium?(' \u00b7 Na\u202f'+Math.round(e.sodium)+'mg'):'')+((e.servings&&e.servings!==1)?' \u00b7 \u00d7'+e.servings:'')+'</div></div>';
+      h+='<div class="sum-result" style="font-size:0.62rem;margin-top:2px;">'+Math.round(e.calories||0)+' kcal \u00b7 SF\u202f'+Math.round((e.satFat||0)*10)/10+'g \u00b7 P\u202f'+Math.round(e.protein||0)+'g'+((e.servings&&e.servings!==1)?' \u00b7 \u00d7'+e.servings:'')+'</div></div>';
       h+='<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;padding-left:12px;"><span style="font-family:Bebas Neue,sans-serif;font-size:1.05rem;">'+Math.round(e.calories||0)+'</span><button onclick="event.stopPropagation();nutDelEntry('+gIdx+')" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;line-height:1;">\u00d7</button></div></div>';
     });
     h+='</div></div>';
@@ -3929,9 +3966,10 @@ function nutConfirmServing(){
   var oldEntry=isEdit?_nutEntries[_nutEditingEntryIdx]:null;
   if(isEdit){_nutEntries[_nutEditingEntryIdx]=entry;}else{_nutEntries.push(entry);}
   _nutEditingEntryIdx=-1;
+  nutSaveEntriesCache();
   var ov=document.getElementById('nutServingOverlay');if(ov)ov.style.display='none';
   nutRenderDay();
-  nutBadge('load','Saving');nutMsg('Saving...');
+  nutBadge('load','Saving');
   var actions=[];
   if(isEdit&&oldEntry)actions.push({type:'deleteNutritionRow',date:oldEntry.date,meal:oldEntry.meal,food:oldEntry.food});
   actions.push({type:'logNutrition',entries:[entry]});
@@ -3967,7 +4005,7 @@ function nutEditEntry(idx){
 
 function nutDelEntry(idx){
   var e=_nutEntries[idx];if(!e)return;
-  _nutEntries.splice(idx,1);nutRenderDay();
+  _nutEntries.splice(idx,1);nutSaveEntriesCache();nutRenderDay();
   nutBadge('load','Saving');
   var cb='wt_dn_'+Date.now();
   window[cb]=function(res){window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);nutBadge(res&&res.status==='ok'?'live':'cached',res&&res.status==='ok'?'Live':'Cached');};
