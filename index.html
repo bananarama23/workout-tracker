@@ -1202,12 +1202,58 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 </div>
 
 <!-- NUTRITION: Create / edit food overlay -->
+<!-- SMART CAMERA OVERLAY — barcode + label + food photo -->
+<div id="nutCamOverlay" style="display:none;position:fixed;inset:0;background:#000;z-index:500;">
+  <!-- Header -->
+  <div style="position:absolute;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top,20px) + 12px) 16px 12px;background:linear-gradient(to bottom,rgba(0,0,0,0.8),transparent);z-index:10;display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:#fff;" id="camModeLabel">POINT AT FOOD</div>
+      <div style="font-size:0.65rem;color:rgba(255,255,255,0.6);margin-top:2px;" id="camHint">Barcode · Label · Food</div>
+    </div>
+    <button onclick="nutCamClose()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:1.1rem;cursor:pointer;">✕</button>
+  </div>
+
+  <!-- Viewfinder -->
+  <video id="nutCamVideo" playsinline autoplay muted style="width:100%;height:100%;object-fit:cover;"></video>
+  <canvas id="nutCamCanvas" style="display:none;"></canvas>
+
+  <!-- Scan frame -->
+  <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+    <div id="camFrame" style="width:72vw;height:42vw;max-width:320px;max-height:180px;border:2px solid rgba(200,255,0,0.8);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);position:relative;">
+      <!-- Corner marks -->
+      <div style="position:absolute;top:-2px;left:-2px;width:20px;height:20px;border-top:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:2px 0 0 0;"></div>
+      <div style="position:absolute;top:-2px;right:-2px;width:20px;height:20px;border-top:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 2px 0 0;"></div>
+      <div style="position:absolute;bottom:-2px;left:-2px;width:20px;height:20px;border-bottom:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:0 0 0 2px;"></div>
+      <div style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-bottom:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 0 2px 0;"></div>
+      <!-- Scan line -->
+      <div id="camScanLine" style="position:absolute;left:4px;right:4px;height:2px;background:linear-gradient(to right,transparent,var(--accent),transparent);top:50%;animation:scanline 2s ease-in-out infinite;"></div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 16px calc(env(safe-area-inset-bottom,20px) + 16px);background:linear-gradient(to top,rgba(0,0,0,0.85),transparent);">
+    <div id="camStatus" style="text-align:center;color:rgba(255,255,255,0.8);font-size:0.78rem;margin-bottom:14px;min-height:20px;"></div>
+    <!-- Capture button -->
+    <div style="display:flex;gap:10px;align-items:center;justify-content:center;">
+      <button onclick="nutCamCapture()" id="camCaptureBtn" style="width:68px;height:68px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,0.4);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+        <div style="width:52px;height:52px;border-radius:50%;background:var(--accent);"></div>
+      </button>
+    </div>
+    <div style="text-align:center;margin-top:10px;font-size:0.62rem;color:rgba(255,255,255,0.4);">Tap to capture · Auto-detects barcodes</div>
+  </div>
+</div>
+<style>
+@keyframes scanline{0%,100%{top:10%;}50%{top:85%;}}
+@keyframes barcodeFound{0%{border-color:rgba(200,255,0,0.8);}50%{border-color:#00ff88;box-shadow:0 0 0 9999px rgba(0,0,0,0.45),0 0 20px rgba(0,255,136,0.5);}100%{border-color:rgba(200,255,0,0.8);}}
+.cam-barcode-flash{animation:barcodeFound 0.4s ease;}
+</style>
+
 <div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch;">
   <div style="background:var(--bg);border-radius:var(--r-lg);margin:40px 12px calc(var(--nav-h) + var(--safe-b) + 24px);padding:20px;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutFoodFormTitle">ADD FOOD</div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button onclick="nutScanPhoto()" style="background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);padding:6px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;cursor:pointer;">📷 SCAN</button>
+        <button onclick="nutCamOpen()" style="background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);padding:6px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;cursor:pointer;">📷 SCAN</button>
         <button onclick="nutCloseFoodForm()" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
       </div>
     </div>
@@ -3811,11 +3857,147 @@ function nutOpenFoodForm(idx){
 }
 function nutCloseFoodForm(){var ov=document.getElementById('nutFoodFormOverlay');if(ov)ov.style.display='none';}
 
-function nutScanPhoto(){var inp=document.getElementById('nutPhotoInput');if(inp)inp.click();}
+// ─── SMART CAMERA ─────────────────────────────────────────────────
+// Barcode auto-detect (BarcodeDetector API) → Open Food Facts lookup
+// Tap capture → Gemini reads label/food photo → Claude fallback
+// ──────────────────────────────────────────────────────────────────
+
+var _camStream=null;
+var _camBarcodeInterval=null;
+var _camBarcodeDetector=null;
+var _camLastBarcode='';
+var _camProcessing=false;
+
+function nutCamOpen(){
+  var ov=document.getElementById('nutCamOverlay');
+  if(!ov)return;
+  ov.style.display='block';
+  _camLastBarcode='';
+  _camProcessing=false;
+  nutCamSetStatus('Point camera at a barcode, label, or food');
+  // Start camera
+  navigator.mediaDevices.getUserMedia({
+    video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}
+  }).then(function(stream){
+    _camStream=stream;
+    var vid=document.getElementById('nutCamVideo');
+    if(vid){vid.srcObject=stream;vid.play();}
+    // Start barcode polling if BarcodeDetector is available
+    if('BarcodeDetector' in window){
+      BarcodeDetector.getSupportedFormats().then(function(fmts){
+        _camBarcodeDetector=new BarcodeDetector({formats:fmts});
+        _camBarcodeInterval=setInterval(nutCamScanBarcode,400);
+      });
+    } else {
+      nutCamSetStatus('Tap capture · Auto-barcode not supported on this browser');
+    }
+  }).catch(function(err){
+    nutCamSetStatus('Camera access denied — use the photo button instead');
+    // Fallback: open file picker
+    setTimeout(function(){nutCamClose();nutScanPhoto();},1500);
+  });
+}
+
+function nutCamClose(){
+  clearInterval(_camBarcodeInterval);_camBarcodeInterval=null;
+  if(_camStream){_camStream.getTracks().forEach(function(t){t.stop();});_camStream=null;}
+  var ov=document.getElementById('nutCamOverlay');if(ov)ov.style.display='none';
+  _camProcessing=false;_camLastBarcode='';
+}
+
+function nutCamSetStatus(txt,col){
+  var el=document.getElementById('camStatus');
+  if(el){el.textContent=txt;el.style.color=col||'rgba(255,255,255,0.8)';}
+}
+
+function nutCamScanBarcode(){
+  if(_camProcessing)return;
+  var vid=document.getElementById('nutCamVideo');
+  if(!vid||vid.readyState<2||!_camBarcodeDetector)return;
+  _camBarcodeDetector.detect(vid).then(function(codes){
+    if(!codes.length)return;
+    var code=codes[0].rawValue;
+    if(code===_camLastBarcode)return; // same barcode — ignore
+    _camLastBarcode=code;
+    _camProcessing=true;
+    // Flash the frame
+    var frame=document.getElementById('camFrame');
+    if(frame){frame.classList.add('cam-barcode-flash');setTimeout(function(){frame.classList.remove('cam-barcode-flash');},400);}
+    nutCamSetStatus('Barcode: '+code+' — looking up...','#00ff88');
+    nutCamLookupBarcode(code);
+  }).catch(function(){});
+}
+
+function nutCamLookupBarcode(barcode){
+  // Open Food Facts — free, no key, 3M+ products
+  var url='https://world.openfoodfacts.org/api/v0/product/'+barcode+'.json';
+  fetch(url)
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.status===1&&data.product){
+        var p=data.product;
+        var n=p.product_name||p.product_name_en||'';
+        var nutriments=p.nutriments||{};
+        // OFF uses per-100g values; serving_size tells us the serving
+        var serving=parseFloat(p.serving_quantity)||100;
+        var unit=p.serving_unit||'g';
+        // Scale factor: macros in OFF are per 100g, we want per serving
+        var scale=serving/100;
+        var food={
+          name: n||'Unknown ('+barcode+')',
+          calories: Math.round((parseFloat(nutriments['energy-kcal_100g'])||0)*scale),
+          protein:  Math.round((parseFloat(nutriments.proteins_100g)||0)*scale*10)/10,
+          carbs:    Math.round((parseFloat(nutriments.carbohydrates_100g)||0)*scale*10)/10,
+          fat:      Math.round((parseFloat(nutriments.fat_100g)||0)*scale*10)/10,
+          fibre:    Math.round((parseFloat(nutriments.fiber_100g)||0)*scale*10)/10,
+          satFat:   Math.round((parseFloat(nutriments['saturated-fat_100g'])||0)*scale*10)/10,
+          sodium:   Math.round((parseFloat(nutriments.sodium_100g)||0)*scale*1000), // g→mg
+          serving:  serving||100,
+          unit:     unit||'g'
+        };
+        nutCamSetStatus('\u2713 Found: '+food.name,'#00ff88');
+        setTimeout(function(){
+          nutCamClose();
+          nutFillFromScan(food,null);
+        },700);
+      } else {
+        // Not in database — capture photo and send to Gemini
+        nutCamSetStatus('Not in database — capturing for AI scan...','rgba(255,200,0,0.9)');
+        setTimeout(function(){nutCamCapture(true);},600);
+      }
+    })
+    .catch(function(){
+      nutCamSetStatus('Lookup failed — capturing for AI scan...','rgba(255,200,0,0.9)');
+      setTimeout(function(){nutCamCapture(true);},600);
+    });
+}
+
+function nutCamCapture(fromBarcodeFallback){
+  if(!_camStream)return;
+  var vid=document.getElementById('nutCamVideo');
+  var canvas=document.getElementById('nutCamCanvas');
+  if(!vid||!canvas)return;
+  canvas.width=vid.videoWidth||1280;
+  canvas.height=vid.videoHeight||720;
+  var ctx=canvas.getContext('2d');
+  ctx.drawImage(vid,0,0,canvas.width,canvas.height);
+  var base64=canvas.toDataURL('image/jpeg',0.85).split(',')[1];
+  nutCamSetStatus('Analysing with Gemini...','rgba(255,255,255,0.9)');
+  nutCamClose();
+  // Show status in food form
+  var status=document.getElementById('nutScanStatus');
+  if(status){status.style.display='block';status.style.color='var(--muted)';status.textContent='Analysing with Gemini...';}
+  nutCallVision(base64,'image/jpeg',status);
+}
+
+function nutScanPhoto(){
+  // Fallback file picker for browsers without camera API
+  var inp=document.getElementById('nutPhotoInput');if(inp)inp.click();
+}
 function nutHandlePhoto(input){
   var file=input.files&&input.files[0];if(!file)return;
   var status=document.getElementById('nutScanStatus');
-  if(status){status.style.display='block';status.style.color='var(--muted)';status.textContent='Reading nutrition label...';}
+  if(status){status.style.display='block';status.style.color='var(--muted)';status.textContent='Reading...';}
   var reader=new FileReader();
   reader.onload=function(e){
     var base64=e.target.result.split(',')[1];
@@ -3826,31 +4008,20 @@ function nutHandlePhoto(input){
 }
 
 function nutCallVision(base64,mediaType,statusEl){
-  if(statusEl)statusEl.textContent='Analysing with AI...';
-  // Route through our Apps Script proxy to avoid exposing API key
+  if(statusEl){statusEl.style.display='block';statusEl.style.color='var(--muted)';statusEl.textContent='Scanning with Gemini...';}
   var payload={type:'scanFood',imageBase64:base64,mediaType:mediaType};
-  var cb='wt_scan_'+Date.now();
-  window[cb]=function(res){
-    window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
-    if(res&&res.status==='ok'&&res.data){
-      nutFillFromScan(res.data,statusEl);
-    } else {
-      if(statusEl){statusEl.textContent='Could not read label \u2014 fill in manually';statusEl.style.color='var(--orange)';}
-    }
-  };
-  var sc=document.createElement('script');sc.id='s_'+cb;
-  sc.onerror=function(){window[cb]=null;if(statusEl){statusEl.textContent='Scan failed \u2014 fill in manually';statusEl.style.color='var(--orange)';}};
-  // POST via JSONP isn't possible for large payloads — use fetch instead
   fetch(CLOUD_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     .then(function(r){return r.json();})
     .then(function(res){
-      window[cb]=null;
-      if(res&&res.status==='ok'&&res.data){nutFillFromScan(res.data,statusEl);}
-      else if(statusEl){statusEl.textContent='Could not read label \u2014 fill in manually';statusEl.style.color='var(--orange)';}
+      if(res&&res.status==='ok'&&res.data){
+        if(statusEl&&res.usedFallback)statusEl.textContent='Read with Claude...';
+        nutFillFromScan(res.data,statusEl);
+      } else {
+        if(statusEl){statusEl.textContent='Could not read — try better lighting or fill in manually';statusEl.style.color='var(--orange)';}
+      }
     })
     .catch(function(){
-      window[cb]=null;
-      if(statusEl){statusEl.textContent='Scan failed \u2014 fill in manually';statusEl.style.color='var(--orange)';}
+      if(statusEl){statusEl.textContent='Scan failed — fill in manually';statusEl.style.color='var(--orange)';}
     });
 }
 
