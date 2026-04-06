@@ -4889,7 +4889,7 @@ function nutCallVision(base64,mediaType,statusEl){
     geminiKey=geminiKey.trim();
   }
   var promptText='This is a nutrition label or food packaging. Extract and return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per serving. Sodium in mg. Use null for unknown fields.';
-  var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+geminiKey;
+  var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
   fetch(url,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
