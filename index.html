@@ -1204,7 +1204,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div id="camScanLine" style="position:absolute;left:4px;right:4px;height:2px;background:linear-gradient(to right,transparent,var(--accent),transparent);top:50%;animation:scanline 2s ease-in-out infinite;"></div>
     </div>
   </div>
-  <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 16px calc(env(safe-area-inset-bottom,20px)+16px);background:linear-gradient(to top,rgba(0,0,0,0.85),transparent);">
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 16px calc(var(--nav-h) + var(--safe-b) + 20px);background:linear-gradient(to top,rgba(0,0,0,0.9) 60%,transparent);">
     <div id="camStatus" style="text-align:center;color:rgba(255,255,255,0.8);font-size:0.78rem;margin-bottom:14px;min-height:20px;"></div>
     <div style="display:flex;gap:10px;align-items:center;justify-content:center;">
       <button onclick="nutCamCapture()" style="width:68px;height:68px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,0.4);cursor:pointer;display:flex;align-items:center;justify-content:center;">
@@ -4875,22 +4875,52 @@ function nutHandlePhoto(input){
 // GAS endpoint handles the actual API calls — avoids browser CORS issues
 function nutCallVision(base64,mediaType,statusEl){
   if(statusEl){statusEl.style.display='block';statusEl.style.color='var(--muted)';statusEl.textContent='Scanning with AI...';}
-  // POST to GAS as JSON — GAS calls Gemini/Claude and returns parsed food data
-  fetch(CLOUD_URL,{
+  // Get Gemini key — stored in localStorage after user enters it once
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  if(!geminiKey){
+    // Prompt user for key first time
+    geminiKey=prompt('Enter your Gemini API key to enable scanning.\n\nGet one free at: aistudio.google.com/apikey\n\nIt will be saved locally on your device.');
+    if(!geminiKey){
+      if(statusEl){statusEl.textContent='No API key — enter one to enable scanning';statusEl.style.color='var(--orange)';}
+      return;
+    }
+    localStorage.setItem('wt_gemini_key',geminiKey.trim());
+    geminiKey=geminiKey.trim();
+  }
+  var prompt_text='This is a nutrition label or food packaging. Extract the nutrition information and return ONLY a JSON object with these exact keys (use null if not found): {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All numbers per serving. Sodium in mg. Return raw JSON only, no markdown, no explanation.';
+  var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key='+geminiKey;
+  fetch(url,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({type:'scanFood',imageBase64:base64,mediaType:mediaType})
+    body:JSON.stringify({contents:[{parts:[
+      {inline_data:{mime_type:mediaType,data:base64}},
+      {text:prompt_text}
+    ]}]})
   })
   .then(function(r){return r.json();})
-  .then(function(res){
-    if(res&&res.status==='ok'&&res.data){
-      nutFillFromScan(res.data,statusEl);
-    } else {
-      if(statusEl){statusEl.textContent='Could not read \u2014 fill in manually';statusEl.style.color='var(--orange)';}
+  .then(function(data){
+    // Check for API error (bad key etc)
+    if(data.error){
+      if(data.error.code===400||data.error.code===401||data.error.code===403){
+        localStorage.removeItem('wt_gemini_key');
+        if(statusEl){statusEl.textContent='Invalid API key — tap SCAN to try again';statusEl.style.color='var(--orange)';}
+      } else {
+        if(statusEl){statusEl.textContent='Scan failed \u2014 fill in manually';statusEl.style.color='var(--orange)';}
+      }
+      return;
+    }
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0].text;
+    if(!text){if(statusEl){statusEl.textContent='Could not read \u2014 fill in manually';statusEl.style.color='var(--orange)';}return;}
+    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    try{
+      var parsed=JSON.parse(text);
+      nutFillFromScan(parsed,statusEl);
+    }catch(e){
+      if(statusEl){statusEl.textContent='Could not parse \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}
     }
   })
-  .catch(function(err){
-    if(statusEl){statusEl.textContent='Scan failed \u2014 fill in manually';statusEl.style.color='var(--orange)';}
+  .catch(function(){
+    if(statusEl){statusEl.textContent='Scan failed \u2014 check your connection';statusEl.style.color='var(--orange)';}
   });
 }
 
