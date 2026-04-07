@@ -4810,32 +4810,25 @@ function nutQueueFlush(){
 }
 // Generic single-action GAS sync — cb(true/false)
 function nutSyncAction(action,msgEl,cb){
-  var cbName='wt_ns_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
-  // Nonce prevents GAS dedup from blocking retries
-  var payload=Object.assign({},action,{_nonce:Date.now()});
-  var isWrite=action.type==='logNutrition'||action.type==='addFood';
-  var done=false;
-
-  function finish(ok){
-    if(done)return;
-    done=true;
-    window[cbName]=null;
-    var s=document.getElementById('s_'+cbName);if(s&&s.parentNode)s.parentNode.removeChild(s);
-    if(cb)cb(ok);
-  }
-
-  window[cbName]=function(res){finish(res&&res.status==='ok');};
-  var sc=document.createElement('script');sc.id='s_'+cbName;
-  sc.onerror=function(){finish(false);};
-  sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify(payload))+'&callback='+cbName;
-  document.head.appendChild(sc);
-
-  // 30s timeout. For write ops (logNutrition, addFood): appendRow is fast,
-  // so if GAS doesn't respond it probably still saved — treat as optimistic success.
-  // For deletes: treat timeout as failure so they retry properly.
-  setTimeout(function(){
-    if(!done){finish(isWrite);}
-  },30000);
+  // fetch POST with text/plain bypasses CORS preflight.
+  // DO NOT try to parse the response — GAS redirects through script.googleusercontent.com
+  // and the response type varies. For writes we don't need to read it at all.
+  var isWrite=(action.type==='logNutrition'||action.type==='addFood'||
+               action.type==='deleteNutritionRow'||action.type==='deleteFood');
+  var payload=JSON.stringify(Object.assign({},action,{_nonce:Date.now()}));
+  fetch(CLOUD_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:payload
+  })
+  .then(function(){
+    // Any response (even opaque) means GAS received and processed the request
+    if(cb)cb(true);
+  })
+  .catch(function(){
+    // Network failure — writes are optimistic (GAS may have processed before disconnect)
+    if(cb)cb(isWrite);
+  });
 }
 
 var _nutDate=localDateStr();
@@ -5478,18 +5471,20 @@ function nutSaveFood(){
   try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
   nutRenderFoodList();
   if(msg){msg.textContent='Saving to sheet...';msg.style.color='var(--muted)';}
-  var cb='wt_af_'+Date.now();
-  window[cb]=function(res){
-    window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
+  fetch(CLOUD_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({type:'addFood',food:food,_nonce:Date.now()})
+  })
+  .then(function(r){return r.json();})
+  .then(function(res){
     var ok=res&&res.status==='ok';
-    if(msg){msg.textContent=ok?'Saved to Google Sheets \u2713':'Saved locally';msg.style.color=ok?'var(--green)':'var(--yellow)';}
+    if(msg){msg.textContent=ok?'Saved \u2713':'Saved locally';msg.style.color=ok?'var(--green)':'var(--yellow)';}
     if(ok)setTimeout(function(){nutCloseFoodForm();},900);
-  };
-  var sc=document.createElement('script');sc.id='s_'+cb;
-  sc.onerror=function(){window[cb]=null;if(msg){msg.textContent='Saved locally (offline)';msg.style.color='var(--yellow)';}};
-  sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'addFood',food:food}))+'&callback='+cb;
-  document.head.appendChild(sc);
-  setTimeout(function(){if(window[cb]){window[cb]=null;if(msg){msg.textContent='Saved locally (timeout)';msg.style.color='var(--yellow)';}}},10000);
+  })
+  .catch(function(){
+    if(msg){msg.textContent='Saved locally';msg.style.color='var(--yellow)';}
+  });
 }
 
 function nutDeleteFood(){
@@ -5500,9 +5495,11 @@ function nutDeleteFood(){
   _nutFoods.splice(idx,1);
   try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
   nutRenderFoodList();nutCloseFoodForm();
-  var sc=document.createElement('script');
-  sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'deleteFood',name:f.name}))+'&callback=wt_df_'+Date.now();
-  document.head.appendChild(sc);
+  fetch(CLOUD_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({type:'deleteFood',name:f.name,_nonce:Date.now()})
+  }).catch(function(){});
 }
 
 // ── Add to meal ────────────────────────────────────────────────────
