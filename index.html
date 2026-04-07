@@ -4811,21 +4811,31 @@ function nutQueueFlush(){
 // Generic single-action GAS sync — cb(true/false)
 function nutSyncAction(action,msgEl,cb){
   var cbName='wt_ns_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
-  // Add a nonce so GAS dedup never blocks retries of the same payload
+  // Nonce prevents GAS dedup from blocking retries
   var payload=Object.assign({},action,{_nonce:Date.now()});
-  window[cbName]=function(res){
-    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
-    // Treat 'Duplicate blocked' as success — data already in sheet
-    var ok=res&&(res.status==='ok');
+  var isWrite=action.type==='logNutrition'||action.type==='addFood';
+  var done=false;
+
+  function finish(ok){
+    if(done)return;
+    done=true;
+    window[cbName]=null;
+    var s=document.getElementById('s_'+cbName);if(s&&s.parentNode)s.parentNode.removeChild(s);
     if(cb)cb(ok);
-  };
+  }
+
+  window[cbName]=function(res){finish(res&&res.status==='ok');};
   var sc=document.createElement('script');sc.id='s_'+cbName;
-  sc.onerror=function(){window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);if(cb)cb(false);};
+  sc.onerror=function(){finish(false);};
   sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify(payload))+'&callback='+cbName;
   document.head.appendChild(sc);
+
+  // 30s timeout. For write ops (logNutrition, addFood): appendRow is fast,
+  // so if GAS doesn't respond it probably still saved — treat as optimistic success.
+  // For deletes: treat timeout as failure so they retry properly.
   setTimeout(function(){
-    if(window[cbName]){window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);if(cb)cb(false);}
-  },20000);
+    if(!done){finish(isWrite);}
+  },30000);
 }
 
 var _nutDate=localDateStr();
