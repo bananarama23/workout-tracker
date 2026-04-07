@@ -4969,12 +4969,49 @@ function nutFetchEntries(){
   window[cb]=function(res){
     window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
     if(res&&res.status==='ok'){
-      _nutEntries=res.entries||[];
-      // Persist to localStorage so next load is instant
+      var sheetEntries=res.entries||[];
+      // ── Reconciliation: find local entries missing from sheet ──────
+      // Local entries are the source of truth — sheet may be missing some
+      // due to JSONP timeouts. Push any that aren't in the sheet.
+      var localEntries=[];
+      try{localEntries=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');}catch(e){}
+      // Only reconcile entries within our fetch window
+      var windowLocal=localEntries.filter(function(e){return e.date>=from&&e.date<=to;});
+      // Build a set of sheet entry keys: date|meal|food
+      var sheetKeys={};
+      sheetEntries.forEach(function(e){
+        var k=e.date+'|'+e.meal+'|'+e.food;
+        sheetKeys[k]=true;
+      });
+      // Find local entries not in sheet
+      var missing=windowLocal.filter(function(e){
+        return !sheetKeys[e.date+'|'+e.meal+'|'+e.food];
+      });
+      if(missing.length){
+        nutMsg('Syncing '+missing.length+' unsaved item'+(missing.length>1?'s':'')+'...','var(--yellow)');
+        // Push missing entries in one batch
+        var batchAction={type:'logNutrition',entries:missing};
+        nutSyncAction(batchAction,null,function(ok){
+          nutBadge(ok?'live':'cached',ok?'Live':'Cached');
+          nutMsg(ok?'All synced \u2713':'',ok?'var(--green)':'');
+          setTimeout(function(){nutMsg('');},2500);
+        });
+      } else {
+        nutBadge('live','Live');
+        nutMsg('');
+      }
+      // Sheet is authoritative for what's actually there — merge with local
+      // Keep local entries outside the window, use sheet entries inside window
+      var outsideWindow=localEntries.filter(function(e){return e.date<from||e.date>to;});
+      _nutEntries=outsideWindow.concat(sheetEntries);
+      // If we had missing, add them to our view too (they're being pushed)
+      if(missing.length){
+        missing.forEach(function(m){
+          var already=_nutEntries.some(function(e){return e.date===m.date&&e.meal===m.meal&&e.food===m.food;});
+          if(!already)_nutEntries.push(m);
+        });
+      }
       try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
-      nutBadge('live','Live');
-      nutMsg('Synced from sheet','var(--muted)');
-      setTimeout(function(){nutMsg('');},2000);
     } else {
       nutBadge('cached','Cached');
       nutMsg('Using local data','var(--yellow)');
@@ -4991,7 +5028,7 @@ function nutFetchEntries(){
   document.head.appendChild(sc);
   setTimeout(function(){
     if(window[cb]){window[cb]=null;nutBadge('cached','Timeout');nutMsg('Sheet timeout','var(--yellow)');nutRenderDay();}
-  },12000);
+  },15000);
 }
 
 // ── Day view ───────────────────────────────────────────────────────
@@ -5611,41 +5648,16 @@ function nutConfirmServing(){
 
   var ov=document.getElementById('nutServingOverlay');if(ov)ov.style.display='none';
   nutRenderDay();
-  nutBadge('load','Saving');
-  nutMsg('Saving...');
+  // Data is already in localStorage — show saved immediately, sync in background
+  nutBadge('live','Live');
+  nutMsg('Saved \u2713','var(--green)');
+  setTimeout(function(){nutMsg('');},2000);
 
-  // Build ordered list of actions: delete-old (if edit), then log-new
-  var syncActions=[];
+  // Best-effort background sync — if it fails, reconciliation on next open will catch it
   if(isEdit&&oldEntry){
-    syncActions.push({type:'deleteNutritionRow',date:oldEntry.date,meal:oldEntry.meal,food:oldEntry.food});
+    nutSyncAction({type:'deleteNutritionRow',date:oldEntry.date,meal:oldEntry.meal,food:oldEntry.food},null,function(){});
   }
-  syncActions.push({type:'logNutrition',entries:[entry]});
-
-  function runNext(i){
-    if(i>=syncActions.length){
-      nutBadge('live','Live');
-      nutMsg('Saved \u2713','var(--green)');
-      setTimeout(function(){nutMsg('');},2500);
-      return;
-    }
-    var action=syncActions[i];
-    nutSyncAction(action,null,function(ok){
-      if(ok){
-        runNext(i+1);
-      } else {
-        // Queue for retry, keep going with remaining actions
-        nutQueuePush(action);
-        runNext(i+1);
-        // Only show offline if the log action itself failed (not the delete)
-        if(action.type==='logNutrition'){
-          nutBadge('cached','Queued');
-          nutMsg('Saved locally \u2014 will retry','var(--yellow)');
-          setTimeout(function(){nutMsg('');},4000);
-        }
-      }
-    });
-  }
-  runNext(0);
+  nutSyncAction({type:'logNutrition',entries:[entry]},null,function(){});
 }
 
 function nutEditEntry(idx){
