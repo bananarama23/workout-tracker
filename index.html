@@ -554,6 +554,16 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <div class="ws-lbl">HIIT</div>
         <div class="ws-sub">of 2</div>
       </div>
+      <div class="week-stat" onclick="navTo('nutrition')">
+        <div class="ws-num c-muted" id="wkNutStreak">-</div>
+        <div class="ws-lbl">Logged</div>
+        <div class="ws-sub">days</div>
+      </div>
+      <div class="week-stat">
+        <div class="ws-num c-accent" id="wkWalkKm">-</div>
+        <div class="ws-lbl">Walk</div>
+        <div class="ws-sub" id="wkWalkSub">km</div>
+      </div>
       <div class="week-stat">
         <div class="ws-num c-accent" id="wkStreak">-</div>
         <div class="ws-lbl">Streak</div>
@@ -649,6 +659,21 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <button onclick="navTo('workout')" style="position:absolute;top:calc(var(--safe-t)+14px);left:16px;background:var(--card2);border:1px solid var(--border);width:34px;height:34px;border-radius:50%;font-size:15px;color:var(--text2);display:flex;align-items:center;justify-content:center;cursor:pointer;">&#8592;</button>
     <h1 id="previewTitle" style="padding-left:44px;">HOME WORKOUT</h1>
     <p class="ph-sub" id="previewSub" style="padding-left:44px;">Review and edit before starting</p>
+  </div>
+  <!-- Paste from Claude section -->
+  <div style="margin:10px 16px 0;background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;">
+    <button onclick="previewTogglePaste()" id="previewPasteToggle" style="width:100%;padding:13px 16px;background:none;border:none;color:var(--muted);font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;font-family:'Bebas Neue',sans-serif;cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between;">
+      <span>&#128203; Paste workout from Claude</span>
+      <span id="previewPasteChevron" style="font-size:0.7rem;">▼</span>
+    </button>
+    <div id="previewPastePanel" style="display:none;padding:0 14px 14px;">
+      <textarea id="previewPasteInput" placeholder="Paste your Claude workout plan here..." style="width:100%;height:120px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:0.78rem;padding:10px 12px;resize:none;box-sizing:border-box;outline:none;font-family:'DM Sans',sans-serif;line-height:1.5;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button onclick="previewParsePaste()" style="flex:1;padding:12px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:2px;font-weight:900;cursor:pointer;">APPLY</button>
+        <button onclick="previewClearPaste()" style="padding:12px 16px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.78rem;font-weight:600;cursor:pointer;">Clear</button>
+      </div>
+      <div id="previewPasteMsg" style="font-size:0.72rem;min-height:18px;margin-top:6px;text-align:center;"></div>
+    </div>
   </div>
   <div class="page-body" id="previewContent" style="padding-top:8px;"></div>
 </div>
@@ -873,6 +898,16 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   </div>
   <div class="page-body" style="padding-top:16px;">
 
+    <!-- Body Weight -->
+    <div class="prog-section" style="margin-bottom:6px;">
+      <div class="prog-section-hdr">
+        <div class="prog-section-lbl">Body Weight</div>
+      </div>
+      <div class="prog-card prog-card-pad">
+        <div id="bodyWeightChart" style="color:var(--muted);font-size:0.85rem;text-align:center;padding:10px 0;">No data yet</div>
+      </div>
+    </div>
+
     <!-- Personal Records -->
     <div class="prog-section" style="margin-bottom:6px;">
       <div class="prog-section-hdr">
@@ -912,6 +947,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div>
         <div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;">Monthly spare</div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:3.4rem;letter-spacing:2px;line-height:1;" id="bSpareVal">—</div>
+        <div style="font-size:0.68rem;color:var(--muted);margin-top:5px;" id="bProjection">—</div>
       </div>
       <div style="text-align:right;padding-bottom:6px;">
         <div style="font-size:0.58rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">After bills</div>
@@ -1232,6 +1268,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     </div>
     <!-- Scan status -->
     <div id="nutScanStatus" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;font-size:0.82rem;color:var(--muted);text-align:center;"></div>
+    <div style="text-align:right;margin:-8px 0 10px;"><button onclick="nutApiKeyShow(null,null,null)" style="background:none;border:none;color:var(--muted);font-size:0.62rem;cursor:pointer;padding:0;">⚙ Gemini key</button></div>
     <input type="file" id="nutPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="nutHandlePhoto(this)">
     <div class="log-field"><label>Food Name</label><input id="nff_name" type="text" class="log-input" placeholder="e.g. Chicken Breast"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -1274,11 +1311,11 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
       <div class="log-field">
         <label id="nutServingAmtLabel">Amount (g)</label>
-        <input id="nutServingAmt" type="number" inputmode="decimal" step="1" value="100" oninput="nutServingPreview()" class="log-input log-input-big" style="text-align:center;">
+        <input id="nutServingAmt" type="number" inputmode="decimal" step="1" value="100" oninput="_nutLastTouched='amt';nutServingPreview()" class="log-input log-input-big" style="text-align:center;">
       </div>
       <div class="log-field">
         <label>Servings</label>
-        <input id="nutServingQty" type="number" inputmode="decimal" step="0.25" value="1" oninput="nutServingPreview()" class="log-input log-input-big" style="text-align:center;">
+        <input id="nutServingQty" type="number" inputmode="decimal" step="0.25" value="1" oninput="_nutLastTouched='qty';nutServingPreview()" class="log-input log-input-big" style="text-align:center;">
       </div>
     </div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:space-around;" id="nutServingPreviewBox"></div>
@@ -1286,6 +1323,22 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   </div>
 </div>
 
+
+<!-- GEMINI API KEY OVERLAY -->
+<div id="nutApiKeyOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:600;display:none;align-items:center;justify-content:center;padding:24px;">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:24px;width:100%;max-width:360px;">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;margin-bottom:6px;">GEMINI API KEY</div>
+    <div style="font-size:0.78rem;color:var(--text2);margin-bottom:4px;">Required for label scanning. Free — no credit card needed.</div>
+    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:16px;">Get yours at <span style="color:var(--blue);">aistudio.google.com/apikey</span></div>
+    <input id="nutApiKeyInput" type="text" placeholder="AIza..." autocomplete="off" autocorrect="off" spellcheck="false"
+      style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);padding:12px 14px;color:var(--text);font-size:0.88rem;outline:none;box-sizing:border-box;margin-bottom:10px;font-family:monospace;">
+    <div id="nutApiKeyMsg" style="font-size:0.72rem;color:var(--orange);min-height:18px;margin-bottom:10px;text-align:center;"></div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="nutApiKeyCancel()" style="flex:1;padding:13px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.88rem;font-weight:600;cursor:pointer;">Cancel</button>
+      <button onclick="nutApiKeySave()" style="flex:2;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">SAVE KEY</button>
+    </div>
+  </div>
+</div>
 
 <!-- PLAN PAGE -->
 <div class="page" id="page-plan">
@@ -1587,6 +1640,38 @@ function renderHomeData(sessions){
   if(he){he.textContent=wkHIIT;he.className='ws-num '+(wkHIIT>=2?'c-green':wkHIIT>=1?'c-yellow':'c-red');}
   var sk=document.getElementById('wkStreak');if(sk)sk.textContent=calcStreak(sessions);
 
+  // Nutrition streak — days logged this week (from localStorage cache)
+  var nutStreakEl=document.getElementById('wkNutStreak');
+  if(nutStreakEl){
+    try{
+      var cachedEnt=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');
+      var weekDates=getWeekDates(0).map(function(d){return fmtDate(d);});
+      var daysLogged=weekDates.filter(function(d){return cachedEnt.some(function(e){return e.date===d;});}).length;
+      nutStreakEl.textContent=daysLogged;
+      nutStreakEl.className='ws-num '+(daysLogged>=5?'c-green':daysLogged>=3?'c-yellow':'c-muted');
+    }catch(e){nutStreakEl.textContent='-';}
+  }
+
+  // Walk km this week
+  var walkEl=document.getElementById('wkWalkKm');
+  var walkSubEl=document.getElementById('wkWalkSub');
+  if(walkEl){
+    var weekStr='Week '+getWeekNum();
+    var walkKm=0,walkCount=0;
+    sessions.forEach(function(s){
+      if(s.week===weekStr&&s.workoutType==='Walk'){
+        walkCount++;
+        // Distance stored in exercises[0].result or notes
+        var ex=(s.exercises||[])[0]||{};
+        var dist=parseFloat(ex.result||ex.notes||'0');
+        if(!isNaN(dist))walkKm+=dist;
+      }
+    });
+    walkEl.textContent=walkKm>0?walkKm.toFixed(1):walkCount>0?walkCount:'-';
+    walkEl.className='ws-num '+(walkKm>=10?'c-green':walkKm>=5?'c-yellow':'c-muted');
+    if(walkSubEl)walkSubEl.textContent=walkKm>0?'km this wk':walkCount>0?'walk'+(walkCount>1?'s':''):' km';
+  }
+
   // Last session
   if(sessions.length>0){
     var last=sessions[sessions.length-1];
@@ -1780,6 +1865,183 @@ function showWorkoutPreview(type){
   var pg=document.getElementById('page-preview');pg.classList.remove('hidden');pg.classList.add('active');
   document.getElementById('previewTitle').textContent=(type==='home'?'HOME':'HOTEL')+' WORKOUT';
   renderPreview();
+}
+
+function previewTogglePaste(){
+  var panel=document.getElementById('previewPastePanel');
+  var chevron=document.getElementById('previewPasteChevron');
+  if(!panel)return;
+  var open=panel.style.display==='none';
+  panel.style.display=open?'block':'none';
+  if(chevron)chevron.textContent=open?'▲':'▼';
+}
+
+function previewClearPaste(){
+  var inp=document.getElementById('previewPasteInput');if(inp)inp.value='';
+  var msg=document.getElementById('previewPasteMsg');if(msg)msg.textContent='';
+}
+
+function previewParsePaste(){
+  var inp=document.getElementById('previewPasteInput');
+  var msg=document.getElementById('previewPasteMsg');
+  var text=(inp?inp.value:'').trim();
+  if(!text){if(msg){msg.textContent='Paste something first';msg.style.color='var(--orange)';}return;}
+
+  // ── Name normaliser: map Claude names → internal exercise names ──
+  var NAME_MAP={
+    'pull-up':'PULL-UPS','pull-ups':'PULL-UPS','pullup':'PULL-UPS','pullups':'PULL-UPS',
+    'pull-up ladder':'PULL-UPS','pull up ladder':'PULL-UPS',
+    'close-grip push-up':'CLOSE-GRIP PUSH-UPS','close grip push-up':'CLOSE-GRIP PUSH-UPS',
+    'close-grip push-ups':'CLOSE-GRIP PUSH-UPS','close grip push-ups':'CLOSE-GRIP PUSH-UPS',
+    'dip':'DIPS','dips':'DIPS',
+    'leg raise':'LEG RAISES','leg raises':'LEG RAISES',
+    'single-leg glute bridge':'SINGLE-LEG GLUTE BRIDGES','single leg glute bridge':'SINGLE-LEG GLUTE BRIDGES',
+    'single-leg glute bridges':'SINGLE-LEG GLUTE BRIDGES','single leg glute bridges':'SINGLE-LEG GLUTE BRIDGES',
+    'glute bridge':'SINGLE-LEG GLUTE BRIDGES','glute bridges':'SINGLE-LEG GLUTE BRIDGES',
+    'side plank':'SIDE PLANKS','side planks':'SIDE PLANKS',
+    'supinated pull-up':'SUPINATED PULL-UPS','supinated pull-ups':'SUPINATED PULL-UPS',
+    'supinated pullup':'SUPINATED PULL-UPS','supinated pullups':'SUPINATED PULL-UPS',
+  };
+  function normaliseName(raw){
+    var lower=raw.toLowerCase().replace(/\s+/g,' ').trim();
+    // Strip leading emoji / numbers like "1️⃣ " or "1. "
+    lower=lower.replace(/^[\d️⃣\.\s#*]+/,'').trim();
+    // Try direct map
+    if(NAME_MAP[lower])return NAME_MAP[lower];
+    // Try partial match
+    for(var k in NAME_MAP){if(lower.indexOf(k)>=0)return NAME_MAP[k];}
+    // Return uppercased original as fallback
+    return raw.replace(/^[\d️⃣\.\s#*–-]+/,'').trim().toUpperCase();
+  }
+
+  // ── Split text into exercise blocks ──────────────────────────────
+  // Blocks start with a line that looks like an exercise header:
+  // "1️⃣ Pull-Up Ladder – 4 / 4 / 3 / 3" or "1. Pull-Ups" etc.
+  var lines=text.split('\n');
+  var blocks=[]; // [{header, lines[]}]
+  var current=null;
+
+  // Detect exercise header: starts with number/emoji, contains exercise-like word
+  function isHeader(line){
+    var l=line.trim();
+    // Numbered: "1.", "1️⃣", "①" etc followed by text
+    if(/^[\d]{1,2}[️⃣\.\)]\s/.test(l))return true;
+    if(/^[①②③④⑤⑥⑦⑧⑨]/.test(l))return true;
+    // Bold markdown "**Exercise**"
+    if(/^\*\*[\w\s\-]+\*\*/.test(l)&&l.length<80)return true;
+    return false;
+  }
+
+  lines.forEach(function(line){
+    if(isHeader(line)){
+      if(current)blocks.push(current);
+      current={header:line.trim(),lines:[]};
+    } else if(current){
+      current.lines.push(line);
+    }
+  });
+  if(current)blocks.push(current);
+
+  if(!blocks.length){
+    if(msg){msg.textContent='No exercises found — check the format';msg.style.color='var(--orange)';}
+    return;
+  }
+
+  // ── Parse each block ─────────────────────────────────────────────
+  function parseReps(str){
+    // "4 / 4 / 3 / 3" or "4/4/3/3" or "10 / 6" → [4,4,3,3]
+    var parts=str.split(/[\/,]/).map(function(p){return parseInt(p.trim());}).filter(function(n){return !isNaN(n)&&n>0;});
+    return parts;
+  }
+  function parseRest(blockLines){
+    for(var i=0;i<blockLines.length;i++){
+      var m=blockLines[i].match(/[Rr]est[:\s]*(\d+)\s*sec/);
+      if(m)return parseInt(m[1]);
+    }
+    return null;
+  }
+  function isPlankBlock(name){
+    return name.indexOf('PLANK')>=0;
+  }
+
+  var parsed=[];
+  blocks.forEach(function(block){
+    // Extract name and rep targets from header
+    // Header: "1️⃣ Pull-Up Ladder – 4 / 4 / 3 / 3"
+    var header=block.header;
+    // Strip leading number/emoji
+    var cleaned=header.replace(/^[\d️⃣①②③④⑤⑥⑦⑧⑨\.\)\s]+/,'').trim();
+    // Remove markdown bold
+    cleaned=cleaned.replace(/\*\*/g,'').trim();
+    // Split on dash/em-dash to get name vs reps portion
+    var dashIdx=cleaned.search(/\s[–\-]\s|\s–|\s-\s/);
+    var namePart=dashIdx>=0?cleaned.slice(0,dashIdx).trim():cleaned;
+    var repsPart=dashIdx>=0?cleaned.slice(dashIdx).replace(/^[\s–\-]+/,'').trim():'';
+
+    var internalName=normaliseName(namePart);
+    var rc=parseReps(repsPart);
+
+    // If no reps in header, look in block lines for "Set 1: ___" count or explicit targets
+    if(!rc.length){
+      var setCount=0;
+      block.lines.forEach(function(l){if(/set\s+\d+/i.test(l))setCount++;});
+      if(setCount>0){
+        // Find target from lines like "Target: 10/6" or just default
+        var targetLine=block.lines.find(function(l){return /target|aim|goal/i.test(l);});
+        if(targetLine){rc=parseReps(targetLine);}
+        if(!rc.length){for(var s=0;s<setCount;s++)rc.push(10);}
+      }
+    }
+
+    // For planks — rc values are seconds per side
+    var plank=isPlankBlock(internalName);
+    if(plank&&!rc.length){
+      // Look for "60 sec" in header or lines
+      var secMatch=header.match(/(\d+)\s*sec/)||block.lines.join(' ').match(/(\d+)\s*sec/);
+      var secs=secMatch?parseInt(secMatch[1]):60;
+      rc=[secs,secs];
+    }
+    if(!rc.length)rc=[10,10]; // fallback
+
+    var rest=parseRest(block.lines);
+
+    // Match to existing exercise to preserve seq/form/watch
+    var defaults=wType==='home'?homeEx:hotelEx;
+    var existing=defaults.find(function(e){return e.name===internalName;});
+
+    var ex=existing?JSON.parse(JSON.stringify(existing)):{
+      name:internalName,sets:rc.length,reps:rc.join('/'),rc:rc,
+      rest:rest||60,form:'',tweak:null,watch:null,isPlank:plank,seq:null
+    };
+    // Apply parsed targets on top of existing
+    ex.rc=rc;
+    ex.sets=rc.length;
+    ex.reps=rc.join('/');
+    if(rest)ex.rest=rest;
+
+    parsed.push(ex);
+  });
+
+  if(!parsed.length){
+    if(msg){msg.textContent='Could not parse any exercises';msg.style.color='var(--orange)';}
+    return;
+  }
+
+  // Apply to exs — replace matched exercises, keep order from paste
+  exs=parsed;
+  _previewSkipped=exs.map(function(){return false;});
+  renderPreview();
+
+  // Close panel with success message
+  var panel=document.getElementById('previewPastePanel');if(panel)panel.style.display='none';
+  var chevron=document.getElementById('previewPasteChevron');if(chevron)chevron.textContent='▼';
+  if(msg){
+    msg.style.color='var(--green)';
+    msg.textContent='\u2713 '+parsed.length+' exercise'+(parsed.length>1?'s':'')+' loaded';
+    // Move msg outside collapsed panel so it stays visible
+    var toggle=document.getElementById('previewPasteToggle');
+    if(toggle){toggle.querySelector('span').textContent='\u2713 '+parsed.length+' exercises loaded from Claude';}
+  }
 }
 
 function renderPreview(){
@@ -3453,6 +3715,7 @@ function loadProgressData(){
   if(cached){buildPRs(cached.sessions);setSyncBadges('cached',cacheAgeStr(cached.ts));}
   fetchHistory(function(sessions){buildPRs(sessions||[]);});
   buildCholDisplay();
+  buildBodyWeightChart();
 }
 
 function buildPullUpChart(sessions){
@@ -3488,7 +3751,8 @@ function buildPullUpChart(sessions){
   drawLineChart(canvas,puData.map(function(d){return d.date;}),puData.map(function(d){return d.total;}),16,'Target');
 }
 
-function drawLineChart(canvas,labels,values,goalVal,goalLabel){
+function drawLineChart(canvas,labels,values,goalVal,goalLabel,lineColor){
+  lineColor=lineColor||'#C8FF00';
   var ctx=canvas.getContext('2d'),W=canvas.offsetWidth||300,H=150;
   canvas.width=W*window.devicePixelRatio;canvas.height=H*window.devicePixelRatio;
   canvas.style.width=W+'px';canvas.style.height=H+'px';
@@ -3507,14 +3771,14 @@ function drawLineChart(canvas,labels,values,goalVal,goalLabel){
   }
   ctx.strokeStyle='rgba(255,255,255,0.06)';ctx.lineWidth=1;
   for(var g=0;g<=4;g++){var gy2=pad.top+cH*g/4;ctx.beginPath();ctx.moveTo(pad.left,gy2);ctx.lineTo(pad.left+cW,gy2);ctx.stroke();}
-  ctx.strokeStyle='#C8FF00';ctx.lineWidth=2.5;ctx.lineJoin='round';
+  ctx.strokeStyle=lineColor;ctx.lineWidth=2.5;ctx.lineJoin='round';
   ctx.beginPath();values.forEach(function(v,i){var x=pad.left+i*xStep,y=pad.top+cH-(v-min)/(max-min)*cH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
   ctx.stroke();
   values.forEach(function(v,i){
     var x=pad.left+i*xStep,y=pad.top+cH-(v-min)/(max-min)*cH;
     ctx.fillStyle='#07090C';ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#C8FF00';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.stroke();
-    ctx.fillStyle='#C8FF00';ctx.font='bold 10px DM Sans';ctx.textAlign='center';ctx.fillText(v,x,y-9);
+    ctx.strokeStyle=lineColor;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle=lineColor;ctx.font='bold 10px DM Sans';ctx.textAlign='center';ctx.fillText(v,x,y-9);
   });
   ctx.fillStyle='#44526A';ctx.font='9px DM Sans';ctx.textAlign='center';
   var step=Math.ceil(labels.length/5);
@@ -3694,6 +3958,56 @@ function buildPRs(sessions){
   if(el)el.innerHTML=html;
 }
 
+function buildBodyWeightChart(){
+  var el=document.getElementById('bodyWeightChart');if(!el)return;
+  el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">Loading...</div>';
+  var cb='wt_bwt_'+Date.now();
+  window[cb]=function(result){
+    window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
+    var rows=(result&&result.rows)?result.rows:[];
+    var data=rows.filter(function(r){return r.weight&&parseFloat(r.weight)>0;})
+      .map(function(r){return{date:r.date,weight:parseFloat(r.weight),waist:parseFloat(r.waist)||0,arm:parseFloat(r.arm)||0};})
+      .sort(function(a,b){return a.date<b.date?-1:1;})
+      .slice(-20);
+    if(!data.length){
+      el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">No weight data yet \u2014 log via Body Metrics</div>';
+      return;
+    }
+    // Stats row
+    var latest=data[data.length-1];
+    var first=data[0];
+    var change=Math.round((latest.weight-first.weight)*10)/10;
+    var changeCol=change<=0?'var(--green)':'var(--red)';
+    var html='<div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px;">';
+    html+='<div style="flex:1;text-align:center;padding:10px 4px;">';
+    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.8rem;color:var(--accent);line-height:1;">'+latest.weight+'</div>';
+    html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-top:2px;">lbs now</div></div>';
+    html+='<div style="flex:1;text-align:center;padding:10px 4px;border-left:1px solid var(--border);">';
+    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.8rem;color:'+changeCol+';line-height:1;">'+(change>0?'+':'')+change+'</div>';
+    html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-top:2px;">since start</div></div>';
+    if(latest.waist>0){
+      html+='<div style="flex:1;text-align:center;padding:10px 4px;border-left:1px solid var(--border);">';
+      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.8rem;color:var(--text);line-height:1;">'+latest.waist+'"</div>';
+      html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-top:2px;">waist</div></div>';
+    }
+    html+='</div>';
+    // Canvas chart
+    html+='<canvas id="bodyWtCanvas" style="width:100%;height:130px;display:block;"></canvas>';
+    el.innerHTML=html;
+    setTimeout(function(){
+      var canvas=document.getElementById('bodyWtCanvas');
+      if(canvas&&data.length>=2){
+        drawLineChart(canvas,data.map(function(d){return d.date;}),data.map(function(d){return d.weight;}),null,null,'var(--blue)');
+      }
+    },50);
+  };
+  var sc=document.createElement('script');sc.id='s_'+cb;
+  sc.onerror=function(){window[cb]=null;if(el)el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">Could not load weight data</div>';};
+  sc.src=CLOUD_URL+'?type=getBodyMetrics&callback='+cb;
+  document.head.appendChild(sc);
+  setTimeout(function(){if(window[cb]){window[cb]=null;if(el)el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">Timed out \u2014 tap Refresh</div>';}},12000);
+}
+
 function buildCholDisplay(){
   // Known readings — always shown immediately as fallback
   var knownReadings=[
@@ -3780,6 +4094,10 @@ function renderCholRows(readings){
   html+='<div class="chol-big-lbl">HDL <span style="font-weight:400;letter-spacing:0;">(40+)</span></div>';
   html+='<div class="chol-big-val" style="color:'+hdlColor+';">'+latest.hdl+'</div>';
   html+=deltaHtml(delta(latest.hdl,prev?prev.hdl:null),true);
+  // HDL goal bar: baseline 24 → goal 40
+  var hdlBase=24,hdlGoal=40,hdlPct=Math.min(100,Math.round(((latest.hdl-hdlBase)/Math.max(1,hdlGoal-hdlBase))*100));
+  html+='<div style="margin-top:6px;height:4px;background:var(--border2);border-radius:2px;overflow:hidden;"><div style="height:100%;width:'+hdlPct+'%;background:'+hdlColor+';border-radius:2px;transition:width 0.6s;"></div></div>';
+  html+='<div style="font-size:0.52rem;color:var(--muted);margin-top:3px;">'+hdlPct+'% to goal 40</div>';
   html+='</div>';
   html+='<div class="chol-big-box">';
   html+='<div class="chol-big-lbl">LDL</div>';
@@ -4192,6 +4510,24 @@ function budCalc(){
   s('bSpareVal',fmt(leftOver),leftOver>=0?'var(--green)':'var(--red)');
   s('bVegasSpare',fmt(leftOver),leftOver>=0?'var(--accent)':'var(--red)');
 
+  // Savings projection
+  var projEl=document.getElementById('bProjection');
+  if(projEl){
+    if(leftOver>0&&dpNeeded>0){
+      var months=Math.ceil(dpNeeded/leftOver);
+      var projDate=new Date();projDate.setMonth(projDate.getMonth()+months);
+      var projStr=projDate.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
+      projEl.textContent='At this rate: '+months+' months \u2014 '+projStr;
+      projEl.style.color='var(--green)';
+    } else if(leftOver<=0){
+      projEl.textContent='Increase spare to project timeline';
+      projEl.style.color='var(--orange)';
+    } else {
+      projEl.textContent='Down payment goal reached \u2713';
+      projEl.style.color='var(--green)';
+    }
+  }
+
   var thEl=document.getElementById('bThisMonth');
   if(thEl){thEl.style.color=thisMonth>=70?'var(--green)':thisMonth>0?'var(--red)':'var(--accent)';}
 
@@ -4421,11 +4757,64 @@ if(window.location.search.indexOf('share')>=0){
 }
 // ─── NUTRITION ────────────────────────────────────────────────────
 var NUT_FOODS_KEY='wt_foods_v1';
+var NUT_ENTRIES_KEY='wt_nut_entries_v1';
 var NUT_TARGETS_KEY='wt_nut_targets';
+var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
 var NUT_DEFAULTS={cal:2497,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000};
+
+// ── Sync queue — persists failed GAS calls and retries on next open ──────────
+function nutQueuePush(action){
+  try{
+    var q=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');
+    q.push({action:action,ts:Date.now(),attempts:0});
+    localStorage.setItem(NUT_SYNC_QUEUE_KEY,JSON.stringify(q));
+  }catch(e){}
+}
+function nutQueueRemove(ts){
+  try{
+    var q=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');
+    q=q.filter(function(i){return i.ts!==ts;});
+    localStorage.setItem(NUT_SYNC_QUEUE_KEY,JSON.stringify(q));
+  }catch(e){}
+}
+function nutQueueFlush(){
+  try{
+    var q=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');
+    if(!q.length)return;
+    // Only flush items older than 5s (give the originating call time to succeed first)
+    var now=Date.now();
+    var toFlush=q.filter(function(i){return now-i.ts>5000&&i.attempts<5;});
+    if(!toFlush.length)return;
+    toFlush.forEach(function(item){
+      item.attempts=(item.attempts||0)+1;
+      nutSyncAction(item.action,null,function(ok){
+        if(ok)nutQueueRemove(item.ts);
+      });
+    });
+    localStorage.setItem(NUT_SYNC_QUEUE_KEY,JSON.stringify(q));
+  }catch(e){}
+}
+// Generic single-action GAS sync — cb(true/false)
+function nutSyncAction(action,msgEl,cb){
+  var cbName='wt_ns_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+  window[cbName]=function(res){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    var ok=res&&res.status==='ok';
+    if(cb)cb(ok);
+  };
+  var sc=document.createElement('script');sc.id='s_'+cbName;
+  sc.onerror=function(){window[cbName]=null;if(cb)cb(false);};
+  sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify(action))+'&callback='+cbName;
+  document.head.appendChild(sc);
+  // GAS cold-start can take 15s — give it 20s before giving up
+  setTimeout(function(){
+    if(window[cbName]){window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);if(cb)cb(false);}
+  },20000);
+}
 
 var _nutDate=localDateStr();
 var _nutTab='day';
+var _nutLastTouched='amt';
 var _nutFoods=[];
 var _nutEntries=[];
 var _nutAddMeal='';
@@ -4489,9 +4878,13 @@ function nutRenderTargetInputs(){
 function nutInit(){
   nutLoadTargets();
   try{_nutFoods=JSON.parse(localStorage.getItem(NUT_FOODS_KEY)||'[]');}catch(e){_nutFoods=[];}
+  // Load cached entries immediately so day renders without waiting for sheet
+  try{_nutEntries=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');}catch(e){_nutEntries=[];}
   _nutDate=localDateStr();
   nutSetDateLabel();
   switchNutTab('day');
+  // Retry any previously failed syncs in the background
+  setTimeout(nutQueueFlush, 3000);
   nutBadge('load','Syncing');
   nutMsg('Loading from sheet...');
   nutFetchFoods();
@@ -4545,12 +4938,14 @@ function nutFetchFoods(){
 }
 
 function nutFetchEntries(){
-  var from=nutShiftDate(localDateStr(),-13),to=localDateStr();
+  var from=nutShiftDate(localDateStr(),-29),to=localDateStr();
   var cb='wt_gn_'+Date.now();
   window[cb]=function(res){
     window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
     if(res&&res.status==='ok'){
       _nutEntries=res.entries||[];
+      // Persist to localStorage so next load is instant
+      try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
       nutBadge('live','Live');
       nutMsg('Synced from sheet','var(--muted)');
       setTimeout(function(){nutMsg('');},2000);
@@ -4631,8 +5026,9 @@ function nutRenderDay(){
       h+='<div class="sum-name" style="font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+e.food+'</div>';
       h+='<div class="sum-result" style="font-size:0.62rem;margin-top:2px;">P\u202f'+Math.round(e.protein||0)+'g \u00b7 C\u202f'+Math.round(e.carbs||0)+'g \u00b7 F\u202f'+Math.round(e.fat||0)+'g'+(e.sodium?(' \u00b7 Sodium\u202f'+Math.round(e.sodium)+'mg'):'')+((e.servings&&e.servings!==1)?' \u00b7 \u00d7'+e.servings:'')+'</div>';
       h+='</div>';
-      h+='<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;padding-left:12px;">';
+      h+='<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;padding-left:8px;">';
       h+='<span style="font-family:Bebas Neue,sans-serif;font-size:1.05rem;">'+Math.round(e.calories||0)+'</span>';
+      h+='<button onclick="event.stopPropagation();nutMoveMeal('+gIdx+',\''+meal+'\')" style="background:var(--card2);border:1px solid var(--border);color:var(--muted);font-size:0.55rem;font-weight:700;letter-spacing:0.5px;border-radius:6px;padding:3px 6px;cursor:pointer;line-height:1.4;">MOVE</button>';
       h+='<button onclick="event.stopPropagation();nutDelEntry('+gIdx+')" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;line-height:1;">\u00d7</button>';
       h+='</div></div>';
     });
@@ -4876,17 +5272,44 @@ function nutHandlePhoto(input){
   input.value='';
 }
 
+var _nutVisionPending=null; // {base64, mediaType, statusEl} — held while key overlay is open
+
+function nutApiKeyShow(base64,mediaType,statusEl){
+  _nutVisionPending=(base64)?{base64:base64,mediaType:mediaType,statusEl:statusEl}:null;
+  var inp=document.getElementById('nutApiKeyInput');
+  // Pre-fill with existing key so user can see/edit it
+  if(inp)inp.value=localStorage.getItem('wt_gemini_key')||'';
+  var msg=document.getElementById('nutApiKeyMsg');
+  if(msg)msg.textContent=base64?'':'Enter or update your Gemini API key';
+  var ov=document.getElementById('nutApiKeyOverlay');
+  if(ov){ov.style.display='flex';}
+}
+function nutApiKeyCancel(){
+  var ov=document.getElementById('nutApiKeyOverlay');if(ov)ov.style.display='none';
+  _nutVisionPending=null;
+}
+function nutApiKeySave(){
+  var inp=document.getElementById('nutApiKeyInput');
+  var key=(inp?inp.value:'').trim();
+  var msg=document.getElementById('nutApiKeyMsg');
+  if(!key||key.length<20){
+    if(msg)msg.textContent='Key looks too short — paste it from AI Studio';
+    return;
+  }
+  localStorage.setItem('wt_gemini_key',key);
+  var ov=document.getElementById('nutApiKeyOverlay');if(ov)ov.style.display='none';
+  if(_nutVisionPending){
+    var p=_nutVisionPending;_nutVisionPending=null;
+    nutCallVision(p.base64,p.mediaType,p.statusEl);
+  }
+}
+
 function nutCallVision(base64,mediaType,statusEl){
   if(statusEl){statusEl.style.display='block';statusEl.style.color='var(--muted)';statusEl.textContent='Scanning with AI...';}
   var geminiKey=localStorage.getItem('wt_gemini_key')||'';
   if(!geminiKey){
-    geminiKey=prompt('Enter your Gemini API key.\n\nGet one free at aistudio.google.com/apikey\n\nSaved locally — only asked once.');
-    if(!geminiKey){
-      if(statusEl){statusEl.textContent='No key — fill in manually';statusEl.style.color='var(--orange)';}
-      return;
-    }
-    localStorage.setItem('wt_gemini_key',geminiKey.trim());
-    geminiKey=geminiKey.trim();
+    nutApiKeyShow(base64,mediaType,statusEl);
+    return;
   }
   var promptText='This is a nutrition label or food packaging. Extract and return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per serving. Sodium in mg. Use null for unknown fields.';
   var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
@@ -4939,7 +5362,10 @@ function nutCallVision(base64,mediaType,statusEl){
   .catch(function(err){
     var msg=err&&err.message||'';
     if(msg.indexOf('BAD_KEY')>=0){
-      if(statusEl){statusEl.textContent='Invalid key \u2014 tap SCAN to re-enter';statusEl.style.color='var(--orange)';}
+      localStorage.removeItem('wt_gemini_key');
+      nutApiKeyShow(base64,mediaType,statusEl);
+      var kmsg=document.getElementById('nutApiKeyMsg');
+      if(kmsg)kmsg.textContent='Key was rejected — paste a fresh one from AI Studio';
     } else if(msg.indexOf('Failed to fetch')>=0||msg.indexOf('NetworkError')>=0||msg===''){
       if(statusEl){statusEl.textContent='Network error \u2014 check connection and try again';statusEl.style.color='var(--orange)';}
     } else {
@@ -5030,12 +5456,45 @@ function nutCloseAdd(){var ov=document.getElementById('nutAddOverlay');if(ov)ov.
 function nutFilterAddList(){
   var q=(document.getElementById('nutAddSearch')||{}).value||'';
   var el=document.getElementById('nutAddList');if(!el)return;
+
+  var html='';
+
+  // Recent foods — top 8 distinct food names from last 14 days, no filter when no query
+  if(!q){
+    var cutoff=nutShiftDate(localDateStr(),-14);
+    var seen={},recent=[];
+    // Walk backwards through entries so most recent first
+    for(var ri=_nutEntries.length-1;ri>=0;ri--){
+      var re=_nutEntries[ri];
+      if(re.date<cutoff)continue;
+      if(seen[re.food])continue;
+      seen[re.food]=true;
+      var rf=_nutFoods.find(function(f){return f.name===re.food;});
+      if(rf)recent.push(rf);
+      if(recent.length>=8)break;
+    }
+    if(recent.length){
+      html+='<div style="font-size:0.58rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;padding:0 4px 8px;">Recent</div>';
+      recent.forEach(function(f){
+        var fi=_nutFoods.indexOf(f);
+        html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="nutPickFood('+fi+')">';
+        html+='<div><div style="font-size:0.88rem;font-weight:600;">'+f.name+'</div>';
+        html+='<div style="font-size:0.62rem;color:var(--muted);">'+Math.round(f.calories)+' kcal \u00b7 P '+Math.round(f.protein)+'g \u00b7 per '+f.serving+f.unit+'</div></div>';
+        html+='<div style="color:var(--accent);font-size:1.4rem;padding:0 6px;font-weight:900;">+</div>';
+        html+='</div>';
+      });
+      html+='<div style="font-size:0.58rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;padding:14px 4px 8px;">All Foods</div>';
+    }
+  }
+
   var list=_nutFoods.filter(function(f){return !q||f.name.toLowerCase().indexOf(q.toLowerCase())>=0;});
-  if(!list.length){
-    el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">'+(q?'No match':'Add foods in the Foods tab first.')+'</div>';
+  if(!list.length&&!html){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">'+(q?'No match for "'+q+'"':'Add foods in the Foods tab first.')+'</div>';
     return;
   }
-  el.innerHTML=list.map(function(f){
+  if(!list.length){el.innerHTML=html;return;}
+
+  html+=list.map(function(f){
     var fi=_nutFoods.indexOf(f);
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="nutPickFood('+fi+')">'+
       '<div><div style="font-size:0.88rem;font-weight:600;">'+f.name+'</div>'+
@@ -5043,12 +5502,15 @@ function nutFilterAddList(){
       '<div style="color:var(--accent);font-size:1.4rem;padding:0 6px;font-weight:900;">+</div>'+
     '</div>';
   }).join('');
+
+  el.innerHTML=html;
 }
 
 function nutPickFood(idx){
   var f=_nutFoods[idx];if(!f)return;
   _nutServingFood=f;
   _nutEditingEntryIdx=-1;
+  _nutLastTouched='amt';
   nutCloseAdd();
   document.getElementById('nutServingFoodName').textContent=f.name;
   document.getElementById('nutServingDefault').textContent='Macros per '+f.serving+f.unit+' serving';
@@ -5067,19 +5529,17 @@ function nutPickFood(idx){
 
 function nutServingPreview(){
   var f=_nutServingFood;if(!f)return;
-  // User can enter either amount OR servings — whichever was last changed
-  // We use amount as the primary control; servings auto-syncs
   var amtEl=document.getElementById('nutServingAmt');
   var qtyEl=document.getElementById('nutServingQty');
-  var amt=parseFloat((amtEl||{}).value)||f.serving;
-  // Sync qty display: qty = amt / serving
-  var qty=f.serving>0?amt/f.serving:1;
-  if(qtyEl&&document.activeElement!==qtyEl)qtyEl.value=Math.round(qty*100)/100;
-  // If user typed in qty, update amt
-  if(document.activeElement===qtyEl){
-    qty=parseFloat(qtyEl.value)||1;
+  var amt,qty;
+  if(_nutLastTouched==='qty'){
+    qty=parseFloat((qtyEl||{}).value)||1;
     amt=qty*f.serving;
-    if(amtEl&&document.activeElement!==amtEl)amtEl.value=Math.round(amt*10)/10;
+    if(amtEl)amtEl.value=Math.round(amt*10)/10;
+  } else {
+    amt=parseFloat((amtEl||{}).value)||f.serving;
+    qty=f.serving>0?amt/f.serving:1;
+    if(qtyEl)qtyEl.value=Math.round(qty*100)/100;
   }
   var ratio=f.serving>0?amt/f.serving:qty;
   var box=document.getElementById('nutServingPreviewBox');if(!box)return;
@@ -5120,15 +5580,17 @@ function nutConfirmServing(){
     _nutEntries.push(entry);
   }
   _nutEditingEntryIdx=-1;
+  // Persist immediately
+  try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
 
   var ov=document.getElementById('nutServingOverlay');if(ov)ov.style.display='none';
   nutRenderDay();
   nutBadge('load','Saving');
-  nutMsg('Saving to sheet...');
+  nutMsg('Saving...');
 
+  // Build ordered list of actions: delete-old (if edit), then log-new
   var syncActions=[];
   if(isEdit&&oldEntry){
-    // Delete old then add new
     syncActions.push({type:'deleteNutritionRow',date:oldEntry.date,meal:oldEntry.meal,food:oldEntry.food});
   }
   syncActions.push({type:'logNutrition',entries:[entry]});
@@ -5136,21 +5598,26 @@ function nutConfirmServing(){
   function runNext(i){
     if(i>=syncActions.length){
       nutBadge('live','Live');
-      nutMsg('Saved to Google Sheets \u2713','var(--green)');
+      nutMsg('Saved \u2713','var(--green)');
       setTimeout(function(){nutMsg('');},2500);
       return;
     }
     var action=syncActions[i];
-    var cb='wt_cs_'+Date.now()+'_'+i;
-    window[cb]=function(res){
-      window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
-      runNext(i+1);
-    };
-    var sc=document.createElement('script');sc.id='s_'+cb;
-    sc.onerror=function(){window[cb]=null;nutBadge('cached','Offline');nutMsg('Saved locally','var(--yellow)');};
-    sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify(action))+'&callback='+cb;
-    document.head.appendChild(sc);
-    setTimeout(function(){if(window[cb]){window[cb]=null;runNext(i+1);}},8000);
+    nutSyncAction(action,null,function(ok){
+      if(ok){
+        runNext(i+1);
+      } else {
+        // Queue for retry, keep going with remaining actions
+        nutQueuePush(action);
+        runNext(i+1);
+        // Only show offline if the log action itself failed (not the delete)
+        if(action.type==='logNutrition'){
+          nutBadge('cached','Queued');
+          nutMsg('Saved locally \u2014 will retry','var(--yellow)');
+          setTimeout(function(){nutMsg('');},4000);
+        }
+      }
+    });
   }
   runNext(0);
 }
@@ -5187,22 +5654,68 @@ function nutEditEntry(idx){
 }
 var _nutEditingEntryIdx=-1;
 
+function nutMoveMeal(idx,currentMeal){
+  var e=_nutEntries[idx];if(!e)return;
+  // Build other meals list
+  var others=NUT_MEALS.filter(function(m){return m!==currentMeal;});
+  // Simple sheet: show inline picker below the row by re-rendering with a picker state
+  // Use a lightweight approach: show a floating picker overlay
+  var picker=document.getElementById('nutMealMoverPicker');
+  if(!picker){
+    picker=document.createElement('div');
+    picker.id='nutMealMoverPicker';
+    picker.style.cssText='position:fixed;z-index:400;background:var(--card);border:1px solid var(--border2);border-radius:var(--r-sm);padding:6px;box-shadow:0 8px 32px rgba(0,0,0,0.5);display:none;';
+    document.body.appendChild(picker);
+  }
+  var html='<div style="font-size:0.58rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;padding:4px 8px 6px;">Move to...</div>';
+  others.forEach(function(m){
+    html+='<button onclick="nutMoveToMeal('+idx+',\''+m+'\')" style="display:block;width:100%;text-align:left;padding:9px 12px;background:none;border:none;color:var(--text);font-size:0.85rem;font-weight:600;cursor:pointer;border-radius:6px;" onmouseover="this.style.background=\'var(--card2)\'" onmouseout="this.style.background=\'none\'">'+m+'</button>';
+  });
+  html+='<button onclick="document.getElementById(\'nutMealMoverPicker\').style.display=\'none\'" style="display:block;width:100%;text-align:center;padding:7px 12px;background:none;border:none;color:var(--muted);font-size:0.75rem;cursor:pointer;margin-top:2px;">Cancel</button>';
+  picker.innerHTML=html;
+  // Position near tap — use a fixed position at bottom-center so it's always visible on mobile
+  picker.style.left='50%';picker.style.transform='translateX(-50%)';picker.style.bottom='calc(var(--nav-h) + var(--safe-b) + 16px)';picker.style.display='block';
+  // Auto-close on outside tap
+  setTimeout(function(){
+    function closePicker(ev){if(!picker.contains(ev.target)){picker.style.display='none';document.removeEventListener('touchstart',closePicker);document.removeEventListener('click',closePicker);}}
+    document.addEventListener('touchstart',closePicker,{once:false,passive:true});
+    document.addEventListener('click',closePicker,{once:false});
+  },100);
+}
+
+function nutMoveToMeal(idx,newMeal){
+  var picker=document.getElementById('nutMealMoverPicker');if(picker)picker.style.display='none';
+  var e=_nutEntries[idx];if(!e)return;
+  var oldEntry=JSON.parse(JSON.stringify(e));
+  e.meal=newMeal;
+  try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(err){}
+  nutRenderDay();
+  nutBadge('load','Saving');
+  var steps=[
+    {type:'deleteNutritionRow',date:oldEntry.date,meal:oldEntry.meal,food:oldEntry.food},
+    {type:'logNutrition',entries:[e]}
+  ];
+  function runStep(i){
+    if(i>=steps.length){nutBadge('live','Live');nutMsg('Moved to '+newMeal+' \u2713','var(--green)');setTimeout(function(){nutMsg('');},2000);return;}
+    nutSyncAction(steps[i],null,function(ok){
+      if(!ok)nutQueuePush(steps[i]);
+      runStep(i+1);
+    });
+  }
+  runStep(0);
+}
+
 function nutDelEntry(idx){
   var e=_nutEntries[idx];if(!e)return;
-  _nutEntries.splice(idx,1);nutRenderDay();
+  var action={type:'deleteNutritionRow',date:e.date,meal:e.meal,food:e.food};
+  _nutEntries.splice(idx,1);
+  try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(err){}
+  nutRenderDay();
   nutBadge('load','Saving');
-  var cb='wt_dn_'+Date.now();
-  window[cb]=function(res){
-    window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
-    nutBadge(res&&res.status==='ok'?'live':'cached',res&&res.status==='ok'?'Live':'Cached');
-    nutMsg(res&&res.status==='ok'?'Deleted \u2713':'','var(--green)');
-    setTimeout(function(){nutMsg('');},2000);
-  };
-  var sc=document.createElement('script');sc.id='s_'+cb;
-  sc.onerror=function(){window[cb]=null;nutBadge('cached','Offline');};
-  sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'deleteNutritionRow',date:e.date,meal:e.meal,food:e.food}))+'&callback='+cb;
-  document.head.appendChild(sc);
-  setTimeout(function(){if(window[cb]){window[cb]=null;nutBadge('cached','Timeout');}},10000);
+  nutSyncAction(action,null,function(ok){
+    if(ok){nutBadge('live','Live');nutMsg('Deleted \u2713','var(--green)');setTimeout(function(){nutMsg('');},2000);}
+    else{nutQueuePush(action);nutBadge('cached','Queued');nutMsg('Queued for retry','var(--yellow)');}
+  });
 }
 
 </script>
