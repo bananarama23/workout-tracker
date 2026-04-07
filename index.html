@@ -1872,10 +1872,10 @@ function previewParsePaste(){
   var text=(inp?inp.value:'').trim();
   if(!text){if(msg){msg.textContent='Paste something first';msg.style.color='var(--orange)';}return;}
 
-  // ── Name normaliser: map Claude names → internal exercise names ──
+  // ── Name map: Claude/ChatGPT names → internal names ──────────────
   var NAME_MAP={
-    'pull-up':'PULL-UPS','pull-ups':'PULL-UPS','pullup':'PULL-UPS','pullups':'PULL-UPS',
     'pull-up ladder':'PULL-UPS','pull up ladder':'PULL-UPS',
+    'pull-up':'PULL-UPS','pull-ups':'PULL-UPS','pullup':'PULL-UPS','pullups':'PULL-UPS',
     'close-grip push-up':'CLOSE-GRIP PUSH-UPS','close grip push-up':'CLOSE-GRIP PUSH-UPS',
     'close-grip push-ups':'CLOSE-GRIP PUSH-UPS','close grip push-ups':'CLOSE-GRIP PUSH-UPS',
     'dip':'DIPS','dips':'DIPS',
@@ -1887,36 +1887,45 @@ function previewParsePaste(){
     'supinated pull-up':'SUPINATED PULL-UPS','supinated pull-ups':'SUPINATED PULL-UPS',
     'supinated pullup':'SUPINATED PULL-UPS','supinated pullups':'SUPINATED PULL-UPS',
   };
+
   function normaliseName(raw){
     var lower=raw.toLowerCase().replace(/\s+/g,' ').trim();
-    // Strip leading emoji / numbers like "1️⃣ " or "1. "
-    lower=lower.replace(/^[\d️⃣\.\s#*]+/,'').trim();
-    // Try direct map
     if(NAME_MAP[lower])return NAME_MAP[lower];
-    // Try partial match
     for(var k in NAME_MAP){if(lower.indexOf(k)>=0)return NAME_MAP[k];}
-    // Return uppercased original as fallback
-    return raw.replace(/^[\d️⃣\.\s#*–-]+/,'').trim().toUpperCase();
+    return raw.toUpperCase();
   }
 
-  // ── Split text into exercise blocks ──────────────────────────────
-  // Blocks start with a line that looks like an exercise header:
-  // "1️⃣ Pull-Up Ladder – 4 / 4 / 3 / 3" or "1. Pull-Ups" etc.
-  var lines=text.split('\n');
-  var blocks=[]; // [{header, lines[]}]
-  var current=null;
+  // ── Strip leading number/emoji from a header line ─────────────────
+  function stripLeading(s){
+    // Keycap sequence: digit + U+FE0F + U+20E3
+    s=s.replace(/^\d\uFE0F\u20E3\s*/,'');
+    // Circled numbers ①-⑨ (U+2460-U+2468)
+    s=s.replace(/^[\u2460-\u2468]\s*/,'');
+    // Plain digit prefix: "1. " "1) " "1 "
+    s=s.replace(/^\d{1,2}[\.\)\s]\s*/,'');
+    // Markdown bold
+    s=s.replace(/\*\*/g,'');
+    return s.trim();
+  }
 
-  // Detect exercise header: starts with number/emoji, contains exercise-like word
+  // ── Detect exercise header lines ──────────────────────────────────
   function isHeader(line){
     var l=line.trim();
-    // Numbered: "1.", "1️⃣", "①" etc followed by text
-    if(/^[\d]{1,2}[️⃣\.\)]\s/.test(l))return true;
-    if(/^[①②③④⑤⑥⑦⑧⑨]/.test(l))return true;
-    // Bold markdown "**Exercise**"
-    if(/^\*\*[\w\s\-]+\*\*/.test(l)&&l.length<80)return true;
+    if(!l)return false;
+    // 1️⃣  — digit + variation selector U+FE0F + combining enclosing keycap U+20E3
+    if(/^\d\uFE0F\u20E3/.test(l))return true;
+    // ①②③… circled numbers
+    if(/^[\u2460-\u2468]/.test(l))return true;
+    // "1. " or "1) "
+    if(/^\d{1,2}[\.\)]\s/.test(l))return true;
+    // **Bold exercise name**
+    if(/^\*\*[A-Z]/.test(l)&&l.length<80)return true;
     return false;
   }
 
+  // ── Split into blocks ─────────────────────────────────────────────
+  var lines=text.split('\n');
+  var blocks=[],current=null;
   lines.forEach(function(line){
     if(isHeader(line)){
       if(current)blocks.push(current);
@@ -1928,96 +1937,82 @@ function previewParsePaste(){
   if(current)blocks.push(current);
 
   if(!blocks.length){
-    if(msg){msg.textContent='No exercises found — check the format';msg.style.color='var(--orange)';}
+    if(msg){msg.textContent='No exercises found — paste the numbered list from Claude or ChatGPT';msg.style.color='var(--orange)';}
     return;
   }
 
-  // ── Parse each block ─────────────────────────────────────────────
+  // ── Parse reps / rest from each block ────────────────────────────
   function parseReps(str){
-    // "4 / 4 / 3 / 3" or "4/4/3/3" or "10 / 6" → [4,4,3,3]
     var parts=str.split(/[\/,]/).map(function(p){return parseInt(p.trim());}).filter(function(n){return !isNaN(n)&&n>0;});
     return parts;
   }
-  function parseRest(blockLines){
-    for(var i=0;i<blockLines.length;i++){
-      var m=blockLines[i].match(/[Rr]est[:\s]*(\d+)\s*sec/);
+  function parseRest(blines){
+    for(var i=0;i<blines.length;i++){
+      var m=blines[i].match(/[Rr]est[:\s]+(\d+)\s*sec/);
       if(m)return parseInt(m[1]);
     }
     return null;
   }
-  function isPlankBlock(name){
-    return name.indexOf('PLANK')>=0;
-  }
 
   var parsed=[];
   blocks.forEach(function(block){
-    // Extract name and rep targets from header
-    // Header: "1️⃣ Pull-Up Ladder – 4 / 4 / 3 / 3"
-    var header=block.header;
-    // Strip leading number/emoji
-    var cleaned=header.replace(/^[\d️⃣①②③④⑤⑥⑦⑧⑨\.\)\s]+/,'').trim();
-    // Remove markdown bold
-    cleaned=cleaned.replace(/\*\*/g,'').trim();
-    // Split on dash/em-dash to get name vs reps portion
-    var dashIdx=cleaned.search(/\s[–\-]\s|\s–|\s-\s/);
+    var cleaned=stripLeading(block.header);
+
+    // Split on em-dash or hyphen-dash: "Pull-Up Ladder – 4 / 4 / 3 / 3"
+    var dashIdx=cleaned.search(/\s[–\-]\s|\s–/);
     var namePart=dashIdx>=0?cleaned.slice(0,dashIdx).trim():cleaned;
     var repsPart=dashIdx>=0?cleaned.slice(dashIdx).replace(/^[\s–\-]+/,'').trim():'';
 
-    var internalName=normaliseName(namePart);
-    var rc=parseReps(repsPart);
-
-    // If no reps in header, look in block lines for "Set 1: ___" count or explicit targets
-    if(!rc.length){
-      var setCount=0;
-      block.lines.forEach(function(l){if(/set\s+\d+/i.test(l))setCount++;});
-      if(setCount>0){
-        // Find target from lines like "Target: 10/6" or just default
-        var targetLine=block.lines.find(function(l){return /target|aim|goal/i.test(l);});
-        if(targetLine){rc=parseReps(targetLine);}
-        if(!rc.length){for(var s=0;s<setCount;s++)rc.push(10);}
-      }
+    // Handle split reps across two lines: "20 /" on header, "16 (NEW TARGET)" on next line
+    if(repsPart.match(/\d+\s*\/\s*$/)&&block.lines.length){
+      var nextNums=block.lines[0].replace(/[^0-9\/\s]/g,'').trim();
+      if(nextNums)repsPart=repsPart+' '+nextNums;
     }
 
-    // For planks — rc values are seconds per side
-    var plank=isPlankBlock(internalName);
-    if(plank&&!rc.length){
-      // Look for "60 sec" in header or lines
-      var secMatch=header.match(/(\d+)\s*sec/)||block.lines.join(' ').match(/(\d+)\s*sec/);
+    var internalName=normaliseName(namePart);
+    var rc=parseReps(repsPart);
+    var isPlank=internalName.indexOf('PLANK')>=0;
+
+    // Planks: get seconds from header
+    if(isPlank){
+      var secMatch=cleaned.match(/(\d+)\s*sec/);
       var secs=secMatch?parseInt(secMatch[1]):60;
       rc=[secs,secs];
     }
-    if(!rc.length)rc=[10,10]; // fallback
+
+    // No reps found: count Set lines in block
+    if(!rc.length&&!isPlank){
+      var setCount=0;
+      block.lines.forEach(function(l){if(/set\s*\d+/i.test(l))setCount++;});
+      for(var s=0;s<(setCount||2);s++)rc.push(10);
+    }
 
     var rest=parseRest(block.lines);
 
-    // Match to existing exercise to preserve seq/form/watch
+    // Merge with built-in exercise (preserves seq/form/watch/cues)
     var defaults=wType==='home'?homeEx:hotelEx;
-    var existing=defaults.find(function(e){return e.name===internalName;});
-
+    var existing=null;
+    for(var i=0;i<defaults.length;i++){if(defaults[i].name===internalName){existing=defaults[i];break;}}
     var ex=existing?JSON.parse(JSON.stringify(existing)):{
       name:internalName,sets:rc.length,reps:rc.join('/'),rc:rc,
-      rest:rest||60,form:'',tweak:null,watch:null,isPlank:plank,seq:null
+      rest:rest||60,form:'',tweak:null,watch:null,isPlank:isPlank,seq:null
     };
-    // Apply parsed targets on top of existing
+    // Always apply parsed values on top
     ex.rc=rc;
     ex.sets=rc.length;
-    ex.reps=rc.join('/');
+    ex.reps=ex.isPlank?(rc[0]||60)+' sec/side':rc.join('/');
     if(rest)ex.rest=rest;
-
     parsed.push(ex);
   });
 
   if(!parsed.length){
-    if(msg){msg.textContent='Could not parse any exercises';msg.style.color='var(--orange)';}
+    if(msg){msg.textContent='Could not parse exercises — try copying just the numbered section';msg.style.color='var(--orange)';}
     return;
   }
 
-  // Apply to exs — replace matched exercises, keep order from paste
   exs=parsed;
   _previewSkipped=exs.map(function(){return false;});
-  // Re-render with panel open so user can see the result
   renderPreview();
-  // Show success in the msg div (panel stays open so msg is visible)
   var msg2=document.getElementById('previewPasteMsg');
   if(msg2){msg2.textContent='\u2713 '+parsed.length+' exercise'+(parsed.length>1?'s':'')+' loaded — review below then start';msg2.style.color='var(--green)';}
 }
