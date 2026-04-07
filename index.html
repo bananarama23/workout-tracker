@@ -528,7 +528,13 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <div id="todayPlanCard" class="today-hero" style="display:none;" onclick="todayCardTap()">
       <div class="th-label">Today's Plan</div>
       <div class="th-type" id="todayPlanType">HOME WORKOUT</div>
-      <div class="th-tap">Tap to begin ›</div>
+      <div id="todayTomorrowRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+        <div class="th-tap" id="todayCardTapHint">Tap to begin ›</div>
+        <div id="tomorrowBadge" style="display:none;background:rgba(255,255,255,0.08);border-radius:20px;padding:4px 12px;">
+          <div style="font-size:0.52rem;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.4);font-weight:700;">Tomorrow</div>
+          <div style="font-size:0.78rem;font-weight:700;color:rgba(255,255,255,0.7);margin-top:1px;" id="tomorrowType">Rest</div>
+        </div>
+      </div>
     </div>
     <div class="week-strip">
       <div class="week-stat" onclick="showHistory('strength')">
@@ -938,6 +944,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 <!-- BUDGET PAGE -->
 <div class="page" id="page-budget">
   <div class="ph">
+    <div class="sync-pill sp-load" id="syncBadgeBud"><div class="sp-dot"></div><span id="syncTextBud">Syncing</span></div>
     <h1>BUDGET</h1>
     <p class="ph-sub" id="budgetUpdated">Tap values to edit</p>
   </div>
@@ -1101,6 +1108,12 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
     </div>
 
+    <!-- ACTIONS -->
+    <div style="padding:20px 20px 8px;">
+      <button onclick="budSaveToSheet()" id="budSaveBtn" style="width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:2px;font-weight:900;transition:all 0.15s;cursor:pointer;margin-bottom:8px;">SAVE TO SHEET</button>
+      <button onclick="budReset()" style="width:100%;padding:12px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:0.85rem;letter-spacing:2px;font-weight:700;transition:all 0.15s;cursor:pointer;">RESET — RESYNC FROM SHEET</button>
+      <div class="log-msg" id="budMsg" style="margin-top:8px;"></div>
+    </div>
     <div style="height:16px;"></div>
   </div>
 </div>
@@ -1113,12 +1126,37 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <p class="ph-sub" id="planWeekLabel">This week</p>
   </div>
   <div class="page-body">
+    <div style="display:flex;gap:0;margin:12px 16px 0;background:var(--card);border-radius:var(--r-sm);padding:3px;border:1px solid var(--border);">
+      <button class="log-tab active" id="planTabThis" onclick="switchPlanWeek(0)">This Week</button>
+      <button class="log-tab" id="planTabNext" onclick="switchPlanWeek(1)">Next Week</button>
+    </div>
+    <!-- Week goal tracker -->
+    <div id="weekGoalBar" style="margin:10px 16px 0;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <div style="display:flex;gap:10px;align-items:center;flex:1;">
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span id="wgStrIcon" style="font-size:1rem;">⬜</span>
+          <span style="font-size:0.68rem;color:var(--muted);">Strength <span id="wgStrCount" style="color:var(--text2);">0/3</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span id="wgHiitIcon" style="font-size:1rem;">⬜</span>
+          <span style="font-size:0.68rem;color:var(--muted);">HIIT <span id="wgHiitCount" style="color:var(--text2);">0/1</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span id="wgHiit8Icon" style="font-size:1rem;">⬜</span>
+          <span style="font-size:0.68rem;color:var(--muted);">HIIT 8 <span id="wgHiit8Count" style="color:var(--text2);">0/1</span></span>
+        </div>
+      </div>
+      <div id="wgAllDone" style="display:none;font-size:0.72rem;font-weight:700;color:var(--green);letter-spacing:0.5px;">WEEK MET ✓</div>
+    </div>
     <div class="plan-grid" id="planGrid">
       <div style="text-align:center;color:var(--muted);padding:40px 0;">Loading plan...</div>
     </div>
     <div style="padding:0 16px 16px;">
       <div id="planMsg" class="plan-msg"></div>
       <div style="font-size:0.7rem;color:var(--muted);text-align:center;padding-top:4px;">Tap any day to cycle types</div>
+      <div id="copyWeekWrap" style="display:none;margin-top:14px;">
+        <button onclick="copyWeekSummary()" id="copyWeekBtn" style="width:100%;padding:14px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--text);cursor:pointer;">&#128203; COPY WEEK SUMMARY</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1567,7 +1605,7 @@ function renderHomeData(sessions){
   var wkStr=0,wkHIIT=0;
   sessions.forEach(function(s){
     if(s.week===weekNum){
-      if(s.workoutType==='HIIT')wkHIIT++;
+      if(isHIIT(s.workoutType))wkHIIT++;
       else if(s.workoutType!=='Walk')wkStr++;
     }
   });
@@ -1594,7 +1632,7 @@ function renderHomeData(sessions){
     var d2=parseLocalDate(s.date);var cut=new Date();cut.setDate(cut.getDate()-56);
     if(d2<cut)return;
     if(!weekCounts[s.week])weekCounts[s.week]={str:0,hiit:0};
-    if(s.workoutType==='HIIT')weekCounts[s.week].hiit++;
+    if(isHIIT(s.workoutType))weekCounts[s.week].hiit++;
     else if(s.workoutType!=='Walk')weekCounts[s.week].str++;
   });
   var wks=Object.keys(weekCounts);
@@ -1616,7 +1654,7 @@ function calcStreak(sessions){
   var wc={};
   sessions.forEach(function(s){
     if(!wc[s.week])wc[s.week]={str:0,hiit:0};
-    if(s.workoutType==='HIIT')wc[s.week].hiit++;
+    if(isHIIT(s.workoutType))wc[s.week].hiit++;
     else if(s.workoutType!=='Walk')wc[s.week].str++;
   });
   var weeks=Object.keys(wc).sort().reverse(),streak=0;
@@ -2817,7 +2855,7 @@ function saveHIIT(){
   var wn=1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7);
   var payload={type:'hiit',date:date,week:'Week '+wn,duration:dur,effort:selEff,notes:notes,video:hiitVideo};
   // Record locally and update home immediately
-  var localSd={date:date,week:'Week '+wn,workoutType:'HIIT',exercises:[{name:'HIIT',feel:'',notes:notes+(hiitVideo?' - '+hiitVideo:'')}]};
+  var localSd={date:date,week:'Week '+wn,workoutType:hiitVideo,exercises:[{name:'HIIT',feel:'',notes:notes+(hiitVideo?' - '+hiitVideo:'')}]};
   recSession(localSd);
   if(_sheetSessions){_sheetSessions.push(localSd);_cachedSessions=_sheetSessions;}
   else if(_cachedSessions){_cachedSessions.push(localSd);}
@@ -2991,7 +3029,7 @@ function showHistory(type){
   document.getElementById('historyContent').innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);">Loading...</div>';
   document.getElementById('historyOverlay').style.display='flex';
   function render(sessions){
-    var filtered=(sessions||[]).filter(function(s){return type==='strength'?s.workoutType&&s.workoutType.indexOf('Strength')>=0:s.workoutType==='HIIT';}).slice().reverse().slice(0,20);
+    var filtered=(sessions||[]).filter(function(s){return type==='strength'?s.workoutType&&s.workoutType.indexOf('Strength')>=0:isHIIT(s.workoutType);}).slice().reverse().slice(0,20);
     if(!filtered.length){document.getElementById('historyContent').innerHTML='<div style="color:var(--muted);text-align:center;padding:20px;">No sessions found</div>';return;}
     var html='';
     filtered.forEach(function(sess){
@@ -3019,35 +3057,119 @@ function goEditSession(){closeHistory();navTo('log');switchLogTab('edit');}
 function closeHistory(){document.getElementById('historyOverlay').style.display='none';}
 
 // ─── PLAN ─────────────────────────────────────────────────────────
-var PLAN_TYPES=['Home','Hotel','HIIT','Rest','Travel'];
-var PLAN_COLORS={'Home':'pt-home','Hotel':'pt-hotel','HIIT':'pt-hiit','Rest':'pt-rest','Travel':'pt-travel'};
+var PLAN_TYPES=['Home','Hotel','HIIT','HIIT 8','Rest','Travel'];
+var PLAN_COLORS={'Home':'pt-home','Hotel':'pt-hotel','HIIT':'pt-hiit','HIIT 8':'pt-hiit8','Rest':'pt-rest','Travel':'pt-travel'};
 var _weekPlan={},_cachedPlan=null;
 
-function getWeekDates(){
+function isHIIT(wt){return isHIIT(wt);}
+
+function getWeekDates(offset){
+  offset=offset||0;
   var today=new Date(),day=today.getDay();
-  var mon=new Date(today);mon.setDate(today.getDate()-(day===0?6:day-1));mon.setHours(0,0,0,0);
+  var mon=new Date(today);
+  mon.setDate(today.getDate()-(day===0?6:day-1)+(offset*7));
+  mon.setHours(0,0,0,0);
   var days=[];for(var i=0;i<7;i++){var d=new Date(mon);d.setDate(mon.getDate()+i);days.push(d);}
   return days;
 }
 function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
-function initPlanPage(){
-  var days=getWeekDates(),today=fmtDate(new Date());
+var _planWeekOffset=0;
+
+function switchPlanWeek(offset){
+  _planWeekOffset=offset;
+  var pt=document.getElementById('planTabThis'),pn=document.getElementById('planTabNext');
+  if(pt)pt.classList.toggle('active',offset===0);
+  if(pn)pn.classList.toggle('active',offset===1);
+  var days=getWeekDates(offset),today=fmtDate(new Date());
   var mon=days[0],sun=days[6];
-  document.getElementById('planWeekLabel').textContent=mon.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' \u2013 '+sun.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  var wlEl=document.getElementById('planWeekLabel');
+  if(wlEl)wlEl.textContent=(offset===0?'This week: ':'')+mon.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' \u2013 '+sun.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  renderPlanGrid(days,today);
+  updateWeekGoalBar(days);
+}
+
+function updateWeekGoalBar(days){
+  var strDone=0,hiitDone=0,hiit8Done=0;
+  (days||getWeekDates(0)).forEach(function(d){
+    var ds=fmtDate(d);
+    (_cachedSessions||[]).forEach(function(s){
+      if(s.date!==ds)return;
+      var wt=s.workoutType||'';
+      if(wt.indexOf('Strength')>=0)strDone++;
+      else if(wt==='HIIT 8')hiit8Done++;
+      else if(wt==='HIIT')hiitDone++;
+    });
+  });
+  strDone=Math.min(strDone,3);hiitDone=Math.min(hiitDone,1);hiit8Done=Math.min(hiit8Done,1);
+  var strOk=strDone>=3,hiitOk=hiitDone>=1,hiit8Ok=hiit8Done>=1;
+  var allDone=strOk&&hiitOk&&hiit8Ok;
+  function tick(id,ok){var el=document.getElementById(id);if(el)el.textContent=ok?'✅':'⬜';}
+  function count(id,n,t){var el=document.getElementById(id);if(el){el.textContent=n+'/'+t;el.style.color=n>=t?'var(--green)':'var(--text2)';}}
+  tick('wgStrIcon',strOk);tick('wgHiitIcon',hiitOk);tick('wgHiit8Icon',hiit8Ok);
+  count('wgStrCount',strDone,3);count('wgHiitCount',hiitDone,1);count('wgHiit8Count',hiit8Done,1);
+  var allEl=document.getElementById('wgAllDone');if(allEl)allEl.style.display=allDone?'block':'none';
+  var bar=document.getElementById('weekGoalBar');if(bar)bar.style.borderColor=allDone?'rgba(0,212,138,0.4)':'var(--border)';
+}
+
+function copyWeekSummary(){
+  var days=getWeekDates(0);
+  var today=fmtDate(new Date());
+  var dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  var lines=['WEEK SUMMARY — w/c '+days[0].toLocaleDateString('en-GB',{day:'numeric',month:'short'}),''];
+  days.forEach(function(d,i){
+    var ds=fmtDate(d);
+    var planned=_weekPlan[ds]||'Rest';
+    var dayLabel=dayNames[i]+' '+d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    var sessions=(_cachedSessions||[]).filter(function(s){return s.date===ds;});
+    var hiitSess=sessions.find(function(s){return isHIIT(s.workoutType);});
+    var strSess=sessions.find(function(s){return s.workoutType&&s.workoutType.indexOf('Strength')>=0;});
+    var parts=[];
+    if(strSess){parts.push(strSess.workoutType.replace(' Strength','').toUpperCase());}
+    else if(planned==='Home'||planned==='Hotel'){parts.push(planned.toUpperCase()+' (planned)');}
+    if(hiitSess){parts.push(hiitSess.workoutType);}
+    else if(planned==='HIIT'||planned==='HIIT 8'){parts.push(planned+' (planned)');}
+    var status=parts.length?parts.join(' + '):'Rest';
+    if(ds>today)status+=' (upcoming)';
+    lines.push(dayLabel+': '+status);
+  });
+  var txt=lines.join('\n');
+  navigator.clipboard.writeText(txt).then(function(){
+    var btn=document.getElementById('copyWeekBtn');
+    if(btn){btn.textContent='COPIED \u2713';btn.style.color='var(--green)';btn.style.borderColor='var(--green)';}
+    setTimeout(function(){var b=document.getElementById('copyWeekBtn');if(b){b.innerHTML='&#128203; COPY WEEK SUMMARY';b.style.color='';b.style.borderColor='';}},2000);
+  }).catch(function(){
+    var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    var btn=document.getElementById('copyWeekBtn');if(btn)btn.textContent='COPIED \u2713';
+    setTimeout(function(){var b=document.getElementById('copyWeekBtn');if(b)b.innerHTML='&#128203; COPY WEEK SUMMARY';},2000);
+  });
+}
+
+function initPlanPage(){
+  _planWeekOffset=0;
+  var pt=document.getElementById('planTabThis'),pn=document.getElementById('planTabNext');
+  if(pt)pt.classList.add('active');if(pn)pn.classList.remove('active');
+  // Show copy button on Sat/Sun
+  var dow=new Date().getDay();
+  var wrap=document.getElementById('copyWeekWrap');
+  if(wrap)wrap.style.display=(dow===0||dow===6)?'block':'none';
+  var days=getWeekDates(0),today=fmtDate(new Date());
+  var mon=days[0],sun=days[6];
+  var wlEl=document.getElementById('planWeekLabel');
+  if(wlEl)wlEl.textContent=mon.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' \u2013 '+sun.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
   if(_cachedSessions&&_cachedSessions.length){
     var pd=overlayCompletedWorkouts(_cachedPlan?JSON.parse(JSON.stringify(_cachedPlan)):{},_cachedSessions);
-    _weekPlan=pd;renderPlanGrid(days,today);updateTodayCard(today);
+    _weekPlan=pd;renderPlanGrid(days,today);updateWeekGoalBar(days);updateTodayCard(today);
   } else {_weekPlan={};renderPlanGrid(days,today);}
   loadWeekPlan();
 }
 
 function overlayCompletedWorkouts(planData,sessions){
-  var weekDates=getWeekDates().map(function(d){return fmtDate(d);});
+  var weekDates=getWeekDates(0).map(function(d){return fmtDate(d);});
   (sessions||[]).forEach(function(sess){
     if(weekDates.indexOf(sess.date)<0)return;
     var wt=sess.workoutType||'';
-    var type=wt.indexOf('Home')>=0?'Home':wt.indexOf('Hotel')>=0?'Hotel':wt==='HIIT'?'HIIT':null;
+    var type=wt.indexOf('Home')>=0?'Home':wt.indexOf('Hotel')>=0?'Hotel':isHIIT(wt)?wt:null;
     if(type)planData[sess.date]=type;
   });
   return planData;
@@ -3060,12 +3182,12 @@ function loadWeekPlan(){
     var planData=result&&result.plan?result.plan:{};
     if(_cachedSessions&&_cachedSessions.length){
       planData=overlayCompletedWorkouts(planData,_cachedSessions);_weekPlan=planData;_cachedPlan=planData;
-      renderPlanGrid(getWeekDates(),fmtDate(new Date()));updateTodayCard(fmtDate(new Date()));
+      renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));updateWeekGoalBar(getWeekDates(_planWeekOffset));updateTodayCard(fmtDate(new Date()));
     } else {
       fetchHistory(function(sessions){
         _cachedSessions=sessions||[];
         planData=overlayCompletedWorkouts(planData,_cachedSessions);_weekPlan=planData;_cachedPlan=planData;
-        renderPlanGrid(getWeekDates(),fmtDate(new Date()));updateTodayCard(fmtDate(new Date()));
+        renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));updateWeekGoalBar(getWeekDates(_planWeekOffset));updateTodayCard(fmtDate(new Date()));
       });
     }
   };
@@ -3073,12 +3195,12 @@ function loadWeekPlan(){
   script.src=CLOUD_URL+'?type=getWeekPlan&callback='+cbP;
   script.onerror=function(){
     var pd=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=pd;_cachedPlan=pd;
-    renderPlanGrid(getWeekDates(),fmtDate(new Date()));updateTodayCard(fmtDate(new Date()));
+    renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));updateWeekGoalBar(getWeekDates(_planWeekOffset));updateTodayCard(fmtDate(new Date()));
   };
   document.head.appendChild(script);
   setTimeout(function(){if(window[cbP]){window[cbP]=null;
     var pd=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=pd;_cachedPlan=pd;
-    renderPlanGrid(getWeekDates(),fmtDate(new Date()));updateTodayCard(fmtDate(new Date()));
+    renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));updateWeekGoalBar(getWeekDates(_planWeekOffset));updateTodayCard(fmtDate(new Date()));
   }},15000);
 }
 
@@ -3101,7 +3223,8 @@ function renderPlanGrid(days,today){
 function cyclePlanType(dateStr){
   var idx=PLAN_TYPES.indexOf(_weekPlan[dateStr]||'Rest');
   _weekPlan[dateStr]=PLAN_TYPES[(idx+1)%PLAN_TYPES.length];
-  renderPlanGrid(getWeekDates(),fmtDate(new Date()));
+  renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
+  updateWeekGoalBar(getWeekDates(_planWeekOffset));
   if(dateStr===fmtDate(new Date()))updateTodayCard(dateStr);
   saveWeekPlan();
 }
@@ -3123,15 +3246,62 @@ function saveWeekPlan(){
 }
 
 function updateTodayCard(today){
-  var type=_weekPlan[today]||null,card=document.getElementById('todayPlanCard'),label=document.getElementById('todayPlanType');
+  var type=_weekPlan[today]||null;
+  var card=document.getElementById('todayPlanCard');
+  var label=document.getElementById('todayPlanType');
+  var tap=document.getElementById('todayCardTapHint');
   if(!card||!label)return;
-  if(!type||type==='Rest'||type==='Travel'){card.style.display='none';return;}
-  card.style.display='block';label.textContent=type.toUpperCase()+' WORKOUT';
+
+  // Tomorrow badge
+  var tomorrowDate=new Date();tomorrowDate.setDate(tomorrowDate.getDate()+1);
+  var tomorrowStr=fmtDate(tomorrowDate);
+  var tomorrowType=_weekPlan[tomorrowStr]||null;
+  var tmBadge=document.getElementById('tomorrowBadge');
+  var tmType=document.getElementById('tomorrowType');
+  if(tmBadge){tmBadge.style.display=tomorrowType?'block':'none';if(tmType&&tomorrowType)tmType.textContent=tomorrowType;}
+
+  card.style.display='block';
+
+  var done=type&&type!=='Rest'&&type!=='Travel'&&(_cachedSessions||[]).some(function(s){
+    if(s.date!==today)return false;
+    var wt=s.workoutType||'';
+    if(isHIIT(type))return isHIIT(wt);
+    return wt.indexOf('Strength')>=0;
+  });
+
+  if(!type||type==='Rest'){
+    label.textContent='REST DAY';label.style.color='var(--text2)';
+    card.style.background='linear-gradient(135deg,#0D1117 0%,#07090C 100%)';
+    card.style.borderColor='rgba(255,255,255,0.08)';
+    if(tap)tap.textContent='Tap to plan week ›';
+  } else if(type==='Travel'){
+    label.textContent='TRAVEL';label.style.color='var(--purple)';
+    card.style.background='';card.style.borderColor='';
+    if(tap)tap.textContent='Tap to plan week ›';
+  } else if(done){
+    label.textContent=type.toUpperCase()+' DONE \u2713';label.style.color='var(--green)';
+    card.style.background='linear-gradient(135deg,#001a0a 0%,#0A0F00 100%)';
+    card.style.borderColor='rgba(0,212,138,0.3)';
+    if(tap)tap.textContent='Tap to view session ›';
+  } else {
+    label.textContent=type.toUpperCase()+' WORKOUT';label.style.color='var(--accent)';
+    card.style.background='';card.style.borderColor='';
+    if(tap)tap.textContent='Tap to begin ›';
+  }
 }
 
 function todayCardTap(){
   var today=fmtDate(new Date()),type=_weekPlan[today]||null;
-  if(type==='HIIT'){navTo('log');switchLogTab('hiit');}
+  if(!type||type==='Rest'||type==='Travel'){navTo('plan');return;}
+  var done=(_cachedSessions||[]).some(function(s){
+    if(s.date!==today)return false;
+    var wt=s.workoutType||'';
+    if(isHIIT(type))return isHIIT(wt);
+    return wt.indexOf('Strength')>=0;
+  });
+  if(done){openLastSession();return;}
+  if(type==='HIIT'){navTo('log');switchLogTab('hiit');setHIITPreset(17,6);}
+  else if(type==='HIIT 8'){navTo('log');switchLogTab('hiit');setHIITPreset(20,8);}
   else{navTo('workout');}
 }
 
@@ -3233,7 +3403,7 @@ function buildHeatmap(sessions){
   var exMap={},dates=[];
   // Only include strength sessions for heatmap
   sessions.forEach(function(s){
-    if(s.workoutType==='HIIT'||s.workoutType==='Walk')return;
+    if(isHIIT(s.workoutType)||s.workoutType==='Walk')return;
     if(parseLocalDate(s.date)<cutoff)return;
     if(dates.indexOf(s.date)<0)dates.push(s.date);
     (s.exercises||[]).forEach(function(ex){if(!exMap[ex.name])exMap[ex.name]=[];exMap[ex.name].push({date:s.date,feel:ex.feel});});
@@ -3454,38 +3624,146 @@ var BUD_KEY='wt_budget';
 var BUD_MONTHS=['December','January','February','March','April','May','June','July','August','September','October','November'];
 var BUD_DEFAULT_HOURS=[70.46,95.11,79.43,65.14,66,70,70,70,70,70,70,70];
 
-function budLoad(){
+// Historical hours (Dec–Nov from sheet, editable)
+var BUD_MONTHS=['December','January','February','March','April','May','June','July','August','September','October','November'];
+var BUD_DEFAULT_HOURS=[70.46,95.11,79.43,65.14,66,70,70,70,70,70,70,70];
+
+function budSyncBadge(state,detail){
+  var b=document.getElementById('syncBadgeBud'),t=document.getElementById('syncTextBud');
+  if(!b){// budget page uses a simpler header — just update budMsg if no pill
+    return;}
+  b.className='sync-pill';
+  if(state==='loading'){b.classList.add('sp-load');if(t)t.textContent='Syncing';}
+  else if(state==='live'){b.classList.add('sp-live');if(t)t.textContent='Live';}
+  else if(state==='cached'){b.classList.add('sp-cache');if(t)t.textContent='Cached'+(detail?' '+detail:'');}
+  else{b.classList.add('sp-off');if(t)t.textContent='Offline';}
+}
+
+function budSetStatus(state){
+  var el=document.getElementById('budgetUpdated');
+  if(!el)return;
+  if(state==='synced')el.textContent='Synced from sheet';
+  else if(state==='saved')el.textContent='Saved to sheet';
+  else if(state==='edited')el.textContent='Edited on device \u2014 not yet saved';
+}
+
+function budUserEdit(){budSave();budCalc();budSetStatus('edited');}
+
+function budApplyStored(){
   try{
     var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
-    // Restore editable fields
-    function rv(id,def){var el=document.getElementById(id);if(el&&stored[id]!==undefined)el.value=stored[id];else if(el)el.value=def;}
-    rv('bHousePrice',744000);rv('bDownPayment',500000);rv('bEquity',0);rv('bBank',-500000);
-    rv('bPayRate',231);rv('bThisMonth','');
+    function rv(id,def){var el=document.getElementById(id);if(el&&stored[id]!==undefined&&stored[id]!==null)el.value=stored[id];else if(el&&def!==undefined)el.value=def;}
+    rv('bHousePrice',744000);rv('bDownPayment',500000);
+    rv('bEquity',0);rv('bBank',-500000);
+    rv('bPayRate',231);
+    var tmVal=stored.bThisMonth;
+    if(!tmVal||tmVal===''){try{tmVal=localStorage.getItem('wt_thismonth')||'';}catch(e){}}
+    if(tmVal&&tmVal!==''){var thEl=document.getElementById('bThisMonth');if(thEl)thEl.value=tmVal;}
     rv('vElec',300);rv('vHoa',206);rv('vTmobile',80);rv('vApa',47);rv('vAtt',55);rv('vChase',2000);
     rv('vCarIns',2514);rv('vUmbrella',503);rv('vPropTax',8541);rv('vHouseIns',2450);rv('bInterest',1098);
-    // Restore historical hours
-    if(stored.monthHours){
-      stored.monthHours.forEach(function(v,i){
-        var el=document.getElementById('bHours_'+i);if(el)el.value=v;
-      });
-    }
+    var hours=stored.monthHours;
+    if(typeof hours==='string'){try{hours=JSON.parse(hours);}catch(e){hours=null;}}
+    if(Array.isArray(hours)){hours.forEach(function(v,i){var el=document.getElementById('bHours_'+i);if(el&&v)el.value=v;});}
   }catch(e){}
+}
+
+function budFetchFromSheet(){
+  var cbName='wt_bud_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var sc=document.getElementById('s_'+cbName);if(sc)sc.parentNode.removeChild(sc);
+    if(result&&result.status==='ok'&&result.data){
+      var d=result.data;
+      try{
+        var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
+        ['bHousePrice','bDownPayment','bEquity','bBank','bPayRate',
+         'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
+         'vCarIns','vUmbrella','vPropTax','vHouseIns','bInterest'].forEach(function(k){
+          if(d[k]!==null&&d[k]!==undefined)stored[k]=d[k];
+        });
+        if(Array.isArray(d.monthHours))stored.monthHours=d.monthHours;
+        localStorage.setItem(BUD_KEY,JSON.stringify(stored));
+      }catch(e){}
+      budApplyStored();budCalc();
+      budSyncBadge('live');budSetStatus('synced');
+    }else{budSyncBadge('cached','local');}
+  };
+  var script=document.createElement('script');script.id='s_'+cbName;
+  script.src=CLOUD_URL+'?type=getBudget&callback='+cbName;
+  script.onerror=function(){budSyncBadge('offline');};
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;budSyncBadge('cached','local');}},12000);
+}
+
+function budLoad(){
+  budApplyStored();
   budCalc();
+  budSyncBadge('loading');
+  budFetchFromSheet();
 }
 
 function budSave(){
   try{
     var data={};
-    ['bHousePrice','bDownPayment','bEquity','bBank','bPayRate','bThisMonth',
+    try{data=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');}catch(e){data={};}
+    ['bHousePrice','bDownPayment','bPayRate',
      'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
-     'vCarIns','vUmbrella','vPropTax','vHouseIns','bInterest'].forEach(function(id){
-      var el=document.getElementById(id);if(el)data[id]=el.value;
+     'vCarIns','vUmbrella','vPropTax','vHouseIns'].forEach(function(id){
+      var el=document.getElementById(id);if(el&&el.value!=='')data[id]=el.value;
     });
+    var tmEl=document.getElementById('bThisMonth');
+    if(tmEl&&tmEl.value!==''){data.bThisMonth=tmEl.value;try{localStorage.setItem('wt_thismonth',tmEl.value);}catch(e){}}
     data.monthHours=BUD_MONTHS.map(function(_,i){
-      var el=document.getElementById('bHours_'+i);return el?parseFloat(el.value)||0:BUD_DEFAULT_HOURS[i];
+      var el=document.getElementById('bHours_'+i);return el&&el.value!==''?parseFloat(el.value)||0:BUD_DEFAULT_HOURS[i];
     });
     localStorage.setItem(BUD_KEY,JSON.stringify(data));
   }catch(e){}
+}
+
+function budSaveToSheet(){
+  budSave();
+  var el=document.getElementById('budMsg'),btn=document.getElementById('budSaveBtn');
+  if(el){el.textContent='Saving to sheet...';el.style.background='var(--blue-dim)';el.style.color='var(--blue)';}
+  if(btn)btn.disabled=true;
+  budSyncBadge('loading');
+  var stored={};try{stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');}catch(e){}
+  var sheetData={};
+  Object.keys(stored).forEach(function(k){
+    sheetData[k]=(k==='monthHours'&&Array.isArray(stored[k]))?JSON.stringify(stored[k]):stored[k];
+  });
+  var payload={type:'budget',data:sheetData};
+  var enc=encodeURIComponent(JSON.stringify(payload));
+  var cbName='wt_budsave_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var sc=document.getElementById('s_'+cbName);if(sc)sc.parentNode.removeChild(sc);
+    if(btn)btn.disabled=false;
+    if(result&&result.status==='ok'){
+      if(el){el.textContent='Saved to Google Sheets \u2713';el.style.background='var(--green-dim)';el.style.color='var(--green)';}
+      budSyncBadge('live');budSetStatus('saved');
+    }else{
+      if(el){el.textContent='Failed \u2014 saved locally only';el.style.background='var(--yellow-dim)';el.style.color='var(--yellow)';}
+      budSyncBadge('offline');
+    }
+    setTimeout(function(){if(el)el.textContent='';},4000);
+  };
+  var script=document.createElement('script');script.id='s_'+cbName;
+  script.src=CLOUD_URL+'?payload='+enc+'&callback='+cbName;
+  script.onerror=function(){
+    if(btn)btn.disabled=false;
+    if(el){el.textContent='Offline \u2014 saved locally only';el.style.background='var(--yellow-dim)';el.style.color='var(--yellow)';}
+    budSyncBadge('offline');setTimeout(function(){if(el)el.textContent='';},4000);
+  };
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;if(btn)btn.disabled=false;budSyncBadge('cached','local');}},15000);
+}
+
+function budReset(){
+  try{localStorage.removeItem(BUD_KEY);}catch(e){}
+  _budSheetData={monthRows:[]};_budSelectedMonthIdx=-1;
+  var upd=document.getElementById('budgetUpdated');if(upd)upd.textContent='Tap values to edit';
+  var el=document.getElementById('budMsg');
+  if(el){el.textContent='Resyncing from sheet...';el.style.background='var(--blue-dim)';el.style.color='var(--blue)';}
+  budSyncBadge('loading');budFetchFromSheet();
+  setTimeout(function(){if(el&&el.textContent==='Resyncing from sheet...')el.textContent='';},5000);
 }
 
 function fmt(n,prefix){
@@ -3510,16 +3788,12 @@ function budCalc(){
   var housePrice=g('bHousePrice');
   var downPayment=g('bDownPayment');
   var mortgage=housePrice-downPayment;
-  var equity=g('bEquity');
-  var bank=g('bBank');
-  var netPos=equity+bank;
-
   s('bMortgage',fmt(mortgage),mortgage>0?'var(--text)':'var(--green)');
-  s('bNetPos',fmt(netPos),netPos>=0?'var(--green)':'var(--red)');
 
-  // Monthly house payment (interest on mortgage, rough: mortgage * 6% / 12)
-  var interest=g('bInterest');
-  var mortgagePayment=interest; // user-entered interest payment
+  // Mortgage payment — PMT(6.5%/12, 360, -mortgage)
+  var rate=0.065/12,nper=360;
+  var mortgagePayment=(mortgage>0)?Math.round(mortgage*rate/(1-Math.pow(1+rate,-nper))):0;
+  s('vHouse',fmt(mortgagePayment));
 
   // Bills
   var elec=g('vElec'),hoa=g('vHoa'),tmobile=g('vTmobile'),apa=g('vApa'),att=g('vAtt'),chase=g('vChase');
@@ -4418,7 +4692,7 @@ function renderShareView(sessions){
   var wkStr=0,wkHIIT=0;
   sessions.forEach(function(s){
     if(s.week===weekNum){
-      if(s.workoutType==='HIIT')wkHIIT++;
+      if(isHIIT(s.workoutType))wkHIIT++;
       else if(s.workoutType!=='Walk')wkStr++;
     }
   });
@@ -4446,7 +4720,7 @@ function renderShareView(sessions){
 
   // Total sessions
   var totalStr=sessions.filter(function(s){return s.workoutType&&s.workoutType.indexOf('Strength')>=0;}).length;
-  var totalHIIT=sessions.filter(function(s){return s.workoutType==='HIIT';}).length;
+  var totalHIIT=sessions.filter(function(s){return isHIIT(s.workoutType);}).length;
 
   var strPct=Math.min(100,Math.round((wkStr/3)*100));
   var hiitPct=Math.min(100,Math.round((wkHIIT/2)*100));
