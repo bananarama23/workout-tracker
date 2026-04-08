@@ -4960,33 +4960,17 @@ function nutQueueFlush(){
 }
 // Generic single-action GAS sync — cb(true/false)
 function nutSyncAction(action,msgEl,cb){
-  // JSONP GET — same pattern as syncData() which works for all workout saves.
-  // fetch POST fails: GAS 302-redirects to googleusercontent.com and the POST body is lost.
-  // JSONP GET avoids all redirect/CORS issues by using a <script> tag.
-  var enc=encodeURIComponent(JSON.stringify(action));
-  var cbName='wt_nut_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
-  window[cbName]=function(res){
-    window[cbName]=null;
-    var s=document.getElementById('s_'+cbName);if(s&&s.parentNode)s.parentNode.removeChild(s);
-    if(cb)cb(res&&res.status==='ok');
-  };
-  var sc=document.createElement('script');sc.id='s_'+cbName;
-  sc.onerror=function(){
-    window[cbName]=null;
-    var s=document.getElementById('s_'+cbName);if(s&&s.parentNode)s.parentNode.removeChild(s);
-    if(cb)cb(false);
-  };
-  sc.src=CLOUD_URL+'?payload='+enc+'&callback='+cbName;
-  document.head.appendChild(sc);
-  // 25s timeout — GAS max execution. Writes are optimistic on timeout.
-  setTimeout(function(){
-    if(window[cbName]){
-      window[cbName]=null;
-      var s=document.getElementById('s_'+cbName);if(s&&s.parentNode)s.parentNode.removeChild(s);
-      var isWrite=action.type==='logNutrition'||action.type==='addFood';
-      if(cb)cb(isWrite);
-    }
-  },25000);
+  var isWrite=(action.type==='logNutrition'||action.type==='addFood'||
+               action.type==='deleteNutritionRow'||action.type==='deleteFood'||
+               action.type==='clearNutritionDay');
+  var payload=JSON.stringify(Object.assign({},action,{_nonce:Date.now()}));
+  fetch(CLOUD_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:payload
+  })
+  .then(function(){if(cb)cb(true);})
+  .catch(function(){if(cb)cb(isWrite);});
 }
 
 var _nutDate=localDateStr();
