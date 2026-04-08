@@ -1242,8 +1242,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 </style>
 
 <!-- NUTRITION: Create / edit food overlay -->
-<div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--nav-h) + var(--safe-b) + 16px);">
-  <div style="background:var(--bg);border-radius:var(--r-lg);margin:40px 12px 0;padding:20px;box-sizing:border-box;">
+<div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+  <div style="background:var(--bg);border-radius:var(--r-lg);margin:40px 12px calc(var(--nav-h) + var(--safe-b) + 24px);padding:20px;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutFoodFormTitle">ADD FOOD</div>
       <div style="display:flex;gap:8px;align-items:center;">
