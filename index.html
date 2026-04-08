@@ -1143,11 +1143,11 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
             <div style="flex:1;min-width:0;">
               <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;">
                 <span style="font-size:0.62rem;color:var(--muted);">Budget</span>
-                <span style="font-size:0.82rem;font-weight:700;" id="nutCalBudget">2,497</span>
+                <span style="font-size:0.82rem;font-weight:700;" id="nutCalBudget">2,100</span>
               </div>
               <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
                 <span style="font-size:0.62rem;color:var(--muted);">Remaining</span>
-                <span style="font-size:0.9rem;font-weight:700;" id="nutCalRemaining">2,497</span>
+                <span style="font-size:0.9rem;font-weight:700;" id="nutCalRemaining">2,100</span>
               </div>
               <!-- Active calories row -->
               <div id="nutActiveRow" style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);padding-top:8px;margin-bottom:8px;">
@@ -4800,7 +4800,7 @@ var NUT_TARGETS_KEY='wt_nut_targets';
 var NUT_ACTIVE_KEY='wt_nut_active'; // {date: activeCals} per day
 var NUT_ACTIVE_BASE=390; // Apple Watch base — calories above/below this adjust budget
 var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
-var NUT_DEFAULTS={cal:2497,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000};
+var NUT_DEFAULTS={cal:2100,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000};
 
 function nutGetActiveCals(date){
   var d=date||_nutDate;
@@ -4835,7 +4835,7 @@ function nutSetActiveCals(date,val){
   nutSyncAction({type:'logNutrition',entries:[entry]},null,null);
 }
 function nutEffectiveBudget(date){
-  var base=_nutTargets.cal||2497;
+  var base=_nutTargets.cal||2100;
   var active=nutGetActiveCals(date||_nutDate);
   if(active===null)return base;
   return base+(active-NUT_ACTIVE_BASE);
@@ -5210,10 +5210,16 @@ function nutRenderWeek(){
   var ws=document.getElementById('nutWeekStats');if(!ws)return;
   var wd=document.getElementById('nutWeekDaysLogged');
   var days=[];for(var i=6;i>=0;i--)days.push(nutShiftDate(localDateStr(),-i));
-  var logged=days.filter(function(d){return _nutEntries.some(function(e){return e.date===d;});});
+  // Only count days with actual food entries (not just _active rows)
+  var logged=days.filter(function(d){return _nutEntries.some(function(e){return e.date===d&&e.meal!=='_active';});});
   var n=logged.length||1;
   var sums={calories:0,protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0};
   logged.forEach(function(d){var t=nutTotals(nutDayEntries(d));Object.keys(sums).forEach(function(k){sums[k]+=t[k]||0;});});
+
+  // Per-day effective calorie budget (accounts for active cal adjustments each day)
+  var totalEffectiveCalBudget=0;
+  logged.forEach(function(d){totalEffectiveCalBudget+=nutEffectiveBudget(d);});
+  var avgEffectiveCalBudget=logged.length>0?Math.round(totalEffectiveCalBudget/logged.length):(_nutTargets.cal||2100);
 
   var rows=[
     {key:'calories',label:'Calories',unit:'kcal',tKey:'cal',  col:'var(--green)'},
@@ -5226,7 +5232,8 @@ function nutRenderWeek(){
   ];
   ws.innerHTML=rows.map(function(m){
     var avg=Math.round(sums[m.key]/n);
-    var target=_nutTargets[m.tKey]||0;
+    // For calories use the per-day effective budget avg; for others use fixed target
+    var target=m.key==='calories'?avgEffectiveCalBudget:(_nutTargets[m.tKey]||0);
     var pct=target>0?Math.min(100,Math.round((avg/target)*100)):0;
     var over=target>0&&avg>target;
     return '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;">'+
