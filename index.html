@@ -1158,6 +1158,14 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <!-- Meal sections — rendered by JS -->
       <div id="nutMeals"></div>
 
+      <!-- Sync: phone is truth button -->
+      <div style="margin:0 16px 8px;display:flex;align-items:center;gap:8px;">
+        <button onclick="nutPushDayToSheet()" id="nutPushDayBtn" style="flex:1;background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 14px;color:var(--muted);font-size:0.68rem;letter-spacing:1.5px;text-transform:uppercase;font-family:'Bebas Neue',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.2s;">
+          <span style="font-size:0.9rem;">↑</span> Phone is truth — sync to sheet
+        </button>
+      </div>
+      <div id="nutPushDayMsg" style="margin:-4px 16px 8px;font-size:0.7rem;color:var(--muted);text-align:center;min-height:16px;"></div>
+
       <!-- Daily targets (collapsible) -->
       <div style="margin:4px 16px 16px;">
         <button onclick="nutToggleTargets()" style="width:100%;background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);padding:11px 16px;color:var(--muted);font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;font-family:'Bebas Neue',sans-serif;cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;">
@@ -4271,9 +4279,9 @@ function budPickMonth(){
 function budSetStatus(state){
   var el=document.getElementById('budgetUpdated');
   if(!el)return;
-  if(state==='synced')el.textContent='Synced from sheet';
-  else if(state==='saved')el.textContent='Saved to sheet';
-  else if(state==='edited')el.textContent='Edited on device \u2014 not yet saved';
+  if(state==='synced'){el.textContent='Synced from sheet';try{localStorage.removeItem('wt_budget_dirty');}catch(e){}}
+  else if(state==='saved'){el.textContent='Saved to sheet';try{localStorage.removeItem('wt_budget_dirty');}catch(e){}}
+  else if(state==='edited'){el.textContent='Unsaved edits — tap SAVE TO SHEET';try{localStorage.setItem('wt_budget_dirty','1');}catch(e){}}
 }
 
 function budUpdateEquityBank(monthRows,idx){
@@ -4355,28 +4363,35 @@ function budFetchFromSheet(){
     window[cbName]=null;var sc=document.getElementById('s_'+cbName);if(sc)sc.parentNode.removeChild(sc);
     if(result&&result.status==='ok'&&result.data){
       var d=result.data;
-      // Populate all editable inputs from sheet — sheet is source of truth on load
-      try{
-        var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
-        ['bHousePrice','bDownPayment','bPayRate',
-         'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
-         'vCarIns','vUmbrella','vPropTax','vHouseIns'].forEach(function(k){
-          if(d[k]!==null&&d[k]!==undefined)stored[k]=d[k];
-        });
-        if(Array.isArray(d.monthHours))stored.monthHours=d.monthHours;
-        localStorage.setItem(BUD_KEY,JSON.stringify(stored));
-      }catch(e){}
-      budApplyStored();
+      // Only overwrite local values from sheet if there are no unsaved local edits
+      // budSetStatus('edited') sets wt_budget_dirty — protect those values
+      var isDirty=false;
+      try{isDirty=localStorage.getItem('wt_budget_dirty')==='1';}catch(e){}
+      if(!isDirty){
+        try{
+          var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
+          ['bHousePrice','bDownPayment','bPayRate',
+           'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
+           'vCarIns','vUmbrella','vPropTax','vHouseIns'].forEach(function(k){
+            if(d[k]!==null&&d[k]!==undefined)stored[k]=d[k];
+          });
+          if(Array.isArray(d.monthHours))stored.monthHours=d.monthHours;
+          localStorage.setItem(BUD_KEY,JSON.stringify(stored));
+        }catch(e){}
+        budApplyStored();
+      } else {
+        // Has unsaved edits — show warning but don't overwrite
+        budSetStatus('edited');
+        var el=document.getElementById('budgetUpdated');
+        if(el)el.textContent='Unsaved edits — tap SAVE TO SHEET to sync';
+      }
 
-      // Store read-only sheet values (month dropdown data only — not used in calc)
+      // Read-only sheet values (month dropdown) always update regardless
       _budSheetData.monthRows=Array.isArray(d.monthRows)?d.monthRows:[];
-
-      // Build month dropdown
       budBuildMonthDropdown(_budSheetData.monthRows);
-      // Run calc — everything derives from inputs now
       budCalc();
-      budSyncBadge('live');
-      budSetStatus('synced');
+      budSyncBadge(isDirty?'cached':'live');
+      if(!isDirty)budSetStatus('synced');
     }else{
       budSyncBadge('cached','local');
     }
@@ -5247,18 +5262,20 @@ function nutOpenFoodForm(idx){
   var title=document.getElementById('nutFoodFormTitle');if(title)title.textContent=isEdit?'EDIT FOOD':'ADD FOOD';
   var delBtn=document.getElementById('nutDeleteFoodBtn');if(delBtn)delBtn.style.display=isEdit?'block':'none';
   var editEl=document.getElementById('nff_editIdx');if(editEl)editEl.value=isEdit?idx:'';
+  // Clear all fields — no stale zeros from previous open
   document.getElementById('nff_name').value=f?f.name:'';
-  document.getElementById('nff_serving').value=f?f.serving:'100';
-  var unitEl=document.getElementById('nff_unit');
-  if(unitEl)unitEl.value=(f&&f.unit)||'g';
+  document.getElementById('nff_serving').value=f?f.serving:'';
+  var unitEl=document.getElementById('nff_unit');if(unitEl)unitEl.value=(f&&f.unit)||'g';
   document.getElementById('nff_cal').value=f?f.calories:'';
   document.getElementById('nff_prot').value=f?f.protein:'';
   document.getElementById('nff_carb').value=f?f.carbs:'';
   document.getElementById('nff_fat').value=f?f.fat:'';
   document.getElementById('nff_fib').value=f?f.fibre:'';
   document.getElementById('nff_satfat').value=f?f.satFat:'';
-  document.getElementById('nff_sodium').value=f?(f.sodium||0):'';
+  document.getElementById('nff_sodium').value=f?(f.sodium||''):'';
   var msg=document.getElementById('nutFoodFormMsg');if(msg)msg.textContent='';
+  // Clear scan/type status panel from previous use
+  var ss=document.getElementById('nutScanStatus');if(ss){ss.style.display='none';ss.innerHTML='';}
   var ov=document.getElementById('nutFoodFormOverlay');
   if(ov){ov.style.display='flex';ov.scrollTop=0;}
 }
@@ -5666,8 +5683,19 @@ function nutSaveFood(){
   if(!name){if(msg){msg.textContent='Name required';msg.style.color='var(--red)';}return;}
   var sNum=parseFloat(document.getElementById('nff_serving').value)||100;
   var sUnit=(document.getElementById('nff_unit')||{}).value||'g';
-  var food={name:name,
-    calories:parseFloat(document.getElementById('nff_cal').value)||0,
+  var calories=parseFloat(document.getElementById('nff_cal').value)||0;
+  var calEmpty=document.getElementById('nff_cal').value.trim()==='';
+  if(calEmpty){
+    // Fix 2: warn but proceed after delay
+    if(msg){msg.textContent='No calories entered — saving as 0. Correct?';msg.style.color='var(--yellow)';}
+    setTimeout(function(){_nutDoSave(name,sNum,sUnit,calories,msg);},1800);
+    return;
+  }
+  _nutDoSave(name,sNum,sUnit,calories,msg);
+}
+
+function _nutDoSave(name,sNum,sUnit,calories,msg){
+  var food={name:name,calories:calories,
     protein:parseFloat(document.getElementById('nff_prot').value)||0,
     carbs:parseFloat(document.getElementById('nff_carb').value)||0,
     fat:parseFloat(document.getElementById('nff_fat').value)||0,
@@ -5676,23 +5704,34 @@ function nutSaveFood(){
     sodium:parseFloat(document.getElementById('nff_sodium').value)||0,
     serving:sNum,unit:sUnit};
   var editIdx=document.getElementById('nff_editIdx').value;
-  if(editIdx!==''){_nutFoods[parseInt(editIdx)]=food;}
+  var isNew=editIdx==='';
+  if(!isNew){_nutFoods[parseInt(editIdx)]=food;}
   else{_nutFoods.push(food);_nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});}
   try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
   nutRenderFoodList();
-  if(msg){msg.textContent='Saving to sheet...';msg.style.color='var(--muted)';}
+  if(msg){msg.textContent='Saving...';msg.style.color='var(--muted)';}
+  function afterSave(){
+    nutCloseFoodForm();
+    // Fix 5: if new food and we have a meal context, open serving picker immediately
+    if(isNew&&_nutAddMeal){
+      setTimeout(function(){
+        var idx=_nutFoods.findIndex(function(f){return f.name===food.name;});
+        if(idx>=0)nutPickFood(idx);
+      },200);
+    }
+  }
   var cbAF='wt_af_'+Date.now();
   window[cbAF]=function(res){
     window[cbAF]=null;var s=document.getElementById('s_'+cbAF);if(s&&s.parentNode)s.parentNode.removeChild(s);
     var ok=res&&res.status==='ok';
-    if(msg){msg.textContent=ok?'Saved \u2713':'Saved locally';msg.style.color=ok?'var(--green)':'var(--yellow)';}
-    if(ok)setTimeout(function(){nutCloseFoodForm();},900);
+    if(msg){msg.textContent=ok?'Saved ✓':'Saved locally';msg.style.color=ok?'var(--green)':'var(--yellow)';}
+    setTimeout(afterSave,700);
   };
   var scAF=document.createElement('script');scAF.id='s_'+cbAF;
-  scAF.onerror=function(){window[cbAF]=null;if(msg){msg.textContent='Saved locally';msg.style.color='var(--yellow)';}};
+  scAF.onerror=function(){window[cbAF]=null;if(msg){msg.textContent='Saved locally';msg.style.color='var(--yellow)';}setTimeout(afterSave,700);};
   scAF.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'addFood',food:food}))+'&callback='+cbAF;
   document.head.appendChild(scAF);
-  setTimeout(function(){if(window[cbAF]){window[cbAF]=null;if(msg){msg.textContent='Saved locally';msg.style.color='var(--yellow)';}setTimeout(function(){nutCloseFoodForm();},900);}},20000);
+  setTimeout(function(){if(window[cbAF]){window[cbAF]=null;if(msg){msg.textContent='Saved locally';msg.style.color='var(--yellow)';}setTimeout(afterSave,700);}},20000);
 }
 
 function nutDeleteFood(){
@@ -6072,6 +6111,53 @@ function nutDelEntry(idx){
   nutSyncAction(action,null,function(ok){
     if(ok){nutBadge('live','Live');nutMsg('Deleted \u2713','var(--green)');setTimeout(function(){nutMsg('');},2000);}
     else{nutQueuePush(action);nutBadge('cached','Queued');nutMsg('Queued for retry','var(--yellow)');}
+  });
+}
+
+// ── Phone is truth — wipe sheet for this day, rewrite from local entries ──────
+function nutPushDayToSheet(){
+  var date=_nutDate;
+  var dayEntries=_nutEntries.filter(function(e){return e.date===date;});
+  var btn=document.getElementById('nutPushDayBtn');
+  var msg=document.getElementById('nutPushDayMsg');
+  var isToday=date===localDateStr();
+
+  var label=isToday?'today':date;
+  if(!confirm('Replace everything on the sheet for '+label+' with what\'s on this phone?\n\n'+dayEntries.length+' item'+(dayEntries.length!==1?'s':'')+' will be written.'))return;
+
+  if(btn){btn.style.color='var(--blue)';btn.style.borderColor='var(--blue)';}
+  if(msg){msg.textContent='Wiping sheet for '+label+'...';msg.style.color='var(--muted)';}
+  nutBadge('load','Syncing');
+
+  // Step 1: delete all rows for this day on the sheet
+  nutSyncAction({type:'clearNutritionDay',date:date},null,function(clearOk){
+    if(!clearOk){
+      if(msg){msg.textContent='Could not clear sheet — try again';msg.style.color='var(--red)';}
+      if(btn){btn.style.color='';btn.style.borderColor='';}
+      nutBadge('cached','Error');
+      return;
+    }
+    if(!dayEntries.length){
+      // Nothing to write — day is now empty on sheet too
+      if(msg){msg.textContent='\u2713 Sheet cleared — no entries for '+label;msg.style.color='var(--green)';}
+      if(btn){btn.style.color='';btn.style.borderColor='';}
+      nutBadge('live','Live');
+      setTimeout(function(){if(msg)msg.textContent='';},3000);
+      return;
+    }
+    // Step 2: write all local entries for this day
+    nutSyncAction({type:'logNutrition',entries:dayEntries},null,function(writeOk){
+      if(writeOk){
+        if(msg){msg.textContent='\u2713 Sheet updated — '+dayEntries.length+' item'+(dayEntries.length!==1?'s':'')+' written';msg.style.color='var(--green)';}
+        nutBadge('live','Live');
+      } else {
+        if(msg){msg.textContent='Cleared but write failed — entries queued';msg.style.color='var(--yellow)';}
+        nutQueuePush({type:'logNutrition',entries:dayEntries});
+        nutBadge('cached','Queued');
+      }
+      if(btn){btn.style.color='';btn.style.borderColor='';}
+      setTimeout(function(){if(msg)msg.textContent='';},4000);
+    });
   });
 }
 
