@@ -1243,7 +1243,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
 <!-- NUTRITION: Create / edit food overlay -->
 <div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-  <div style="background:var(--bg);border-radius:var(--r-lg);margin:40px 12px 24px;padding:20px;box-sizing:border-box;">
+  <div style="background:var(--bg);border-radius:var(--r-lg);margin:40px 12px calc(var(--nav-h) + var(--safe-b) + 24px);padding:20px;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutFoodFormTitle">ADD FOOD</div>
       <div style="display:flex;gap:8px;align-items:center;">
@@ -5636,6 +5636,12 @@ function nutCallVision(base64,mediaType,statusEl){
 
 function nutFillFromScan(d,statusEl){
   if(!d){if(statusEl){statusEl.textContent='Could not parse \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}return;}
+  // If we came from the Add overlay (camera icon there), skip the food form and go straight to serving
+  if(_nutAddInlineMode){
+    _nutAddInlineMode=false;
+    nutAddInlineFinish(d);
+    return;
+  }
   function setVal(id,val){var el=document.getElementById(id);if(el&&val!==null&&val!==undefined)el.value=val;}
   if(d.name)setVal('nff_name',d.name);
   if(d.serving)setVal('nff_serving',d.serving);
@@ -5713,6 +5719,102 @@ function nutOpenAdd(meal){
 }
 function nutCloseAdd(){var ov=document.getElementById('nutAddOverlay');if(ov)ov.style.display='none';}
 
+// ── Inline create from Add overlay ────────────────────────────────
+// Creates food AND immediately picks it into the serving overlay — no detour to My Foods
+
+function nutAddInlineStatus(txt,col){
+  var el=document.getElementById('nutAddInlineStatus');
+  if(el){el.textContent=txt;el.style.color=col||'var(--muted)';}
+}
+
+function nutAddInlineGemini(){
+  var q=(document.getElementById('nutAddSearch')||{}).value||'';
+  if(!q.trim()){nutAddInlineStatus('Type a food name first','var(--orange)');return;}
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  if(!geminiKey){
+    nutCloseAdd();
+    nutApiKeyShow(null,null,null);
+    return;
+  }
+  nutAddInlineStatus('Asking Gemini...','var(--muted)');
+  var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
+  var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
+  fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
+  })
+  .then(function(r){
+    if(!r.ok){return r.json().then(function(err){
+      var msg=err&&err.error&&err.error.message||('HTTP '+r.status);
+      if(r.status===400||r.status===401||r.status===403){localStorage.removeItem('wt_gemini_key');}
+      throw new Error(msg);
+    });}
+    return r.json();
+  })
+  .then(function(data){
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
+    if(!text){nutAddInlineStatus('No result — try a clearer description','var(--orange)');return;}
+    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    var jsonStart=text.indexOf('{'),jsonEnd=text.lastIndexOf('}');
+    if(jsonStart>=0&&jsonEnd>jsonStart)text=text.slice(jsonStart,jsonEnd+1);
+    try{
+      var food=JSON.parse(text);
+      if(!food.name)food.name=q;
+      nutAddInlineFinish(food);
+    }catch(e){nutAddInlineStatus('Parse error — try again','var(--orange)');}
+  })
+  .catch(function(err){
+    var msg=err&&err.message||'';
+    if(msg.indexOf('BAD_KEY')>=0||msg.indexOf('401')>=0||msg.indexOf('403')>=0){
+      localStorage.removeItem('wt_gemini_key');
+      nutCloseAdd();nutApiKeyShow(null,null,null);
+    } else {
+      nutAddInlineStatus('Error: '+(msg||'network problem'),'var(--orange)');
+    }
+  });
+}
+
+function nutAddInlineScan(){
+  // Close add overlay, open camera — on scan complete, go straight to serving picker
+  _nutAddInlineMode=true;
+  nutCloseAdd();
+  nutCamOpen();
+}
+var _nutAddInlineMode=false; // flag: we came from the add overlay, not the food form
+
+function nutAddInlineFinish(food){
+  // Save to food database
+  food.name=food.name||'Unknown';
+  food.calories=parseFloat(food.calories)||0;
+  food.protein=parseFloat(food.protein)||0;
+  food.carbs=parseFloat(food.carbs)||0;
+  food.fat=parseFloat(food.fat)||0;
+  food.fibre=parseFloat(food.fibre)||0;
+  food.satFat=parseFloat(food.satFat)||0;
+  food.sodium=parseFloat(food.sodium)||0;
+  food.serving=parseFloat(food.serving)||100;
+  food.unit=food.unit||'g';
+
+  // Add to foods DB if not already there
+  var existing=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===food.name.toLowerCase();});
+  if(existing>=0){_nutFoods[existing]=food;}
+  else{_nutFoods.push(food);_nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});}
+  try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
+
+  // Save to sheet in background
+  var cb='wt_af_'+Date.now();
+  window[cb]=function(){window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);};
+  var sc=document.createElement('script');sc.id='s_'+cb;
+  sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'addFood',food:food}))+'&callback='+cb;
+  document.head.appendChild(sc);
+
+  // Close add overlay and go straight to serving picker
+  nutCloseAdd();
+  var fi=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===food.name.toLowerCase();});
+  nutPickFood(fi);
+}
+
 function nutFilterAddList(){
   var q=(document.getElementById('nutAddSearch')||{}).value||'';
   var el=document.getElementById('nutAddList');if(!el)return;
@@ -5748,12 +5850,24 @@ function nutFilterAddList(){
   }
 
   var list=_nutFoods.filter(function(f){return !q||f.name.toLowerCase().indexOf(q.toLowerCase())>=0;});
-  if(!list.length&&!html){
-    el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">'+(q?'No match for "'+q+'"':'Add foods in the Foods tab first.')+'</div>';
+
+  // No match — show inline create buttons
+  if(!list.length){
+    if(q){
+      html+='<div style="padding:12px 4px 8px;font-size:0.8rem;color:var(--muted);">No match for "'+q+'" — create it:</div>';
+      html+='<div style="display:flex;gap:8px;margin-bottom:12px;">';
+      html+='<button onclick="nutAddInlineGemini()" style="flex:1;padding:12px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:\'Bebas Neue\',sans-serif;font-size:0.9rem;letter-spacing:1px;font-weight:900;cursor:pointer;">✦ ASK GEMINI</button>';
+      html+='<button onclick="nutAddInlineScan()" style="flex:0 0 52px;padding:12px;background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);font-size:1.1rem;cursor:pointer;">📷</button>';
+      html+='</div>';
+      html+='<div id="nutAddInlineStatus" style="font-size:0.72rem;color:var(--muted);min-height:16px;padding:0 4px;"></div>';
+    } else if(!html){
+      html='<div style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">No foods yet — search and tap Ask Gemini to create one</div>';
+    }
+    el.innerHTML=html;
     return;
   }
-  if(!list.length){el.innerHTML=html;return;}
 
+  // Show create buttons at bottom when there's a query with partial matches
   html+=list.map(function(f){
     var fi=_nutFoods.indexOf(f);
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="nutPickFood('+fi+')">'+
@@ -5762,6 +5876,14 @@ function nutFilterAddList(){
       '<div style="color:var(--accent);font-size:1.4rem;padding:0 6px;font-weight:900;">+</div>'+
     '</div>';
   }).join('');
+
+  if(q){
+    html+='<div style="display:flex;gap:8px;margin-top:12px;">';
+    html+='<button onclick="nutAddInlineGemini()" style="flex:1;padding:11px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-family:\'Bebas Neue\',sans-serif;font-size:0.82rem;letter-spacing:1px;cursor:pointer;">✦ New: Ask Gemini</button>';
+    html+='<button onclick="nutAddInlineScan()" style="flex:0 0 44px;padding:11px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-size:1rem;cursor:pointer;">📷</button>';
+    html+='</div>';
+    html+='<div id="nutAddInlineStatus" style="font-size:0.72rem;color:var(--muted);min-height:16px;padding:4px 4px 0;"></div>';
+  }
 
   el.innerHTML=html;
 }
