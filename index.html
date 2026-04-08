@@ -3619,18 +3619,33 @@ function cyclePlanType(dateStr){
 
 function saveWeekPlan(){
   var msg=document.getElementById('planMsg');if(msg){msg.textContent='Saving...';msg.style.color='var(--muted)';}
-  var cbName='wt_savep_'+Date.now();
-  window[cbName]=function(result){
-    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
-    if(msg){msg.textContent='Saved';msg.style.color='var(--green)';}
+  fetch(CLOUD_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type:'setWeekPlan',plan:_weekPlan})
+  })
+  .then(function(r){return r.json();})
+  .then(function(result){
+    if(msg){msg.textContent=result&&result.status==='ok'?'Saved \u2713':'Save failed';
+      msg.style.color=result&&result.status==='ok'?'var(--green)':'var(--red)';}
     setTimeout(function(){if(msg)msg.textContent='';},2000);
     updateTodayCard(fmtDate(new Date()));loadHomeData();
-  };
-  var url=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'setWeekPlan',plan:_weekPlan}))+'&callback='+cbName;
-  var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
-  script.onerror=function(){if(msg){msg.textContent='Failed to save';msg.style.color='var(--red)';}};
-  document.head.appendChild(script);
-  setTimeout(function(){if(window[cbName]){window[cbName]=null;}},15000);
+  })
+  .catch(function(err){
+    // Fallback to JSONP GET
+    var cbName='wt_savep_'+Date.now();
+    window[cbName]=function(result){
+      window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+      if(msg){msg.textContent='Saved \u2713';msg.style.color='var(--green)';}
+      setTimeout(function(){if(msg)msg.textContent='';},2000);
+      updateTodayCard(fmtDate(new Date()));loadHomeData();
+    };
+    var url=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'setWeekPlan',plan:_weekPlan}))+'&callback='+cbName;
+    var sc=document.createElement('script');sc.id='s_'+cbName;sc.src=url;
+    sc.onerror=function(){if(msg){msg.textContent='Failed to save';msg.style.color='var(--red)';}};
+    document.head.appendChild(sc);
+    setTimeout(function(){if(window[cbName]){window[cbName]=null;}},15000);
+  });
   // Show copy button on Sat/Sun
   var dow=new Date().getDay();
   var wrap=document.getElementById('copyWeekWrap');
