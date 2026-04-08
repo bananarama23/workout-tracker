@@ -2770,18 +2770,22 @@ function saveSeqAsDefault(){
     stored[ex.name]=JSON.parse(JSON.stringify(ex.seq));
     localStorage.setItem(SEQ_DEFAULTS_KEY,JSON.stringify(stored));
     var btn=document.querySelector('.seq-add-btn[onclick="saveSeqAsDefault()"]');
-    if(btn){var orig=btn.textContent;btn.textContent='Saving...';
-      var cbName='wt_seq_'+Date.now();
-      window[cbName]=function(res){
-        window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
-        btn.textContent=res&&res.status==='ok'?'Saved \u2713':'Saved locally';
+    if(btn){
+      var orig=btn.textContent;
+      btn.textContent='Saving...';
+      fetch(CLOUD_URL,{
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify({type:'setSeqDefaults',defaults:stored,_nonce:Date.now()})
+      })
+      .then(function(){
+        btn.textContent='Saved \u2713';
         setTimeout(function(){btn.textContent=orig;},1800);
-      };
-      var sc=document.createElement('script');sc.id='s_'+cbName;
-      sc.onerror=function(){window[cbName]=null;btn.textContent='Saved locally';setTimeout(function(){btn.textContent=orig;},1800);};
-      sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'setSeqDefaults',defaults:stored}))+'&callback='+cbName;
-      document.head.appendChild(sc);
-      setTimeout(function(){if(window[cbName]){window[cbName]=null;btn.textContent='Saved locally';setTimeout(function(){btn.textContent=orig;},1800);}},15000);
+      })
+      .catch(function(){
+        btn.textContent='Saved locally';
+        setTimeout(function(){btn.textContent=orig;},1800);
+      });
     }
   }catch(e){alert('Could not save: '+e.message);}
 }
@@ -5805,18 +5809,19 @@ function _nutDoSave(name,sNum,sUnit,calories,msg){
       },200);
     }
   }
-  var cbAF='wt_af_'+Date.now();
-  window[cbAF]=function(res){
-    window[cbAF]=null;var s=document.getElementById('s_'+cbAF);if(s&&s.parentNode)s.parentNode.removeChild(s);
-    var ok=res&&res.status==='ok';
-    if(msg){msg.textContent=ok?'Saved ✓':'Saved locally';msg.style.color=ok?'var(--green)':'var(--yellow)';}
+  fetch(CLOUD_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({type:'addFood',food:food,_nonce:Date.now()})
+  })
+  .then(function(){
+    if(msg){msg.textContent='Saved \u2713';msg.style.color='var(--green)';}
     setTimeout(afterSave,700);
-  };
-  var scAF=document.createElement('script');scAF.id='s_'+cbAF;
-  scAF.onerror=function(){window[cbAF]=null;if(msg){msg.textContent='Saved locally';msg.style.color='var(--yellow)';}setTimeout(afterSave,700);};
-  scAF.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'addFood',food:food}))+'&callback='+cbAF;
-  document.head.appendChild(scAF);
-  setTimeout(function(){if(window[cbAF]){window[cbAF]=null;if(msg){msg.textContent='Saved locally';msg.style.color='var(--yellow)';}setTimeout(afterSave,700);}},20000);
+  })
+  .catch(function(){
+    if(msg){msg.textContent='Saved locally';msg.style.color='var(--yellow)';}
+    setTimeout(afterSave,700);
+  });
 }
 
 function nutDeleteFood(){
@@ -5827,9 +5832,11 @@ function nutDeleteFood(){
   _nutFoods.splice(idx,1);
   try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
   nutRenderFoodList();nutCloseFoodForm();
-  var scDF=document.createElement('script');
-  scDF.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'deleteFood',name:f.name}))+'&callback=wt_df_'+Date.now();
-  document.head.appendChild(scDF);
+  fetch(CLOUD_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({type:'deleteFood',name:f.name,_nonce:Date.now()})
+  }).catch(function(){});
 }
 
 // ── Add to meal ────────────────────────────────────────────────────
@@ -5927,11 +5934,11 @@ function nutAddInlineFinish(food){
   try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
 
   // Save to sheet in background
-  var cb='wt_af_'+Date.now();
-  window[cb]=function(){window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);};
-  var sc=document.createElement('script');sc.id='s_'+cb;
-  sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'addFood',food:food}))+'&callback='+cb;
-  document.head.appendChild(sc);
+  fetch(CLOUD_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({type:'addFood',food:food,_nonce:Date.now()})
+  }).catch(function(){});
 
   // Close add overlay and go straight to serving picker
   nutCloseAdd();
