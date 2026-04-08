@@ -4830,7 +4830,8 @@ function nutSetActiveCals(date,val){
     return;
   }
   var entry={date:d,meal:'_active',food:'AppleWatch',calories:parseFloat(val),
-    protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0,servings:1};
+    protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0,servings:1,
+    id:Date.now(),updatedAt:Date.now()};
   if(_nutEntries)_nutEntries.push(entry);
   nutSyncAction({type:'logNutrition',entries:[entry]},null,null);
 }
@@ -5053,27 +5054,25 @@ function nutFetchEntries(){
     if(res&&res.status==='ok'){
       var sheetEntries=res.entries||[];
       // ── Reconciliation: find local entries missing from sheet ──────
-      // Local entries are the source of truth — sheet may be missing some
-      // due to JSONP timeouts. Push any that aren't in the sheet.
+      // Match on id if present, fall back to date|meal|food for old entries without id
       var localEntries=[];
       try{localEntries=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');}catch(e){}
-      // Only reconcile entries within our fetch window
-      var windowLocal=localEntries.filter(function(e){return e.date>=from&&e.date<=to;});
-      // Build a set of sheet entry keys: date|meal|food
-      var sheetKeys={};
+      var windowLocal=localEntries.filter(function(e){return e.date>=from&&e.date<=to&&e.meal!=='_active';});
+      // Build lookup sets from sheet — by id AND by date|meal|food for legacy entries
+      var sheetIds={},sheetKeys={};
       sheetEntries.forEach(function(e){
-        var k=e.date+'|'+e.meal+'|'+e.food;
-        sheetKeys[k]=true;
+        if(e.id)sheetIds[String(e.id)]=true;
+        sheetKeys[e.date+'|'+e.meal+'|'+e.food]=true;
       });
-      // Find local entries not in sheet
+      // Entry is missing if neither its id nor its legacy key is found in sheet
       var missing=windowLocal.filter(function(e){
-        return !sheetKeys[e.date+'|'+e.meal+'|'+e.food];
+        if(e.id&&sheetIds[String(e.id)])return false;        // id matched in sheet
+        if(sheetKeys[e.date+'|'+e.meal+'|'+e.food])return false; // legacy key matched (covers old sheet rows with no id)
+        return true;                                          // genuinely missing
       });
       if(missing.length){
         nutMsg('Syncing '+missing.length+' unsaved item'+(missing.length>1?'s':'')+'...','var(--yellow)');
-        // Push missing entries in one batch
-        var batchAction={type:'logNutrition',entries:missing};
-        nutSyncAction(batchAction,null,function(ok){
+        nutSyncAction({type:'logNutrition',entries:missing},null,function(ok){
           nutBadge(ok?'live':'cached',ok?'Live':'Cached');
           nutMsg(ok?'All synced \u2713':'',ok?'var(--green)':'');
           setTimeout(function(){nutMsg('');},2500);
@@ -5082,14 +5081,21 @@ function nutFetchEntries(){
         nutBadge('live','Live');
         nutMsg('');
       }
-      // Sheet is authoritative for what's actually there — merge with local
-      // Keep local entries outside the window, use sheet entries inside window
+      // Sheet is authoritative inside the window — merge with local outside window
       var outsideWindow=localEntries.filter(function(e){return e.date<from||e.date>to;});
       _nutEntries=outsideWindow.concat(sheetEntries);
-      // If we had missing, add them to our view too (they're being pushed)
+      // Also sync _active entries back to NUT_ACTIVE_KEY cache for nutEffectiveBudget
+      try{
+        var activeStored=JSON.parse(localStorage.getItem(NUT_ACTIVE_KEY)||'{}');
+        sheetEntries.forEach(function(e){
+          if(e.meal==='_active'&&e.food==='AppleWatch')activeStored[e.date]=e.calories;
+        });
+        localStorage.setItem(NUT_ACTIVE_KEY,JSON.stringify(activeStored));
+      }catch(er){}
+      // Add missing entries to view (they're being pushed)
       if(missing.length){
         missing.forEach(function(m){
-          var already=_nutEntries.some(function(e){return e.date===m.date&&e.meal===m.meal&&e.food===m.food;});
+          var already=_nutEntries.some(function(e){return e.id&&m.id?String(e.id)===String(m.id):e.date===m.date&&e.meal===m.meal&&e.food===m.food;});
           if(!already)_nutEntries.push(m);
         });
       }
@@ -5790,13 +5796,16 @@ function nutConfirmServing(){
   var qty=f.serving>0?amt/f.serving:parseFloat((qtyEl||{}).value)||1;
   var ratio=f.serving>0?amt/f.serving:qty;
   function rn(v){return Math.round(v*ratio*10)/10;}
+  var isEdit=(_nutEditingEntryIdx>=0&&_nutEditingEntryIdx<_nutEntries.length);
+  var oldEntry=isEdit?_nutEntries[_nutEditingEntryIdx]:null;
+  var now=Date.now();
   var entry={date:_nutDate,meal:_nutAddMeal,food:f.name,
     calories:rn(f.calories),protein:rn(f.protein),carbs:rn(f.carbs),
     fat:rn(f.fat),fibre:rn(f.fibre),satFat:rn(f.satFat),
-    sodium:rn(f.sodium||0),servings:Math.round(qty*100)/100};
+    sodium:rn(f.sodium||0),servings:Math.round(qty*100)/100,
+    id:(isEdit&&oldEntry&&oldEntry.id)?oldEntry.id:now,
+    updatedAt:now};
 
-  var isEdit=(_nutEditingEntryIdx>=0&&_nutEditingEntryIdx<_nutEntries.length);
-  var oldEntry=isEdit?_nutEntries[_nutEditingEntryIdx]:null;
   if(isEdit){
     _nutEntries[_nutEditingEntryIdx]=entry;
   } else {
@@ -5815,7 +5824,7 @@ function nutConfirmServing(){
 
   // Best-effort background sync — if it fails, reconciliation on next open will catch it
   if(isEdit&&oldEntry){
-    nutSyncAction({type:'deleteNutritionRow',date:oldEntry.date,meal:oldEntry.meal,food:oldEntry.food},null,function(){});
+    nutSyncAction({type:'deleteNutritionRow',date:oldEntry.date,meal:oldEntry.meal,food:oldEntry.food,id:oldEntry.id},null,function(){});
   }
   nutSyncAction({type:'logNutrition',entries:[entry]},null,function(){});
 }
@@ -6020,6 +6029,7 @@ function nutAddInlineFinish(food){
   food.carbs=parseFloat(food.carbs)||0;food.fat=parseFloat(food.fat)||0;
   food.fibre=parseFloat(food.fibre)||0;food.satFat=parseFloat(food.satFat)||0;
   food.sodium=parseFloat(food.sodium)||0;food.serving=parseFloat(food.serving)||100;food.unit=food.unit||'g';
+  food.id=Date.now();food.updatedAt=food.id;
   var existing=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===food.name.toLowerCase();});
   if(existing>=0){_nutFoods[existing]=food;}
   else{_nutFoods.push(food);_nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});}
