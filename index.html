@@ -1965,6 +1965,18 @@ function previewParsePaste(){
     return null;
   }
 
+  function parseForm(blines){
+    for(var i=0;i<blines.length;i++){
+      var l=blines[i].trim();
+      var m=l.match(/(?:\*\s*)?[Ff]orm[:\s]+(.+)/);
+      if(m){
+        // Convert · separators to bullet • to match built-in style
+        return m[1].replace(/\s*·\s*/g,' \u2022 ').replace(/\*+/g,'').trim();
+      }
+    }
+    return null;
+  }
+
   var parsed=[];
   blocks.forEach(function(block){
     var cleaned=stripLeading(block.header);
@@ -2000,6 +2012,7 @@ function previewParsePaste(){
 
     var rest=parseRest(block.lines);
     var goal=parseGoal(block.lines);
+    var form=parseForm(block.lines);
 
     // Merge with built-in exercise (preserves seq/form/watch/cues)
     var defaults=wType==='home'?homeEx:hotelEx;
@@ -2014,10 +2027,10 @@ function previewParsePaste(){
     ex.sets=rc.length;
     ex.reps=ex.isPlank?(rc[0]||60)+' sec/side':rc.join('/');
     if(rest)ex.rest=rest;
-    // Apply goal as a watch cue — appended or set if none
-    if(goal){
-      ex.watch=ex.watch?ex.watch+'\n🎯 '+goal:'🎯 '+goal;
-    }
+    // Pasted form is king — always overwrite built-in
+    if(form)ex.form=form;
+    // Pasted goal replaces built-in watch — session-specific
+    if(goal)ex.watch='\uD83C\uDFAF '+goal;
     parsed.push(ex);
   });
 
@@ -5240,7 +5253,7 @@ function nutTypeGeminiSearch(){
     return;
   }
 
-  var promptText='Give me the nutrition info for: "'+q+'". Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per serving as described. Sodium in mg. Estimate if needed.';
+  var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
   var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
 
   fetch(url,{
