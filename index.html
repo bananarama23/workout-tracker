@@ -1143,11 +1143,11 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
             <div style="flex:1;min-width:0;">
               <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;">
                 <span style="font-size:0.62rem;color:var(--muted);">Budget</span>
-                <span style="font-size:0.82rem;font-weight:700;" id="nutCalBudget">2,100</span>
+                <span style="font-size:0.82rem;font-weight:700;" id="nutCalBudget">2,497</span>
               </div>
               <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
                 <span style="font-size:0.62rem;color:var(--muted);">Remaining</span>
-                <span style="font-size:0.9rem;font-weight:700;" id="nutCalRemaining">2,100</span>
+                <span style="font-size:0.9rem;font-weight:700;" id="nutCalRemaining">2,497</span>
               </div>
               <!-- Active calories row -->
               <div id="nutActiveRow" style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);padding-top:8px;margin-bottom:8px;">
@@ -1260,7 +1260,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
 <!-- NUTRITION: Create / edit food overlay -->
 <div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-  <div style="background:var(--bg);border-radius:var(--r-lg);margin:40px 12px calc(var(--nav-h) + var(--safe-b) + 24px);padding:20px;box-sizing:border-box;">
+  <div style="background:var(--bg);border-radius:var(--r-lg);margin:40px 12px 24px;padding:20px;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutFoodFormTitle">ADD FOOD</div>
       <div style="display:flex;gap:8px;align-items:center;">
@@ -1972,28 +1972,6 @@ function previewParsePaste(){
     return null;
   }
 
-  function parseGoal(blines){
-    for(var i=0;i<blines.length;i++){
-      var l=blines[i].trim();
-      // Matches "🎯 Goal: Should feel easier" or "* Goal: ..." or "Goal: ..."
-      var m=l.match(/(?:🎯\s*)?[Gg]oal[:\s]+(.+)/);
-      if(m)return m[1].replace(/\*+/g,'').trim();
-    }
-    return null;
-  }
-
-  function parseForm(blines){
-    for(var i=0;i<blines.length;i++){
-      var l=blines[i].trim();
-      var m=l.match(/(?:\*\s*)?[Ff]orm[:\s]+(.+)/);
-      if(m){
-        // Convert · separators to bullet • to match built-in style
-        return m[1].replace(/\s*·\s*/g,' \u2022 ').replace(/\*+/g,'').trim();
-      }
-    }
-    return null;
-  }
-
   var parsed=[];
   blocks.forEach(function(block){
     var cleaned=stripLeading(block.header);
@@ -2028,8 +2006,6 @@ function previewParsePaste(){
     }
 
     var rest=parseRest(block.lines);
-    var goal=parseGoal(block.lines);
-    var form=parseForm(block.lines);
 
     // Merge with built-in exercise (preserves seq/form/watch/cues)
     var defaults=wType==='home'?homeEx:hotelEx;
@@ -2044,10 +2020,6 @@ function previewParsePaste(){
     ex.sets=rc.length;
     ex.reps=ex.isPlank?(rc[0]||60)+' sec/side':rc.join('/');
     if(rest)ex.rest=rest;
-    // Pasted form is king — always overwrite built-in
-    if(form)ex.form=form;
-    // Pasted goal replaces built-in watch — session-specific
-    if(goal)ex.watch='\uD83C\uDFAF '+goal;
     parsed.push(ex);
   });
 
@@ -2144,9 +2116,6 @@ function renderPreview(){
       }
       if(ex.tweak){
         html+='<div style="font-size:0.7rem;color:var(--orange);margin-top:6px;font-weight:600;">! '+ex.tweak+'</div>';
-      }
-      if(ex.watch){
-        html+='<div style="font-size:0.72rem;color:var(--blue);margin-top:6px;background:var(--blue-dim);border-left:2px solid var(--blue);border-radius:0 6px 6px 0;padding:7px 10px;white-space:pre-line;">'+ex.watch+'</div>';
       }
       html+='</div>'; // preview-ex-body
     }
@@ -2769,51 +2738,15 @@ function saveSeqAsDefault(){
     var stored=JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||'{}');
     stored[ex.name]=JSON.parse(JSON.stringify(ex.seq));
     localStorage.setItem(SEQ_DEFAULTS_KEY,JSON.stringify(stored));
+    // Visual feedback
     var btn=document.querySelector('.seq-add-btn[onclick="saveSeqAsDefault()"]');
-    if(btn){
-      var orig=btn.textContent;
-      btn.textContent='Saving...';
-      fetch(CLOUD_URL,{
-        method:'POST',
-        headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body:JSON.stringify({type:'setSeqDefaults',defaults:stored,_nonce:Date.now()})
-      })
-      .then(function(){
-        btn.textContent='Saved \u2713';
-        setTimeout(function(){btn.textContent=orig;},1800);
-      })
-      .catch(function(){
-        btn.textContent='Saved locally';
-        setTimeout(function(){btn.textContent=orig;},1800);
-      });
-    }
+    if(btn){var orig=btn.textContent;btn.textContent='Saved!';setTimeout(function(){btn.textContent=orig;},1500);}
   }catch(e){alert('Could not save: '+e.message);}
 }
 
 function loadSeqDefaults(){
   try{return JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||'{}');}
   catch(e){return {};}
-}
-
-function fetchSeqDefaultsFromSheet(){
-  // Fetch once on startup — merges sheet into localStorage so new browsers pick up saved sequences
-  var cb='wt_seqd_'+Date.now();
-  window[cb]=function(result){
-    window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
-    if(result&&result.status==='ok'&&result.defaults&&Object.keys(result.defaults).length){
-      try{
-        // Merge: sheet wins over localStorage for any exercise that exists in sheet
-        var local=JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||'{}');
-        var merged=Object.assign({},local,result.defaults);
-        localStorage.setItem(SEQ_DEFAULTS_KEY,JSON.stringify(merged));
-      }catch(e){}
-    }
-  };
-  var sc=document.createElement('script');sc.id='s_'+cb;
-  sc.onerror=function(){window[cb]=null;};
-  sc.src=CLOUD_URL+'?type=getSeqDefaults&callback='+cb;
-  document.head.appendChild(sc);
-  setTimeout(function(){if(window[cb]){window[cb]=null;}},10000);
 }
 
 function applySeqDefaults(exercises){
@@ -3615,15 +3548,16 @@ function saveWeekPlan(){
   var cbName='wt_savep_'+Date.now();
   window[cbName]=function(result){
     window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
-    if(msg){msg.textContent='Saved \u2713';msg.style.color='var(--green)';}
+    if(msg){msg.textContent='Saved';msg.style.color='var(--green)';}
     setTimeout(function(){if(msg)msg.textContent='';},2000);
     updateTodayCard(fmtDate(new Date()));loadHomeData();
   };
   var url=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'setWeekPlan',plan:_weekPlan}))+'&callback='+cbName;
-  var sc=document.createElement('script');sc.id='s_'+cbName;sc.src=url;
-  sc.onerror=function(){if(msg){msg.textContent='Failed to save';msg.style.color='var(--red)';}};
-  document.head.appendChild(sc);
-  setTimeout(function(){if(window[cbName]){window[cbName]=null;if(msg){msg.textContent='Timeout';msg.style.color='var(--orange)';}}},15000);
+  var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
+  script.onerror=function(){if(msg){msg.textContent='Failed to save';msg.style.color='var(--red)';}};
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;}},15000);
+  // Show copy button on Sat/Sun
   var dow=new Date().getDay();
   var wrap=document.getElementById('copyWeekWrap');
   if(wrap)wrap.style.display=(dow===0||dow===6)?'block':'none';
@@ -4280,9 +4214,9 @@ function budPickMonth(){
 function budSetStatus(state){
   var el=document.getElementById('budgetUpdated');
   if(!el)return;
-  if(state==='synced'){el.textContent='Synced from sheet';try{localStorage.removeItem('wt_budget_dirty');}catch(e){}}
-  else if(state==='saved'){el.textContent='Saved to sheet';try{localStorage.removeItem('wt_budget_dirty');}catch(e){}}
-  else if(state==='edited'){el.textContent='Unsaved edits — tap SAVE TO SHEET';try{localStorage.setItem('wt_budget_dirty','1');}catch(e){}}
+  if(state==='synced')el.textContent='Synced from sheet';
+  else if(state==='saved')el.textContent='Saved to sheet';
+  else if(state==='edited')el.textContent='Edited on device \u2014 not yet saved';
 }
 
 function budUpdateEquityBank(monthRows,idx){
@@ -4364,35 +4298,28 @@ function budFetchFromSheet(){
     window[cbName]=null;var sc=document.getElementById('s_'+cbName);if(sc)sc.parentNode.removeChild(sc);
     if(result&&result.status==='ok'&&result.data){
       var d=result.data;
-      // Only overwrite local values from sheet if there are no unsaved local edits
-      // budSetStatus('edited') sets wt_budget_dirty — protect those values
-      var isDirty=false;
-      try{isDirty=localStorage.getItem('wt_budget_dirty')==='1';}catch(e){}
-      if(!isDirty){
-        try{
-          var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
-          ['bHousePrice','bDownPayment','bPayRate',
-           'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
-           'vCarIns','vUmbrella','vPropTax','vHouseIns'].forEach(function(k){
-            if(d[k]!==null&&d[k]!==undefined)stored[k]=d[k];
-          });
-          if(Array.isArray(d.monthHours))stored.monthHours=d.monthHours;
-          localStorage.setItem(BUD_KEY,JSON.stringify(stored));
-        }catch(e){}
-        budApplyStored();
-      } else {
-        // Has unsaved edits — show warning but don't overwrite
-        budSetStatus('edited');
-        var el=document.getElementById('budgetUpdated');
-        if(el)el.textContent='Unsaved edits — tap SAVE TO SHEET to sync';
-      }
+      // Populate all editable inputs from sheet — sheet is source of truth on load
+      try{
+        var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
+        ['bHousePrice','bDownPayment','bPayRate',
+         'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
+         'vCarIns','vUmbrella','vPropTax','vHouseIns'].forEach(function(k){
+          if(d[k]!==null&&d[k]!==undefined)stored[k]=d[k];
+        });
+        if(Array.isArray(d.monthHours))stored.monthHours=d.monthHours;
+        localStorage.setItem(BUD_KEY,JSON.stringify(stored));
+      }catch(e){}
+      budApplyStored();
 
-      // Read-only sheet values (month dropdown) always update regardless
+      // Store read-only sheet values (month dropdown data only — not used in calc)
       _budSheetData.monthRows=Array.isArray(d.monthRows)?d.monthRows:[];
+
+      // Build month dropdown
       budBuildMonthDropdown(_budSheetData.monthRows);
+      // Run calc — everything derives from inputs now
       budCalc();
-      budSyncBadge(isDirty?'cached':'live');
-      if(!isDirty)budSetStatus('synced');
+      budSyncBadge('live');
+      budSetStatus('synced');
     }else{
       budSyncBadge('cached','local');
     }
@@ -4843,8 +4770,6 @@ if(window.location.search.indexOf('share')>=0){
 } else {
   navTo('home');
   setTimeout(loadHomeData,200);
-  // Fetch seq defaults from sheet so custom sequences work on any browser
-  setTimeout(fetchSeqDefaultsFromSheet,3000);
 }
 // ─── NUTRITION ────────────────────────────────────────────────────
 var NUT_FOODS_KEY='wt_foods_v1';
@@ -4852,15 +4777,15 @@ var NUT_ENTRIES_KEY='wt_nut_entries_v1';
 var NUT_TARGETS_KEY='wt_nut_targets';
 var NUT_ACTIVE_KEY='wt_nut_active'; // {date: activeCals} per day
 var NUT_ACTIVE_BASE=390; // Apple Watch base — calories above/below this adjust budget
+var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
+var NUT_DEFAULTS={cal:2497,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000};
 
 function nutGetActiveCals(date){
-  // Primary: read from _nutEntries (auto-synced from sheet)
   var d=date||_nutDate;
   if(_nutEntries&&_nutEntries.length){
     var entry=_nutEntries.find(function(e){return e.date===d&&e.meal==='_active'&&e.food==='AppleWatch';});
     if(entry)return entry.calories;
   }
-  // Fallback: localStorage cache before first sync
   try{
     var stored=JSON.parse(localStorage.getItem(NUT_ACTIVE_KEY)||'{}');
     var v=stored[d];
@@ -4869,50 +4794,38 @@ function nutGetActiveCals(date){
 }
 function nutSetActiveCals(date,val){
   var d=date||_nutDate;
-  // Remove existing active entry for this date from memory
   if(_nutEntries)_nutEntries=_nutEntries.filter(function(e){
     return !(e.date===d&&e.meal==='_active'&&e.food==='AppleWatch');
   });
   var isEmpty=val===null||val===''||isNaN(parseFloat(val));
-  // Update localStorage cache
   try{
     var stored=JSON.parse(localStorage.getItem(NUT_ACTIVE_KEY)||'{}');
     if(isEmpty){delete stored[d];}else{stored[d]=parseFloat(val);}
     localStorage.setItem(NUT_ACTIVE_KEY,JSON.stringify(stored));
   }catch(e){}
   if(isEmpty){
-    // Delete from sheet
     nutSyncAction({type:'deleteNutritionRow',date:d,meal:'_active',food:'AppleWatch'},null,null);
     return;
   }
-  // Add to memory + sync to sheet via existing logNutrition
   var entry={date:d,meal:'_active',food:'AppleWatch',calories:parseFloat(val),
     protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0,servings:1};
   if(_nutEntries)_nutEntries.push(entry);
   nutSyncAction({type:'logNutrition',entries:[entry]},null,null);
 }
 function nutEffectiveBudget(date){
-  // Base target + any active cal adjustment above/below 390
-  var base=_nutTargets.cal||2100;
+  var base=_nutTargets.cal||2497;
   var active=nutGetActiveCals(date||_nutDate);
-  if(active===null)return base; // no entry = assume hit base target, no adjustment
+  if(active===null)return base;
   return base+(active-NUT_ACTIVE_BASE);
 }
-
 function nutActiveChanged(){
-  // Live update as user types
   var inp=document.getElementById('nutActiveInp');
   if(!inp)return;
   var val=inp.value.trim();
-  nutSetActiveCals(_nutDate, val===''?null:parseFloat(val));
+  nutSetActiveCals(_nutDate,val===''?null:parseFloat(val));
   nutRenderDay();
 }
-function nutActiveBlur(){
-  // On blur, save and re-render cleanly
-  nutActiveChanged();
-}
-var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
-var NUT_DEFAULTS={cal:2100,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000};
+function nutActiveBlur(){nutActiveChanged();}
 
 // ── Sync queue — persists failed GAS calls and retries on next open ──────────
 function nutQueuePush(action){
@@ -4964,17 +4877,25 @@ function nutQueueFlush(){
 }
 // Generic single-action GAS sync — cb(true/false)
 function nutSyncAction(action,msgEl,cb){
+  // fetch POST with text/plain bypasses CORS preflight.
+  // DO NOT try to parse the response — GAS redirects through script.googleusercontent.com
+  // and the response type varies. For writes we don't need to read it at all.
   var isWrite=(action.type==='logNutrition'||action.type==='addFood'||
-               action.type==='deleteNutritionRow'||action.type==='deleteFood'||
-               action.type==='clearNutritionDay');
+               action.type==='deleteNutritionRow'||action.type==='deleteFood');
   var payload=JSON.stringify(Object.assign({},action,{_nonce:Date.now()}));
   fetch(CLOUD_URL,{
     method:'POST',
     headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:payload
   })
-  .then(function(){if(cb)cb(true);})
-  .catch(function(){if(cb)cb(isWrite);});
+  .then(function(){
+    // Any response (even opaque) means GAS received and processed the request
+    if(cb)cb(true);
+  })
+  .catch(function(){
+    // Network failure — writes are optimistic (GAS may have processed before disconnect)
+    if(cb)cb(isWrite);
+  });
 }
 
 var _nutDate=localDateStr();
@@ -5124,8 +5045,6 @@ function nutFetchEntries(){
       });
       // Find local entries not in sheet
       var missing=windowLocal.filter(function(e){
-        // Exclude _active entries — they sync via nutSetActiveCals directly
-        if(e.meal==='_active')return false;
         return !sheetKeys[e.date+'|'+e.meal+'|'+e.food];
       });
       if(missing.length){
@@ -5145,14 +5064,6 @@ function nutFetchEntries(){
       // Keep local entries outside the window, use sheet entries inside window
       var outsideWindow=localEntries.filter(function(e){return e.date<from||e.date>to;});
       _nutEntries=outsideWindow.concat(sheetEntries);
-      // Sync _active entries to localStorage cache so nutEffectiveBudget can read them
-      try{
-        var activeStored=JSON.parse(localStorage.getItem(NUT_ACTIVE_KEY)||'{}');
-        sheetEntries.forEach(function(e){
-          if(e.meal==='_active'&&e.food==='AppleWatch')activeStored[e.date]=e.calories;
-        });
-        localStorage.setItem(NUT_ACTIVE_KEY,JSON.stringify(activeStored));
-      }catch(er){}
       // If we had missing, add them to our view too (they're being pushed)
       if(missing.length){
         missing.forEach(function(m){
@@ -5181,7 +5092,7 @@ function nutFetchEntries(){
 }
 
 // ── Day view ───────────────────────────────────────────────────────
-function nutDayEntries(date){return _nutEntries.filter(function(e){return e.date===(date||_nutDate)&&e.meal!=='_active';});}
+function nutDayEntries(date){return _nutEntries.filter(function(e){return e.date===(date||_nutDate);});}
 function nutTotals(entries){
   var t={calories:0,protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0};
   entries.forEach(function(e){
@@ -5194,7 +5105,6 @@ function nutTotals(entries){
 function nutRenderDay(){
   var entries=nutDayEntries(),tot=nutTotals(entries);
   var activeCals=nutGetActiveCals(_nutDate);
-  var base=_nutTargets.cal||2100;
   var adjustment=activeCals!==null?(activeCals-NUT_ACTIVE_BASE):0;
   var calBudget=nutEffectiveBudget(_nutDate),eaten=Math.round(tot.calories),remain=calBudget-eaten;
 
@@ -5217,20 +5127,17 @@ function nutRenderDay(){
   var cr=document.getElementById('nutCalRemaining');
   if(cr){cr.textContent=(remain>=0?'':'\u2212')+Math.abs(remain).toLocaleString()+' remaining';cr.style.color=remain>=0?'var(--green)':'var(--red)';}
 
-  // Active cals row — editable inline
-  var acRow=document.getElementById('nutActiveRow');
-  if(acRow){
-    var acInp=document.getElementById('nutActiveInp');
-    if(acInp&&document.activeElement!==acInp){
-      acInp.value=activeCals!==null?Math.round(activeCals):'';
-    }
-    var acAdj=document.getElementById('nutActiveAdj');
-    if(acAdj){
-      if(activeCals===null){acAdj.textContent='';acAdj.style.color='';}
-      else if(adjustment>0){acAdj.textContent='+'+Math.round(adjustment)+' extra kcal';acAdj.style.color='var(--green)';}
-      else if(adjustment<0){acAdj.textContent=Math.round(adjustment)+' kcal';acAdj.style.color='var(--red)';}
-      else{acAdj.textContent='At base';acAdj.style.color='var(--muted)';}
-    }
+  // Active cals row
+  var acInp=document.getElementById('nutActiveInp');
+  if(acInp&&document.activeElement!==acInp){
+    acInp.value=activeCals!==null?Math.round(activeCals):'';
+  }
+  var acAdj=document.getElementById('nutActiveAdj');
+  if(acAdj){
+    if(activeCals===null){acAdj.textContent='';acAdj.style.color='';}
+    else if(adjustment>0){acAdj.textContent='+'+Math.round(adjustment)+' extra kcal';acAdj.style.color='var(--green)';}
+    else if(adjustment<0){acAdj.textContent=Math.round(adjustment)+' kcal';acAdj.style.color='var(--red)';}
+    else{acAdj.textContent='At base';acAdj.style.color='var(--muted)';}
   }
 
   var mb=document.getElementById('nutMacroBars');
@@ -5238,13 +5145,12 @@ function nutRenderDay(){
     mb.innerHTML=NUT_MACRO_DEFS.map(function(m){
       var val=Math.round(tot[m.key]||0),target=_nutTargets[m.tKey]||0;
       var pct=target>0?Math.min(100,Math.round((val/target)*100)):0;
-      var goodOver=(m.key==='protein'||m.key==='fibre');
-      var over=target>0&&val>target,col=over?(goodOver?m.col:'var(--red)'):m.col;
+      var over=target>0&&val>target,col=over?'var(--red)':m.col;
       return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
         '<div style="font-size:0.6rem;color:var(--muted);width:44px;flex-shrink:0;">'+m.label+'</div>'+
         '<div style="flex:1;height:4px;background:var(--border2);border-radius:2px;overflow:hidden;">'+
           '<div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:2px;transition:width 0.4s;"></div></div>'+
-        '<div style="font-size:0.6rem;font-weight:700;min-width:56px;text-align:right;color:'+(over?(goodOver?m.col:'var(--red)'):'var(--text2)')+';">'+
+        '<div style="font-size:0.6rem;font-weight:700;min-width:56px;text-align:right;color:'+(over?'var(--red)':'var(--text2)')+';">'+
           val+(target>0?'/'+target:'')+m.unit+'</div></div>';
     }).join('');
   }
@@ -5287,11 +5193,6 @@ function nutRenderWeek(){
   var sums={calories:0,protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0};
   logged.forEach(function(d){var t=nutTotals(nutDayEntries(d));Object.keys(sums).forEach(function(k){sums[k]+=t[k]||0;});});
 
-  // Per-day effective calorie budget (accounts for active cals each day)
-  var totalEffectiveCalBudget=0;
-  logged.forEach(function(d){totalEffectiveCalBudget+=nutEffectiveBudget(d);});
-  var avgEffectiveCalBudget=logged.length>0?Math.round(totalEffectiveCalBudget/logged.length):(_nutTargets.cal||2100);
-
   var rows=[
     {key:'calories',label:'Calories',unit:'kcal',tKey:'cal',  col:'var(--green)'},
     {key:'protein', label:'Protein', unit:'g',   tKey:'prot', col:'#9B7FFF'},
@@ -5303,18 +5204,16 @@ function nutRenderWeek(){
   ];
   ws.innerHTML=rows.map(function(m){
     var avg=Math.round(sums[m.key]/n);
-    // For calories, use the per-day effective budget (includes active cal adjustments)
-    var target=m.key==='calories'?avgEffectiveCalBudget:(_nutTargets[m.tKey]||0);
+    var target=_nutTargets[m.tKey]||0;
     var pct=target>0?Math.min(100,Math.round((avg/target)*100)):0;
     var over=target>0&&avg>target;
-    var goodOver2=(m.key==='protein'||m.key==='fibre');
     return '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;">'+
       '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">'+
         '<span style="font-size:0.78rem;font-weight:700;">'+m.label+'</span>'+
-        '<span style="font-size:0.7rem;color:'+(over?(goodOver2?m.col:'var(--red)'):'var(--muted)')+';">'+avg+m.unit+' avg'+(target?' / '+target+m.unit:'')+'</span>'+
+        '<span style="font-size:0.7rem;color:'+(over?'var(--red)':'var(--muted)')+';">'+avg+m.unit+' avg'+(target?' / '+target+m.unit:'')+'</span>'+
       '</div>'+
       '<div style="height:6px;background:var(--border2);border-radius:3px;overflow:hidden;">'+
-        '<div style="height:100%;width:'+pct+'%;background:'+(over?(goodOver2?m.col:'var(--red)'):m.col)+';border-radius:3px;"></div></div>'+
+        '<div style="height:100%;width:'+pct+'%;background:'+(over?'var(--red)':m.col)+';border-radius:3px;"></div></div>'+
       '<div style="font-size:0.6rem;color:var(--muted);margin-top:4px;">'+pct+'% of target \u00b7 '+logged.length+' day'+(logged.length!==1?'s':'')+' logged</div>'+
     '</div>';
   }).join('');
@@ -5351,141 +5250,22 @@ function nutOpenFoodForm(idx){
   var title=document.getElementById('nutFoodFormTitle');if(title)title.textContent=isEdit?'EDIT FOOD':'ADD FOOD';
   var delBtn=document.getElementById('nutDeleteFoodBtn');if(delBtn)delBtn.style.display=isEdit?'block':'none';
   var editEl=document.getElementById('nff_editIdx');if(editEl)editEl.value=isEdit?idx:'';
-  // Clear all fields — no stale zeros from previous open
   document.getElementById('nff_name').value=f?f.name:'';
-  document.getElementById('nff_serving').value=f?f.serving:'';
-  var unitEl=document.getElementById('nff_unit');if(unitEl)unitEl.value=(f&&f.unit)||'g';
+  document.getElementById('nff_serving').value=f?f.serving:'100';
+  var unitEl=document.getElementById('nff_unit');
+  if(unitEl)unitEl.value=(f&&f.unit)||'g';
   document.getElementById('nff_cal').value=f?f.calories:'';
   document.getElementById('nff_prot').value=f?f.protein:'';
   document.getElementById('nff_carb').value=f?f.carbs:'';
   document.getElementById('nff_fat').value=f?f.fat:'';
   document.getElementById('nff_fib').value=f?f.fibre:'';
   document.getElementById('nff_satfat').value=f?f.satFat:'';
-  document.getElementById('nff_sodium').value=f?(f.sodium||''):'';
+  document.getElementById('nff_sodium').value=f?(f.sodium||0):'';
   var msg=document.getElementById('nutFoodFormMsg');if(msg)msg.textContent='';
-  // Clear scan/type status panel from previous use
-  var ss=document.getElementById('nutScanStatus');if(ss){ss.style.display='none';ss.innerHTML='';}
   var ov=document.getElementById('nutFoodFormOverlay');
   if(ov){ov.style.display='flex';ov.scrollTop=0;}
 }
 function nutCloseFoodForm(){var ov=document.getElementById('nutFoodFormOverlay');if(ov)ov.style.display='none';}
-
-// ── Type food manually — search bar that searches existing foods OR lets user type name
-// and auto-fills the form fields without needing a camera
-function nutOpenTypeFood(){
-  var status=document.getElementById('nutScanStatus');
-  if(status){
-    status.style.display='block';
-    status.style.color='var(--text)';
-    status.innerHTML=
-      '<div style="margin-bottom:8px;font-size:0.72rem;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;">Search food — Gemini looks up nutrition</div>'+
-      '<div style="display:flex;gap:6px;align-items:center;">'+
-        '<input id="nutTypeSearchInp" type="text" placeholder="e.g. 100g chicken breast, 1 banana..." '+
-          'style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:var(--r-sm);color:var(--text);font-size:0.9rem;padding:10px 12px;outline:none;box-sizing:border-box;" '+
-          'onkeydown="if(event.key===\'Enter\'){event.preventDefault();nutTypeGeminiSearch();}">'+
-        '<button onclick="nutTypeGeminiSearch()" style="background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);padding:10px 14px;font-family:\'Bebas Neue\',sans-serif;font-size:0.88rem;letter-spacing:1px;cursor:pointer;white-space:nowrap;">SEARCH</button>'+
-      '</div>'+
-      '<div id="nutTypeSearchStatus" style="font-size:0.72rem;color:var(--muted);margin-top:6px;min-height:16px;"></div>';
-    setTimeout(function(){var inp=document.getElementById('nutTypeSearchInp');if(inp)inp.focus();},100);
-  }
-}
-
-function nutTypeGeminiSearch(){
-  var q=(document.getElementById('nutTypeSearchInp')||{}).value||'';
-  if(!q.trim())return;
-  var statusEl=document.getElementById('nutTypeSearchStatus');
-  if(statusEl){statusEl.textContent='Asking Gemini...';statusEl.style.color='var(--muted)';}
-
-  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
-  if(!geminiKey){
-    nutApiKeyShow(null,null,null);
-    // After key is saved, user will need to tap SEARCH again
-    if(statusEl){statusEl.textContent='Enter your Gemini key then search again';statusEl.style.color='var(--orange)';}
-    return;
-  }
-
-  var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
-  var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
-
-  fetch(url,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      contents:[{parts:[{text:promptText}]}],
-      generationConfig:{temperature:0,maxOutputTokens:200}
-    })
-  })
-  .then(function(r){
-    if(!r.ok){
-      return r.json().then(function(err){
-        var msg=err&&err.error&&err.error.message||('HTTP '+r.status);
-        if(r.status===400||r.status===401||r.status===403){
-          localStorage.removeItem('wt_gemini_key');
-          throw new Error('BAD_KEY:'+msg);
-        }
-        throw new Error(msg);
-      });
-    }
-    return r.json();
-  })
-  .then(function(data){
-    var text=data.candidates&&data.candidates[0]&&
-             data.candidates[0].content&&data.candidates[0].content.parts&&
-             data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
-    if(!text){
-      if(statusEl){statusEl.textContent='No result — try a more specific description';statusEl.style.color='var(--orange)';}
-      return;
-    }
-    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    var jsonStart=text.indexOf('{'),jsonEnd=text.lastIndexOf('}');
-    if(jsonStart>=0&&jsonEnd>jsonStart)text=text.slice(jsonStart,jsonEnd+1);
-    try{
-      var parsed=JSON.parse(text);
-      // Hide the search panel
-      var outer=document.getElementById('nutScanStatus');
-      if(outer){outer.style.display='none';outer.innerHTML='';}
-      // Fill the form
-      nutFillFromScan(parsed,null);
-      // Show brief success in form msg
-      var msg=document.getElementById('nutFoodFormMsg');
-      if(msg){msg.textContent='\u2713 '+(parsed.name||q)+' — check values then save';msg.style.color='var(--green)';}
-    }catch(e){
-      if(statusEl){statusEl.textContent='Parse error — try again';statusEl.style.color='var(--orange)';}
-    }
-  })
-  .catch(function(err){
-    var msg=err&&err.message||'';
-    if(msg.indexOf('BAD_KEY')>=0){
-      localStorage.removeItem('wt_gemini_key');
-      nutApiKeyShow(null,null,null);
-      if(statusEl){statusEl.textContent='Invalid key — re-enter in the overlay';statusEl.style.color='var(--orange)';}
-    } else {
-      if(statusEl){statusEl.textContent='Error: '+(msg||'network problem')+' — try again';statusEl.style.color='var(--orange)';}
-    }
-  });
-}
-
-function nutTypeSearchFilter(){}   // no-op — kept so nothing breaks
-function nutTypeSelectFood(idx){
-  var f=_nutFoods[idx];if(!f)return;
-  document.getElementById('nff_name').value=f.name;
-  document.getElementById('nff_serving').value=f.serving;
-  var unitEl=document.getElementById('nff_unit');if(unitEl)unitEl.value=f.unit||'g';
-  document.getElementById('nff_cal').value=f.calories;
-  document.getElementById('nff_prot').value=f.protein;
-  document.getElementById('nff_carb').value=f.carbs;
-  document.getElementById('nff_fat').value=f.fat;
-  document.getElementById('nff_fib').value=f.fibre;
-  document.getElementById('nff_satfat').value=f.satFat;
-  document.getElementById('nff_sodium').value=f.sodium||0;
-  var status=document.getElementById('nutScanStatus');
-  if(status){status.style.display='none';status.innerHTML='';}
-}
-function nutTypeSelectTop(){}      // no-op
-function nutTypeSearchFill(){
-  var status=document.getElementById('nutScanStatus');
-  if(status){status.style.display='none';status.innerHTML='';}
-}
 
 // ── Smart camera ────────────────────────────────────────────────────
 // Flow: open camera → BarcodeDetector auto-detects → Open Food Facts lookup
@@ -5742,7 +5522,7 @@ function nutCallVision(base64,mediaType,statusEl){
 
 function nutFillFromScan(d,statusEl){
   if(!d){if(statusEl){statusEl.textContent='Could not parse \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}return;}
-  // If we came from the Add overlay (camera icon there), skip the food form and go straight to serving
+  // If we came from the Add overlay camera, skip the food form and go straight to serving
   if(_nutAddInlineMode){
     _nutAddInlineMode=false;
     nutAddInlineFinish(d);
@@ -5772,19 +5552,8 @@ function nutSaveFood(){
   if(!name){if(msg){msg.textContent='Name required';msg.style.color='var(--red)';}return;}
   var sNum=parseFloat(document.getElementById('nff_serving').value)||100;
   var sUnit=(document.getElementById('nff_unit')||{}).value||'g';
-  var calories=parseFloat(document.getElementById('nff_cal').value)||0;
-  var calEmpty=document.getElementById('nff_cal').value.trim()==='';
-  if(calEmpty){
-    // Fix 2: warn but proceed after delay
-    if(msg){msg.textContent='No calories entered — saving as 0. Correct?';msg.style.color='var(--yellow)';}
-    setTimeout(function(){_nutDoSave(name,sNum,sUnit,calories,msg);},1800);
-    return;
-  }
-  _nutDoSave(name,sNum,sUnit,calories,msg);
-}
-
-function _nutDoSave(name,sNum,sUnit,calories,msg){
-  var food={name:name,calories:calories,
+  var food={name:name,
+    calories:parseFloat(document.getElementById('nff_cal').value)||0,
     protein:parseFloat(document.getElementById('nff_prot').value)||0,
     carbs:parseFloat(document.getElementById('nff_carb').value)||0,
     fat:parseFloat(document.getElementById('nff_fat').value)||0,
@@ -5793,34 +5562,24 @@ function _nutDoSave(name,sNum,sUnit,calories,msg){
     sodium:parseFloat(document.getElementById('nff_sodium').value)||0,
     serving:sNum,unit:sUnit};
   var editIdx=document.getElementById('nff_editIdx').value;
-  var isNew=editIdx==='';
-  if(!isNew){_nutFoods[parseInt(editIdx)]=food;}
+  if(editIdx!==''){_nutFoods[parseInt(editIdx)]=food;}
   else{_nutFoods.push(food);_nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});}
   try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
   nutRenderFoodList();
-  if(msg){msg.textContent='Saving...';msg.style.color='var(--muted)';}
-  function afterSave(){
-    nutCloseFoodForm();
-    // Fix 5: if new food and we have a meal context, open serving picker immediately
-    if(isNew&&_nutAddMeal){
-      setTimeout(function(){
-        var idx=_nutFoods.findIndex(function(f){return f.name===food.name;});
-        if(idx>=0)nutPickFood(idx);
-      },200);
-    }
-  }
+  if(msg){msg.textContent='Saving to sheet...';msg.style.color='var(--muted)';}
   fetch(CLOUD_URL,{
     method:'POST',
     headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify({type:'addFood',food:food,_nonce:Date.now()})
   })
-  .then(function(){
-    if(msg){msg.textContent='Saved \u2713';msg.style.color='var(--green)';}
-    setTimeout(afterSave,700);
+  .then(function(r){return r.json();})
+  .then(function(res){
+    var ok=res&&res.status==='ok';
+    if(msg){msg.textContent=ok?'Saved \u2713':'Saved locally';msg.style.color=ok?'var(--green)':'var(--yellow)';}
+    if(ok)setTimeout(function(){nutCloseFoodForm();},900);
   })
   .catch(function(){
     if(msg){msg.textContent='Saved locally';msg.style.color='var(--yellow)';}
-    setTimeout(afterSave,700);
   });
 }
 
@@ -5849,102 +5608,6 @@ function nutOpenAdd(meal){
   if(ov){ov.style.display='flex';ov.scrollTop=0;}
 }
 function nutCloseAdd(){var ov=document.getElementById('nutAddOverlay');if(ov)ov.style.display='none';}
-
-// ── Inline create from Add overlay ────────────────────────────────
-// Creates food AND immediately picks it into the serving overlay — no detour to My Foods
-
-function nutAddInlineStatus(txt,col){
-  var el=document.getElementById('nutAddInlineStatus');
-  if(el){el.textContent=txt;el.style.color=col||'var(--muted)';}
-}
-
-function nutAddInlineGemini(){
-  var q=(document.getElementById('nutAddSearch')||{}).value||'';
-  if(!q.trim()){nutAddInlineStatus('Type a food name first','var(--orange)');return;}
-  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
-  if(!geminiKey){
-    nutCloseAdd();
-    nutApiKeyShow(null,null,null);
-    return;
-  }
-  nutAddInlineStatus('Asking Gemini...','var(--muted)');
-  var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
-  var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
-  fetch(url,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
-  })
-  .then(function(r){
-    if(!r.ok){return r.json().then(function(err){
-      var msg=err&&err.error&&err.error.message||('HTTP '+r.status);
-      if(r.status===400||r.status===401||r.status===403){localStorage.removeItem('wt_gemini_key');}
-      throw new Error(msg);
-    });}
-    return r.json();
-  })
-  .then(function(data){
-    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
-    if(!text){nutAddInlineStatus('No result — try a clearer description','var(--orange)');return;}
-    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    var jsonStart=text.indexOf('{'),jsonEnd=text.lastIndexOf('}');
-    if(jsonStart>=0&&jsonEnd>jsonStart)text=text.slice(jsonStart,jsonEnd+1);
-    try{
-      var food=JSON.parse(text);
-      if(!food.name)food.name=q;
-      nutAddInlineFinish(food);
-    }catch(e){nutAddInlineStatus('Parse error — try again','var(--orange)');}
-  })
-  .catch(function(err){
-    var msg=err&&err.message||'';
-    if(msg.indexOf('BAD_KEY')>=0||msg.indexOf('401')>=0||msg.indexOf('403')>=0){
-      localStorage.removeItem('wt_gemini_key');
-      nutCloseAdd();nutApiKeyShow(null,null,null);
-    } else {
-      nutAddInlineStatus('Error: '+(msg||'network problem'),'var(--orange)');
-    }
-  });
-}
-
-function nutAddInlineScan(){
-  // Close add overlay, open camera — on scan complete, go straight to serving picker
-  _nutAddInlineMode=true;
-  nutCloseAdd();
-  nutCamOpen();
-}
-var _nutAddInlineMode=false; // flag: we came from the add overlay, not the food form
-
-function nutAddInlineFinish(food){
-  // Save to food database
-  food.name=food.name||'Unknown';
-  food.calories=parseFloat(food.calories)||0;
-  food.protein=parseFloat(food.protein)||0;
-  food.carbs=parseFloat(food.carbs)||0;
-  food.fat=parseFloat(food.fat)||0;
-  food.fibre=parseFloat(food.fibre)||0;
-  food.satFat=parseFloat(food.satFat)||0;
-  food.sodium=parseFloat(food.sodium)||0;
-  food.serving=parseFloat(food.serving)||100;
-  food.unit=food.unit||'g';
-
-  // Add to foods DB if not already there
-  var existing=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===food.name.toLowerCase();});
-  if(existing>=0){_nutFoods[existing]=food;}
-  else{_nutFoods.push(food);_nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});}
-  try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
-
-  // Save to sheet in background
-  fetch(CLOUD_URL,{
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify({type:'addFood',food:food,_nonce:Date.now()})
-  }).catch(function(){});
-
-  // Close add overlay and go straight to serving picker
-  nutCloseAdd();
-  var fi=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===food.name.toLowerCase();});
-  nutPickFood(fi);
-}
 
 function nutFilterAddList(){
   var q=(document.getElementById('nutAddSearch')||{}).value||'';
@@ -5981,24 +5644,22 @@ function nutFilterAddList(){
   }
 
   var list=_nutFoods.filter(function(f){return !q||f.name.toLowerCase().indexOf(q.toLowerCase())>=0;});
-
-  // No match — show inline create buttons
-  if(!list.length){
+  if(!list.length&&!html){
     if(q){
       html+='<div style="padding:12px 4px 8px;font-size:0.8rem;color:var(--muted);">No match for "'+q+'" — create it:</div>';
       html+='<div style="display:flex;gap:8px;margin-bottom:12px;">';
-      html+='<button onclick="nutAddInlineGemini()" style="flex:1;padding:12px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:\'Bebas Neue\',sans-serif;font-size:0.9rem;letter-spacing:1px;font-weight:900;cursor:pointer;">✦ ASK GEMINI</button>';
-      html+='<button onclick="nutAddInlineScan()" style="flex:0 0 52px;padding:12px;background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);font-size:1.1rem;cursor:pointer;">📷</button>';
+      html+='<button onclick="nutAddInlineGemini()" style="flex:1;padding:12px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:\'Bebas Neue\',sans-serif;font-size:0.9rem;letter-spacing:1px;font-weight:900;cursor:pointer;">\u2736 ASK GEMINI</button>';
+      html+='<button onclick="nutAddInlineScan()" style="flex:0 0 52px;padding:12px;background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);font-size:1.1rem;cursor:pointer;">\uD83D\uDCF7</button>';
       html+='</div>';
       html+='<div id="nutAddInlineStatus" style="font-size:0.72rem;color:var(--muted);min-height:16px;padding:0 4px;"></div>';
-    } else if(!html){
-      html='<div style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">No foods yet — search and tap Ask Gemini to create one</div>';
+      el.innerHTML=html;
+    } else {
+      el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">Add foods in the Foods tab first.</div>';
     }
-    el.innerHTML=html;
     return;
   }
+  if(!list.length){el.innerHTML=html;return;}
 
-  // Show create buttons at bottom when there's a query with partial matches
   html+=list.map(function(f){
     var fi=_nutFoods.indexOf(f);
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="nutPickFood('+fi+')">'+
@@ -6010,8 +5671,8 @@ function nutFilterAddList(){
 
   if(q){
     html+='<div style="display:flex;gap:8px;margin-top:12px;">';
-    html+='<button onclick="nutAddInlineGemini()" style="flex:1;padding:11px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-family:\'Bebas Neue\',sans-serif;font-size:0.82rem;letter-spacing:1px;cursor:pointer;">✦ New: Ask Gemini</button>';
-    html+='<button onclick="nutAddInlineScan()" style="flex:0 0 44px;padding:11px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-size:1rem;cursor:pointer;">📷</button>';
+    html+='<button onclick="nutAddInlineGemini()" style="flex:1;padding:11px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-family:\'Bebas Neue\',sans-serif;font-size:0.82rem;letter-spacing:1px;cursor:pointer;">\u2736 New: Ask Gemini</button>';
+    html+='<button onclick="nutAddInlineScan()" style="flex:0 0 44px;padding:11px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-size:1rem;cursor:pointer;">\uD83D\uDCF7</button>';
     html+='</div>';
     html+='<div id="nutAddInlineStatus" style="font-size:0.72rem;color:var(--muted);min-height:16px;padding:4px 4px 0;"></div>';
   }
@@ -6206,53 +5867,150 @@ function nutDelEntry(idx){
   });
 }
 
-// ── Phone is truth — wipe sheet for this day, rewrite from local entries ──────
+
+// ── Type food (Gemini text search) ────────────────────────────────
+function nutOpenTypeFood(){
+  var status=document.getElementById('nutScanStatus');
+  if(status){
+    status.style.display='block';
+    status.style.color='var(--text)';
+    status.innerHTML=
+      '<div style="margin-bottom:8px;font-size:0.72rem;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;">Search food — Gemini looks up nutrition</div>'+
+      '<div style="display:flex;gap:6px;align-items:center;">'+
+        '<input id="nutTypeSearchInp" type="text" placeholder="e.g. 100g chicken breast, 1 banana..." '+
+          'style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:var(--r-sm);color:var(--text);font-size:0.9rem;padding:10px 12px;outline:none;box-sizing:border-box;" '+
+          'onkeydown="if(event.key===\'Enter\'){event.preventDefault();nutTypeGeminiSearch();}">'+
+        '<button onclick="nutTypeGeminiSearch()" style="background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);padding:10px 14px;font-family:\'Bebas Neue\',sans-serif;font-size:0.88rem;letter-spacing:1px;cursor:pointer;white-space:nowrap;">SEARCH</button>'+
+      '</div>'+
+      '<div id="nutTypeSearchStatus" style="font-size:0.72rem;color:var(--muted);margin-top:6px;min-height:16px;"></div>';
+    setTimeout(function(){var inp=document.getElementById('nutTypeSearchInp');if(inp)inp.focus();},100);
+  }
+}
+function nutTypeGeminiSearch(){
+  var q=(document.getElementById('nutTypeSearchInp')||{}).value||'';
+  if(!q.trim())return;
+  var statusEl=document.getElementById('nutTypeSearchStatus');
+  if(statusEl){statusEl.textContent='Asking Gemini...';statusEl.style.color='var(--muted)';}
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  if(!geminiKey){nutApiKeyShow(null,null,null);if(statusEl){statusEl.textContent='Enter your Gemini key then search again';statusEl.style.color='var(--orange)';}return;}
+  var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
+  })
+  .then(function(r){
+    if(!r.ok){return r.json().then(function(err){var msg=err&&err.error&&err.error.message||('HTTP '+r.status);if(r.status===400||r.status===401||r.status===403){localStorage.removeItem('wt_gemini_key');throw new Error('BAD_KEY:'+msg);}throw new Error(msg);});}
+    return r.json();
+  })
+  .then(function(data){
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
+    if(!text){if(statusEl){statusEl.textContent='No result — try a more specific description';statusEl.style.color='var(--orange)';}return;}
+    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    var jsonStart=text.indexOf('{'),jsonEnd=text.lastIndexOf('}');
+    if(jsonStart>=0&&jsonEnd>jsonStart)text=text.slice(jsonStart,jsonEnd+1);
+    try{
+      var parsed=JSON.parse(text);
+      var outer=document.getElementById('nutScanStatus');if(outer){outer.style.display='none';outer.innerHTML='';}
+      nutFillFromScan(parsed,null);
+      var msg=document.getElementById('nutFoodFormMsg');if(msg){msg.textContent='\u2713 '+(parsed.name||q)+' — check values then save';msg.style.color='var(--green)';}
+    }catch(e){if(statusEl){statusEl.textContent='Parse error — try again';statusEl.style.color='var(--orange)';}}
+  })
+  .catch(function(err){
+    var msg=err&&err.message||'';
+    if(msg.indexOf('BAD_KEY')>=0){localStorage.removeItem('wt_gemini_key');nutApiKeyShow(null,null,null);if(statusEl){statusEl.textContent='Invalid key — re-enter in the overlay';statusEl.style.color='var(--orange)';}}
+    else{if(statusEl){statusEl.textContent='Error: '+(msg||'network problem')+' — try again';statusEl.style.color='var(--orange)';}}
+  });
+}
+function nutTypeSearchFilter(){}
+function nutTypeSelectFood(idx){
+  var f=_nutFoods[idx];if(!f)return;
+  ['nff_name','nff_serving','nff_cal','nff_prot','nff_carb','nff_fat','nff_fib','nff_satfat','nff_sodium'].forEach(function(id,i){
+    var vals=[f.name,f.serving,f.calories,f.protein,f.carbs,f.fat,f.fibre,f.satFat,f.sodium||0];
+    var el=document.getElementById(id);if(el)el.value=vals[i];
+  });
+  var unitEl=document.getElementById('nff_unit');if(unitEl)unitEl.value=f.unit||'g';
+  var status=document.getElementById('nutScanStatus');if(status){status.style.display='none';status.innerHTML='';}
+}
+function nutTypeSelectTop(){}
+function nutTypeSearchFill(){var status=document.getElementById('nutScanStatus');if(status){status.style.display='none';status.innerHTML='';}}
+
+// ── Inline Gemini add from meal overlay ───────────────────────────
+var _nutAddInlineMode=false;
+function nutAddInlineStatus(txt,col){var el=document.getElementById('nutAddInlineStatus');if(el){el.textContent=txt;el.style.color=col||'var(--muted)';}}
+function nutAddInlineGemini(){
+  var q=(document.getElementById('nutAddSearch')||{}).value||'';
+  if(!q.trim()){nutAddInlineStatus('Type a food name first','var(--orange)');return;}
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  if(!geminiKey){nutCloseAdd();nutApiKeyShow(null,null,null);return;}
+  nutAddInlineStatus('Asking Gemini...','var(--muted)');
+  var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
+  })
+  .then(function(r){if(!r.ok){return r.json().then(function(err){var msg=err&&err.error&&err.error.message||('HTTP '+r.status);if(r.status===400||r.status===401||r.status===403)localStorage.removeItem('wt_gemini_key');throw new Error(msg);});}return r.json();})
+  .then(function(data){
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
+    if(!text){nutAddInlineStatus('No result — try a clearer description','var(--orange)');return;}
+    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    var jsonStart=text.indexOf('{'),jsonEnd=text.lastIndexOf('}');
+    if(jsonStart>=0&&jsonEnd>jsonStart)text=text.slice(jsonStart,jsonEnd+1);
+    try{var food=JSON.parse(text);if(!food.name)food.name=q;nutAddInlineFinish(food);}
+    catch(e){nutAddInlineStatus('Parse error — try again','var(--orange)');}
+  })
+  .catch(function(err){
+    var msg=err&&err.message||'';
+    if(msg.indexOf('401')>=0||msg.indexOf('403')>=0){localStorage.removeItem('wt_gemini_key');nutCloseAdd();nutApiKeyShow(null,null,null);}
+    else{nutAddInlineStatus('Error: '+(msg||'network problem'),'var(--orange)');}
+  });
+}
+function nutAddInlineScan(){_nutAddInlineMode=true;nutCloseAdd();nutCamOpen();}
+function nutAddInlineFinish(food){
+  food.name=food.name||'Unknown';
+  food.calories=parseFloat(food.calories)||0;food.protein=parseFloat(food.protein)||0;
+  food.carbs=parseFloat(food.carbs)||0;food.fat=parseFloat(food.fat)||0;
+  food.fibre=parseFloat(food.fibre)||0;food.satFat=parseFloat(food.satFat)||0;
+  food.sodium=parseFloat(food.sodium)||0;food.serving=parseFloat(food.serving)||100;food.unit=food.unit||'g';
+  var existing=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===food.name.toLowerCase();});
+  if(existing>=0){_nutFoods[existing]=food;}
+  else{_nutFoods.push(food);_nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});}
+  try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
+  fetch(CLOUD_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({type:'addFood',food:food,_nonce:Date.now()})}).catch(function(){});
+  nutCloseAdd();
+  var fi=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===food.name.toLowerCase();});
+  nutPickFood(fi);
+}
+
+// ── Push day to sheet (phone is truth) ────────────────────────────
 function nutPushDayToSheet(){
   var date=_nutDate;
   var dayEntries=_nutEntries.filter(function(e){return e.date===date;});
   var btn=document.getElementById('nutPushDayBtn');
   var msg=document.getElementById('nutPushDayMsg');
-  var isToday=date===localDateStr();
-
-  var label=isToday?'today':date;
+  var label=date===localDateStr()?'today':date;
   if(!confirm('Replace everything on the sheet for '+label+' with what\'s on this phone?\n\n'+dayEntries.length+' item'+(dayEntries.length!==1?'s':'')+' will be written.'))return;
-
   if(btn){btn.style.color='var(--blue)';btn.style.borderColor='var(--blue)';}
   if(msg){msg.textContent='Wiping sheet for '+label+'...';msg.style.color='var(--muted)';}
   nutBadge('load','Syncing');
-
-  // Step 1: delete all rows for this day on the sheet
   nutSyncAction({type:'clearNutritionDay',date:date},null,function(clearOk){
     if(!clearOk){
       if(msg){msg.textContent='Could not clear sheet — try again';msg.style.color='var(--red)';}
       if(btn){btn.style.color='';btn.style.borderColor='';}
-      nutBadge('cached','Error');
-      return;
+      nutBadge('cached','Error');return;
     }
     if(!dayEntries.length){
-      // Nothing to write — day is now empty on sheet too
       if(msg){msg.textContent='\u2713 Sheet cleared — no entries for '+label;msg.style.color='var(--green)';}
       if(btn){btn.style.color='';btn.style.borderColor='';}
-      nutBadge('live','Live');
-      setTimeout(function(){if(msg)msg.textContent='';},3000);
-      return;
+      nutBadge('live','Live');setTimeout(function(){if(msg)msg.textContent='';},3000);return;
     }
-    // Step 2: write all local entries for this day
     nutSyncAction({type:'logNutrition',entries:dayEntries},null,function(writeOk){
-      if(writeOk){
-        if(msg){msg.textContent='\u2713 Sheet updated — '+dayEntries.length+' item'+(dayEntries.length!==1?'s':'')+' written';msg.style.color='var(--green)';}
-        nutBadge('live','Live');
-      } else {
-        if(msg){msg.textContent='Cleared but write failed — entries queued';msg.style.color='var(--yellow)';}
-        nutQueuePush({type:'logNutrition',entries:dayEntries});
-        nutBadge('cached','Queued');
-      }
+      if(writeOk){if(msg){msg.textContent='\u2713 Sheet updated — '+dayEntries.length+' item'+(dayEntries.length!==1?'s':'')+' written';msg.style.color='var(--green)';}nutBadge('live','Live');}
+      else{if(msg){msg.textContent='Cleared but write failed — entries queued';msg.style.color='var(--yellow)';}nutQueuePush({type:'logNutrition',entries:dayEntries});nutBadge('cached','Queued');}
       if(btn){btn.style.color='';btn.style.borderColor='';}
       setTimeout(function(){if(msg)msg.textContent='';},4000);
     });
   });
 }
-
 </script>
 </body>
 </html>
