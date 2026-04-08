@@ -2749,6 +2749,26 @@ function loadSeqDefaults(){
   catch(e){return {};}
 }
 
+function fetchSeqDefaultsFromSheet(){
+  // Fetch once on startup — merges sheet into localStorage so new browsers pick up saved sequences
+  var cb='wt_seqd_'+Date.now();
+  window[cb]=function(result){
+    window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
+    if(result&&result.status==='ok'&&result.defaults&&Object.keys(result.defaults).length){
+      try{
+        var local=JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||'{}');
+        var merged=Object.assign({},local,result.defaults);
+        localStorage.setItem(SEQ_DEFAULTS_KEY,JSON.stringify(merged));
+      }catch(e){}
+    }
+  };
+  var sc=document.createElement('script');sc.id='s_'+cb;
+  sc.onerror=function(){window[cb]=null;};
+  sc.src=CLOUD_URL+'?type=getSeqDefaults&callback='+cb;
+  document.head.appendChild(sc);
+  setTimeout(function(){if(window[cb]){window[cb]=null;}},10000);
+}
+
 function applySeqDefaults(exercises){
   var defaults=loadSeqDefaults();
   if(!Object.keys(defaults).length)return exercises;
@@ -4770,6 +4790,8 @@ if(window.location.search.indexOf('share')>=0){
 } else {
   navTo('home');
   setTimeout(loadHomeData,200);
+  // Fetch seq defaults from sheet so custom sequences work on any browser
+  setTimeout(fetchSeqDefaultsFromSheet,3000);
 }
 // ─── NUTRITION ────────────────────────────────────────────────────
 var NUT_FOODS_KEY='wt_foods_v1';
@@ -5092,7 +5114,7 @@ function nutFetchEntries(){
 }
 
 // ── Day view ───────────────────────────────────────────────────────
-function nutDayEntries(date){return _nutEntries.filter(function(e){return e.date===(date||_nutDate);});}
+function nutDayEntries(date){return _nutEntries.filter(function(e){return e.date===(date||_nutDate)&&e.meal!=='_active';});}
 function nutTotals(entries){
   var t={calories:0,protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0};
   entries.forEach(function(e){
@@ -5552,8 +5574,18 @@ function nutSaveFood(){
   if(!name){if(msg){msg.textContent='Name required';msg.style.color='var(--red)';}return;}
   var sNum=parseFloat(document.getElementById('nff_serving').value)||100;
   var sUnit=(document.getElementById('nff_unit')||{}).value||'g';
-  var food={name:name,
-    calories:parseFloat(document.getElementById('nff_cal').value)||0,
+  var calories=parseFloat(document.getElementById('nff_cal').value)||0;
+  var calEmpty=document.getElementById('nff_cal').value.trim()==='';
+  if(calEmpty){
+    if(msg){msg.textContent='No calories entered — saving as 0. Correct?';msg.style.color='var(--yellow)';}
+    setTimeout(function(){_nutDoSave(name,sNum,sUnit,calories,msg);},1800);
+    return;
+  }
+  _nutDoSave(name,sNum,sUnit,calories,msg);
+}
+
+function _nutDoSave(name,sNum,sUnit,calories,msg){
+  var food={name:name,calories:calories,
     protein:parseFloat(document.getElementById('nff_prot').value)||0,
     carbs:parseFloat(document.getElementById('nff_carb').value)||0,
     fat:parseFloat(document.getElementById('nff_fat').value)||0,
@@ -5562,24 +5594,33 @@ function nutSaveFood(){
     sodium:parseFloat(document.getElementById('nff_sodium').value)||0,
     serving:sNum,unit:sUnit};
   var editIdx=document.getElementById('nff_editIdx').value;
-  if(editIdx!==''){_nutFoods[parseInt(editIdx)]=food;}
+  var isNew=editIdx==='';
+  if(!isNew){_nutFoods[parseInt(editIdx)]=food;}
   else{_nutFoods.push(food);_nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});}
   try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
   nutRenderFoodList();
-  if(msg){msg.textContent='Saving to sheet...';msg.style.color='var(--muted)';}
+  if(msg){msg.textContent='Saving...';msg.style.color='var(--muted)';}
+  function afterSave(){
+    nutCloseFoodForm();
+    if(isNew&&_nutAddMeal){
+      setTimeout(function(){
+        var idx=_nutFoods.findIndex(function(f){return f.name===food.name;});
+        if(idx>=0)nutPickFood(idx);
+      },200);
+    }
+  }
   fetch(CLOUD_URL,{
     method:'POST',
     headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify({type:'addFood',food:food,_nonce:Date.now()})
   })
-  .then(function(r){return r.json();})
-  .then(function(res){
-    var ok=res&&res.status==='ok';
-    if(msg){msg.textContent=ok?'Saved \u2713':'Saved locally';msg.style.color=ok?'var(--green)':'var(--yellow)';}
-    if(ok)setTimeout(function(){nutCloseFoodForm();},900);
+  .then(function(){
+    if(msg){msg.textContent='Saved \u2713';msg.style.color='var(--green)';}
+    setTimeout(afterSave,700);
   })
   .catch(function(){
     if(msg){msg.textContent='Saved locally';msg.style.color='var(--yellow)';}
+    setTimeout(afterSave,700);
   });
 }
 
