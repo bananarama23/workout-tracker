@@ -2754,13 +2754,56 @@ function saveSeqAsDefault(){
     localStorage.setItem(SEQ_DEFAULTS_KEY,JSON.stringify(stored));
     // Visual feedback
     var btn=document.querySelector('.seq-add-btn[onclick="saveSeqAsDefault()"]');
-    if(btn){var orig=btn.textContent;btn.textContent='Saved!';setTimeout(function(){btn.textContent=orig;},1500);}
+    if(btn){var orig=btn.textContent;btn.textContent='Saving...';
+      // Sync all defaults to sheet via fetch POST (avoids JSONP URL length limit)
+      fetch(CLOUD_URL,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({type:'setSeqDefaults',defaults:stored})
+      })
+      .then(function(r){return r.json();})
+      .then(function(res){
+        btn.textContent=res&&res.status==='ok'?'Saved \u2713':'Saved locally';
+        setTimeout(function(){btn.textContent=orig;},1800);
+      })
+      .catch(function(){
+        // Fallback: JSONP (may fail for large payloads but worth trying)
+        var cb='wt_seq_'+Date.now();
+        window[cb]=function(){window[cb]=null;};
+        var sc=document.createElement('script');sc.id='s_'+cb;
+        sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'setSeqDefaults',defaults:stored}))+'&callback='+cb;
+        document.head.appendChild(sc);
+        btn.textContent='Saved locally';
+        setTimeout(function(){btn.textContent=orig;},1800);
+      });
+    }
   }catch(e){alert('Could not save: '+e.message);}
 }
 
 function loadSeqDefaults(){
   try{return JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||'{}');}
   catch(e){return {};}
+}
+
+function fetchSeqDefaultsFromSheet(){
+  // Fetch once on startup — merges sheet into localStorage so new browsers pick up saved sequences
+  var cb='wt_seqd_'+Date.now();
+  window[cb]=function(result){
+    window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
+    if(result&&result.status==='ok'&&result.defaults&&Object.keys(result.defaults).length){
+      try{
+        // Merge: sheet wins over localStorage for any exercise that exists in sheet
+        var local=JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||'{}');
+        var merged=Object.assign({},local,result.defaults);
+        localStorage.setItem(SEQ_DEFAULTS_KEY,JSON.stringify(merged));
+      }catch(e){}
+    }
+  };
+  var sc=document.createElement('script');sc.id='s_'+cb;
+  sc.onerror=function(){window[cb]=null;};
+  sc.src=CLOUD_URL+'?type=getSeqDefaults&callback='+cb;
+  document.head.appendChild(sc);
+  setTimeout(function(){if(window[cb]){window[cb]=null;}},10000);
 }
 
 function applySeqDefaults(exercises){
@@ -4784,6 +4827,8 @@ if(window.location.search.indexOf('share')>=0){
 } else {
   navTo('home');
   setTimeout(loadHomeData,200);
+  // Fetch seq defaults from sheet so custom sequences work on any browser
+  setTimeout(fetchSeqDefaultsFromSheet,3000);
 }
 // ─── NUTRITION ────────────────────────────────────────────────────
 var NUT_FOODS_KEY='wt_foods_v1';
