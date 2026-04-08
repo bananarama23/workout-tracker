@@ -2769,30 +2769,19 @@ function saveSeqAsDefault(){
     var stored=JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||'{}');
     stored[ex.name]=JSON.parse(JSON.stringify(ex.seq));
     localStorage.setItem(SEQ_DEFAULTS_KEY,JSON.stringify(stored));
-    // Visual feedback
     var btn=document.querySelector('.seq-add-btn[onclick="saveSeqAsDefault()"]');
     if(btn){var orig=btn.textContent;btn.textContent='Saving...';
-      // Sync all defaults to sheet via fetch POST (avoids JSONP URL length limit)
-      fetch(CLOUD_URL,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({type:'setSeqDefaults',defaults:stored})
-      })
-      .then(function(r){return r.json();})
-      .then(function(res){
+      var cbName='wt_seq_'+Date.now();
+      window[cbName]=function(res){
+        window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
         btn.textContent=res&&res.status==='ok'?'Saved \u2713':'Saved locally';
         setTimeout(function(){btn.textContent=orig;},1800);
-      })
-      .catch(function(){
-        // Fallback: JSONP (may fail for large payloads but worth trying)
-        var cb='wt_seq_'+Date.now();
-        window[cb]=function(){window[cb]=null;};
-        var sc=document.createElement('script');sc.id='s_'+cb;
-        sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'setSeqDefaults',defaults:stored}))+'&callback='+cb;
-        document.head.appendChild(sc);
-        btn.textContent='Saved locally';
-        setTimeout(function(){btn.textContent=orig;},1800);
-      });
+      };
+      var sc=document.createElement('script');sc.id='s_'+cbName;
+      sc.onerror=function(){window[cbName]=null;btn.textContent='Saved locally';setTimeout(function(){btn.textContent=orig;},1800);};
+      sc.src=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'setSeqDefaults',defaults:stored}))+'&callback='+cbName;
+      document.head.appendChild(sc);
+      setTimeout(function(){if(window[cbName]){window[cbName]=null;btn.textContent='Saved locally';setTimeout(function(){btn.textContent=orig;},1800);}},15000);
     }
   }catch(e){alert('Could not save: '+e.message);}
 }
@@ -3619,34 +3608,18 @@ function cyclePlanType(dateStr){
 
 function saveWeekPlan(){
   var msg=document.getElementById('planMsg');if(msg){msg.textContent='Saving...';msg.style.color='var(--muted)';}
-  fetch(CLOUD_URL,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({type:'setWeekPlan',plan:_weekPlan})
-  })
-  .then(function(r){return r.json();})
-  .then(function(result){
-    if(msg){msg.textContent=result&&result.status==='ok'?'Saved \u2713':'Save failed';
-      msg.style.color=result&&result.status==='ok'?'var(--green)':'var(--red)';}
+  var cbName='wt_savep_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    if(msg){msg.textContent='Saved \u2713';msg.style.color='var(--green)';}
     setTimeout(function(){if(msg)msg.textContent='';},2000);
     updateTodayCard(fmtDate(new Date()));loadHomeData();
-  })
-  .catch(function(err){
-    // Fallback to JSONP GET
-    var cbName='wt_savep_'+Date.now();
-    window[cbName]=function(result){
-      window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
-      if(msg){msg.textContent='Saved \u2713';msg.style.color='var(--green)';}
-      setTimeout(function(){if(msg)msg.textContent='';},2000);
-      updateTodayCard(fmtDate(new Date()));loadHomeData();
-    };
-    var url=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'setWeekPlan',plan:_weekPlan}))+'&callback='+cbName;
-    var sc=document.createElement('script');sc.id='s_'+cbName;sc.src=url;
-    sc.onerror=function(){if(msg){msg.textContent='Failed to save';msg.style.color='var(--red)';}};
-    document.head.appendChild(sc);
-    setTimeout(function(){if(window[cbName]){window[cbName]=null;}},15000);
-  });
-  // Show copy button on Sat/Sun
+  };
+  var url=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'setWeekPlan',plan:_weekPlan}))+'&callback='+cbName;
+  var sc=document.createElement('script');sc.id='s_'+cbName;sc.src=url;
+  sc.onerror=function(){if(msg){msg.textContent='Failed to save';msg.style.color='var(--red)';}};
+  document.head.appendChild(sc);
+  setTimeout(function(){if(window[cbName]){window[cbName]=null;if(msg){msg.textContent='Timeout';msg.style.color='var(--orange)';}}},15000);
   var dow=new Date().getDay();
   var wrap=document.getElementById('copyWeekWrap');
   if(wrap)wrap.style.display=(dow===0||dow===6)?'block':'none';
