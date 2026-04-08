@@ -5167,12 +5167,12 @@ function nutRenderDay(){
     mb.innerHTML=NUT_MACRO_DEFS.map(function(m){
       var val=Math.round(tot[m.key]||0),target=_nutTargets[m.tKey]||0;
       var pct=target>0?Math.min(100,Math.round((val/target)*100)):0;
-      var over=target>0&&val>target,col=over?'var(--red)':m.col;
+      var over=target>0&&val>target,goodOver=(m.key==='protein'||m.key==='fibre'),col=over?(goodOver?m.col:'var(--red)'):m.col;
       return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
         '<div style="font-size:0.6rem;color:var(--muted);width:44px;flex-shrink:0;">'+m.label+'</div>'+
         '<div style="flex:1;height:4px;background:var(--border2);border-radius:2px;overflow:hidden;">'+
           '<div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:2px;transition:width 0.4s;"></div></div>'+
-        '<div style="font-size:0.6rem;font-weight:700;min-width:56px;text-align:right;color:'+(over?'var(--red)':'var(--text2)')+';">'+
+        '<div style="font-size:0.6rem;font-weight:700;min-width:56px;text-align:right;color:'+(over?(goodOver?m.col:'var(--red)'):'var(--text2)')+';">'+ 
           val+(target>0?'/'+target:'')+m.unit+'</div></div>';
     }).join('');
   }
@@ -5236,13 +5236,14 @@ function nutRenderWeek(){
     var target=m.key==='calories'?avgEffectiveCalBudget:(_nutTargets[m.tKey]||0);
     var pct=target>0?Math.min(100,Math.round((avg/target)*100)):0;
     var over=target>0&&avg>target;
+    var goodOver2=(m.key==='protein'||m.key==='fibre');
     return '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;">'+
       '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">'+
         '<span style="font-size:0.78rem;font-weight:700;">'+m.label+'</span>'+
-        '<span style="font-size:0.7rem;color:'+(over?'var(--red)':'var(--muted)')+';">'+avg+m.unit+' avg'+(target?' / '+target+m.unit:'')+'</span>'+
+        '<span style="font-size:0.7rem;color:'+(over?(goodOver2?m.col:'var(--red)'):'var(--muted)')+';">'+avg+m.unit+' avg'+(target?' / '+target+m.unit:'')+'</span>'+
       '</div>'+
       '<div style="height:6px;background:var(--border2);border-radius:3px;overflow:hidden;">'+
-        '<div style="height:100%;width:'+pct+'%;background:'+(over?'var(--red)':m.col)+';border-radius:3px;"></div></div>'+
+        '<div style="height:100%;width:'+pct+'%;background:'+(over?(goodOver2?m.col:'var(--red)'):m.col)+';border-radius:3px;"></div></div>'+
       '<div style="font-size:0.6rem;color:var(--muted);margin-top:4px;">'+pct+'% of target \u00b7 '+logged.length+' day'+(logged.length!==1?'s':'')+' logged</div>'+
     '</div>';
   }).join('');
