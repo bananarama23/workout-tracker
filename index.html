@@ -5174,7 +5174,11 @@ function switchNutTab(tab){
     if(panel)panel.style.display=t===tab?'':'none';
   });
   if(tab==='week')nutRenderWeek();
-  if(tab==='foods')nutRenderFoodList();
+  if(tab==='foods'){
+    nutRenderFoodList();
+    // If no foods loaded yet, fetch now
+    if(!_nutFoods||!_nutFoods.length)nutFetchFoods();
+  }
 }
 
 function nutPrevDay(){_nutDate=nutShiftDate(_nutDate,-1);nutSetDateLabel();nutRenderDay();}
@@ -5200,7 +5204,9 @@ function nutFetchFoods(){
     if(res&&res.status==='ok'&&res.foods){
       _nutFoods=res.foods;
       try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
+      // Always re-render wherever foods are shown
       if(_nutTab==='foods')nutRenderFoodList();
+      nutFilterAddList(); // refresh add overlay if open
     }
   };
   var sc=document.createElement('script');sc.id='s_'+cb;
