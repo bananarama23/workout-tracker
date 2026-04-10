@@ -5042,12 +5042,32 @@ function nutMsg(txt,col){
 
 // ── Targets ────────────────────────────────────────────────────────
 function nutLoadTargets(){
-  try{var t=JSON.parse(localStorage.getItem(NUT_TARGETS_KEY)||'{}');_nutTargets=Object.assign({},NUT_DEFAULTS,t);}
+  try{
+    var t=JSON.parse(localStorage.getItem(NUT_TARGETS_KEY)||'{}');
+    // Start from defaults, then apply saved values — but only if saved value is non-zero
+    // or the default is also zero (e.g. carb/fat have 0 default intentionally)
+    _nutTargets=JSON.parse(JSON.stringify(NUT_DEFAULTS));
+    Object.keys(t).forEach(function(k){
+      if(t[k]!==null&&t[k]!==undefined){
+        // Only override default with saved zero if default is also zero
+        if(parseFloat(t[k])>0||(NUT_DEFAULTS[k]===0&&t[k]===0)){
+          _nutTargets[k]=parseFloat(t[k])||0;
+        }
+      }
+    });
+  }
   catch(e){_nutTargets=JSON.parse(JSON.stringify(NUT_DEFAULTS));}
 }
 function nutSaveTargets(){
   var map={cal:'nutT_cal',prot:'nutT_prot',carb:'nutT_carb',fat:'nutT_fat',fib:'nutT_fib',satfat:'nutT_satfat',sodium:'nutT_sodium'};
-  Object.keys(map).forEach(function(k){var el=document.getElementById(map[k]);if(el&&el.value!=='')_nutTargets[k]=parseFloat(el.value)||0;});
+  Object.keys(map).forEach(function(k){
+    var el=document.getElementById(map[k]);
+    if(el&&el.value.trim()!==''){
+      var v=parseFloat(el.value);
+      // Only save if user entered a value; don't save zeros over non-zero defaults
+      if(!isNaN(v)&&(v>0||NUT_DEFAULTS[k]===0)){_nutTargets[k]=v;}
+    }
+  });
   try{localStorage.setItem(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));}catch(e){}
   var p=document.getElementById('nutTargetsPanel');if(p)p.style.display='none';
   nutRenderDay();
