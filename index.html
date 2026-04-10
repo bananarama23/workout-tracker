@@ -4944,7 +4944,7 @@ function nutToggleCheatDay(){
   var isOn=nutIsCheatDay(_nutDate);
   nutSetCheatDay(_nutDate,!isOn);
   nutRenderDay();
-  if(_nutTab==='week')nutRenderWeek();
+  nutRenderWeek();
 }
 function nutEffectiveBudget(date){
   var base=_nutTargets.cal||2100;
@@ -5082,25 +5082,16 @@ function nutMsg(txt,col){
 // ── Targets ────────────────────────────────────────────────────────
 function nutLoadTargets(){
   try{
-    var t=JSON.parse(localStorage.getItem(NUT_TARGETS_KEY)||'{}');
-    // Start from defaults always
+    var saved=JSON.parse(localStorage.getItem(NUT_TARGETS_KEY)||'{}');
+    // Always start from defaults
     _nutTargets=JSON.parse(JSON.stringify(NUT_DEFAULTS));
-    // Check if saved data is all zeros (bad save after localStorage wipe) — if so ignore it
-    var nonZeroDefaults=['cal','prot','fib','satfat','sodium'];
-    var allZero=nonZeroDefaults.every(function(k){return !t[k]||parseFloat(t[k])===0;});
-    if(allZero&&Object.keys(t).length>0){
-      // Bad saved data — clear it and use defaults
-      try{localStorage.removeItem(NUT_TARGETS_KEY);}catch(e){}
-      return;
-    }
-    // Apply saved values, but never let a saved zero override a non-zero default
-    Object.keys(t).forEach(function(k){
-      if(t[k]!==null&&t[k]!==undefined){
-        if(parseFloat(t[k])>0||(NUT_DEFAULTS[k]===0)){
-          _nutTargets[k]=parseFloat(t[k])||0;
-        }
-      }
+    // Merge saved values — only if positive (never let a zero overwrite a non-zero default)
+    Object.keys(saved).forEach(function(k){
+      var v=parseFloat(saved[k]);
+      if(v>0)_nutTargets[k]=v;
     });
+    // Re-save so fresh installs/wipes get defaults persisted immediately
+    localStorage.setItem(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));
   }
   catch(e){_nutTargets=JSON.parse(JSON.stringify(NUT_DEFAULTS));}
 }
@@ -5108,10 +5099,13 @@ function nutSaveTargets(){
   var map={cal:'nutT_cal',prot:'nutT_prot',carb:'nutT_carb',fat:'nutT_fat',fib:'nutT_fib',satfat:'nutT_satfat',sodium:'nutT_sodium'};
   Object.keys(map).forEach(function(k){
     var el=document.getElementById(map[k]);
-    if(el&&el.value.trim()!==''){
-      var v=parseFloat(el.value);
-      // Only save if user entered a value; don't save zeros over non-zero defaults
-      if(!isNaN(v)&&(v>0||NUT_DEFAULTS[k]===0)){_nutTargets[k]=v;}
+    if(!el)return;
+    var v=parseFloat(el.value);
+    if(isNaN(v)||v<=0){
+      // Blank or zero — restore default for this field
+      _nutTargets[k]=NUT_DEFAULTS[k];
+    } else {
+      _nutTargets[k]=v;
     }
   });
   try{localStorage.setItem(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));}catch(e){}
