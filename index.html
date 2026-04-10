@@ -1156,7 +1156,10 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
                   <input id="nutActiveInp" type="number" inputmode="numeric" placeholder="390" style="width:60px;background:var(--card2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:0.9rem;text-align:center;padding:3px 6px;outline:none;" oninput="nutActiveChanged()" onblur="nutActiveBlur()">
                   <span style="font-size:0.58rem;color:var(--muted);">kcal</span>
                 </div>
-                <span id="nutActiveAdj" style="font-size:0.68rem;font-weight:700;"></span>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span id="nutActiveAdj" style="font-size:0.68rem;font-weight:700;"></span>
+                  <button id="nutCheatBtn" onclick="nutToggleCheatDay()" style="font-size:0.58rem;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;">1:1</button>
+                </div>
               </div>
               <div style="border-top:1px solid var(--border);padding-top:8px;" id="nutMacroBars"></div>
             </div>
@@ -4865,6 +4868,7 @@ var NUT_FOODS_KEY='wt_foods_v1';
 var NUT_ENTRIES_KEY='wt_nut_entries_v1';
 var NUT_TARGETS_KEY='wt_nut_targets';
 var NUT_ACTIVE_KEY='wt_nut_active'; // {date: activeCals} per day
+var NUT_CHEAT_KEY='wt_nut_cheat'; // {date: true} for 1:1 bonus days
 var _nutLastFetch=0; // timestamp of last successful sheet fetch
 var _nutSyncedIds={}; // ids confirmed in sheet
 var NUT_ACTIVE_BASE=390; // Apple Watch base — calories above/below this adjust budget
@@ -4908,12 +4912,46 @@ function nutSetActiveCals(date,val){
     nutSyncAction({type:'logNutrition',entries:[entry]},null,null);
   });
 }
+function nutIsCheatDay(date){
+  var d=date||_nutDate;
+  // Check memory first (from sheet fetch), then localStorage cache
+  if(_nutEntries&&_nutEntries.some(function(e){return e.date===d&&e.meal==='_cheat'&&e.food==='CheatDay';}))return true;
+  try{var stored=JSON.parse(localStorage.getItem(NUT_CHEAT_KEY)||'{}');return !!stored[d];}catch(e){return false;}
+}
+function nutSetCheatDay(date,on){
+  var d=date||_nutDate;
+  // Update localStorage cache
+  try{
+    var stored=JSON.parse(localStorage.getItem(NUT_CHEAT_KEY)||'{}');
+    if(on){stored[d]=true;}else{delete stored[d];}
+    localStorage.setItem(NUT_CHEAT_KEY,JSON.stringify(stored));
+  }catch(e){}
+  // Remove from memory
+  if(_nutEntries)_nutEntries=_nutEntries.filter(function(e){
+    return !(e.date===d&&e.meal==='_cheat'&&e.food==='CheatDay');
+  });
+  if(!on){
+    nutSyncAction({type:'deleteNutritionRow',date:d,meal:'_cheat',food:'CheatDay'},null,null);
+    return;
+  }
+  var entry={date:d,meal:'_cheat',food:'CheatDay',calories:1,
+    protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0,servings:1,
+    id:'cheat_'+d,updatedAt:Date.now()};
+  if(_nutEntries)_nutEntries.push(entry);
+  nutSyncAction({type:'logNutrition',entries:[entry]},null,null);
+}
+function nutToggleCheatDay(){
+  var isOn=nutIsCheatDay(_nutDate);
+  nutSetCheatDay(_nutDate,!isOn);
+  nutRenderDay();
+}
 function nutEffectiveBudget(date){
   var base=_nutTargets.cal||2100;
   var active=nutGetActiveCals(date||_nutDate);
   if(active===null)return base;
-  // 0.5 calorie budget bonus per calorie burned above the 390 base
-  return base+Math.round((active-NUT_ACTIVE_BASE)*0.5);
+  // 0.5 bonus normally, 1:1 on cheat days
+  var ratio=nutIsCheatDay(date||_nutDate)?1.0:0.5;
+  return base+Math.round((active-NUT_ACTIVE_BASE)*ratio);
 }
 var _nutActiveTimer=null;
 function nutActiveChanged(){
@@ -5204,13 +5242,22 @@ function nutFetchEntries(){
       // Sheet is authoritative inside the window — merge with local outside window
       var outsideWindow=localEntries.filter(function(e){return e.date<from||e.date>to;});
       _nutEntries=outsideWindow.concat(sheetEntries);
-      // Also sync _active entries back to NUT_ACTIVE_KEY cache for nutEffectiveBudget
+      // Sync _active entries back to NUT_ACTIVE_KEY cache for nutEffectiveBudget
       try{
         var activeStored=JSON.parse(localStorage.getItem(NUT_ACTIVE_KEY)||'{}');
         sheetEntries.forEach(function(e){
           if(e.meal==='_active'&&e.food==='AppleWatch')activeStored[e.date]=e.calories;
         });
         localStorage.setItem(NUT_ACTIVE_KEY,JSON.stringify(activeStored));
+      }catch(er){}
+      // Sync _cheat entries back to NUT_CHEAT_KEY cache
+      try{
+        var cheatStored=JSON.parse(localStorage.getItem(NUT_CHEAT_KEY)||'{}');
+        // Reset to only what sheet has (sheet is truth for cheat days)
+        sheetEntries.forEach(function(e){
+          if(e.meal==='_cheat'&&e.food==='CheatDay')cheatStored[e.date]=true;
+        });
+        localStorage.setItem(NUT_CHEAT_KEY,JSON.stringify(cheatStored));
       }catch(er){}
       // Add missing entries to view (they're being pushed)
       if(missing.length){
@@ -5256,7 +5303,7 @@ function nutFetchEntries(){
 }
 
 // ── Day view ───────────────────────────────────────────────────────
-function nutDayEntries(date){return _nutEntries.filter(function(e){return e.date===(date||_nutDate)&&e.meal!=='_active';});}
+function nutDayEntries(date){return _nutEntries.filter(function(e){return e.date===(date||_nutDate)&&e.meal!=='_active'&&e.meal!=='_cheat';});}
 function nutTotals(entries){
   var t={calories:0,protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0};
   entries.forEach(function(e){
@@ -5290,6 +5337,16 @@ function nutRenderDay(){
   }
   var cr=document.getElementById('nutCalRemaining');
   if(cr){cr.textContent=(remain>=0?'':'\u2212')+Math.abs(remain).toLocaleString()+' remaining';cr.style.color=remain>=0?'var(--green)':'var(--red)';}
+
+  // Cheat day button state
+  var cheatBtn=document.getElementById('nutCheatBtn');
+  if(cheatBtn){
+    var isCheat=nutIsCheatDay(_nutDate);
+    cheatBtn.textContent=isCheat?'1:1 ON':'1:1';
+    cheatBtn.style.background=isCheat?'var(--accent)':'var(--card2)';
+    cheatBtn.style.color=isCheat?'#000':'var(--muted)';
+    cheatBtn.style.borderColor=isCheat?'var(--accent)':'var(--border2)';
+  }
 
   // Active cals row
   var acInp=document.getElementById('nutActiveInp');
@@ -5356,7 +5413,7 @@ function nutRenderWeek(){
   var wd=document.getElementById('nutWeekDaysLogged');
   var days=[];for(var i=6;i>=0;i--)days.push(nutShiftDate(localDateStr(),-i));
   // Only count days with actual food entries (not just _active rows)
-  var logged=days.filter(function(d){return _nutEntries.some(function(e){return e.date===d&&e.meal!=='_active';});});
+  var logged=days.filter(function(d){return _nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});});
   var n=logged.length||1;
   var sums={calories:0,protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0};
   logged.forEach(function(d){var t=nutTotals(nutDayEntries(d));Object.keys(sums).forEach(function(k){sums[k]+=t[k]||0;});});
