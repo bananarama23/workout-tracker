@@ -1509,7 +1509,20 @@ function fetchHistory(cb){
 // ─── WAKE LOCK ────────────────────────────────────────────────────
 var wl=null;
 function reqWL(){if('wakeLock' in navigator){navigator.wakeLock.request('screen').then(function(w){wl=w;w.addEventListener('release',function(){wl=null;});}).catch(function(){});}}
-document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&!wl)reqWL();});
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible'){
+    if(!wl)reqWL();
+    // Re-attempt nutrition sync when app comes back to foreground
+    if(currentPage==='nutrition'){
+      nutQueueFlush();
+      // Re-fetch if last fetch was more than 5 minutes ago
+      var now=Date.now();
+      if(!_nutLastFetch||now-_nutLastFetch>5*60*1000){
+        nutFetchEntries();
+      }
+    }
+  }
+});
 document.addEventListener('click',function(){if(!wl)reqWL();},{once:true});
 
 // ─── AUDIO ────────────────────────────────────────────────────────
@@ -1571,7 +1584,12 @@ function navTo(page){
   if(page==='plan')initPlanPage();
   if(page==='log')initEditTab();
   if(page==='budget'){budLoad();}
-  if(page==='nutrition'){nutInit();}
+  if(page==='nutrition'){
+    // If already initialised, just flush queue and re-fetch if stale
+    // nutInit() resets date — only call it fresh if not already on nutrition
+    if(currentPage!=='nutrition'){nutInit();}
+    else{nutQueueFlush();if(!_nutLastFetch||Date.now()-_nutLastFetch>5*60*1000)nutFetchEntries();}
+  }
 }
 
 // ─── LOCAL HISTORY ────────────────────────────────────────────────
@@ -4847,6 +4865,8 @@ var NUT_FOODS_KEY='wt_foods_v1';
 var NUT_ENTRIES_KEY='wt_nut_entries_v1';
 var NUT_TARGETS_KEY='wt_nut_targets';
 var NUT_ACTIVE_KEY='wt_nut_active'; // {date: activeCals} per day
+var _nutLastFetch=0; // timestamp of last successful sheet fetch
+var _nutSyncedIds={}; // ids confirmed in sheet
 var NUT_ACTIVE_BASE=390; // Apple Watch base — calories above/below this adjust budget
 var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
 var NUT_DEFAULTS={cal:2100,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000};
@@ -4865,39 +4885,57 @@ function nutGetActiveCals(date){
 }
 function nutSetActiveCals(date,val){
   var d=date||_nutDate;
+  // Remove from memory
   if(_nutEntries)_nutEntries=_nutEntries.filter(function(e){
     return !(e.date===d&&e.meal==='_active'&&e.food==='AppleWatch');
   });
   var isEmpty=val===null||val===''||isNaN(parseFloat(val));
+  // Update localStorage cache
   try{
     var stored=JSON.parse(localStorage.getItem(NUT_ACTIVE_KEY)||'{}');
     if(isEmpty){delete stored[d];}else{stored[d]=parseFloat(val);}
     localStorage.setItem(NUT_ACTIVE_KEY,JSON.stringify(stored));
   }catch(e){}
-  if(isEmpty){
-    nutSyncAction({type:'deleteNutritionRow',date:d,meal:'_active',food:'AppleWatch'},null,null);
-    return;
-  }
-  var entry={date:d,meal:'_active',food:'AppleWatch',calories:parseFloat(val),
-    protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0,servings:1,
-    id:Date.now(),updatedAt:Date.now()};
-  if(_nutEntries)_nutEntries.push(entry);
-  nutSyncAction({type:'logNutrition',entries:[entry]},null,null);
+  // Always delete from sheet first (clears any old/duplicate rows for this date+_active)
+  // then re-log if we have a value. Use a stable id so GAS upsert works correctly.
+  var stableId='active_'+d; // same id every time for this date — GAS will upsert
+  nutSyncAction({type:'deleteNutritionRow',date:d,meal:'_active',food:'AppleWatch'},null,function(){
+    if(isEmpty)return; // just delete, no re-log needed
+    var entry={date:d,meal:'_active',food:'AppleWatch',calories:parseFloat(val),
+      protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0,servings:1,
+      id:stableId,updatedAt:Date.now()};
+    if(_nutEntries)_nutEntries.push(entry);
+    nutSyncAction({type:'logNutrition',entries:[entry]},null,null);
+  });
 }
 function nutEffectiveBudget(date){
   var base=_nutTargets.cal||2100;
   var active=nutGetActiveCals(date||_nutDate);
   if(active===null)return base;
-  return base+(active-NUT_ACTIVE_BASE);
+  // 0.5 calorie budget bonus per calorie burned above the 390 base
+  return base+Math.round((active-NUT_ACTIVE_BASE)*0.5);
 }
+var _nutActiveTimer=null;
 function nutActiveChanged(){
+  var inp=document.getElementById('nutActiveInp');
+  if(!inp)return;
+  // Update display immediately but debounce the sheet sync
+  nutRenderDay();
+  clearTimeout(_nutActiveTimer);
+  _nutActiveTimer=setTimeout(function(){
+    var val=inp.value.trim();
+    nutSetActiveCals(_nutDate,val===''?null:parseFloat(val));
+  },1500);
+}
+function nutActiveBlur(){
+  // On blur, flush immediately without waiting for debounce
+  clearTimeout(_nutActiveTimer);
   var inp=document.getElementById('nutActiveInp');
   if(!inp)return;
   var val=inp.value.trim();
   nutSetActiveCals(_nutDate,val===''?null:parseFloat(val));
   nutRenderDay();
 }
-function nutActiveBlur(){nutActiveChanged();}
 
 // ── Sync queue — persists failed GAS calls and retries on next open ──────────
 function nutQueuePush(action){
@@ -5041,12 +5079,25 @@ function nutInit(){
   _nutDate=localDateStr();
   nutSetDateLabel();
   switchNutTab('day');
-  // Retry any previously failed syncs in the background
-  setTimeout(nutQueueFlush, 3000);
+  nutRenderDay(); // render from cache immediately
+  // Show unsynced count badge before fetch
+  _nutShowUnsyncedBadge();
+  // Flush queue aggressively on open (before fetch so push happens first)
+  nutQueueFlush();
   nutBadge('load','Syncing');
   nutMsg('Loading from sheet...');
   nutFetchFoods();
   nutFetchEntries();
+}
+
+function _nutShowUnsyncedBadge(){
+  try{
+    var q=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');
+    if(q.length){
+      nutBadge('cached','Cached');
+      nutMsg(q.length+' item'+(q.length>1?'s':'')+' unsynced','var(--yellow)');
+    }
+  }catch(e){}
 }
 
 function switchNutTab(tab){
@@ -5096,7 +5147,7 @@ function nutFetchFoods(){
 }
 
 function nutFetchEntries(){
-  var from=nutShiftDate(localDateStr(),-29),to=localDateStr();
+  var from=nutShiftDate(localDateStr(),-6),to=localDateStr();
   var cb='wt_gn_'+Date.now();
   window[cb]=function(res){
     window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
@@ -5149,6 +5200,22 @@ function nutFetchEntries(){
         });
       }
       try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
+      _nutLastFetch=Date.now();
+      // Track which ids are confirmed in sheet for per-entry status dots
+      sheetEntries.forEach(function(e){if(e.id)_nutSyncedIds[String(e.id)]=true;});
+      // Conflict detection: compare local vs sheet totals for today
+      (function(){
+        var today=localDateStr();
+        var localToday=localEntries.filter(function(e){return e.date===today&&e.meal!=='_active';});
+        var sheetToday=sheetEntries.filter(function(e){return e.date===today&&e.meal!=='_active';});
+        var localCal=Math.round(localToday.reduce(function(a,e){return a+(e.calories||0);},0));
+        var sheetCal=Math.round(sheetToday.reduce(function(a,e){return a+(e.calories||0);},0));
+        var localCount=localToday.length, sheetCount=sheetToday.length;
+        // Only flag if both have data and counts differ (missing entries, not rounding)
+        if(localCount>0&&sheetCount>0&&localCount!==sheetCount){
+          nutMsg('⚠ Local: '+localCount+' items · Sheet: '+sheetCount+' — use ↑ Phone is truth to fix','var(--orange)');
+        }
+      })();
     } else {
       nutBadge('cached','Cached');
       nutMsg('Using local data','var(--yellow)');
@@ -5249,7 +5316,10 @@ function nutRenderDay(){
       h+='<div class="sum-name" style="font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+e.food+'</div>';
       h+='<div class="sum-result" style="font-size:0.62rem;margin-top:2px;">P\u202f'+Math.round(e.protein||0)+'g \u00b7 C\u202f'+Math.round(e.carbs||0)+'g \u00b7 F\u202f'+Math.round(e.fat||0)+'g'+(e.sodium?(' \u00b7 Sodium\u202f'+Math.round(e.sodium)+'mg'):'')+((e.servings&&e.servings!==1)?' \u00b7 \u00d7'+e.servings:'')+'</div>';
       h+='</div>';
+      var synced=e.id?_nutSyncedIds[String(e.id)]:true; // entries without id assumed legacy-synced
+      var dotCol=_nutLastFetch>0?(synced?'var(--green)':'var(--yellow)'):'transparent';
       h+='<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;padding-left:8px;">';
+      h+='<span title="'+(synced?'Synced':'Pending sync')+'" style="width:5px;height:5px;border-radius:50%;background:'+dotCol+';flex-shrink:0;"></span>';
       h+='<span style="font-family:Bebas Neue,sans-serif;font-size:1.05rem;">'+Math.round(e.calories||0)+'</span>';
       h+='<button onclick="event.stopPropagation();nutMoveMeal('+gIdx+',\''+meal+'\')" style="background:var(--card2);border:1px solid var(--border);color:var(--muted);font-size:0.55rem;font-weight:700;letter-spacing:0.5px;border-radius:6px;padding:3px 6px;cursor:pointer;line-height:1.4;">MOVE</button>';
       h+='<button onclick="event.stopPropagation();nutDelEntry('+gIdx+')" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;line-height:1;">\u00d7</button>';
