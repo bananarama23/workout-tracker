@@ -5249,7 +5249,7 @@ function nutTotals(entries){
 function nutRenderDay(){
   var entries=nutDayEntries(),tot=nutTotals(entries);
   var activeCals=nutGetActiveCals(_nutDate);
-  var adjustment=activeCals!==null?(activeCals-NUT_ACTIVE_BASE):0;
+  var adjustment=activeCals!==null?Math.round((activeCals-NUT_ACTIVE_BASE)*0.5):0;
   var calBudget=nutEffectiveBudget(_nutDate),eaten=Math.round(tot.calories),remain=calBudget-eaten;
 
   var ring=document.getElementById('nutCalRing');
