@@ -5081,19 +5081,18 @@ function nutMsg(txt,col){
 
 // ── Targets ────────────────────────────────────────────────────────
 function nutLoadTargets(){
+  // Always start from defaults — these are the fallback for any missing/zero value
+  _nutTargets=JSON.parse(JSON.stringify(NUT_DEFAULTS));
   try{
     var saved=JSON.parse(localStorage.getItem(NUT_TARGETS_KEY)||'{}');
-    // Always start from defaults
-    _nutTargets=JSON.parse(JSON.stringify(NUT_DEFAULTS));
-    // Merge saved values — only if positive (never let a zero overwrite a non-zero default)
+    // Merge saved values — only if positive (never let a saved zero override a non-zero default)
     Object.keys(saved).forEach(function(k){
       var v=parseFloat(saved[k]);
       if(v>0)_nutTargets[k]=v;
     });
-    // Re-save so fresh installs/wipes get defaults persisted immediately
-    localStorage.setItem(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));
-  }
-  catch(e){_nutTargets=JSON.parse(JSON.stringify(NUT_DEFAULTS));}
+  }catch(e){}
+  // Always persist defaults back so the panel never shows zeros
+  try{localStorage.setItem(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));}catch(e){}
 }
 function nutSaveTargets(){
   var map={cal:'nutT_cal',prot:'nutT_prot',carb:'nutT_carb',fat:'nutT_fat',fib:'nutT_fib',satfat:'nutT_satfat',sodium:'nutT_sodium'};
@@ -5126,7 +5125,7 @@ function nutRenderTargetInputs(){
   ];
   c.innerHTML=fields.map(function(f){
     return '<div><div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">'+f[1]+'</div>'+
-    '<input id="nutT_'+f[0]+'" type="number" inputmode="numeric" value="'+(_nutTargets[f[0]]||0)+'" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;outline:none;box-sizing:border-box;"></div>';
+    '<input id="nutT_'+f[0]+'" type="number" inputmode="numeric" value="'+((_nutTargets[f[0]]||NUT_DEFAULTS[f[0]])||'')+'" placeholder="'+(NUT_DEFAULTS[f[0]]||0)+'" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;outline:none;box-sizing:border-box;"></div>';
   }).join('');
 }
 
