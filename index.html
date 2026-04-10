@@ -4944,6 +4944,7 @@ function nutToggleCheatDay(){
   var isOn=nutIsCheatDay(_nutDate);
   nutSetCheatDay(_nutDate,!isOn);
   nutRenderDay();
+  if(_nutTab==='week')nutRenderWeek();
 }
 function nutEffectiveBudget(date){
   var base=_nutTargets.cal||2100;
@@ -5082,13 +5083,20 @@ function nutMsg(txt,col){
 function nutLoadTargets(){
   try{
     var t=JSON.parse(localStorage.getItem(NUT_TARGETS_KEY)||'{}');
-    // Start from defaults, then apply saved values — but only if saved value is non-zero
-    // or the default is also zero (e.g. carb/fat have 0 default intentionally)
+    // Start from defaults always
     _nutTargets=JSON.parse(JSON.stringify(NUT_DEFAULTS));
+    // Check if saved data is all zeros (bad save after localStorage wipe) — if so ignore it
+    var nonZeroDefaults=['cal','prot','fib','satfat','sodium'];
+    var allZero=nonZeroDefaults.every(function(k){return !t[k]||parseFloat(t[k])===0;});
+    if(allZero&&Object.keys(t).length>0){
+      // Bad saved data — clear it and use defaults
+      try{localStorage.removeItem(NUT_TARGETS_KEY);}catch(e){}
+      return;
+    }
+    // Apply saved values, but never let a saved zero override a non-zero default
     Object.keys(t).forEach(function(k){
       if(t[k]!==null&&t[k]!==undefined){
-        // Only override default with saved zero if default is also zero
-        if(parseFloat(t[k])>0||(NUT_DEFAULTS[k]===0&&t[k]===0)){
+        if(parseFloat(t[k])>0||(NUT_DEFAULTS[k]===0)){
           _nutTargets[k]=parseFloat(t[k])||0;
         }
       }
