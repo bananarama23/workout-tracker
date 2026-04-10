@@ -1580,6 +1580,7 @@ function navTo(page){
   var pg=document.getElementById('page-'+page);
   if(pg){pg.classList.add('active');pg.classList.remove('hidden');}
   var nb=document.getElementById('nav-'+page);if(nb)nb.classList.add('active');
+ var prevPage=currentPage;
   currentPage=page;
   if(page==='progress')loadProgressData();
   if(page==='home')loadHomeData();
@@ -1588,12 +1589,9 @@ function navTo(page){
   if(page==='log')initEditTab();
   if(page==='budget'){budLoad();}
   if(page==='nutrition'){
-    // If already initialised, just flush queue and re-fetch if stale
-    // nutInit() resets date — only call it fresh if not already on nutrition
-    if(currentPage!=='nutrition'){nutInit();}
+    if(prevPage!=='nutrition'){nutInit();}
     else{nutQueueFlush();if(!_nutLastFetch||Date.now()-_nutLastFetch>5*60*1000)nutFetchEntries();}
   }
-}
 
 // ─── LOCAL HISTORY ────────────────────────────────────────────────
 function loadHist(){try{return JSON.parse(localStorage.getItem(HIST_KEY)||'{}');}catch(e){return {};}}
