@@ -1971,6 +1971,45 @@ function previewParsePaste(){
     }
     return null;
   }
+  function parseForm(blines){
+    for(var i=0;i<blines.length;i++){
+      var l=blines[i].replace(/^[\s\*\-]+/,'').trim(); // strip bullet prefix
+      var m=l.match(/[Ff]orm[:\s]+(.+)/);
+      if(m){
+        return m[1].replace(/·/g,'·').trim();
+      }
+    }
+    return null;
+  }
+  function parseTweak(blines){
+    for(var i=0;i<blines.length;i++){
+      var m=blines[i].match(/[Tt]weak[:\s]+(.+)|[Nn]ote[:\s]+(.+)/);
+      if(m)return (m[1]||m[2]).trim();
+    }
+    return null;
+  }
+  function parseGoal(blines){
+    var goal=null;
+    for(var i=0;i<blines.length;i++){
+      var l=blines[i].replace(/^[\s\*\-]+/,'').trim(); // strip bullet prefix
+      var m=l.match(/🎯\s*[Gg]oal[:\s]*(.*)/) || l.match(/^[Gg]oal[:\s]+(.+)/);
+      if(m){
+        goal=(m[1]||'').trim();
+        // Grab 👉 continuation lines immediately following
+        for(var j=i+1;j<blines.length;j++){
+          var next=blines[j].replace(/^[\s\*\-]+/,'').trim();
+          if(next.indexOf('\uD83D\uDC49')===0||next.indexOf('👉')===0){
+            var cont=next.replace(/^👉\s*/,'').trim();
+            if(cont)goal+=' — '+cont;
+          } else if(next){
+            break; // stop at first non-empty, non-arrow line
+          }
+        }
+        break;
+      }
+    }
+    return goal||null;
+  }
 
   var parsed=[];
   blocks.forEach(function(block){
@@ -2006,8 +2045,11 @@ function previewParsePaste(){
     }
 
     var rest=parseRest(block.lines);
+    var parsedForm=parseForm(block.lines);
+    var parsedTweak=parseTweak(block.lines);
+    var parsedGoal=parseGoal(block.lines);
 
-    // Merge with built-in exercise (preserves seq/form/watch/cues)
+    // Merge with built-in exercise (preserves seq/watch/cues from defaults)
     var defaults=wType==='home'?homeEx:hotelEx;
     var existing=null;
     for(var i=0;i<defaults.length;i++){if(defaults[i].name===internalName){existing=defaults[i];break;}}
@@ -2020,6 +2062,10 @@ function previewParsePaste(){
     ex.sets=rc.length;
     ex.reps=ex.isPlank?(rc[0]||60)+' sec/side':rc.join('/');
     if(rest)ex.rest=rest;
+    // Override form/tweak from paste if present; otherwise keep built-in defaults
+    if(parsedForm)ex.form=parsedForm;
+    if(parsedTweak)ex.tweak=parsedTweak;
+    if(parsedGoal)ex.goal=parsedGoal;
     parsed.push(ex);
   });
 
@@ -2116,6 +2162,9 @@ function renderPreview(){
       }
       if(ex.tweak){
         html+='<div style="font-size:0.7rem;color:var(--orange);margin-top:6px;font-weight:600;">! '+ex.tweak+'</div>';
+      }
+      if(ex.goal){
+        html+='<div style="font-size:0.7rem;color:var(--accent);background:var(--accent-dim);border-radius:var(--r-sm);padding:6px 10px;margin-top:6px;font-weight:600;">🎯 '+ex.goal+'</div>';
       }
       html+='</div>'; // preview-ex-body
     }
