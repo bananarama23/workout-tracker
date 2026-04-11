@@ -5514,36 +5514,32 @@ function nutRenderWeek(){
     var avgCal=Math.round(s.calories/n),avgProt=Math.round(s.protein/n);
     var avgFib=Math.round(s.fibre/n),avgSat=Math.round(s.satFat/n);
     var avgCarb=Math.round(s.carbs/n),avgSod=Math.round(s.sodium/n);
-    var calTarget=_nutTargets.cal||2100,protTarget=_nutTargets.prot||175;
-    var calColor=avgCal>calTarget?'var(--red)':avgCal>calTarget*0.85?'var(--green)':'var(--yellow)';
-    var protColor=avgProt>=protTarget?'var(--green)':avgProt>=protTarget*0.8?'var(--yellow)':'var(--red)';
+    var tCal=_nutTargets.cal||2100,tProt=_nutTargets.prot||175;
+    var tFib=_nutTargets.fib||30,tSat=_nutTargets.satfat||14,tSod=_nutTargets.sodium||3000;
+    // Calories: green=within 10% under target, yellow=>10% under, red=over
+    var cCal=avgCal>tCal?'var(--red)':avgCal>=tCal*0.9?'var(--green)':'var(--yellow)';
+    // Protein + Fibre: more is better — green=at/over, yellow=70-100%, red=under 70%
+    var cProt=avgProt>=tProt?'var(--green)':avgProt>=tProt*0.7?'var(--yellow)':'var(--red)';
+    var cFib=avgFib>=tFib?'var(--green)':avgFib>=tFib*0.7?'var(--yellow)':'var(--red)';
+    // Sat fat + Sodium: less is better — green=under, yellow=up to 20% over, red=>20% over
+    var cSat=avgSat<=tSat?'var(--green)':avgSat<=tSat*1.2?'var(--yellow)':'var(--red)';
+    var cSod=avgSod<=tSod?'var(--green)':avgSod<=tSod*1.2?'var(--yellow)':'var(--red)';
+    var cCarb='var(--text)'; // no carb target
+    function cell(val,col,lbl){
+      return '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
+        '<div style="font-size:1.05rem;font-weight:700;color:'+col+';">'+val+'</div>'+
+        '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">'+lbl+'</div>'+
+      '</div>';
+    }
     return '<div style="margin-bottom:6px;">'+
       '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">'+label+' \u00b7 '+loggedDays.length+' days logged</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">'+
-        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
-          '<div style="font-size:1.05rem;font-weight:700;color:'+calColor+';">'+avgCal.toLocaleString()+'</div>'+
-          '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Avg kcal</div>'+
-        '</div>'+
-        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
-          '<div style="font-size:1.05rem;font-weight:700;color:'+protColor+';">'+avgProt+'g</div>'+
-          '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Protein</div>'+
-        '</div>'+
-        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
-          '<div style="font-size:1.05rem;font-weight:700;color:var(--text);">'+avgFib+'g</div>'+
-          '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Fibre</div>'+
-        '</div>'+
-        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
-          '<div style="font-size:1.05rem;font-weight:700;color:var(--text);">'+avgSat+'g</div>'+
-          '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Sat Fat</div>'+
-        '</div>'+
-        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
-          '<div style="font-size:1.05rem;font-weight:700;color:var(--text);">'+avgCarb+'g</div>'+
-          '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Carbs</div>'+
-        '</div>'+
-        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
-          '<div style="font-size:1.05rem;font-weight:700;color:var(--text);">'+Math.round(avgSod/100)/10+'g</div>'+
-          '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Sodium</div>'+
-        '</div>'+
+        cell(avgCal.toLocaleString(),cCal,'Avg kcal')+
+        cell(avgProt+'g',cProt,'Protein')+
+        cell(avgFib+'g',cFib,'Fibre')+
+        cell(avgSat+'g',cSat,'Sat Fat')+
+        cell(avgCarb+'g',cCarb,'Carbs')+
+        cell(Math.round(avgSod/100)/10+'g',cSod,'Sodium')+
       '</div>'+
     '</div>';
   }
