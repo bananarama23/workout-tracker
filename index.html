@@ -1648,12 +1648,18 @@ function loadHomeData(){
   document.getElementById('greeting').textContent=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
   document.getElementById('todayDate').textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
   var cached=loadCache();
-  // Always render immediately — cached data or empty state
+  // Render instantly from cache — today's plan, diet card etc. show immediately
   _cachedSessions=cached?cached.sessions:[];
   renderHomeData(_cachedSessions);
   setSyncBadges(cached?'cached':'loading', cached?cacheAgeStr(cached.ts):null);
-  // Fetch fresh in background — update when it arrives
-  fetchHistory(function(sessions){_cachedSessions=sessions||[];renderHomeData(_cachedSessions);});
+  // Always fetch fresh in background — silently updates when it arrives
+  // This keeps today's plan, streak, and diet card accurate as the day changes
+  fetchHistory(function(sessions){
+    _cachedSessions=sessions||[];
+    saveCache(_cachedSessions);
+    renderHomeData(_cachedSessions);
+    setSyncBadges('live', null);
+  });
 }
 
 function renderHomeData(sessions){
@@ -3847,21 +3853,22 @@ function renderHomeCholCard(){
     if(moreIsBetter)return val>=target?'var(--green)':'var(--red)';
     return val<=target?'var(--green)':'var(--red)';
   }
-  function stat(val,color,lbl){
+  function stat(val,color,lbl,target){
     return '<div style="flex:1;text-align:center;">'+
       '<div style="font-size:0.95rem;font-weight:700;color:'+color+';">'+val+'</div>'+
       '<div style="font-size:0.52rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:1px;">'+lbl+'</div>'+
+      (target?'<div style="font-size:0.48rem;color:var(--muted);margin-top:1px;">tgt '+target+'</div>':'')+
     '</div>';
   }
   card.style.display='block';
   card.innerHTML=
     '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;">Diet since blood test · '+n+' days</div>'+
     '<div style="display:flex;gap:4px;">'+
-      stat(avg('calories').toLocaleString(), col(avg('calories'),tCal,false), 'Kcal')+
-      stat(avg('protein')+'g', col(avg('protein'),tProt,true), 'Protein')+
-      stat(avg('fibre')+'g', col(avg('fibre'),tFib,true), 'Fibre')+
-      stat(avg('satFat')+'g', col(avg('satFat'),tSat,false), 'Sat Fat')+
-      stat(Math.round(avg('sodium')/100)/10+'g', col(avg('sodium'),tSod,false), 'Sodium')+
+      stat(avg('calories').toLocaleString(), col(avg('calories'),tCal,false), 'Kcal', tCal.toLocaleString())+
+      stat(avg('protein')+'g', col(avg('protein'),tProt,true), 'Protein', tProt+'g')+
+      stat(avg('fibre')+'g', col(avg('fibre'),tFib,true), 'Fibre', tFib+'g')+
+      stat(avg('satFat')+'g', col(avg('satFat'),tSat,false), 'Sat Fat', tSat+'g')+
+      stat(Math.round(avg('sodium')/100)/10+'g', col(avg('sodium'),tSod,false), 'Sodium', Math.round(tSod/100)/10+'g')+
     '</div>';
 }
 
