@@ -1462,6 +1462,10 @@ var _sheetSessions=null;
 var _fetchInProgress=false;
 var _fetchCbs=[];
 var _cachedSessions=null;
+var _cholReadings=[
+  {date:'2024-11-05',hdl:24,ldl:132,total:175,ratio:7.3},
+  {date:'2026-04-02',hdl:37,ldl:95,total:149,ratio:4.0}
+];
 
 function getSheetSessions(cb){
   if(_sheetSessions){cb(_sheetSessions);return;}
@@ -4122,7 +4126,8 @@ function buildCholDisplay(){
     {date:'2024-11-05',hdl:24,ldl:132,total:175,ratio:7.3,isBaseline:true},
     {date:'2026-04-02',hdl:37,ldl:95,total:149,ratio:4.0}
   ];
-  renderCholRows(knownReadings);
+  _cholReadings=knownReadings.slice();
+  renderCholRows(_cholReadings);
 
   // Fetch live data from getCholesterol endpoint
   var cbName='wt_chol_'+Date.now();
@@ -4143,13 +4148,16 @@ function buildCholDisplay(){
       if(!merged.some(function(m){return m.date===r.date;}))merged.push(r);
     });
     merged.sort(function(a,b){return a.date<b.date?-1:1;});
-    if(merged.length>0)renderCholRows(merged);
+    if(merged.length>0){
+      _cholReadings=merged; // store globally so week tab can use live data
+      renderCholRows(merged);
+    }
   };
   var script=document.createElement('script');script.id='s_'+cbName;
   script.src=CLOUD_URL+'?type=getCholesterol&callback='+cbName;
   script.onerror=function(){
     var chol=extractCholFromSessions(_cachedSessions||[]);
-    if(chol.length>knownReadings.length)renderCholRows(chol);
+    if(chol.length>knownReadings.length){_cholReadings=chol;renderCholRows(chol);}
   };
   document.head.appendChild(script);
   setTimeout(function(){if(window[cbName]){window[cbName]=null;}},15000);
@@ -5175,12 +5183,41 @@ function switchNutTab(tab){
     if(btn)btn.classList.toggle('active',t===tab);
     if(panel)panel.style.display=t===tab?'':'none';
   });
-  if(tab==='week')nutRenderWeek();
+  if(tab==='week'){
+    nutRenderWeek();
+    // Fetch live cholesterol so since-last-test uses actual logged data
+    nutFetchCholForWeekTab();
+  }
   if(tab==='foods'){
     nutRenderFoodList();
-    // If no foods loaded yet, fetch now
     if(!_nutFoods||!_nutFoods.length)nutFetchFoods();
   }
+}
+
+function nutFetchCholForWeekTab(){
+  // Lightweight fetch — updates _cholReadings then re-renders week tab
+  var cb='wt_wchol_'+Date.now();
+  window[cb]=function(result){
+    window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
+    var rows=(result&&result.rows)?result.rows:[];
+    if(!rows.length)return;
+    var fresh=[];
+    rows.forEach(function(r){
+      var hdl=parseFloat(r.hdl||0),ldl=parseFloat(r.ldl||0),total=parseFloat(r.total||0);
+      var ratio=hdl>0?Math.round((total/hdl)*10)/10:0;
+      if(r.date&&(hdl||ldl||total))fresh.push({date:r.date,hdl:hdl,ldl:ldl,total:total,ratio:ratio});
+    });
+    if(fresh.length){
+      fresh.sort(function(a,b){return a.date<b.date?-1:1;});
+      _cholReadings=fresh;
+      if(_nutTab==='week')nutRenderWeek(); // re-render with live data
+    }
+  };
+  var sc=document.createElement('script');sc.id='s_'+cb;
+  sc.onerror=function(){window[cb]=null;};
+  sc.src=CLOUD_URL+'?type=getCholesterol&callback='+cb;
+  document.head.appendChild(sc);
+  setTimeout(function(){if(window[cb]){window[cb]=null;}},10000);
 }
 
 function nutPrevDay(){_nutDate=nutShiftDate(_nutDate,-1);nutSetDateLabel();nutRenderDay();}
@@ -5466,63 +5503,95 @@ function nutRenderWeek(){
   }).join('');
   if(wd)wd.textContent=logged.length+' of last 7 days logged';
 
-  // ── Month summary ───────────────────────────────────────────────
-  var monthEl=document.getElementById('nutWeekMonthSummary');
-  if(monthEl){
-    var now=new Date(),monthStart=localDateStr().slice(0,8)+'01';
-    var allDays=[];for(var mi=0;mi<31;mi++){var d=new Date(now.getFullYear(),now.getMonth(),mi+1);if(d.getMonth()===now.getMonth())allDays.push(d.toISOString().slice(0,10));}
-    var monthLogged=allDays.filter(function(d){return _nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});});
-    var mSums={calories:0,protein:0};
-    monthLogged.forEach(function(d){var t=nutTotals(nutDayEntries(d));mSums.calories+=t.calories||0;mSums.protein+=t.protein||0;});
-    var mN=monthLogged.length||1;
-    var mName=now.toLocaleString('default',{month:'long'});
-    monthEl.innerHTML=
-      '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">'+mName+' so far</div>'+
-      '<div style="display:flex;gap:10px;">'+
-        '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">'+
-          '<div style="font-size:1.1rem;font-weight:700;color:var(--green);">'+monthLogged.length+'</div>'+
-          '<div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Days logged</div>'+
+  // ── Helper: build a stats block for an arbitrary set of logged days ──
+  function nutStatsBlock(loggedDays, label){
+    var n=loggedDays.length||1;
+    var s={calories:0,protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0};
+    loggedDays.forEach(function(d){
+      var t=nutTotals(nutDayEntries(d));
+      Object.keys(s).forEach(function(k){s[k]+=t[k]||0;});
+    });
+    var avgCal=Math.round(s.calories/n),avgProt=Math.round(s.protein/n);
+    var avgFib=Math.round(s.fibre/n),avgSat=Math.round(s.satFat/n);
+    var avgCarb=Math.round(s.carbs/n),avgSod=Math.round(s.sodium/n);
+    var calTarget=_nutTargets.cal||2100,protTarget=_nutTargets.prot||175;
+    var calColor=avgCal>calTarget?'var(--red)':avgCal>calTarget*0.85?'var(--green)':'var(--yellow)';
+    var protColor=avgProt>=protTarget?'var(--green)':avgProt>=protTarget*0.8?'var(--yellow)':'var(--red)';
+    return '<div style="margin-bottom:6px;">'+
+      '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">'+label+' \u00b7 '+loggedDays.length+' days logged</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">'+
+        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
+          '<div style="font-size:1.05rem;font-weight:700;color:'+calColor+';">'+avgCal.toLocaleString()+'</div>'+
+          '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Avg kcal</div>'+
         '</div>'+
-        '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">'+
-          '<div style="font-size:1.1rem;font-weight:700;color:var(--text);">'+Math.round(mSums.calories/mN).toLocaleString()+'</div>'+
-          '<div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Avg kcal</div>'+
+        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
+          '<div style="font-size:1.05rem;font-weight:700;color:'+protColor+';">'+avgProt+'g</div>'+
+          '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Protein</div>'+
         '</div>'+
-        '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">'+
-          '<div style="font-size:1.1rem;font-weight:700;color:#9B7FFF;">'+Math.round(mSums.protein/mN)+'g</div>'+
-          '<div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Avg protein</div>'+
+        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
+          '<div style="font-size:1.05rem;font-weight:700;color:var(--text);">'+avgFib+'g</div>'+
+          '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Fibre</div>'+
         '</div>'+
-      '</div>';
+        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
+          '<div style="font-size:1.05rem;font-weight:700;color:var(--text);">'+avgSat+'g</div>'+
+          '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Sat Fat</div>'+
+        '</div>'+
+        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
+          '<div style="font-size:1.05rem;font-weight:700;color:var(--text);">'+avgCarb+'g</div>'+
+          '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Carbs</div>'+
+        '</div>'+
+        '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
+          '<div style="font-size:1.05rem;font-weight:700;color:var(--text);">'+Math.round(avgSod/100)/10+'g</div>'+
+          '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Sodium</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
   }
 
-  // ── Cholesterol since last test ─────────────────────────────────
+  // ── Last 30 days ─────────────────────────────────────────────────
+  var monthEl=document.getElementById('nutWeekMonthSummary');
+  if(monthEl){
+    var last30=[];for(var mi=29;mi>=0;mi--)last30.push(nutShiftDate(localDateStr(),-mi));
+    var last30Logged=last30.filter(function(d){
+      return _nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});
+    });
+    monthEl.innerHTML=nutStatsBlock(last30Logged,'Last 30 days');
+  }
+
+  // ── Since last cholesterol test ─────────────────────────────────
   var cholEl=document.getElementById('nutWeekCholSummary');
   if(cholEl){
-    // Use hardcoded readings (same as progress page)
-    var readings=[
+    var readings=_cholReadings.length?_cholReadings:[
       {date:'2024-11-05',hdl:24,ldl:132,total:175,ratio:7.3},
       {date:'2026-04-02',hdl:37,ldl:95,total:149,ratio:4.0}
     ];
-    var last=readings[readings.length-1];
-    var prev=readings.length>1?readings[readings.length-2]:null;
-    var hdlDiff=prev?Math.round((last.hdl-prev.hdl)*10)/10:null;
-    var ldlDiff=prev?Math.round((last.ldl-prev.ldl)*10)/10:null;
-    var daysSince=Math.floor((Date.now()-new Date(last.date).getTime())/(1000*60*60*24));
+    var lastTest=readings[readings.length-1];
+    var prevTest=readings.length>1?readings[readings.length-2]:null;
+    var hdlDiff=prevTest?Math.round((lastTest.hdl-prevTest.hdl)*10)/10:null;
+    var ldlDiff=prevTest?Math.round((lastTest.ldl-prevTest.ldl)*10)/10:null;
+    var daysSince=Math.floor((Date.now()-new Date(lastTest.date).getTime())/(1000*60*60*24));
+    var sinceDays=[];for(var si=daysSince;si>=0;si--)sinceDays.push(nutShiftDate(localDateStr(),-si));
+    var sinceLogged=sinceDays.filter(function(d){
+      return _nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});
+    });
+    var cholRow='<div style="display:flex;gap:6px;margin-bottom:10px;">'+
+      '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;text-align:center;">'+
+        '<div style="font-size:1.05rem;font-weight:700;color:var(--green);">'+lastTest.hdl+'</div>'+
+        '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">HDL'+(hdlDiff!==null?' '+(hdlDiff>0?'↑':'↓')+Math.abs(hdlDiff):'')+' </div>'+
+      '</div>'+
+      '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;text-align:center;">'+
+        '<div style="font-size:1.05rem;font-weight:700;color:var(--text);">'+lastTest.ldl+'</div>'+
+        '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">LDL'+(ldlDiff!==null?' '+(ldlDiff<0?'↓':'↑')+Math.abs(ldlDiff):'')+' </div>'+
+      '</div>'+
+      '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;text-align:center;">'+
+        '<div style="font-size:1.05rem;font-weight:700;color:'+(lastTest.ratio<5?'var(--green)':lastTest.ratio<6?'var(--yellow)':'var(--red)')+';">'+lastTest.ratio+'</div>'+
+        '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">TC/HDL</div>'+
+      '</div>'+
+    '</div>';
     cholEl.innerHTML=
-      '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">Last blood test · '+daysSince+' days ago</div>'+
-      '<div style="display:flex;gap:10px;">'+
-        '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">'+
-          '<div style="font-size:1.1rem;font-weight:700;color:var(--green);">'+last.hdl+'</div>'+
-          '<div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">HDL'+(hdlDiff!==null?' '+(hdlDiff>0?'↑':'↓')+Math.abs(hdlDiff):'')+' </div>'+
-        '</div>'+
-        '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">'+
-          '<div style="font-size:1.1rem;font-weight:700;color:var(--text);">'+last.ldl+'</div>'+
-          '<div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">LDL'+(ldlDiff!==null?' '+(ldlDiff<0?'↓':'↑')+Math.abs(ldlDiff):'')+' </div>'+
-        '</div>'+
-        '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">'+
-          '<div style="font-size:1.1rem;font-weight:700;color:'+(last.ratio<5?'var(--green)':last.ratio<6?'var(--yellow)':'var(--red)')+';">'+last.ratio+'</div>'+
-          '<div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">TC/HDL</div>'+
-        '</div>'+
-      '</div>';
+      '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">Last blood test \u00b7 '+daysSince+' days ago</div>'+
+      cholRow+
+      (sinceLogged.length>0?nutStatsBlock(sinceLogged,'Diet since '+lastTest.date):'<div style="font-size:0.75rem;color:var(--muted);text-align:center;padding:8px;">No food logged since '+lastTest.date+'</div>');
   }
 }
 
