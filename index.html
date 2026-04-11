@@ -3829,7 +3829,7 @@ function renderHomeCholCard(){
 
   // Gather logged days since last test
   var sinceDays=[];
-  for(var i=daysSince;i>=0;i--)sinceDays.push(nutShiftDate(localDateStr(),-i));
+  for(var i=daysSince;i>=1;i--)sinceDays.push(nutShiftDate(localDateStr(),-i));
   var sinceLogged=sinceDays.filter(function(d){
     return _nutEntries&&_nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});
   });
@@ -5622,7 +5622,7 @@ function nutRenderWeek(){
   // ── Last 30 days ─────────────────────────────────────────────────
   var monthEl=document.getElementById('nutWeekMonthSummary');
   if(monthEl){
-    var last30=[];for(var mi=29;mi>=0;mi--)last30.push(nutShiftDate(localDateStr(),-mi));
+    var last30=[];for(var mi=29;mi>=1;mi--)last30.push(nutShiftDate(localDateStr(),-mi));
     var last30Logged=last30.filter(function(d){
       return _nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});
     });
@@ -5641,7 +5641,7 @@ function nutRenderWeek(){
     var hdlDiff=prevTest?Math.round((lastTest.hdl-prevTest.hdl)*10)/10:null;
     var ldlDiff=prevTest?Math.round((lastTest.ldl-prevTest.ldl)*10)/10:null;
     var daysSince=Math.floor((Date.now()-new Date(lastTest.date).getTime())/(1000*60*60*24));
-    var sinceDays=[];for(var si=daysSince;si>=0;si--)sinceDays.push(nutShiftDate(localDateStr(),-si));
+    var sinceDays=[];for(var si=daysSince;si>=1;si--)sinceDays.push(nutShiftDate(localDateStr(),-si));
     var sinceLogged=sinceDays.filter(function(d){
       return _nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});
     });
