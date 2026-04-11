@@ -543,6 +543,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         </div>
       </div>
     </div>
+    <!-- Cholesterol since last test — shown on home screen -->
+    <div id="homeCholCard" style="display:none;margin:0 16px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;"></div>
     <div class="week-strip">
       <div class="week-stat" onclick="showHistory('strength')">
         <div class="ws-num c-muted" id="wkStrength">-</div>
@@ -1735,6 +1737,7 @@ function renderHomeData(sessions){
 
   updateMilestone(sessions);
   loadTodayPlan();
+  renderHomeCholCard();
 }
 
 function calcStreak(sessions){
@@ -3802,6 +3805,66 @@ function todayCardTap(){
   else{navTo('workout');}
 }
 
+function renderHomeCholCard(){
+  var card=document.getElementById('homeCholCard');
+  if(!card)return;
+  var readings=_cholReadings&&_cholReadings.length?_cholReadings:[
+    {date:'2024-11-05',hdl:24,ldl:132,total:175,ratio:7.3},
+    {date:'2026-04-02',hdl:37,ldl:95,total:149,ratio:4.0}
+  ];
+  var last=readings[readings.length-1];
+  var daysSince=Math.floor((Date.now()-new Date(last.date).getTime())/(1000*60*60*24));
+
+  // If test is older than our fetch window, fetch extended data first then re-render
+  if(daysSince>29&&_nutEntries&&!_nutEntries.some(function(e){return e.date===last.date;})){
+    nutFetchEntries(last.date);
+    // nutFetchEntries will call nutRenderDay + nutRenderWeek on completion
+    // but not renderHomeCholCard — patch that here
+    var _origRender=window._nutEntriesCb;
+    var _cbKey='wt_homechol_'+Date.now();
+    // Instead just re-call after a delay to let the fetch settle
+    setTimeout(function(){renderHomeCholCard();},3000);
+    return;
+  }
+
+  // Gather logged days since last test
+  var sinceDays=[];
+  for(var i=daysSince;i>=0;i--)sinceDays.push(nutShiftDate(localDateStr(),-i));
+  var sinceLogged=sinceDays.filter(function(d){
+    return _nutEntries&&_nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});
+  });
+  if(!sinceLogged.length){card.style.display='none';return;}
+  var n=sinceLogged.length,s={calories:0,protein:0,fibre:0,satFat:0,sodium:0};
+  sinceLogged.forEach(function(d){
+    var t=nutTotals(nutDayEntries(d));
+    Object.keys(s).forEach(function(k){s[k]+=(t[k]||0);});
+  });
+  var tCal=(_nutTargets&&_nutTargets.cal)||2100,tProt=(_nutTargets&&_nutTargets.prot)||175;
+  var tFib=(_nutTargets&&_nutTargets.fib)||30,tSat=(_nutTargets&&_nutTargets.satfat)||14;
+  var tSod=(_nutTargets&&_nutTargets.sodium)||3000;
+  function avg(k){return Math.round(s[k]/n);}
+  function col(val,target,moreIsBetter){
+    if(moreIsBetter)return val>=target?'var(--green)':'var(--red)';
+    return val<=target?'var(--green)':'var(--red)';
+  }
+  function stat(val,color,lbl){
+    return '<div style="flex:1;text-align:center;">'+
+      '<div style="font-size:0.95rem;font-weight:700;color:'+color+';">'+val+'</div>'+
+      '<div style="font-size:0.52rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:1px;">'+lbl+'</div>'+
+    '</div>';
+  }
+  card.style.display='block';
+  card.innerHTML=
+    '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;">Diet since blood test · '+n+' days</div>'+
+    '<div style="display:flex;gap:4px;">'+
+      stat(avg('calories').toLocaleString(), col(avg('calories'),tCal,false), 'Kcal')+
+      stat(avg('protein')+'g', col(avg('protein'),tProt,true), 'Protein')+
+      stat(avg('fibre')+'g', col(avg('fibre'),tFib,true), 'Fibre')+
+      stat(avg('satFat')+'g', col(avg('satFat'),tSat,false), 'Sat Fat')+
+      stat(Math.round(avg('sodium')/100)/10+'g', col(avg('sodium'),tSod,false), 'Sodium')+
+    '</div>';
+}
+
 function loadTodayPlan(){
   var today=fmtDate(new Date());
   if(_cachedPlan){
@@ -5210,7 +5273,16 @@ function nutFetchCholForWeekTab(){
     if(fresh.length){
       fresh.sort(function(a,b){return a.date<b.date?-1:1;});
       _cholReadings=fresh;
-      if(_nutTab==='week')nutRenderWeek(); // re-render with live data
+      // Refresh home screen chol card with live data
+      renderHomeCholCard(); // re-render home card with live chol data, then check if extended fetch needed
+      var lastTestDate=fresh[fresh.length-1].date;
+      var daysSince=Math.floor((Date.now()-new Date(lastTestDate).getTime())/(1000*60*60*24));
+      if(daysSince>29){
+        // Need more history — fetch from chol date onwards
+        nutFetchEntries(lastTestDate);
+      } else {
+        if(_nutTab==='week')nutRenderWeek();
+      }
     }
   };
   var sc=document.createElement('script');sc.id='s_'+cb;
@@ -5255,8 +5327,9 @@ function nutFetchFoods(){
   setTimeout(function(){if(window[cb]){window[cb]=null;}},12000);
 }
 
-function nutFetchEntries(){
-  var from=nutShiftDate(localDateStr(),-6),to=localDateStr();
+function nutFetchEntries(extendedFrom){
+  // extendedFrom lets week tab fetch further back to cover since-chol-test period
+  var from=extendedFrom||nutShiftDate(localDateStr(),-29),to=localDateStr();
   var cb='wt_gn_'+Date.now();
   window[cb]=function(res){
     window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
@@ -5341,6 +5414,8 @@ function nutFetchEntries(){
     }
     nutRenderDay();
     if(_nutTab==='week')nutRenderWeek();
+    // Re-render home chol card if it triggered an extended fetch
+    if(typeof renderHomeCholCard==='function')renderHomeCholCard();
   };
   var sc=document.createElement('script');sc.id='s_'+cb;
   sc.onerror=function(){
