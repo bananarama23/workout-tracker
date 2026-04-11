@@ -1673,7 +1673,7 @@ function renderHomeData(sessions){
     }
   });
   var se=document.getElementById('wkStrength');
-  if(se){se.textContent=wkStr;se.className='ws-num '+(wkStr>=3?'c-green':wkStr>=2?'c-yellow':'c-red');}
+  if(se){se.textContent=wkStr;se.className='ws-num '+(wkStr>=2?'c-green':'c-red');}
   var he=document.getElementById('wkHIIT');
   if(he){he.textContent=wkHIIT;he.className='ws-num '+(wkHIIT>=2?'c-green':wkHIIT>=1?'c-yellow':'c-red');}
   var sk=document.getElementById('wkStreak');if(sk)sk.textContent=calcStreak(sessions);
@@ -5602,8 +5602,8 @@ function nutRenderWeek(){
     var avgFib=Math.round(s.fibre/n),avgSat=Math.round(s.satFat/n);
     var avgCarb=Math.round(s.carbs/n),avgSod=Math.round(s.sodium/n);
     var avgEffBudget=Math.round(totalEffBudget/n);
-    var tProt=_nutTargets.prot||175;
-    var tFib=_nutTargets.fib||30,tSat=_nutTargets.satfat||14,tSod=_nutTargets.sodium||3000;
+    var tProt=(_nutTargets&&_nutTargets.prot)||175;
+    var tFib=(_nutTargets&&_nutTargets.fib)||30,tSat=(_nutTargets&&_nutTargets.satfat)||14,tSod=(_nutTargets&&_nutTargets.sodium)||3000;
     // Calories: compare against per-day effective budget (active cals + cheat day ratio applied)
     var cCal=avgCal>avgEffBudget?'var(--red)':'var(--green)';
     var cProt=avgProt>=tProt?'var(--green)':'var(--red)';
