@@ -5516,14 +5516,14 @@ function nutRenderWeek(){
     var avgCarb=Math.round(s.carbs/n),avgSod=Math.round(s.sodium/n);
     var tCal=_nutTargets.cal||2100,tProt=_nutTargets.prot||175;
     var tFib=_nutTargets.fib||30,tSat=_nutTargets.satfat||14,tSod=_nutTargets.sodium||3000;
-    // Calories: green=within 10% under target, yellow=>10% under, red=over
-    var cCal=avgCal>tCal?'var(--red)':avgCal>=tCal*0.9?'var(--green)':'var(--yellow)';
-    // Protein + Fibre: more is better — green=at/over, yellow=70-100%, red=under 70%
-    var cProt=avgProt>=tProt?'var(--green)':avgProt>=tProt*0.7?'var(--yellow)':'var(--red)';
-    var cFib=avgFib>=tFib?'var(--green)':avgFib>=tFib*0.7?'var(--yellow)':'var(--red)';
-    // Sat fat + Sodium: less is better — green=under, yellow=up to 20% over, red=>20% over
-    var cSat=avgSat<=tSat?'var(--green)':avgSat<=tSat*1.2?'var(--yellow)':'var(--red)';
-    var cSod=avgSod<=tSod?'var(--green)':avgSod<=tSod*1.2?'var(--yellow)':'var(--red)';
+    // Calories: green=under target, red=over
+    var cCal=avgCal>tCal?'var(--red)':'var(--green)';
+    // Protein + Fibre: more is better — green=at/over, red=under
+    var cProt=avgProt>=tProt?'var(--green)':'var(--red)';
+    var cFib=avgFib>=tFib?'var(--green)':'var(--red)';
+    // Sat fat + Sodium: less is better — green=under, red=over
+    var cSat=avgSat<=tSat?'var(--green)':'var(--red)';
+    var cSod=avgSod<=tSod?'var(--green)':'var(--red)';
     var cCarb='var(--text)'; // no carb target
     function cell(val,col,lbl){
       return '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
