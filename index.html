@@ -3841,11 +3841,14 @@ function renderHomeCholCard(){
   });
   if(!sinceLogged.length){card.style.display='none';return;}
   var n=sinceLogged.length,s={calories:0,protein:0,fibre:0,satFat:0,sodium:0};
+  var totalEffBudget=0;
   sinceLogged.forEach(function(d){
     var t=nutTotals(nutDayEntries(d));
     Object.keys(s).forEach(function(k){s[k]+=(t[k]||0);});
+    totalEffBudget+=nutEffectiveBudget(d);
   });
-  var tCal=(_nutTargets&&_nutTargets.cal)||2100,tProt=(_nutTargets&&_nutTargets.prot)||175;
+  var avgEffBudget=Math.round(totalEffBudget/n);
+  var tProt=(_nutTargets&&_nutTargets.prot)||175;
   var tFib=(_nutTargets&&_nutTargets.fib)||30,tSat=(_nutTargets&&_nutTargets.satfat)||14;
   var tSod=(_nutTargets&&_nutTargets.sodium)||3000;
   function avg(k){return Math.round(s[k]/n);}
@@ -3853,7 +3856,7 @@ function renderHomeCholCard(){
     if(moreIsBetter)return val>=target?'var(--green)':'var(--red)';
     return val<=target?'var(--green)':'var(--red)';
   }
-  function stat(val,color,lbl,target){
+function stat(val,color,lbl,target){
     return '<div style="flex:1;text-align:center;">'+
       '<div style="font-size:0.95rem;font-weight:700;color:'+color+';">'+val+'</div>'+
       '<div style="font-size:0.52rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:1px;">'+lbl+'</div>'+
@@ -3864,7 +3867,7 @@ function renderHomeCholCard(){
   card.innerHTML=
     '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;">Diet since blood test · '+n+' days</div>'+
     '<div style="display:flex;gap:4px;">'+
-      stat(avg('calories').toLocaleString(), col(avg('calories'),tCal,false), 'Kcal', tCal.toLocaleString())+
+      stat(avg('calories').toLocaleString(), col(avg('calories'),avgEffBudget,false), 'Kcal', avgEffBudget.toLocaleString())+
       stat(avg('protein')+'g', col(avg('protein'),tProt,true), 'Protein', tProt+'g')+
       stat(avg('fibre')+'g', col(avg('fibre'),tFib,true), 'Fibre', tFib+'g')+
       stat(avg('satFat')+'g', col(avg('satFat'),tSat,false), 'Sat Fat', tSat+'g')+
@@ -5589,24 +5592,25 @@ function nutRenderWeek(){
   function nutStatsBlock(loggedDays, label){
     var n=loggedDays.length||1;
     var s={calories:0,protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0};
+    var totalEffBudget=0;
     loggedDays.forEach(function(d){
       var t=nutTotals(nutDayEntries(d));
       Object.keys(s).forEach(function(k){s[k]+=t[k]||0;});
+      totalEffBudget+=nutEffectiveBudget(d);
     });
     var avgCal=Math.round(s.calories/n),avgProt=Math.round(s.protein/n);
     var avgFib=Math.round(s.fibre/n),avgSat=Math.round(s.satFat/n);
     var avgCarb=Math.round(s.carbs/n),avgSod=Math.round(s.sodium/n);
-    var tCal=_nutTargets.cal||2100,tProt=_nutTargets.prot||175;
+    var avgEffBudget=Math.round(totalEffBudget/n);
+    var tProt=_nutTargets.prot||175;
     var tFib=_nutTargets.fib||30,tSat=_nutTargets.satfat||14,tSod=_nutTargets.sodium||3000;
-    // Calories: green=under target, red=over
-    var cCal=avgCal>tCal?'var(--red)':'var(--green)';
-    // Protein + Fibre: more is better — green=at/over, red=under
+    // Calories: compare against per-day effective budget (active cals + cheat day ratio applied)
+    var cCal=avgCal>avgEffBudget?'var(--red)':'var(--green)';
     var cProt=avgProt>=tProt?'var(--green)':'var(--red)';
     var cFib=avgFib>=tFib?'var(--green)':'var(--red)';
-    // Sat fat + Sodium: less is better — green=under, red=over
     var cSat=avgSat<=tSat?'var(--green)':'var(--red)';
     var cSod=avgSod<=tSod?'var(--green)':'var(--red)';
-    var cCarb='var(--text)'; // no carb target
+    var cCarb='var(--text)';
     function cell(val,col,lbl){
       return '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
         '<div style="font-size:1.05rem;font-weight:700;color:'+col+';">'+val+'</div>'+
