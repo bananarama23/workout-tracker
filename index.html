@@ -1196,6 +1196,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <div class="prog-section-hdr"><div class="prog-section-lbl">7-Day Average vs Target</div></div>
         <div id="nutWeekStats"></div>
         <div style="font-size:0.62rem;color:var(--muted);text-align:center;padding:8px 0;" id="nutWeekDaysLogged"></div>
+        <div id="nutWeekMonthSummary" style="margin-top:12px;"></div>
+        <div id="nutWeekCholSummary" style="margin-top:10px;padding-bottom:8px;"></div>
       </div>
     </div>
 
@@ -1739,7 +1741,7 @@ function calcStreak(sessions){
     else if(s.workoutType!=='Walk')wc[s.week].str++;
   });
   var weeks=Object.keys(wc).sort().reverse(),streak=0;
-  for(var w=0;w<weeks.length;w++){if(wc[weeks[w]].str>=3&&wc[weeks[w]].hiit>=2)streak++;else break;}
+  for(var w=0;w<weeks.length;w++){if(wc[weeks[w]].str>=2&&wc[weeks[w]].hiit>=1)streak++;else break;}
   return streak;
 }
 
@@ -5463,6 +5465,65 @@ function nutRenderWeek(){
     '</div>';
   }).join('');
   if(wd)wd.textContent=logged.length+' of last 7 days logged';
+
+  // ── Month summary ───────────────────────────────────────────────
+  var monthEl=document.getElementById('nutWeekMonthSummary');
+  if(monthEl){
+    var now=new Date(),monthStart=localDateStr().slice(0,8)+'01';
+    var allDays=[];for(var mi=0;mi<31;mi++){var d=new Date(now.getFullYear(),now.getMonth(),mi+1);if(d.getMonth()===now.getMonth())allDays.push(d.toISOString().slice(0,10));}
+    var monthLogged=allDays.filter(function(d){return _nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});});
+    var mSums={calories:0,protein:0};
+    monthLogged.forEach(function(d){var t=nutTotals(nutDayEntries(d));mSums.calories+=t.calories||0;mSums.protein+=t.protein||0;});
+    var mN=monthLogged.length||1;
+    var mName=now.toLocaleString('default',{month:'long'});
+    monthEl.innerHTML=
+      '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">'+mName+' so far</div>'+
+      '<div style="display:flex;gap:10px;">'+
+        '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">'+
+          '<div style="font-size:1.1rem;font-weight:700;color:var(--green);">'+monthLogged.length+'</div>'+
+          '<div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Days logged</div>'+
+        '</div>'+
+        '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">'+
+          '<div style="font-size:1.1rem;font-weight:700;color:var(--text);">'+Math.round(mSums.calories/mN).toLocaleString()+'</div>'+
+          '<div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Avg kcal</div>'+
+        '</div>'+
+        '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">'+
+          '<div style="font-size:1.1rem;font-weight:700;color:#9B7FFF;">'+Math.round(mSums.protein/mN)+'g</div>'+
+          '<div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Avg protein</div>'+
+        '</div>'+
+      '</div>';
+  }
+
+  // ── Cholesterol since last test ─────────────────────────────────
+  var cholEl=document.getElementById('nutWeekCholSummary');
+  if(cholEl){
+    // Use hardcoded readings (same as progress page)
+    var readings=[
+      {date:'2024-11-05',hdl:24,ldl:132,total:175,ratio:7.3},
+      {date:'2026-04-02',hdl:37,ldl:95,total:149,ratio:4.0}
+    ];
+    var last=readings[readings.length-1];
+    var prev=readings.length>1?readings[readings.length-2]:null;
+    var hdlDiff=prev?Math.round((last.hdl-prev.hdl)*10)/10:null;
+    var ldlDiff=prev?Math.round((last.ldl-prev.ldl)*10)/10:null;
+    var daysSince=Math.floor((Date.now()-new Date(last.date).getTime())/(1000*60*60*24));
+    cholEl.innerHTML=
+      '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">Last blood test · '+daysSince+' days ago</div>'+
+      '<div style="display:flex;gap:10px;">'+
+        '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">'+
+          '<div style="font-size:1.1rem;font-weight:700;color:var(--green);">'+last.hdl+'</div>'+
+          '<div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">HDL'+(hdlDiff!==null?' '+(hdlDiff>0?'↑':'↓')+Math.abs(hdlDiff):'')+' </div>'+
+        '</div>'+
+        '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">'+
+          '<div style="font-size:1.1rem;font-weight:700;color:var(--text);">'+last.ldl+'</div>'+
+          '<div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">LDL'+(ldlDiff!==null?' '+(ldlDiff<0?'↓':'↑')+Math.abs(ldlDiff):'')+' </div>'+
+        '</div>'+
+        '<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">'+
+          '<div style="font-size:1.1rem;font-weight:700;color:'+(last.ratio<5?'var(--green)':last.ratio<6?'var(--yellow)':'var(--red)')+';">'+last.ratio+'</div>'+
+          '<div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">TC/HDL</div>'+
+        '</div>'+
+      '</div>';
+  }
 }
 
 // ── Food list ──────────────────────────────────────────────────────
@@ -5496,7 +5557,7 @@ function nutOpenFoodForm(idx){
   var delBtn=document.getElementById('nutDeleteFoodBtn');if(delBtn)delBtn.style.display=isEdit?'block':'none';
   var editEl=document.getElementById('nff_editIdx');if(editEl)editEl.value=isEdit?idx:'';
   document.getElementById('nff_name').value=f?f.name:'';
-  document.getElementById('nff_serving').value=f?f.serving:'100';
+  document.getElementById('nff_serving').value=f?f.serving:'';
   var unitEl=document.getElementById('nff_unit');
   if(unitEl)unitEl.value=(f&&f.unit)||'g';
   document.getElementById('nff_cal').value=f?f.calories:'';
@@ -5505,8 +5566,10 @@ function nutOpenFoodForm(idx){
   document.getElementById('nff_fat').value=f?f.fat:'';
   document.getElementById('nff_fib').value=f?f.fibre:'';
   document.getElementById('nff_satfat').value=f?f.satFat:'';
-  document.getElementById('nff_sodium').value=f?(f.sodium||0):'';
+  document.getElementById('nff_sodium').value=f?(f.sodium||''):'';
   var msg=document.getElementById('nutFoodFormMsg');if(msg)msg.textContent='';
+  // Clear scan/type status from previous use
+  var ss=document.getElementById('nutScanStatus');if(ss){ss.style.display='none';ss.innerHTML='';}
   var ov=document.getElementById('nutFoodFormOverlay');
   if(ov){ov.style.display='flex';ov.scrollTop=0;}
 }
@@ -5915,6 +5978,7 @@ function nutFilterAddList(){
       html+='<button onclick="nutAddInlineGemini()" style="flex:1;padding:12px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:\'Bebas Neue\',sans-serif;font-size:0.9rem;letter-spacing:1px;font-weight:900;cursor:pointer;">\u2736 ASK GEMINI</button>';
       html+='<button onclick="nutAddInlineScan()" style="flex:0 0 52px;padding:12px;background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);font-size:1.1rem;cursor:pointer;">\uD83D\uDCF7</button>';
       html+='</div>';
+      html+='<label style="display:flex;align-items:center;gap:8px;font-size:0.72rem;color:var(--muted);padding:0 4px 8px;cursor:pointer;"><input type="checkbox" id="nutSaveToFoodsCheck" checked style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;"> Save to My Foods</label>';
       html+='<div id="nutAddInlineStatus" style="font-size:0.72rem;color:var(--muted);min-height:16px;padding:0 4px;"></div>';
       el.innerHTML=html;
     } else {
@@ -5938,6 +6002,7 @@ function nutFilterAddList(){
     html+='<button onclick="nutAddInlineGemini()" style="flex:1;padding:11px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-family:\'Bebas Neue\',sans-serif;font-size:0.82rem;letter-spacing:1px;cursor:pointer;">\u2736 New: Ask Gemini</button>';
     html+='<button onclick="nutAddInlineScan()" style="flex:0 0 44px;padding:11px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-size:1rem;cursor:pointer;">\uD83D\uDCF7</button>';
     html+='</div>';
+    html+='<label style="display:flex;align-items:center;gap:8px;font-size:0.72rem;color:var(--muted);padding:4px 4px 0;cursor:pointer;"><input type="checkbox" id="nutSaveToFoodsCheck" checked style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;"> Save to My Foods</label>';
     html+='<div id="nutAddInlineStatus" style="font-size:0.72rem;color:var(--muted);min-height:16px;padding:4px 4px 0;"></div>';
   }
 
@@ -6239,14 +6304,33 @@ function nutAddInlineFinish(food){
   food.fibre=parseFloat(food.fibre)||0;food.satFat=parseFloat(food.satFat)||0;
   food.sodium=parseFloat(food.sodium)||0;food.serving=parseFloat(food.serving)||100;food.unit=food.unit||'g';
   food.id=Date.now();food.updatedAt=food.id;
-  var existing=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===food.name.toLowerCase();});
-  if(existing>=0){_nutFoods[existing]=food;}
-  else{_nutFoods.push(food);_nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});}
-  try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
-  fetch(CLOUD_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({type:'addFood',food:food,_nonce:Date.now()})}).catch(function(){});
+  // Check save-to-foods checkbox — default true if not found
+  var saveChk=document.getElementById('nutSaveToFoodsCheck');
+  var saveToFoods=!saveChk||saveChk.checked;
+  if(saveToFoods){
+    var existing=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===food.name.toLowerCase();});
+    if(existing>=0){_nutFoods[existing]=food;}
+    else{_nutFoods.push(food);_nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});}
+    try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
+    fetch(CLOUD_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({type:'addFood',food:food,_nonce:Date.now()})}).catch(function(){});
+  }
   nutCloseAdd();
-  var fi=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===food.name.toLowerCase();});
-  nutPickFood(fi);
+  if(saveToFoods){
+    var fi=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===food.name.toLowerCase();});
+    nutPickFood(fi);
+  } else {
+    // Not saving to DB — open serving picker directly with temp food
+    _nutServingFood=food;
+    _nutEditingEntryIdx=-1;
+    _nutLastTouched='amt';
+    document.getElementById('nutServingFoodName').textContent=food.name;
+    document.getElementById('nutServingDefault').textContent='Macros per '+food.serving+food.unit+' serving';
+    var lbl=document.getElementById('nutServingAmtLabel');if(lbl)lbl.textContent='Amount ('+food.unit+')';
+    var amtEl=document.getElementById('nutServingAmt');if(amtEl)amtEl.value=food.serving;
+    var qtyEl=document.getElementById('nutServingQty');if(qtyEl)qtyEl.value='1';
+    nutServingPreview();
+    var ov=document.getElementById('nutServingOverlay');if(ov){ov.style.display='flex';ov.scrollTop=0;}
+  }
 }
 
 // ── Push day to sheet (phone is truth) ────────────────────────────
