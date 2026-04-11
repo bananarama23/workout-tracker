@@ -5599,33 +5599,30 @@ function nutRenderWeek(){
       totalEffBudget+=nutEffectiveBudget(d);
     });
     var avgCal=Math.round(s.calories/n),avgProt=Math.round(s.protein/n);
-    var avgFib=Math.round(s.fibre/n),avgSat=Math.round(s.satFat/n);
-    var avgCarb=Math.round(s.carbs/n),avgSod=Math.round(s.sodium/n);
+    var avgFib=Math.round(s.fibre/n),avgSat=Math.round(s.satFat/n),avgSod=Math.round(s.sodium/n);
     var avgEffBudget=Math.round(totalEffBudget/n);
     var tProt=(_nutTargets&&_nutTargets.prot)||175;
     var tFib=(_nutTargets&&_nutTargets.fib)||30,tSat=(_nutTargets&&_nutTargets.satfat)||14,tSod=(_nutTargets&&_nutTargets.sodium)||3000;
-    // Calories: compare against per-day effective budget (active cals + cheat day ratio applied)
     var cCal=avgCal>avgEffBudget?'var(--red)':'var(--green)';
     var cProt=avgProt>=tProt?'var(--green)':'var(--red)';
     var cFib=avgFib>=tFib?'var(--green)':'var(--red)';
     var cSat=avgSat<=tSat?'var(--green)':'var(--red)';
     var cSod=avgSod<=tSod?'var(--green)':'var(--red)';
-    var cCarb='var(--text)';
-    function cell(val,col,lbl){
-      return '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;">'+
-        '<div style="font-size:1.05rem;font-weight:700;color:'+col+';">'+val+'</div>'+
-        '<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">'+lbl+'</div>'+
+    function stat(val,color,lbl,tgt){
+      return '<div style="flex:1;text-align:center;">'+
+        '<div style="font-size:0.95rem;font-weight:700;color:'+color+';">'+val+'</div>'+
+        '<div style="font-size:0.52rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:1px;">'+lbl+'</div>'+
+        (tgt?'<div style="font-size:0.48rem;color:var(--muted);margin-top:1px;">tgt '+tgt+'</div>':'')+
       '</div>';
     }
     return '<div style="margin-bottom:6px;">'+
-      '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">'+label+' \u00b7 '+loggedDays.length+' days logged</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">'+
-        cell(avgCal.toLocaleString(),cCal,'Avg kcal')+
-        cell(avgProt+'g',cProt,'Protein')+
-        cell(avgFib+'g',cFib,'Fibre')+
-        cell(avgSat+'g',cSat,'Sat Fat')+
-        cell(avgCarb+'g',cCarb,'Carbs')+
-        cell(Math.round(avgSod/100)/10+'g',cSod,'Sodium')+
+      '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;">'+label+' \u00b7 '+loggedDays.length+' days logged</div>'+
+      '<div style="display:flex;gap:4px;">'+
+        stat(avgCal.toLocaleString(),cCal,'Kcal',avgEffBudget.toLocaleString())+
+        stat(avgProt+'g',cProt,'Protein',tProt+'g')+
+        stat(avgFib+'g',cFib,'Fibre',tFib+'g')+
+        stat(avgSat+'g',cSat,'Sat Fat',tSat+'g')+
+        stat(Math.round(avgSod/100)/10+'g',cSod,'Sodium',Math.round(tSod/100)/10+'g')+
       '</div>'+
     '</div>';
   }
