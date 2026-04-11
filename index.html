@@ -1158,7 +1158,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;">
                   <span id="nutActiveAdj" style="font-size:0.68rem;font-weight:700;"></span>
-                  <button id="nutCheatBtn" onclick="nutToggleCheatDay()" style="font-size:0.58rem;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;">1:1</button>
+                  <button id="nutCheatBtn" onclick="nutToggleCheatDay()" style="font-size:0.58rem;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;">1:0.75</button>
                 </div>
               </div>
               <div style="border-top:1px solid var(--border);padding-top:8px;" id="nutMacroBars"></div>
@@ -4955,8 +4955,8 @@ function nutEffectiveBudget(date){
   var base=_nutTargets.cal||2100;
   var active=nutGetActiveCals(date||_nutDate);
   if(active===null)return base;
-  // 0.5 bonus normally, 1:1 on cheat days
-  var ratio=nutIsCheatDay(date||_nutDate)?1.0:0.5;
+  // 0.5 bonus normally, 0.75 on cheat days
+  var ratio=nutIsCheatDay(date||_nutDate)?0.75:0.5;
   return base+Math.round((active-NUT_ACTIVE_BASE)*ratio);
 }
 var _nutActiveTimer=null;
@@ -5355,7 +5355,7 @@ function nutRenderDay(){
   var cheatBtn=document.getElementById('nutCheatBtn');
   if(cheatBtn){
     var isCheat=nutIsCheatDay(_nutDate);
-    cheatBtn.textContent=isCheat?'1:1 ON':'1:1';
+    cheatBtn.textContent=isCheat?'1:0.75 ON':'1:0.75';
     cheatBtn.style.background=isCheat?'var(--accent)':'var(--card2)';
     cheatBtn.style.color=isCheat?'#000':'var(--muted)';
     cheatBtn.style.borderColor=isCheat?'var(--accent)':'var(--border2)';
