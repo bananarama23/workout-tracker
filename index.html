@@ -543,6 +543,14 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         </div>
       </div>
     </div>
+    <!-- Day Done checkbox -->
+    <div id="dayDoneBar" style="margin:0 16px 10px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="dayDoneToggle()">
+      <div>
+        <div style="font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:2px;">Day Status</div>
+        <div id="dayDoneLabel" style="font-size:0.82rem;font-weight:600;color:var(--text2);">Still eating — macros in progress</div>
+      </div>
+      <div id="dayDoneChk" style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border2);background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.2s;flex-shrink:0;"></div>
+    </div>
     <!-- Cholesterol since last test — shown on home screen -->
     <div id="homeCholCard" style="display:none;margin:0 16px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;"></div>
     <div class="week-strip">
@@ -990,6 +998,14 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
             <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;line-height:1;" id="bBank">—</div>
           </div>
         </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div style="flex:1;">
+            <div style="font-size:0.55rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:5px;">Edit equity for selected month</div>
+            <input id="bEquityEdit" type="number" inputmode="decimal" placeholder="Enter equity" style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:1.2rem;padding:8px 12px;outline:none;" oninput="budEquityEditChanged()">
+          </div>
+          <button onclick="budSaveEquity()" id="bEquitySaveBtn" style="margin-top:18px;padding:9px 16px;background:var(--accent-dim);border:1px solid rgba(200,255,0,0.4);border-radius:var(--r-sm);color:var(--accent);font-family:'Bebas Neue',sans-serif;font-size:0.9rem;letter-spacing:1px;white-space:nowrap;transition:all 0.2s;">SAVE</button>
+        </div>
+        <div id="bEquitySaveMsg" style="font-size:0.7rem;min-height:14px;color:var(--muted);margin-bottom:4px;"></div>
         <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:10px;">
           <span style="font-size:0.75rem;color:var(--text2);">Future mortgage payment</span>
           <span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--orange);" id="vHouse">—</span>
@@ -4373,6 +4389,42 @@ function budBuildMonthDropdown(monthRows){
   });
   _budSelectedMonthIdx=curIdx;
   budUpdateEquityBank(monthRows,curIdx);
+  var initRow=monthRows[curIdx];
+  var initInp=document.getElementById('bEquityEdit');
+  if(initInp&&initRow&&initRow.equity!==null)initInp.value=Math.round(initRow.equity);
+}
+
+function budEquityEditChanged(){
+  var btn=document.getElementById('bEquitySaveBtn');
+  var msg=document.getElementById('bEquitySaveMsg');
+  if(btn){btn.style.background='var(--accent)';btn.style.color='#000';}
+  if(msg)msg.textContent='';
+}
+
+function budSaveEquity(){
+  var inp=document.getElementById('bEquityEdit');
+  var msg=document.getElementById('bEquitySaveMsg');
+  var btn=document.getElementById('bEquitySaveBtn');
+  if(!inp||inp.value===''){if(msg){msg.textContent='Enter a value first';msg.style.color='var(--orange)';}return;}
+  var newEquity=parseFloat(inp.value);
+  if(isNaN(newEquity)){if(msg){msg.textContent='Invalid number';msg.style.color='var(--orange)';}return;}
+  var idx=_budSelectedMonthIdx>=0?_budSelectedMonthIdx:budCurrentMonthIdx();
+  if(_budSheetData.monthRows&&_budSheetData.monthRows[idx]){
+    _budSheetData.monthRows[idx].equity=newEquity;
+  } else {
+    // No sheet rows loaded yet — create a placeholder
+    if(!_budSheetData.monthRows)_budSheetData.monthRows=[];
+    while(_budSheetData.monthRows.length<=idx)_budSheetData.monthRows.push({label:'',equity:null,bank:null});
+    _budSheetData.monthRows[idx].equity=newEquity;
+  }
+  // Persist in localStorage fallback
+  try{var st=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');st.lastEquity=newEquity;localStorage.setItem(BUD_KEY,JSON.stringify(st));}catch(e){}
+  budUpdateEquityBank(_budSheetData.monthRows,idx);
+  budCalc();
+  budSetStatus('edited');
+  if(msg){msg.textContent='\u2713 Saved — tap SAVE TO SHEET to persist';msg.style.color='var(--green)';}
+  if(btn){btn.style.background='var(--accent-dim)';btn.style.color='var(--accent)';}
+  setTimeout(function(){if(msg)msg.textContent='';},3500);
 }
 
 function budPickMonth(){
@@ -4381,6 +4433,13 @@ function budPickMonth(){
   var idx=parseInt(sel.value);
   _budSelectedMonthIdx=idx;
   budUpdateEquityBank(_budSheetData.monthRows,idx);
+  // Pre-fill equity edit input with selected month's value
+  var row=_budSheetData.monthRows&&_budSheetData.monthRows[idx];
+  var inp=document.getElementById('bEquityEdit');
+  if(inp&&row&&row.equity!==null)inp.value=Math.round(row.equity);
+  else if(inp)inp.value='';
+  var btn=document.getElementById('bEquitySaveBtn');if(btn){btn.style.background='var(--accent-dim)';btn.style.color='var(--accent)';}
+  var msg=document.getElementById('bEquitySaveMsg');if(msg)msg.textContent='';
   budCalc();
 }
 
@@ -4704,11 +4763,21 @@ function budCalc(){
   s('bSpareVal',fmt(leftOver),leftOver>=0?'var(--green)':'var(--red)');
   s('bVegasSpare',fmt(leftOver),leftOver>=0?'var(--accent)':'var(--red)');
 
-  // Savings projection
+  // Savings projection — always use TODAY's real equity (not the selected future month)
   var projEl=document.getElementById('bProjection');
   if(projEl){
-    if(leftOver>0&&dpNeeded>0){
-      var months=Math.ceil(dpNeeded/leftOver);
+    var todayEquity=0;
+    if(_budSheetData.monthRows&&_budSheetData.monthRows.length){
+      var todayIdx=budCurrentMonthIdx();
+      var todayRow=_budSheetData.monthRows[todayIdx]||_budSheetData.monthRows[0];
+      if(todayRow&&todayRow.equity!==null)todayEquity=Math.round(todayRow.equity);
+    } else {
+      try{var _st2=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');if(_st2.lastEquity)todayEquity=Math.round(_st2.lastEquity);}catch(e){}
+    }
+    var dpTarget2=downPayment>0?downPayment:1;
+    var dpNeeded2=Math.max(0,dpTarget2-todayEquity);
+    if(leftOver>0&&dpNeeded2>0){
+      var months=Math.ceil(dpNeeded2/leftOver);
       var projDate=new Date();projDate.setMonth(projDate.getMonth()+months);
       var projStr=projDate.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
       projEl.textContent='At this rate: '+months+' months \u2014 '+projStr;
@@ -4730,6 +4799,19 @@ function budCalc(){
 
 function budRenderHours(hours,avg){
   var el=document.getElementById('bHoursTable');if(!el)return;
+  // If a hours input has focus, only update bars/colors — don't rebuild DOM (kills typing)
+  var focusedHours=document.activeElement&&document.activeElement.classList.contains('bud-month-val');
+  if(focusedHours){
+    BUD_MONTHS.forEach(function(_,i){
+      var v=hours[i];
+      var col=v>=70?'var(--green)':v>0?'var(--red)':'var(--muted)';
+      var inp=document.getElementById('bHours_'+i);
+      if(inp&&document.activeElement!==inp)inp.style.color=col;
+      var bar=document.getElementById('bHoursBar_'+i);
+      if(bar){var barPct=Math.min(100,Math.round((v/100)*100));var barCol=v>=70?'var(--green)':'var(--red)';bar.style.width=barPct+'%';bar.style.background=barCol;}
+    });
+    return;
+  }
   var html='';
   BUD_MONTHS.forEach(function(month,i){
     var v=hours[i];
@@ -4739,7 +4821,7 @@ function budRenderHours(hours,avg){
     var displayVal=v>0?v:'';
     html+='<div class="bud-month-row">';
     html+='<div class="bud-month-lbl">'+month+'</div>';
-    html+='<div class="bud-month-bar"><div class="bud-month-bar-fill" style="width:'+barPct+'%;background:'+barCol+';"></div></div>';
+    html+='<div class="bud-month-bar"><div class="bud-month-bar-fill" id="bHoursBar_'+i+'" style="width:'+barPct+'%;background:'+barCol+';"></div></div>';
     html+='<input class="bud-month-val" id="bHours_'+i+'" type="number" inputmode="decimal" step="0.01" value="'+displayVal+'" placeholder="0" style="color:'+col+';background:transparent;border:none;width:60px;text-align:right;outline:none;font-family:\'Bebas Neue\',sans-serif;font-size:1.05rem;" oninput="budUserEdit()">';
     html+='<div style="font-size:0.62rem;color:var(--muted);width:24px;text-align:right;">h</div>';
     html+='</div>';
@@ -4959,6 +5041,31 @@ var NUT_ACTIVE_KEY='wt_nut_active'; // {date: activeCals} per day
 var NUT_CHEAT_KEY='wt_nut_cheat'; // {date: true} for 1:1 bonus days
 var _nutLastFetch=0; // timestamp of last successful sheet fetch
 var _nutSyncedIds={}; // ids confirmed in sheet
+// ─── DAY DONE ─────────────────────────────────────────────────────
+var DAY_DONE_KEY='wt_daydone';
+function dayDoneGet(){
+  try{var d=JSON.parse(localStorage.getItem(DAY_DONE_KEY)||'{}');return d[localDateStr()]===true;}catch(e){return false;}
+}
+function dayDoneSet(val){
+  try{var d=JSON.parse(localStorage.getItem(DAY_DONE_KEY)||'{}');d[localDateStr()]=val;localStorage.setItem(DAY_DONE_KEY,JSON.stringify(d));}catch(e){}
+}
+function dayDoneToggle(){
+  var done=!dayDoneGet();dayDoneSet(done);dayDoneRender();
+  // Re-render nutrition if on that page so macros reflect final state
+  if(typeof nutRenderDay==='function')nutRenderDay();
+}
+function dayDoneRender(){
+  var done=dayDoneGet();
+  var chk=document.getElementById('dayDoneChk');
+  var lbl=document.getElementById('dayDoneLabel');
+  var bar=document.getElementById('dayDoneBar');
+  if(chk){chk.textContent=done?'✓':'';chk.style.background=done?'var(--green)':'var(--card2)';chk.style.borderColor=done?'var(--green)':'var(--border2)';chk.style.color=done?'#000':'';}
+  if(lbl){lbl.textContent=done?'Day done — macros finalised':'Still eating — macros in progress';lbl.style.color=done?'var(--green)':'var(--text2)';}
+  if(bar){bar.style.borderColor=done?'rgba(0,212,138,0.4)':'var(--border)';}
+}
+// Init on load
+document.addEventListener('DOMContentLoaded',function(){dayDoneRender();});
+
 var NUT_ACTIVE_BASE=390; // Apple Watch base — calories above/below this adjust budget
 var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
 var NUT_DEFAULTS={cal:2100,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000};
@@ -6126,7 +6233,7 @@ function nutFilterAddList(){
       html+='<button onclick="nutAddInlineGemini()" style="flex:1;padding:12px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:\'Bebas Neue\',sans-serif;font-size:0.9rem;letter-spacing:1px;font-weight:900;cursor:pointer;">\u2736 ASK GEMINI</button>';
       html+='<button onclick="nutAddInlineScan()" style="flex:0 0 52px;padding:12px;background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);font-size:1.1rem;cursor:pointer;">\uD83D\uDCF7</button>';
       html+='</div>';
-      html+='<label style="display:flex;align-items:center;gap:8px;font-size:0.72rem;color:var(--muted);padding:0 4px 8px;cursor:pointer;"><input type="checkbox" id="nutSaveToFoodsCheck" checked style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;"> Save to My Foods</label>';
+      html+='<label style="display:flex;align-items:center;gap:8px;font-size:0.72rem;color:var(--muted);padding:0 4px 8px;cursor:pointer;"><input type="checkbox" id="nutSaveToFoodsCheck" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;"> Save to My Foods</label>';
       html+='<div id="nutAddInlineStatus" style="font-size:0.72rem;color:var(--muted);min-height:16px;padding:0 4px;"></div>';
       el.innerHTML=html;
     } else {
@@ -6150,7 +6257,7 @@ function nutFilterAddList(){
     html+='<button onclick="nutAddInlineGemini()" style="flex:1;padding:11px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-family:\'Bebas Neue\',sans-serif;font-size:0.82rem;letter-spacing:1px;cursor:pointer;">\u2736 New: Ask Gemini</button>';
     html+='<button onclick="nutAddInlineScan()" style="flex:0 0 44px;padding:11px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-size:1rem;cursor:pointer;">\uD83D\uDCF7</button>';
     html+='</div>';
-    html+='<label style="display:flex;align-items:center;gap:8px;font-size:0.72rem;color:var(--muted);padding:4px 4px 0;cursor:pointer;"><input type="checkbox" id="nutSaveToFoodsCheck" checked style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;"> Save to My Foods</label>';
+    html+='<label style="display:flex;align-items:center;gap:8px;font-size:0.72rem;color:var(--muted);padding:4px 4px 0;cursor:pointer;"><input type="checkbox" id="nutSaveToFoodsCheck" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;"> Save to My Foods</label>';
     html+='<div id="nutAddInlineStatus" style="font-size:0.72rem;color:var(--muted);min-height:16px;padding:4px 4px 0;"></div>';
   }
 
