@@ -7072,11 +7072,12 @@ function progAIRunFeedback(geminiKey,btn,card,result){
   }
 
   var prompt=
+    'STRATEGY: Normal days = eat in deficit for weight loss. Cheat/travel days = eat freely and maintain (near-zero surplus is the goal, NOT a deficit). Weight loss happens through normal day deficits, not cheat day restriction.\n\n'+
     'CURRENT PLAN SETTINGS:\n'+
     'Base calories: '+calBase+'kcal/day\n'+
     'AW active baseline: '+activeBase+' (earn-back starts above this)\n'+
     'Normal day ratio: '+normalRatio+' (e.g. 500 active → budget='+calBase+'+('+(500)+'-'+activeBase+')*'+normalRatio+'='+(calBase+Math.round((500-activeBase)*normalRatio))+')\n'+
-    'Cheat day ratio: '+cheatRatio+' (travel days ~8mi walk)\n'+
+    'Cheat day ratio: '+cheatRatio+' (travel days ~8mi walk — IMPORTANT: on cheat/travel days the goal is to eat freely/a lot and roughly MAINTAIN, NOT create a deficit. A near-zero surplus or small surplus on cheat days is correct and desirable. Do NOT suggest lowering the cheat ratio to create a deficit on these days.)\n'+
     'Protein target: '+protTarget+'g/day\n'+
     (goalWeight?'Goal weight: '+goalWeight+'lbs\n':'')+
     '\nWEIGHT: '+wtTrend+'\n'+
@@ -7093,8 +7094,8 @@ function progAIRunFeedback(geminiKey,btn,card,result){
     '1. Base calories (currently '+calBase+') — right for '+(goalWeight?'reaching '+goalWeight+'lbs':'my goal')+'?\n'+
     '2. AW baseline (currently '+activeBase+') — is this the right threshold?\n'+
     '3. Normal ratio (currently '+normalRatio+') — am I earning back the right amount?\n'+
-    '4. Cheat ratio (currently '+cheatRatio+') — right for travel days?\n'+
-    'Use my actual surplus/deficit numbers and weight trend. 4 short answers, one per number, specific values to change to if needed.';
+    '4. Cheat ratio (currently '+cheatRatio+') — am I earning back the right amount on travel/cheat days? Remember: on cheat days a near-zero surplus or small surplus is the TARGET (maintenance), not a problem. Only suggest changing this if cheat days are causing an unhealthy surplus that's hurting the overall weight trend.\n'+
+    'Use my actual surplus/deficit numbers and weight trend. 4 short answers, one per number, specific values to change to if needed. Do not penalize cheat days for being near maintenance — that is intentional.';
 
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
