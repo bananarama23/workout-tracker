@@ -717,6 +717,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
     <!-- HIIT -->
     <div class="log-panel" id="panel-hiit">
+      <div id="hiitWeekSummary" style="margin:12px 16px 0;padding:10px 14px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);font-size:0.72rem;color:var(--text2);line-height:1.6;"></div>
       <div class="log-field">
         <label>Select Video</label>
         <div class="hiit-presets">
@@ -1433,11 +1434,11 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         </div>
         <div id="wgHiit" style="display:flex;align-items:center;gap:5px;">
           <span id="wgHiitIcon" style="font-size:1rem;">⬜</span>
-          <span style="font-size:0.68rem;color:var(--muted);">HIIT <span id="wgHiitCount" style="color:var(--text2);">0/2</span></span>
+          <span style="font-size:0.68rem;color:var(--muted);">Effort <span id="wgHiitEffort" style="color:var(--text2);">0/13</span></span>
         </div>
-        <div id="wgHiit8" style="display:flex;align-items:center;gap:5px;">
-          <span id="wgHiit8Icon" style="font-size:1rem;">⬜</span>
-          <span style="font-size:0.68rem;color:var(--muted);">HIIT 8 <span id="wgHiit8Count" style="color:var(--text2);">0/1</span></span>
+        <div id="wgHiitDur" style="display:flex;align-items:center;gap:5px;">
+          <span id="wgHiitDurIcon" style="font-size:1rem;">⬜</span>
+          <span style="font-size:0.68rem;color:var(--muted);">Min <span id="wgHiitDurCount" style="color:var(--text2);">0/28</span></span>
         </div>
       </div>
       <div id="wgAllDone" style="display:none;font-size:0.72rem;font-weight:700;color:var(--green);letter-spacing:0.5px;">WEEK MET ✓</div>
@@ -1490,6 +1491,10 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 var CLOUD_URL='https://script.google.com/macros/s/AKfycbyWZ1VoxhQ5OPgnWRIpnYgDw9RvjepJvZEKaycOJ807cpB_bwDA0rCwGj_W_ZVbWZ1t/exec';
 var HIST_KEY='wt_hist_v3';
 var CACHE_KEY='wt_sheet_cache';
+var PLAN_CACHE_KEY='wt_plan_cache';
+var CACHE_MAX_AGE=2*60*60*1000;
+function savePlanCache(plan){try{localStorage.setItem(PLAN_CACHE_KEY,JSON.stringify({plan:plan,ts:Date.now()}));}catch(e){}}
+function loadPlanCache(){try{var r=localStorage.getItem(PLAN_CACHE_KEY);if(!r)return null;var o=JSON.parse(r);return(o&&o.plan)?o:null;}catch(e){return null;}}
 function localDateStr(){
   var d=new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -1714,8 +1719,7 @@ function loadHomeData(){
   _cachedSessions=cached?cached.sessions:[];
   renderHomeData(_cachedSessions);
   setSyncBadges(cached?'cached':'loading', cached?cacheAgeStr(cached.ts):null);
-  // Always fetch fresh in background — silently updates when it arrives
-  // This keeps today's plan, streak, and diet card accurate as the day changes
+  // Always fetch fresh in background — cache render above gives instant display
   fetchHistory(function(sessions){
     _cachedSessions=sessions||[];
     saveCache(_cachedSessions);
@@ -3282,6 +3286,30 @@ function copyResults(){
 }
 
 // ─── LOG TABS ─────────────────────────────────────────────────────
+function updateHiitWeekSummary(){
+  var el=document.getElementById('hiitWeekSummary');if(!el)return;
+  var EFFORT_GOAL=13,DUR_GOAL=28;
+  var weekDates=getWeekDates(0).map(function(d){return fmtDate(d);});
+  var totalEffort=0,totalDur=0;
+  (_cachedSessions||[]).forEach(function(s){
+    if(weekDates.indexOf(s.date)<0)return;
+    if(!isHIIT(s.workoutType))return;
+    totalEffort+=parseInt(s.effort)||0;
+    totalDur+=parseInt(s.duration)||0;
+  });
+  var remEffort=Math.max(0,EFFORT_GOAL-totalEffort);
+  var remDur=Math.max(0,DUR_GOAL-totalDur);
+  var effortOk=totalEffort>=EFFORT_GOAL,durOk=totalDur>=DUR_GOAL;
+  if(effortOk&&durOk){
+    el.innerHTML='<span style="color:var(--green);font-weight:700;">✓ Week HIIT goals met</span> — '+totalEffort+' effort · '+totalDur+'min logged';
+  } else {
+    var parts=[];
+    if(!effortOk)parts.push('<span style="color:var(--accent);font-weight:600;">'+remEffort+' effort</span> remaining ('+totalEffort+'/'+EFFORT_GOAL+')');
+    if(!durOk)parts.push('<span style="color:var(--accent);font-weight:600;">'+remDur+'min</span> remaining ('+totalDur+'/'+DUR_GOAL+')');
+    el.innerHTML='This week: '+parts.join(' · ');
+  }
+}
+
 function switchLogTab(tab){
   ['hiit','chol','body','walk','edit'].forEach(function(t){
     document.getElementById('tab-'+t).classList.remove('active');
@@ -3290,6 +3318,7 @@ function switchLogTab(tab){
   document.getElementById('tab-'+tab).classList.add('active');
   document.getElementById('panel-'+tab).classList.add('active');
   if(tab==='edit')initEditTab();
+  if(tab==='hiit')updateHiitWeekSummary();
 }
 
 // ─── HIIT ─────────────────────────────────────────────────────────
@@ -3341,7 +3370,7 @@ function saveHIIT(){
   var wn=1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7);
   var payload={type:'hiit',date:date,week:'Week '+wn,duration:dur,effort:selEff,notes:notes,video:hiitVideo};
   // hiitVideo is 'HIIT' or 'HIIT 8' — use as the workoutType
-  var localSd={date:date,week:'Week '+wn,workoutType:hiitVideo,exercises:[{name:'HIIT',feel:'',notes:notes+(hiitVideo?' - '+hiitVideo:'')}]};
+  var localSd={date:date,week:'Week '+wn,workoutType:hiitVideo,duration:parseInt(dur)||0,effort:selEff,exercises:[{name:'HIIT',feel:'',notes:notes+(hiitVideo?' - '+hiitVideo:'')}]};
   recSession(localSd);
   if(_sheetSessions){_sheetSessions.push(localSd);_cachedSessions=_sheetSessions;}
   else if(_cachedSessions){_cachedSessions.push(localSd);}
@@ -3620,32 +3649,41 @@ function overlayCompletedWorkouts(planData,sessions){
 }
 
 function loadWeekPlan(){
+  var today=fmtDate(new Date());
+  var pc=loadPlanCache();
+  if(pc){
+    var pd=overlayCompletedWorkouts(JSON.parse(JSON.stringify(pc.plan)),_cachedSessions||[]);
+    _weekPlan=pd;_cachedPlan=pd;
+    renderPlanGrid(getWeekDates(_planWeekOffset),today);updateTodayCard(today);
+    if((Date.now()-pc.ts)<CACHE_MAX_AGE)return;
+  }
   var cbP='wt_plan_'+Date.now();
   window[cbP]=function(result){
     window[cbP]=null;var s=document.getElementById('s_'+cbP);if(s)s.parentNode.removeChild(s);
     var planData=result&&result.plan?result.plan:{};
+    savePlanCache(planData);
     if(_cachedSessions&&_cachedSessions.length){
       planData=overlayCompletedWorkouts(planData,_cachedSessions);_weekPlan=planData;_cachedPlan=planData;
-      renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));updateTodayCard(fmtDate(new Date()));
+      renderPlanGrid(getWeekDates(_planWeekOffset),today);updateTodayCard(today);
     } else {
       fetchHistory(function(sessions){
         _cachedSessions=sessions||[];
         planData=overlayCompletedWorkouts(planData,_cachedSessions);_weekPlan=planData;_cachedPlan=planData;
-        renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));updateTodayCard(fmtDate(new Date()));
+        renderPlanGrid(getWeekDates(_planWeekOffset),today);updateTodayCard(today);
       });
     }
   };
   var script=document.createElement('script');script.id='s_'+cbP;
   script.src=CLOUD_URL+'?type=getWeekPlan&callback='+cbP;
   script.onerror=function(){
-    var pd=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=pd;_cachedPlan=pd;
-    renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));updateTodayCard(fmtDate(new Date()));
+    if(!pc){var pd=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=pd;_cachedPlan=pd;
+    renderPlanGrid(getWeekDates(_planWeekOffset),today);updateTodayCard(today);}
   };
   document.head.appendChild(script);
-  setTimeout(function(){if(window[cbP]){window[cbP]=null;
-    var pd=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=pd;_cachedPlan=pd;
-    renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));updateTodayCard(fmtDate(new Date()));
-  }},15000);
+  setTimeout(function(){if(!window[cbP])return;window[cbP]=null;
+    if(!pc){var pd=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=pd;_cachedPlan=pd;
+    renderPlanGrid(getWeekDates(_planWeekOffset),today);updateTodayCard(today);}
+  },15000);
 }
 
 function renderPlanGrid(days,today){
@@ -3724,37 +3762,39 @@ function debounceSavePlan(){
 }
 
 function updateWeekGoalBar(days){
-  // Count planned and completed for this week's goal
-  var strPlanned=0,strDone=0,hiitDone=0,hiit8Done=0;
+  var strDone=0,hiitEffort=0,hiitDuration=0;
+  var EFFORT_GOAL=13,DUR_GOAL=28,STR_GOAL=2;
   days.forEach(function(d){
-    var ds=fmtDate(d),type=_weekPlan[ds]||'Rest';
-    if(type==='Home'||type==='Hotel')strPlanned++;
-    // Count actuals from sessions
+    var ds=fmtDate(d);
     (_cachedSessions||[]).forEach(function(s){
       if(s.date!==ds)return;
       var wt=s.workoutType||'';
       if(wt.indexOf('Strength')>=0)strDone++;
-      else if(wt==='HIIT')hiitDone++;
-      else if(wt==='HIIT 8')hiit8Done++;
+      else if(isHIIT(wt)){
+        hiitEffort+=parseInt(s.effort)||0;
+        hiitDuration+=parseInt(s.duration)||0;
+      }
     });
   });
-  // Cap actuals at targets
-  strDone=Math.min(strDone,2);hiitDone=Math.min(hiitDone+hiit8Done,2);
+  strDone=Math.min(strDone,STR_GOAL);
+  var effortCapped=Math.min(hiitEffort,EFFORT_GOAL);
+  var durCapped=Math.min(hiitDuration,DUR_GOAL);
 
-  var strOk=strDone>=2,hiitOk=hiitDone>=2;
+  var strOk=strDone>=STR_GOAL,effortOk=hiitEffort>=EFFORT_GOAL,durOk=hiitDuration>=DUR_GOAL;
+  var hiitOk=effortOk&&durOk;
   var allDone=strOk&&hiitOk;
 
   function tick(id,ok){var el=document.getElementById(id);if(el)el.textContent=ok?'✅':'⬜';}
-  tick('wgStrIcon',strOk);tick('wgHiitIcon',hiitOk);
-  var h8el=document.getElementById('wgHiit8');if(h8el)h8el.style.display='none';
+  tick('wgStrIcon',strOk);tick('wgHiitIcon',effortOk);tick('wgHiitDurIcon',durOk);
 
   function count(id,n,t){var el=document.getElementById(id);if(el){el.textContent=n+'/'+t;el.style.color=n>=t?'var(--green)':'var(--text2)';}}
-  count('wgStrCount',strDone,2);count('wgHiitCount',hiitDone,2);
+  count('wgStrCount',strDone,STR_GOAL);
+  count('wgHiitEffort',hiitEffort,EFFORT_GOAL);
+  count('wgHiitDurCount',hiitDuration,DUR_GOAL);
 
   var allEl=document.getElementById('wgAllDone');
   if(allEl)allEl.style.display=allDone?'block':'none';
 
-  // Update the bar border to green when all done
   var bar=document.getElementById('weekGoalBar');
   if(bar)bar.style.borderColor=allDone?'rgba(0,212,138,0.4)':'var(--border)';
 }
@@ -3773,6 +3813,7 @@ function saveWeekPlan(){
   var cbName='wt_savep_'+Date.now();
   window[cbName]=function(result){
     window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    savePlanCache(_weekPlan);
     if(msg){msg.textContent='Saved';msg.style.color='var(--green)';}
     setTimeout(function(){if(msg)msg.textContent='';},2000);
     updateTodayCard(fmtDate(new Date()));loadHomeData();
@@ -6882,10 +6923,10 @@ function nutEditEntry(idx){
     _nutPerItemName=e.perItemName||'item';
     _nutServingUnitMultiplier=1;
     _nutServingCurrentUnit='native';
-    var perItemRow=document.getElementById('nutPerItemRow');
-    if(perItemRow){
-      perItemRow.style.display='block';
-      perItemRow.innerHTML='<button id="nutPerItemBtn" onclick="nutSetPerItem('+e.perItemGrams+',\''+e.perItemName+'\')" style="background:var(--purple);border:1px solid var(--purple);color:#fff;border-radius:20px;padding:5px 14px;font-size:0.68rem;font-weight:700;cursor:pointer;letter-spacing:0.5px;">Count '+e.perItemName+'s ('+e.perItemGrams+food.unit+' each)</button>';
+    var perItemRowE=document.getElementById('nutPerItemRow');
+    if(perItemRowE){
+      perItemRowE.style.display='block';
+      perItemRowE.innerHTML='<button id="nutPerItemBtn" onclick="nutSetPerItem('+e.perItemGrams+',\''+e.perItemName+'\')" style="background:var(--purple);border:1px solid var(--purple);color:#fff;border-radius:20px;padding:5px 14px;font-size:0.68rem;font-weight:700;cursor:pointer;letter-spacing:0.5px;">Count '+e.perItemName+'s ('+e.perItemGrams+food.unit+' each)</button>';
     }
     document.querySelectorAll('.nutUnitBtn').forEach(function(btn){
       btn.style.background='var(--card2)';btn.style.color='var(--muted)';btn.style.borderColor='var(--border2)';
@@ -6899,16 +6940,16 @@ function nutEditEntry(idx){
     _nutLastTouched='amt';
   } else {
     _nutPerItemGrams=0;_nutPerItemName='';
-    var perItemRow=document.getElementById('nutPerItemRow');
-    if(perItemRow){
+    var perItemRowE=document.getElementById('nutPerItemRow');
+    if(perItemRowE){
       var descMatch=food.servingDesc&&food.servingDesc.match(/^(?:about\s+)?(\d+)\s+([a-zA-Z]+)/i);
       if(descMatch&&food.serving>0){
         var piCount=parseInt(descMatch[1]);var piName=descMatch[2].toLowerCase();
         var piGrams=Math.round((food.serving/piCount)*100)/100;
-        perItemRow.style.display='block';
-        perItemRow.innerHTML='<button id="nutPerItemBtn" onclick="nutSetPerItem('+piGrams+',\''+piName+'\')" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:20px;padding:5px 14px;font-size:0.68rem;font-weight:700;cursor:pointer;letter-spacing:0.5px;">Count '+piName+'s ('+piGrams+food.unit+' each)</button>';
+        perItemRowE.style.display='block';
+        perItemRowE.innerHTML='<button id="nutPerItemBtn" onclick="nutSetPerItem('+piGrams+',\''+piName+'\')" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:20px;padding:5px 14px;font-size:0.68rem;font-weight:700;cursor:pointer;letter-spacing:0.5px;">Count '+piName+'s ('+piGrams+food.unit+' each)</button>';
       } else {
-        perItemRow.style.display='none';perItemRow.innerHTML='';
+        perItemRowE.style.display='none';perItemRowE.innerHTML='';
       }
     }
     if(amtEl)amtEl.value=Math.round(currentServings*food.serving*10)/10;
