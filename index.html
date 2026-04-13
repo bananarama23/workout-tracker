@@ -48,17 +48,18 @@ html{height:100%;min-height:calc(100% + env(safe-area-inset-top));overflow:hidde
 body{height:100dvh;overflow:hidden;width:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,-apple-system,sans-serif;font-size:16px;-webkit-font-smoothing:antialiased;}
 input,textarea,select,button{font-family:inherit;}
 button{cursor:pointer;border:none;background:none;color:inherit;}
+button:active{opacity:0.82;}
 
 /* PAGES */
 .page{position:fixed;top:0;left:0;right:0;bottom:calc(var(--nav-h) + var(--safe-b));overflow-y:scroll;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;overscroll-behavior:contain;}
-.page.active{display:flex;}
+.page.active{display:flex;animation:fadeIn 0.12s ease both;}
 .page-body{padding-bottom:32px;}
 
 /* NAV */
 .nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + var(--safe-b));background:rgba(7,9,12,0.96);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--border);display:flex;align-items:flex-start;padding-top:12px;padding-bottom:var(--safe-b);z-index:900;box-sizing:border-box;}
 .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 2px;transition:opacity 0.15s;}
 .nav-btn:active{opacity:0.6;}
-.ni{font-size:19px;color:var(--muted);transition:color 0.2s;}
+.ni{color:var(--muted);transition:color 0.2s;display:flex;align-items:center;justify-content:center;}
 .nl{font-size:8px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--muted);transition:color 0.2s;}
 .nav-btn.active .ni,.nav-btn.active .nl{color:var(--accent);}
 
@@ -80,6 +81,10 @@ button{cursor:pointer;border:none;background:none;color:inherit;}
 .sp-off{background:var(--red-dim);color:var(--red);}
 .sp-off .sp-dot{background:var(--red);}
 @keyframes blink{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(0.7);}}
+@keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.sheet-anim{animation:slideUp 0.22s cubic-bezier(0.32,0.72,0,1) both;}
+.overlay-anim{animation:fadeIn 0.18s ease both;}
 
 /* CARDS */
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin:0 16px 10px;}
@@ -306,7 +311,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
 .skip-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:2000;align-items:flex-end;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
 .skip-overlay.show{display:flex;}
-.skip-sheet{background:var(--card);border-radius:22px 22px 0 0;padding:24px 20px calc(24px + var(--safe-b));width:100%;border-top:1px solid var(--border);}
+.skip-sheet{background:var(--card);border-radius:22px 22px 0 0;padding:24px 20px calc(24px + var(--safe-b));width:100%;border-top:1px solid var(--border);animation:slideUp 0.22s cubic-bezier(0.32,0.72,0,1) both;}
 .skip-sheet p{text-align:center;font-size:0.92rem;margin-bottom:16px;color:var(--text);}
 .skip-btns{display:flex;gap:10px;}
 .skip-yes{flex:1;padding:14px;background:var(--red);color:#fff;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;}
@@ -514,7 +519,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
 /* OVERLAYS */
 .hist-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:3000;align-items:flex-end;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
-.hist-sheet{background:var(--card);border-radius:22px 22px 0 0;padding:20px 20px calc(20px + var(--safe-b));width:100%;max-height:80vh;overflow-y:auto;border-top:1px solid var(--border);}
+.hist-sheet{background:var(--card);border-radius:22px 22px 0 0;padding:20px 20px calc(20px + var(--safe-b));width:100%;max-height:80vh;overflow-y:auto;border-top:1px solid var(--border);animation:slideUp 0.22s cubic-bezier(0.32,0.72,0,1) both;}
 .hist-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
 .hist-title{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--accent);}
 .hist-close{background:var(--card2);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;font-size:1rem;color:var(--muted);display:flex;align-items:center;justify-content:center;}
@@ -606,10 +611,10 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <p class="ph-sub">Choose your session</p>
   </div>
   <div class="page-body">
-    <div id="planTodayBanner" style="display:none;margin:12px 16px 0;padding:12px 16px;background:var(--blue-dim);border-radius:var(--r-sm);font-size:0.82rem;color:var(--blue);font-weight:600;cursor:pointer;border:1px solid rgba(59,131,246,0.2);" onclick="navTo('plan')">&#128197; <span id="planTodayText">Today: Home</span> &nbsp;&#8250; Edit plan</div>
+    <div id="planTodayBanner" style="display:none;margin:12px 16px 0;padding:12px 16px;background:var(--blue-dim);border-radius:var(--r-sm);font-size:0.82rem;color:var(--blue);font-weight:600;cursor:pointer;border:1px solid rgba(59,131,246,0.2);" onclick="navTo('plan')"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="13" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="7" y1="4" x2="7" y2="8"/><line x1="13" y1="4" x2="13" y2="8"/><line x1="6" y1="12" x2="9" y2="12"/><line x1="6" y1="14.5" x2="11" y2="14.5"/></svg> <span id="planTodayText">Today: Home</span> &nbsp;&#8250; Edit plan</div>
     <div class="wt-grid">
       <div class="wt-card home-c" id="homeWtCard" onclick="showWorkoutPreview('home')">
-        <span class="wt-icon">&#127968;</span>
+        <span class="wt-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L10 3l7 6.5"/><path d="M5 8v8h4v-4h2v4h4V8"/></svg></span>
         <div class="wt-title">HOME</div>
         <div class="wt-sub">Pull-up bar required</div>
         <div id="homeLoadedBadge" class="wt-loaded hidden">Workout loaded ✓</div>
@@ -651,7 +656,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <div class="pre-title">HOW DO YOU FEEL?</div>
     <div class="pre-sub">Rate your body before starting</div>
     <div class="bf-list">
-      <button class="bf-btn bf-5" onclick="setBF(5,'Great')"><span>5 &nbsp; Feeling great</span><span class="bf-score">&#128170;</span></button>
+      <button class="bf-btn bf-5" onclick="setBF(5,'Great')"><span>5 &nbsp; Feeling great</span><span class="bf-score"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="9" width="2.5" height="2"/><rect x="15.5" y="9" width="2.5" height="2"/><rect x="4.5" y="7" width="2" height="6" rx="1"/><rect x="13.5" y="7" width="2" height="6" rx="1"/><line x1="6.5" y1="10" x2="13.5" y2="10"/></svg></span></button>
       <button class="bf-btn bf-4" onclick="setBF(4,'Good')"><span>4 &nbsp; Good</span><span class="bf-score">&#128512;</span></button>
       <button class="bf-btn bf-3" onclick="setBF(3,'OK')"><span>3 &nbsp; OK, let's go</span><span class="bf-score">&#128528;</span></button>
       <button class="bf-btn bf-2" onclick="setBF(2,'Tired')"><span>2 &nbsp; Tired</span><span class="bf-score">&#128564;</span></button>
@@ -1228,7 +1233,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     </div>
 
     <!-- Macro drill-down overlay -->
-    <div id="nutMacroChartOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:400;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div id="nutMacroChartOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:400;overflow-y:auto;-webkit-overflow-scrolling:touch;" class="overlay-anim">
       <div style="background:var(--bg);border-radius:var(--r-lg);margin:48px 12px calc(var(--nav-h) + var(--safe-b) + 24px);padding:20px;box-sizing:border-box;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
           <div id="nutMacroChartTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;"></div>
@@ -1253,7 +1258,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 </div>
 
 <!-- NUTRITION: Add food to meal overlay -->
-<div id="nutAddOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+<div id="nutAddOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch;" class="overlay-anim">
   <div style="background:var(--bg);border-radius:var(--r-lg);margin:60px 12px 24px;padding:20px;box-sizing:border-box;min-height:300px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutAddOverlayTitle">ADD TO BREAKFAST</div>
@@ -1301,7 +1306,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 </style>
 
 <!-- NUTRITION: Create / edit food overlay -->
-<div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;">
+<div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;" class="overlay-anim">
   <!-- Sticky header - always visible -->
   <div style="position:absolute;top:0;left:0;right:0;background:var(--bg);border-radius:var(--r-lg) var(--r-lg) 0 0;margin:40px 12px 0;padding:16px 20px 12px;z-index:1;border-bottom:1px solid var(--border);box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -1357,7 +1362,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 </div>
 
 <!-- NUTRITION: Serving size picker -->
-<div id="nutServingOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+<div id="nutServingOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;overflow-y:auto;-webkit-overflow-scrolling:touch;" class="overlay-anim">
   <div style="background:var(--bg);border-radius:var(--r-lg);margin:60px 12px calc(var(--nav-h) + var(--safe-b) + 40px);padding:20px;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;" id="nutServingFoodName">Food</div>
@@ -1443,7 +1448,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         </div>
       </div>
       <div id="wgAllDone" style="display:none;font-size:0.72rem;font-weight:700;color:var(--green);letter-spacing:0.5px;">WEEK MET ✓</div>
-      <button onclick="goalsOpen()" style="background:none;border:none;color:var(--muted);font-size:1.1rem;padding:4px;cursor:pointer;flex-shrink:0;" title="Edit goals">⚙️</button>
+      <button onclick="goalsOpen()" style="background:none;border:none;color:var(--muted);font-size:1.1rem;padding:4px;cursor:pointer;flex-shrink:0;" title="Edit goals"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="2.5"/><path d="M9 2v1.5M9 14.5V16M2 9h1.5M14.5 9H16M4.1 4.1l1 1M12.9 12.9l1 1M12.9 4.1l1-1M4.1 12.9l1-1"/></svg></button>
     </div>
     <div class="plan-grid" id="planGrid">
       <div style="text-align:center;color:var(--muted);padding:40px 0;">Loading plan...</div>
@@ -1460,12 +1465,12 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
 <!-- BOTTOM NAV -->
 <nav class="nav">
-  <button class="nav-btn active" id="nav-home" onclick="navTo('home')"><span class="ni">&#127968;</span><span class="nl">Home</span></button>
-  <button class="nav-btn" id="nav-workout" onclick="navTo('workout')"><span class="ni">&#128170;</span><span class="nl">Workout</span></button>
-  <button class="nav-btn" id="nav-nutrition" onclick="navTo('nutrition')"><span class="ni">🥗</span><span class="nl">Nutrition</span></button>
-  <button class="nav-btn" id="nav-progress" onclick="navTo('progress')"><span class="ni">&#128200;</span><span class="nl">Progress</span></button>
-  <button class="nav-btn" id="nav-budget" onclick="navTo('budget')"><span class="ni">&#128181;</span><span class="nl">Budget</span></button>
-  <button class="nav-btn" id="nav-plan" onclick="navTo('plan')"><span class="ni">&#128197;</span><span class="nl">Plan</span></button>
+  <button class="nav-btn active" id="nav-home" onclick="navTo('home')"><span class="ni"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L10 3l7 6.5"/><path d="M5 8v8h4v-4h2v4h4V8"/></svg></span><span class="nl">Home</span></button>
+  <button class="nav-btn" id="nav-workout" onclick="navTo('workout')"><span class="ni"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2" y="9" width="2.5" height="2"/><rect x="15.5" y="9" width="2.5" height="2"/><rect x="4.5" y="7" width="2" height="6" rx="1"/><rect x="13.5" y="7" width="2" height="6" rx="1"/><line x1="6.5" y1="10" x2="13.5" y2="10"/></svg></span><span class="nl">Workout</span></button>
+  <button class="nav-btn" id="nav-nutrition" onclick="navTo('nutrition')"><span class="ni"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3c0 0-5 3.5-5 8a5 5 0 0010 0c0-4.5-5-8-5-8z"/><line x1="10" y1="8" x2="10" y2="14"/></svg></span><span class="nl">Nutrition</span></button>
+  <button class="nav-btn" id="nav-progress" onclick="navTo('progress')"><span class="ni"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,14 7,9 11,11 17,5"/><polyline points="14,5 17,5 17,8"/></svg></span><span class="nl">Progress</span></button>
+  <button class="nav-btn" id="nav-budget" onclick="navTo('budget')"><span class="ni"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="16" height="11" rx="2"/><line x1="2" y1="9" x2="18" y2="9"/><line x1="6" y1="13" x2="8" y2="13"/></svg></span><span class="nl">Budget</span></button>
+  <button class="nav-btn" id="nav-plan" onclick="navTo('plan')"><span class="ni"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="13" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="7" y1="4" x2="7" y2="8"/><line x1="13" y1="4" x2="13" y2="8"/><line x1="6" y1="12" x2="9" y2="12"/><line x1="6" y1="14.5" x2="11" y2="14.5"/></svg></span><span class="nl">Plan</span></button>
 </nav>
 
 <!-- OVERLAYS -->
@@ -1886,14 +1891,14 @@ function updateMilestone(sessions){
       mt.textContent=shortName(c.name)+' — '+c.sets.join('/');
     }
     ms.textContent='Up from '+c.prev+' \u2192 '+c.total+' \uD83C\uDF89';
-    if(mi)mi.textContent='🏆';
+    if(mi)mi.textContent='✦';
   } else {
     // Fall back to pull-up goal progress
     var best=0;
     (exHistory['PULL-UPS']||[]).forEach(function(h){if(h.total>best)best=h.total;});
     var label2=document.querySelector('#milestoneCard .ms-label');
     if(label2)label2.textContent='Next Milestone';
-    if(mi)mi.textContent='🎯';
+    if(mi)mi.textContent='→';
     if(best===0){mt.textContent='Complete a home workout';ms.textContent='Target: 4/4/4/4 (16 total reps)';}
     else if(best<16){mt.textContent=(16-best)+' rep'+(16-best>1?'s':'')+' to 4/4/4/4';ms.textContent='Pull-up best: '+best+' reps per session';}
     else{mt.textContent='Pull-ups 4/4/4/4 done!';ms.textContent='Keep the streak going';}
@@ -2282,7 +2287,7 @@ function renderPreview(){
         html+='<div style="font-size:0.7rem;color:var(--orange);margin-top:6px;font-weight:600;">! '+ex.tweak+'</div>';
       }
       if(ex.goal){
-        html+='<div style="font-size:0.7rem;color:var(--accent);background:var(--accent-dim);border-radius:var(--r-sm);padding:6px 10px;margin-top:6px;font-weight:600;">🎯 '+ex.goal+'</div>';
+        html+='<div style="font-size:0.7rem;color:var(--accent);background:var(--accent-dim);border-radius:var(--r-sm);padding:6px 10px;margin-top:6px;font-weight:600;">✦ '+ex.goal+'</div>';
       }
       html+='</div>'; // preview-ex-body
     }
@@ -3205,11 +3210,11 @@ function finishWorkout(){
     rows+='<div class="sum-row"><div style="flex:1"><div class="sum-name">'+ex.name+'</div>';
     if(ex.isPlank){
       rows+='<div style="display:flex;gap:6px;margin-top:5px;">';
-      ['LEFT','RIGHT'].forEach(function(side,si){rows+='<div style="flex:1;text-align:center"><div style="font-size:0.58rem;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;">'+side+'</div><input type="number" inputmode="numeric" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.5rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text);padding:6px;" value="'+(log.sets[si].time||'')+'" oninput="logs['+ei+'].sets['+si+'].time=this.value"></div>';});
+      ['LEFT','RIGHT'].forEach(function(side,si){rows+='<div style="flex:1;text-align:center"><div style="font-size:0.58rem;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;">'+side+'</div><input type="number" inputmode="numeric" style="width:100%;font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text);padding:6px;" value="'+(log.sets[si].time||'')+'" oninput="logs['+ei+'].sets['+si+'].time=this.value"></div>';});
       rows+='</div>';
     } else {
       rows+='<div style="display:flex;gap:6px;margin-top:5px;">';
-      log.sets.forEach(function(s,si){rows+='<div style="flex:1;text-align:center"><div style="font-size:0.58rem;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;">S'+(si+1)+'</div><input type="number" inputmode="numeric" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.5rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text);padding:6px;" value="'+(s.reps||'')+'" oninput="logs['+ei+'].sets['+si+'].reps=this.value"></div>';});
+      log.sets.forEach(function(s,si){rows+='<div style="flex:1;text-align:center"><div style="font-size:0.58rem;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;">S'+(si+1)+'</div><input type="number" inputmode="numeric" style="width:100%;font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text);padding:6px;" value="'+(s.reps||'')+'" oninput="logs['+ei+'].sets['+si+'].reps=this.value"></div>';});
       rows+='</div>';
     }
     if(log.notes)rows+='<div class="sum-notes">'+log.notes+'</div>';
@@ -3500,11 +3505,11 @@ function loadEditSessionFromData(date,sessions){
     html+='<div style="font-size:0.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:7px;">'+ex.name+'</div>';
     if(ex.isPlank==='yes'){
       html+='<div style="display:flex;gap:8px;">';
-      ['LEFT (sec)','RIGHT (sec)'].forEach(function(lbl,si){html+='<div style="flex:1;text-align:center"><div style="font-size:0.58rem;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;">'+lbl+'</div><input type="number" inputmode="numeric" data-ei="'+ei+'" data-si="'+si+'" data-plank="1" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.6rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--blue);padding:6px;" value="'+(ex.sets[si]||'')+'"></div>';});
+      ['LEFT (sec)','RIGHT (sec)'].forEach(function(lbl,si){html+='<div style="flex:1;text-align:center"><div style="font-size:0.58rem;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;">'+lbl+'</div><input type="number" inputmode="numeric" data-ei="'+ei+'" data-si="'+si+'" data-plank="1" style="width:100%;font-family:\'Bebas Neue\',sans-serif;font-size:1.6rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--blue);padding:6px;" value="'+(ex.sets[si]||'')+'"></div>';});
       html+='</div>';
     } else {
       html+='<div style="display:flex;gap:6px;">';
-      (ex.sets||[]).forEach(function(v,si){html+='<div style="flex:1;text-align:center"><div style="font-size:0.58rem;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;">S'+(si+1)+'</div><input type="number" inputmode="numeric" data-ei="'+ei+'" data-si="'+si+'" style="width:100%;font-family:Bebas Neue,sans-serif;font-size:1.6rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text);padding:6px;" value="'+(v||'')+'"></div>';});
+      (ex.sets||[]).forEach(function(v,si){html+='<div style="flex:1;text-align:center"><div style="font-size:0.58rem;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;">S'+(si+1)+'</div><input type="number" inputmode="numeric" data-ei="'+ei+'" data-si="'+si+'" style="width:100%;font-family:\'Bebas Neue\',sans-serif;font-size:1.6rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text);padding:6px;" value="'+(v||'')+'"></div>';});
       html+='</div>';
     }
     var feel=ex.feel||'';
@@ -3562,14 +3567,14 @@ function openLastSession(){
     if(notes)html+='<div style="font-size:0.85rem;color:var(--text2);margin-bottom:8px;">'+notes+'</div>';
     html+='<div style="font-size:0.78rem;color:var(--muted);">'+((ex.result)||'HIIT session')+'</div>';
     html+='</div>';
-    html+='<div style="margin-top:14px;"><button onclick="closeHistory();navTo(\'log\');switchLogTab(\'hiit\')" style="width:100%;padding:13px;background:var(--blue);color:#fff;border:none;border-radius:12px;font-family:Bebas Neue,sans-serif;font-size:0.95rem;letter-spacing:1px;font-weight:900;cursor:pointer;">LOG ANOTHER HIIT</button></div>';
+    html+='<div style="margin-top:14px;"><button onclick="closeHistory();navTo(\'log\');switchLogTab(\'hiit\')" style="width:100%;padding:13px;background:var(--blue);color:#fff;border:none;border-radius:12px;font-family:\'Bebas Neue\',sans-serif;font-size:0.95rem;letter-spacing:1px;font-weight:900;cursor:pointer;">LOG ANOTHER HIIT</button></div>';
   } else {
     (found.exercises||[]).forEach(function(ex){
       var fc=ex.feel==='Medium'?'sf-m':ex.feel==='Medium-hard'?'sf-mh':'sf-h';
       var rs=ex.isPlank==='yes'?'L:'+(ex.sets[0]||'?')+'s / R:'+(ex.sets[1]||'?')+'s':(ex.sets||[]).join(' / ');
       html+='<div class="sum-row"><div><div class="sum-name">'+ex.name+'</div><div class="sum-result">'+rs+'</div>'+(ex.notes?'<div class="sum-notes">'+ex.notes+'</div>':'')+'</div><span class="sum-feel '+fc+'">'+(ex.feel||'-')+'</span></div>';
     });
-    html+='<div style="margin-top:14px;"><button onclick="goEditSession()" style="width:100%;padding:13px;background:var(--accent);color:#000;border:none;border-radius:12px;font-family:Bebas Neue,sans-serif;font-size:0.95rem;letter-spacing:1px;font-weight:900;cursor:pointer;">EDIT THIS SESSION</button></div>';
+    html+='<div style="margin-top:14px;"><button onclick="goEditSession()" style="width:100%;padding:13px;background:var(--accent);color:#000;border:none;border-radius:12px;font-family:\'Bebas Neue\',sans-serif;font-size:0.95rem;letter-spacing:1px;font-weight:900;cursor:pointer;">EDIT THIS SESSION</button></div>';
   }
   document.getElementById('historyContent').innerHTML=html;
   document.getElementById('historyOverlay').style.display='flex';
@@ -5283,7 +5288,9 @@ function renderShareView(sessions){
     html+='<div style="font-size:0.72rem;color:var(--muted);">total reps per session</div>';
     html+='</div>';
     html+='<div style="text-align:right;">';
-    html+='<div style="font-size:1.8rem;">'+(puBest>=target?'🏆':puBest>=12?'💪':puBest>=8?'📈':'🎯')+'</div>';
+    var puIcon=puBest>=target?'✦':puBest>=12?'▲':puBest>=8?'↑':'→';
+    var puIconColor=puBest>=target?'var(--accent)':puBest>=12?'var(--green)':puBest>=8?'var(--yellow)':'var(--muted)';
+    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.6rem;color:'+puIconColor+';">'+puIcon+'</div>';
     html+='</div></div>';
     // Progress bar
     html+='<div style="height:10px;background:rgba(200,255,0,0.1);border-radius:5px;overflow:hidden;">';
@@ -5973,7 +5980,7 @@ function nutRenderDay(){
     var h='<div class="prog-section" style="margin-bottom:8px;">';
     h+='<div class="prog-section-hdr">';
     h+='<div class="prog-section-lbl">'+meal+(mc>0?' \u2014 '+mc+' kcal':'')+'</div>';
-    h+='<button onclick="nutOpenAdd(\''+meal+'\')" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:4px 12px;font-family:Bebas Neue,sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">+ ADD</button>';
+    h+='<button onclick="nutOpenAdd(\''+meal+'\')" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:4px 12px;font-family:\'Bebas Neue\',sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">+ ADD</button>';
     h+='</div><div class="prog-card">';
     if(me.length===0){h+='<div style="padding:13px 16px;font-size:0.8rem;color:var(--muted);">Nothing logged yet</div>';}
     me.forEach(function(e){
@@ -5987,7 +5994,7 @@ function nutRenderDay(){
       var dotCol=_nutLastFetch>0?(synced?'var(--green)':'var(--yellow)'):'transparent';
       h+='<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;padding-left:8px;">';
       h+='<span title="'+(synced?'Synced':'Pending sync')+'" style="width:5px;height:5px;border-radius:50%;background:'+dotCol+';flex-shrink:0;"></span>';
-      h+='<span style="font-family:Bebas Neue,sans-serif;font-size:1.05rem;">'+Math.round(e.calories||0)+'</span>';
+      h+='<span style="font-family:\'Bebas Neue\',sans-serif;font-size:1.05rem;">'+Math.round(e.calories||0)+'</span>';
       h+='<button onclick="event.stopPropagation();nutMoveMeal('+gIdx+',\''+meal+'\')" style="background:var(--card2);border:1px solid var(--border);color:var(--muted);font-size:0.55rem;font-weight:700;letter-spacing:0.5px;border-radius:6px;padding:3px 6px;cursor:pointer;line-height:1.4;">MOVE</button>';
       h+='<button onclick="event.stopPropagation();nutDelEntry('+gIdx+')" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;line-height:1;">\u00d7</button>';
       h+='</div></div>';
@@ -6961,7 +6968,7 @@ function nutServingPreview(){
   ];
   box.innerHTML=items.map(function(it){
     return '<div style="font-size:0.7rem;text-align:center;min-width:48px;">'+
-      '<div style="font-family:Bebas Neue,sans-serif;font-size:1rem;line-height:1;">'+it.v+'</div>'+
+      '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;line-height:1;">'+it.v+'</div>'+
       '<div style="color:var(--muted);font-size:0.58rem;margin-top:1px;">'+it.l+'</div></div>';
   }).join('');
 }
@@ -7528,8 +7535,8 @@ function loadGoals(){
 </script>
 
 <!-- GOALS SETTINGS OVERLAY -->
-<div id="goalsOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;align-items:flex-end;justify-content:center;">
-  <div style="background:var(--card);border-radius:var(--r-lg) var(--r-lg) 0 0;padding:24px 20px 40px;width:100%;max-width:480px;border-top:1px solid var(--border2);">
+<div id="goalsOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;align-items:flex-end;justify-content:center;" class="overlay-anim">
+  <div style="background:var(--card);border-radius:var(--r-lg) var(--r-lg) 0 0;padding:24px 20px 40px;width:100%;max-width:480px;border-top:1px solid var(--border2);animation:slideUp 0.22s cubic-bezier(0.32,0.72,0,1) both;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;">WEEKLY GOALS</div>
       <button onclick="goalsClose()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
