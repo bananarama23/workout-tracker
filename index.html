@@ -1289,7 +1289,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
 <!-- NUTRITION: Create / edit food overlay -->
 <div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-  <div style="background:var(--bg);border-radius:var(--r-lg);margin:40px 12px 24px;padding:20px;box-sizing:border-box;">
+  <div style="background:var(--bg);border-radius:var(--r-lg);margin:40px 12px calc(var(--nav-h) + var(--safe-b) + 40px);padding:20px;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutFoodFormTitle">ADD FOOD</div>
       <div style="display:flex;gap:8px;align-items:center;">
@@ -1335,7 +1335,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
 <!-- NUTRITION: Serving size picker -->
 <div id="nutServingOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-  <div style="background:var(--bg);border-radius:var(--r-lg);margin:60px 12px 24px;padding:20px;box-sizing:border-box;">
+  <div style="background:var(--bg);border-radius:var(--r-lg);margin:60px 12px calc(var(--nav-h) + var(--safe-b) + 40px);padding:20px;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;" id="nutServingFoodName">Food</div>
       <div style="display:flex;gap:6px;align-items:center;">
@@ -6472,10 +6472,10 @@ function nutPickFood(idx){
   // Show per-item button if servingDesc contains a count (e.g. "14 crisps" → per-crisp option)
   var perItemRow=document.getElementById('nutPerItemRow');
   if(perItemRow){
-    var descMatch=f.servingDesc&&f.servingDesc.match(/^(\d+)\s+(.+)$/);
+    var descMatch=f.servingDesc&&f.servingDesc.match(/^(?:about\s+)?(\d+)\s+([a-zA-Z]+)/i);
     if(descMatch&&f.serving>0){
       var itemCount=parseInt(descMatch[1]);
-      var itemName=descMatch[2];
+      var itemName=descMatch[2].toLowerCase();
       var gramsPerItem=Math.round((f.serving/itemCount)*100)/100;
       perItemRow.style.display='block';
       perItemRow.innerHTML='<button onclick="nutSetPerItem('+gramsPerItem+',\''+itemName+'\')" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:20px;padding:5px 14px;font-size:0.68rem;font-weight:700;cursor:pointer;letter-spacing:0.5px;">Per '+itemName+' ('+gramsPerItem+f.unit+')</button>';
@@ -6855,10 +6855,10 @@ function progAIRunFeedback(geminiKey,btn,card,result){
     '\nWEIGHT: '+wtTrend+'\n'+
     '\nLAST 28 DAYS:\n'+
     'Logged: '+loggedDays.length+' days ('+completeDays.length+' complete). Normal: '+normalDays.length+'. Cheat/travel: '+cheatDays.length+'.\n'+
-    'Normal days — avg eaten: '+avgKcalNormal+'kcal, avg effective budget: '+avgBudgetNormal+'kcal, avg surplus: '+(avgSurplusNormal>=0?'+':'')+avgSurplusNormal+'kcal\n'+
+    'Normal days — avg eaten: '+avgKcalNormal+'kcal, avg effective budget: '+avgBudgetNormal+'kcal, avg surplus/deficit: '+(avgSurplusNormal>=0?'+':'')+avgSurplusNormal+'kcal (negative=under budget=deficit=good for loss)\n'+
     (cheatDays.length?'Cheat days — avg eaten: '+avgKcalCheat+'kcal, avg effective budget: '+avgBudgetCheat+'kcal\n':'')+
     'Avg protein: '+avgProt+'g/day\n'+
-    '\nDAILY LOG (date,eaten,budget,surplus,protein,flags):\n'+
+    '\nDAILY LOG (date,eaten,budget,surplus[+=over -=under],protein,flags):\n'+
     loggedDays.slice(-14).map(function(d){
       return d.date+','+d.kcal+','+(d.activeCals!==null?d.effectiveBudget+'(AW'+d.activeCals+')':d.effectiveBudget)+','+(d.surplus>=0?'+':'')+d.surplus+','+d.prot+'g'+(d.isCheat?',CHEAT':'')+(d.isDone?',DONE':'');
     }).join('\n')+
