@@ -550,12 +550,12 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div class="week-stat" onclick="showHistory('strength')">
         <div class="ws-num c-muted" id="wkStrength">-</div>
         <div class="ws-lbl">Strength</div>
-        <div class="ws-sub">of 2</div>
+        <div class="ws-sub" id="wkStrSub">of 2</div>
       </div>
       <div class="week-stat" onclick="showHistory('hiit')">
         <div class="ws-num c-muted" id="wkHIIT">-</div>
         <div class="ws-lbl">HIIT</div>
-        <div class="ws-sub">of 2</div>
+        <div class="ws-sub" id="wkHiitSub">of 2</div>
       </div>
       <div class="week-stat" onclick="navTo('nutrition')">
         <div class="ws-num c-muted" id="wkNutStreak">-</div>
@@ -1750,8 +1750,8 @@ function renderHomeData(sessions){
   if(se){se.textContent=wkStr;se.className='ws-num '+(wkStr>=_goals.strGoal?'c-green':'c-red');}
   var he=document.getElementById('wkHIIT');
   if(he){he.textContent=wkHIIT;he.className='ws-num '+(wkHIIT>=_goals.hiitSessions?'c-green':wkHIIT>=1?'c-yellow':'c-red');}
-  var strSub=document.querySelector('#wkStrength ~ .ws-sub');if(strSub)strSub.textContent='of '+_goals.strGoal;
-  var hiitSub=document.querySelector('#wkHIIT ~ .ws-sub');if(hiitSub)hiitSub.textContent='of '+_goals.hiitSessions;
+  var strSub=document.getElementById('wkStrSub');if(strSub)strSub.textContent='of '+_goals.strGoal;
+  var hiitSub=document.getElementById('wkHiitSub');if(hiitSub)hiitSub.textContent='of '+_goals.hiitSessions;
   var sk=document.getElementById('wkStreak');if(sk)sk.textContent=calcStreak(sessions);
 
   // Nutrition streak — days logged this week (from localStorage cache)
@@ -3636,7 +3636,6 @@ function getWeekDates(offset){
 function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
 function initPlanPage(){
-  if(!_goalsLoaded){_goalsLoaded=true;loadGoals();}
   _planWeekOffset=0;
   document.getElementById('planTabThis').classList.add('active');
   document.getElementById('planTabNext').classList.remove('active');
@@ -5239,6 +5238,8 @@ if(window.location.search.indexOf('share')>=0){
 } else {
   navTo('home');
   setTimeout(loadHomeData,200);
+  // Load goals from sheet (uses localStorage cache immediately, then updates from sheet)
+  _goalsLoaded=true;loadGoals();
   // Fetch seq defaults from sheet so custom sequences work on any browser
   setTimeout(fetchSeqDefaultsFromSheet,3000);
 }
@@ -7378,8 +7379,7 @@ function goalsSave(){
   renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
   updateHiitWeekSummary();
   // Update home week strip subtitles
-  var strSub=document.querySelector('#wkStrength+.ws-lbl+.ws-sub,#wkStrength~.ws-sub');
-  // Simpler: just re-render home stats
+  // Re-render home stats
   var se=document.getElementById('wkStrength');
   // Sync to sheet
   var msg=document.getElementById('goalsSaveMsg');
