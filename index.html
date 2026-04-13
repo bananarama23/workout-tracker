@@ -479,7 +479,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 .pt-home{background:var(--accent-dim);color:var(--accent);}
 .pt-hotel{background:var(--orange-dim);color:var(--orange);}
 .pt-hiit{background:var(--blue-dim);color:var(--blue);}
-.pt-hiit8{background:var(--purple-dim);color:var(--purple);}
+
 .pt-rest{background:var(--card2);color:var(--muted);}
 .pt-travel{background:var(--purple-dim);color:var(--purple);}
 .plan-msg{text-align:center;padding:8px;font-size:0.78rem;font-weight:600;min-height:20px;color:var(--muted);}
@@ -730,7 +730,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <div class="hiit-preset" id="preset20" onclick="setHIITPreset(20,8)">
             <div class="hp-dur" id="hp20dur">20</div>
             <div class="hp-eff" id="hp20eff">EFFORT 8/10</div>
-            <div class="hp-badge hpb-default" id="hp20badge">HIIT 8</div>
+            <div class="hp-badge hpb-default" id="hp20badge">HIIT</div>
           </div>
         </div>
       </div>
@@ -1443,6 +1443,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         </div>
       </div>
       <div id="wgAllDone" style="display:none;font-size:0.72rem;font-weight:700;color:var(--green);letter-spacing:0.5px;">WEEK MET ✓</div>
+      <button onclick="goalsOpen()" style="background:none;border:none;color:var(--muted);font-size:1.1rem;padding:4px;cursor:pointer;flex-shrink:0;" title="Edit goals">⚙️</button>
     </div>
     <div class="plan-grid" id="planGrid">
       <div style="text-align:center;color:var(--muted);padding:40px 0;">Loading plan...</div>
@@ -1493,6 +1494,12 @@ var CLOUD_URL='https://script.google.com/macros/s/AKfycbyWZ1VoxhQ5OPgnWRIpnYgDw9
 var HIST_KEY='wt_hist_v3';
 var CACHE_KEY='wt_sheet_cache';
 var PLAN_CACHE_KEY='wt_plan_cache';
+var GOALS_CACHE_KEY='wt_goals_v1';
+var _goals={strGoal:2,hiitSessions:2,effortGoal:13,durGoal:28};
+var _goalsLoaded=false;
+function loadGoalsCache(){try{var r=localStorage.getItem(GOALS_CACHE_KEY);if(!r)return null;return JSON.parse(r);}catch(e){return null;}}
+function saveGoalsCache(g){try{localStorage.setItem(GOALS_CACHE_KEY,JSON.stringify(g));}catch(e){}}
+function applyGoals(g){if(!g)return;_goals.strGoal=parseInt(g.strGoal)||2;_goals.hiitSessions=parseInt(g.hiitSessions)||2;_goals.effortGoal=parseInt(g.effortGoal)||13;_goals.durGoal=parseInt(g.durGoal)||28;}
 var CACHE_MAX_AGE=2*60*60*1000;
 function savePlanCache(plan){try{localStorage.setItem(PLAN_CACHE_KEY,JSON.stringify({plan:plan,ts:Date.now()}));}catch(e){}}
 function loadPlanCache(){try{var r=localStorage.getItem(PLAN_CACHE_KEY);if(!r)return null;var o=JSON.parse(r);return(o&&o.plan)?o:null;}catch(e){return null;}}
@@ -1740,9 +1747,11 @@ function renderHomeData(sessions){
     }
   });
   var se=document.getElementById('wkStrength');
-  if(se){se.textContent=wkStr;se.className='ws-num '+(wkStr>=2?'c-green':'c-red');}
+  if(se){se.textContent=wkStr;se.className='ws-num '+(wkStr>=_goals.strGoal?'c-green':'c-red');}
   var he=document.getElementById('wkHIIT');
-  if(he){he.textContent=wkHIIT;he.className='ws-num '+(wkHIIT>=2?'c-green':wkHIIT>=1?'c-yellow':'c-red');}
+  if(he){he.textContent=wkHIIT;he.className='ws-num '+(wkHIIT>=_goals.hiitSessions?'c-green':wkHIIT>=1?'c-yellow':'c-red');}
+  var strSub=document.querySelector('#wkStrength ~ .ws-sub');if(strSub)strSub.textContent='of '+_goals.strGoal;
+  var hiitSub=document.querySelector('#wkHIIT ~ .ws-sub');if(hiitSub)hiitSub.textContent='of '+_goals.hiitSessions;
   var sk=document.getElementById('wkStreak');if(sk)sk.textContent=calcStreak(sessions);
 
   // Nutrition streak — days logged this week (from localStorage cache)
@@ -1798,7 +1807,7 @@ function renderHomeData(sessions){
     else if(s.workoutType!=='Walk')weekCounts[s.week].str++;
   });
   var wks=Object.keys(weekCounts);
-  var hiitWks=wks.filter(function(w){return weekCounts[w].hiit>=2;}).length;
+  var hiitWks=wks.filter(function(w){return weekCounts[w].hiit>=_goals.hiitSessions;}).length;
   var pct=wks.length>0?Math.round((hiitWks/wks.length)*100):0;
   var pe=document.getElementById('consistencyPct');if(pe)pe.textContent=wks.length>0?pct+'%':'0%';
   var cr=document.getElementById('consistencyRing');
@@ -1820,8 +1829,14 @@ function calcStreak(sessions){
     if(isHIIT(s.workoutType))wc[s.week].hiit++;
     else if(s.workoutType!=='Walk')wc[s.week].str++;
   });
+  var currentWeek='Week '+getWeekNum();
   var weeks=Object.keys(wc).sort().reverse(),streak=0;
-  for(var w=0;w<weeks.length;w++){if(wc[weeks[w]].str>=2&&wc[weeks[w]].hiit>=2)streak++;else break;}
+  for(var w=0;w<weeks.length;w++){
+    // Skip current week — it's in progress, don't let it break the streak
+    if(weeks[w]===currentWeek)continue;
+    if(wc[weeks[w]].str>=_goals.strGoal&&wc[weeks[w]].hiit>=_goals.hiitSessions)streak++;
+    else break;
+  }
   return streak;
 }
 
@@ -3289,7 +3304,7 @@ function copyResults(){
 // ─── LOG TABS ─────────────────────────────────────────────────────
 function updateHiitWeekSummary(){
   var el=document.getElementById('hiitWeekSummary');if(!el)return;
-  var EFFORT_GOAL=13,DUR_GOAL=28;
+  var EFFORT_GOAL=_goals.effortGoal,DUR_GOAL=_goals.durGoal;
   var weekDates=getWeekDates(0).map(function(d){return fmtDate(d);});
   var totalEffort=0,totalDur=0;
   (_cachedSessions||[]).forEach(function(s){
@@ -3334,8 +3349,8 @@ function buildEffBtns(){
 }
 
 function setHIITPreset(dur,effort){
-  // HIIT = 17min/effort 6 (lighter), HIIT 8 = 20min/effort 8 (harder)
-  hiitVideo=(dur===20)?'HIIT 8':'HIIT';
+  // HIIT preset: 17min/effort 6 or 20min/effort 8
+  hiitVideo='HIIT';
   document.getElementById('hiitDur').value=dur;
   selEff=effort;
   document.getElementById('effBtns').querySelectorAll('.eff-btn').forEach(function(x){x.classList.remove('on');});
@@ -3355,7 +3370,7 @@ function setHIITPreset(dur,effort){
     document.getElementById('hp20dur').className='hp-dur'+((!is17)?' hp-dur-selected':'');
     document.getElementById('hp20eff').className='hp-eff'+((!is17)?' hp-eff-selected':'');
     document.getElementById('hp20badge').className='hp-badge'+((!is17)?' hpb-selected':' hpb-default');
-    document.getElementById('hp20badge').textContent='HIIT 8';
+    document.getElementById('hp20badge').textContent='HIIT';
   }
 }
 
@@ -3370,7 +3385,7 @@ function saveHIIT(){
   var w1=new Date(d.getFullYear(),0,4);
   var wn=1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7);
   var payload={type:'hiit',date:date,week:'Week '+wn,duration:dur,effort:selEff,notes:notes,video:hiitVideo};
-  // hiitVideo is 'HIIT' or 'HIIT 8' — use as the workoutType
+  // hiitVideo is 'HIIT' — use as the workoutType
   var localSd={date:date,week:'Week '+wn,workoutType:hiitVideo,duration:parseInt(dur)||0,effort:selEff,exercises:[{name:'HIIT',feel:'',notes:notes+(hiitVideo?' - '+hiitVideo:'')}]};
   recSession(localSd);
   if(_sheetSessions){_sheetSessions.push(localSd);_cachedSessions=_sheetSessions;}
@@ -3593,8 +3608,8 @@ function goEditSession(){closeHistory();navTo('log');switchLogTab('edit');}
 function closeHistory(){document.getElementById('historyOverlay').style.display='none';}
 
 // ─── PLAN ─────────────────────────────────────────────────────────
-var PLAN_TYPES=['Home','Hotel','HIIT','HIIT 8','Rest','Travel'];
-var PLAN_COLORS={'Home':'pt-home','Hotel':'pt-hotel','HIIT':'pt-hiit','HIIT 8':'pt-hiit8','Rest':'pt-rest','Travel':'pt-travel'};
+var PLAN_TYPES=['Home','Hotel','HIIT','Rest','Travel'];
+var PLAN_COLORS={'Home':'pt-home','Hotel':'pt-hotel','HIIT':'pt-hiit','Rest':'pt-rest','Travel':'pt-travel'};
 var _weekPlan={},_cachedPlan=null;
 var _planWeekOffset=0;
 function isHIIT(wt){return wt==='HIIT'||wt==='HIIT 8';} // 0=this week, 1=next week
@@ -3621,6 +3636,7 @@ function getWeekDates(offset){
 function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
 function initPlanPage(){
+  if(!_goalsLoaded){_goalsLoaded=true;loadGoals();}
   _planWeekOffset=0;
   document.getElementById('planTabThis').classList.add('active');
   document.getElementById('planTabNext').classList.remove('active');
@@ -3643,7 +3659,7 @@ function overlayCompletedWorkouts(planData,sessions){
   (sessions||[]).forEach(function(sess){
     if(weekDates.indexOf(sess.date)<0)return;
     var wt=sess.workoutType||'';
-    var type=wt.indexOf('Home')>=0?'Home':wt.indexOf('Hotel')>=0?'Hotel':wt==='HIIT'?'HIIT':wt==='HIIT 8'?'HIIT 8':null;
+    var type=wt.indexOf('Home')>=0?'Home':wt.indexOf('Hotel')>=0?'Hotel':isHIIT(wt)?'HIIT':null;
     if(type)planData[sess.date]=type;
   });
   return planData;
@@ -3764,7 +3780,7 @@ function debounceSavePlan(){
 
 function updateWeekGoalBar(days){
   var strDone=0,hiitEffort=0,hiitDuration=0;
-  var EFFORT_GOAL=13,DUR_GOAL=28,STR_GOAL=2;
+  var STR_GOAL=_goals.strGoal,EFFORT_GOAL=_goals.effortGoal,DUR_GOAL=_goals.durGoal;
   days.forEach(function(d){
     var ds=fmtDate(d);
     (_cachedSessions||[]).forEach(function(s){
@@ -3969,7 +3985,7 @@ function todayCardTap(){
   });
   if(done){openLastSession();return;}
   if(type==='HIIT'){navTo('log');switchLogTab('hiit');setHIITPreset(17,6);}
-  else if(type==='HIIT 8'){navTo('log');switchLogTab('hiit');setHIITPreset(20,8);}
+
   else{navTo('workout');}
 }
 
@@ -5095,8 +5111,8 @@ function renderShareView(sessions){
   var totalStr=sessions.filter(function(s){return s.workoutType&&s.workoutType.indexOf('Strength')>=0;}).length;
   var totalHIIT=sessions.filter(function(s){return isHIIT(s.workoutType);}).length;
 
-  var strPct=Math.min(100,Math.round((wkStr/2)*100));
-  var hiitPct=Math.min(100,Math.round((wkHIIT/2)*100));
+  var strPct=Math.min(100,Math.round((wkStr/_goals.strGoal)*100));
+  var hiitPct=Math.min(100,Math.round((wkHIIT/_goals.hiitSessions)*100));
 
   function bar(pct,color){
     return '<div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden;margin-top:6px;">'
@@ -5119,17 +5135,17 @@ function renderShareView(sessions){
   html+='<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;">';
   html+='<div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">Strength</div>';
   html+='<div style="display:flex;align-items:baseline;gap:4px;">';
-  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2.4rem;color:'+(wkStr>=2?'var(--green)':wkStr>=1?'var(--yellow)':'var(--text)')+';line-height:1;">'+wkStr+'</div>';
-  html+='<div style="font-size:0.75rem;color:var(--muted);">/ 3</div></div>';
-  html+=bar(strPct,wkStr>=2?'var(--green)':wkStr>=1?'var(--yellow)':'var(--muted)');
+  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2.4rem;color:'+(wkStr>=_goals.strGoal?'var(--green)':wkStr>=1?'var(--yellow)':'var(--text)')+';line-height:1;">'+wkStr+'</div>';
+  html+='<div style="font-size:0.75rem;color:var(--muted);">/ '+_goals.strGoal+'</div></div>';
+  html+=bar(strPct,wkStr>=_goals.strGoal?'var(--green)':wkStr>=1?'var(--yellow)':'var(--muted)');
   html+='</div>';
   // HIIT card
   html+='<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;">';
   html+='<div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">HIIT</div>';
   html+='<div style="display:flex;align-items:baseline;gap:4px;">';
-  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2.4rem;color:'+(wkHIIT>=2?'var(--green)':wkHIIT>=1?'var(--yellow)':'var(--text)')+';line-height:1;">'+wkHIIT+'</div>';
-  html+='<div style="font-size:0.75rem;color:var(--muted);">/ 2</div></div>';
-  html+=bar(hiitPct,wkHIIT>=2?'var(--green)':wkHIIT>=1?'var(--yellow)':'var(--muted)');
+  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2.4rem;color:'+(wkHIIT>=_goals.hiitSessions?'var(--green)':wkHIIT>=1?'var(--yellow)':'var(--text)')+';line-height:1;">'+wkHIIT+'</div>';
+  html+='<div style="font-size:0.75rem;color:var(--muted);">/ '+_goals.hiitSessions+'</div></div>';
+  html+=bar(hiitPct,wkHIIT>=_goals.hiitSessions?'var(--green)':wkHIIT>=1?'var(--yellow)':'var(--muted)');
   html+='</div>';
   html+='</div>';
 
@@ -7335,6 +7351,102 @@ function nutPushDayToSheet(){
     });
   });
 }
+
+// ── GOALS ─────────────────────────────────────────────────────────
+function goalsOpen(){
+  document.getElementById('goalStrInput').value=_goals.strGoal;
+  document.getElementById('goalHiitInput').value=_goals.hiitSessions;
+  document.getElementById('goalEffortInput').value=_goals.effortGoal;
+  document.getElementById('goalDurInput').value=_goals.durGoal;
+  var el=document.getElementById('goalsSaveMsg');if(el)el.textContent='';
+  var ov=document.getElementById('goalsOverlay');if(ov){ov.style.display='flex';ov.scrollTop=0;}
+}
+function goalsClose(){
+  var ov=document.getElementById('goalsOverlay');if(ov)ov.style.display='none';
+}
+function goalsSave(){
+  var g={
+    strGoal:parseInt(document.getElementById('goalStrInput').value)||2,
+    hiitSessions:parseInt(document.getElementById('goalHiitInput').value)||2,
+    effortGoal:parseInt(document.getElementById('goalEffortInput').value)||13,
+    durGoal:parseInt(document.getElementById('goalDurInput').value)||28
+  };
+  applyGoals(g);
+  saveGoalsCache(g);
+  // Refresh all dependent UI
+  renderHomeData(_cachedSessions||[]);
+  renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
+  updateHiitWeekSummary();
+  // Update home week strip subtitles
+  var strSub=document.querySelector('#wkStrength+.ws-lbl+.ws-sub,#wkStrength~.ws-sub');
+  // Simpler: just re-render home stats
+  var se=document.getElementById('wkStrength');
+  // Sync to sheet
+  var msg=document.getElementById('goalsSaveMsg');
+  if(msg){msg.textContent='Saving...';msg.style.color='var(--muted)';}
+  var cbName='wt_goals_'+Date.now();
+  window[cbName]=function(result){
+    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    if(msg){msg.textContent='Saved ✓';msg.style.color='var(--green)';}
+    setTimeout(function(){goalsClose();},800);
+  };
+  var url=CLOUD_URL+'?payload='+encodeURIComponent(JSON.stringify({type:'setGoals',goals:g}))+'&callback='+cbName;
+  var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
+  script.onerror=function(){if(msg){msg.textContent='Saved locally (sheet offline)';msg.style.color='var(--yellow)';} setTimeout(function(){goalsClose();},1200);};
+  document.head.appendChild(script);
+  setTimeout(function(){if(!window[cbName])return;window[cbName]=null;
+    if(msg){msg.textContent='Saved locally (sheet timeout)';msg.style.color='var(--yellow)';} setTimeout(function(){goalsClose();},1200);
+  },10000);
+}
+function loadGoals(){
+  // Apply cache immediately
+  var cached=loadGoalsCache();
+  if(cached)applyGoals(cached);
+  // Fetch from sheet in background
+  var cbP='wt_getgoals_'+Date.now();
+  window[cbP]=function(result){
+    window[cbP]=null;var s=document.getElementById('s_'+cbP);if(s)s.parentNode.removeChild(s);
+    if(result&&result.goals){applyGoals(result.goals);saveGoalsCache(result.goals);
+      renderHomeData(_cachedSessions||[]);
+      renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
+    }
+  };
+  var script=document.createElement('script');script.id='s_'+cbP;
+  script.src=CLOUD_URL+'?type=getGoals&callback='+cbP;
+  script.onerror=function(){};
+  document.head.appendChild(script);
+  setTimeout(function(){if(window[cbP]){window[cbP]=null;}},15000);
+}
 </script>
+
+<!-- GOALS SETTINGS OVERLAY -->
+<div id="goalsOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;align-items:flex-end;justify-content:center;">
+  <div style="background:var(--card);border-radius:var(--r-lg) var(--r-lg) 0 0;padding:24px 20px 40px;width:100%;max-width:480px;border-top:1px solid var(--border2);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;">WEEKLY GOALS</div>
+      <button onclick="goalsClose()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div>
+        <label style="font-size:0.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;display:block;margin-bottom:6px;">Strength sessions / week</label>
+        <input id="goalStrInput" type="number" inputmode="numeric" min="1" max="7" style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:1.4rem;padding:10px 14px;outline:none;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:0.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;display:block;margin-bottom:6px;">HIIT sessions / week</label>
+        <input id="goalHiitInput" type="number" inputmode="numeric" min="1" max="7" style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:1.4rem;padding:10px 14px;outline:none;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:0.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;display:block;margin-bottom:6px;">HIIT effort total / week</label>
+        <input id="goalEffortInput" type="number" inputmode="numeric" min="1" max="100" style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:1.4rem;padding:10px 14px;outline:none;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:0.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;display:block;margin-bottom:6px;">HIIT duration total / week (min)</label>
+        <input id="goalDurInput" type="number" inputmode="numeric" min="1" max="300" style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:1.4rem;padding:10px 14px;outline:none;box-sizing:border-box;">
+      </div>
+    </div>
+    <div id="goalsSaveMsg" style="font-size:0.72rem;color:var(--muted);text-align:center;margin-top:12px;min-height:18px;"></div>
+    <button onclick="goalsSave()" style="margin-top:16px;width:100%;padding:16px;background:var(--accent);border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:#000;cursor:pointer;">SAVE GOALS</button>
+  </div>
+</div>
 </body>
 </html>
