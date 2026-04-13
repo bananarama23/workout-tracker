@@ -1185,7 +1185,27 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <span style="font-size:0.9rem;">⚙</span> Daily Targets
         </button>
         <div id="nutTargetsPanel" style="display:none;background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-sm) var(--r-sm);padding:16px;">
+          <div style="margin-bottom:12px;">
+            <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Goal Weight (lbs)</div>
+            <input id="nutT_goalweight" type="number" inputmode="decimal" placeholder="170" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;outline:none;box-sizing:border-box;">
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;" id="nutTargetInputs"></div>
+          <div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">Active Cal Rules</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+            <div>
+              <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">AW Baseline</div>
+              <input id="nutT_activeBase" type="number" inputmode="numeric" placeholder="390" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;outline:none;box-sizing:border-box;">
+            </div>
+            <div>
+              <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Normal Ratio</div>
+              <input id="nutT_normalRatio" type="number" inputmode="decimal" step="0.05" placeholder="0.5" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;outline:none;box-sizing:border-box;">
+            </div>
+            <div>
+              <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Cheat Ratio</div>
+              <input id="nutT_cheatRatio" type="number" inputmode="decimal" step="0.05" placeholder="0.75" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;outline:none;box-sizing:border-box;">
+            </div>
+          </div>
+          <div style="font-size:0.6rem;color:var(--muted);margin-bottom:14px;line-height:1.5;">Budget = base + (active − baseline) × ratio. Normal days use Normal Ratio, Cheat Day uses Cheat Ratio.</div>
           <button onclick="nutSaveTargets()" style="width:100%;padding:12px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">SAVE TARGETS</button>
         </div>
       </div>
@@ -4520,8 +4540,14 @@ function budApplyStored(){
     var hours=stored.monthHours;
     if(typeof hours==='string'){try{hours=JSON.parse(hours);}catch(e){hours=null;}}
     if(Array.isArray(hours)){
+      // Legacy array format
       hours.forEach(function(v,i){
         var el=document.getElementById('bHours_'+i);if(el&&v)el.value=v;
+      });
+    } else if(hours&&typeof hours==='object'){
+      // New object format: only contains explicitly-set months
+      Object.keys(hours).forEach(function(i){
+        var el=document.getElementById('bHours_'+parseInt(i));if(el&&hours[i])el.value=hours[i];
       });
     }
   }catch(e){}
@@ -4609,9 +4635,14 @@ function budSave(){
       data.bThisMonth=tmEl.value;
       try{localStorage.setItem('wt_thismonth',tmEl.value);}catch(e){}
     }
-    data.monthHours=BUD_MONTHS.map(function(_,i){
-      var el=document.getElementById('bHours_'+i);return el&&el.value!==''?parseFloat(el.value)||0:BUD_DEFAULT_HOURS[i];
+    // Only persist monthHours that the user has explicitly entered (non-empty inputs)
+    // This avoids overwriting sheet formula values for months the user hasn't touched
+    var monthHoursEdited={};
+    BUD_MONTHS.forEach(function(_,i){
+      var el=document.getElementById('bHours_'+i);
+      if(el&&el.value!==''){monthHoursEdited[i]=parseFloat(el.value)||0;}
     });
+    data.monthHours=monthHoursEdited;
     localStorage.setItem(BUD_KEY,JSON.stringify(data));
   }catch(e){}
 }
@@ -4626,7 +4657,12 @@ function budSaveToSheet(){
   // monthHours as JSON string so it survives URL encoding
   var sheetData={};
   Object.keys(stored).forEach(function(k){
-    sheetData[k]=(k==='monthHours'&&Array.isArray(stored[k]))?JSON.stringify(stored[k]):stored[k];
+    if(k==='monthHours'){
+      // Send as JSON string — object with only explicitly-edited months
+      sheetData[k]=JSON.stringify(stored[k]);
+    } else {
+      sheetData[k]=stored[k];
+    }
   });
   var payload={type:'budget',data:sheetData};
   var enc=encodeURIComponent(JSON.stringify(payload));
@@ -5116,7 +5152,8 @@ document.addEventListener('DOMContentLoaded',function(){dayDoneRender();});
 
 var NUT_ACTIVE_BASE=390; // Apple Watch base — calories above/below this adjust budget
 var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
-var NUT_DEFAULTS={cal:2100,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000};
+var NUT_ACTIVE_BASE=390; // fallback only — user-editable via targets panel
+var NUT_DEFAULTS={cal:2100,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000,activeBase:390,normalRatio:0.5,cheatRatio:0.75};
 
 function nutGetActiveCals(date){
   var d=date||_nutDate;
@@ -5193,9 +5230,9 @@ function nutEffectiveBudget(date){
   var base=_nutTargets.cal||2100;
   var active=nutGetActiveCals(date||_nutDate);
   if(active===null)return base;
-  // 0.5 bonus normally, 0.75 on cheat days
-  var ratio=nutIsCheatDay(date||_nutDate)?0.75:0.5;
-  return base+Math.round((active-NUT_ACTIVE_BASE)*ratio);
+  var activeBase=_nutTargets.activeBase||NUT_ACTIVE_BASE;
+  var ratio=nutIsCheatDay(date||_nutDate)?(_nutTargets.cheatRatio||0.75):(_nutTargets.normalRatio||0.5);
+  return base+Math.round((active-activeBase)*ratio);
 }
 var _nutActiveTimer=null;
 function nutActiveChanged(){
@@ -5324,17 +5361,17 @@ function nutMsg(txt,col){
 
 // ── Targets ────────────────────────────────────────────────────────
 function nutLoadTargets(){
-  // Always start from defaults — these are the fallback for any missing/zero value
   _nutTargets=JSON.parse(JSON.stringify(NUT_DEFAULTS));
   try{
     var saved=JSON.parse(localStorage.getItem(NUT_TARGETS_KEY)||'{}');
-    // Merge saved values — only if positive (never let a saved zero override a non-zero default)
     Object.keys(saved).forEach(function(k){
       var v=parseFloat(saved[k]);
-      if(v>0)_nutTargets[k]=v;
+      // Ratios and activeBase can be any positive number including <1
+      if(!isNaN(v)&&v>0)_nutTargets[k]=v;
+      // goalWeight stored separately
+      if(k==='goalWeight'&&saved[k])_nutTargets.goalWeight=parseFloat(saved[k]);
     });
   }catch(e){}
-  // Always persist defaults back so the panel never shows zeros
   try{localStorage.setItem(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));}catch(e){}
 }
 function nutSaveTargets(){
@@ -5343,13 +5380,14 @@ function nutSaveTargets(){
     var el=document.getElementById(map[k]);
     if(!el)return;
     var v=parseFloat(el.value);
-    if(isNaN(v)||v<=0){
-      // Blank or zero — restore default for this field
-      _nutTargets[k]=NUT_DEFAULTS[k];
-    } else {
-      _nutTargets[k]=v;
-    }
+    if(isNaN(v)||v<=0){_nutTargets[k]=NUT_DEFAULTS[k];}else{_nutTargets[k]=v;}
   });
+  // Active cal settings
+  var abEl=document.getElementById('nutT_activeBase');if(abEl&&abEl.value)_nutTargets.activeBase=parseFloat(abEl.value)||390;
+  var nrEl=document.getElementById('nutT_normalRatio');if(nrEl&&nrEl.value)_nutTargets.normalRatio=parseFloat(nrEl.value)||0.5;
+  var crEl=document.getElementById('nutT_cheatRatio');if(crEl&&crEl.value)_nutTargets.cheatRatio=parseFloat(crEl.value)||0.75;
+  var gwEl=document.getElementById('nutT_goalweight');
+  if(gwEl&&gwEl.value)_nutTargets.goalWeight=parseFloat(gwEl.value)||0;
   try{localStorage.setItem(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));}catch(e){}
   var p=document.getElementById('nutTargetsPanel');if(p)p.style.display='none';
   nutRenderDay();
@@ -5370,6 +5408,11 @@ function nutRenderTargetInputs(){
     return '<div><div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">'+f[1]+'</div>'+
     '<input id="nutT_'+f[0]+'" type="number" inputmode="numeric" value="'+((_nutTargets[f[0]]||NUT_DEFAULTS[f[0]])||'')+'" placeholder="'+(NUT_DEFAULTS[f[0]]||0)+'" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;outline:none;box-sizing:border-box;"></div>';
   }).join('');
+  var gwEl=document.getElementById('nutT_goalweight');
+  if(gwEl&&_nutTargets.goalWeight)gwEl.value=_nutTargets.goalWeight;
+  var abEl=document.getElementById('nutT_activeBase');if(abEl)abEl.value=_nutTargets.activeBase||390;
+  var nrEl=document.getElementById('nutT_normalRatio');if(nrEl)nrEl.value=_nutTargets.normalRatio||0.5;
+  var crEl=document.getElementById('nutT_cheatRatio');if(crEl)crEl.value=_nutTargets.cheatRatio||0.75;
 }
 
 // ── Init ───────────────────────────────────────────────────────────
@@ -5609,7 +5652,9 @@ function nutRenderDay(){
   dayDoneRender();
   var entries=nutDayEntries(),tot=nutTotals(entries);
   var activeCals=nutGetActiveCals(_nutDate);
-  var adjustment=activeCals!==null?Math.round((activeCals-NUT_ACTIVE_BASE)*0.5):0;
+  var activeBase=_nutTargets.activeBase||NUT_ACTIVE_BASE;
+  var normalRatio=_nutTargets.normalRatio||0.5;
+  var adjustment=activeCals!==null?Math.round((activeCals-activeBase)*normalRatio):0;
   var calBudget=nutEffectiveBudget(_nutDate),eaten=Math.round(tot.calories),remain=calBudget-eaten;
 
   var ring=document.getElementById('nutCalRing');
@@ -6695,52 +6740,75 @@ function progAIFeedback(){
   if(card)card.style.display='block';
   if(result)result.textContent='Loading your data...';
 
-  // Gather last 28 days of weight entries from sheet cache + calorie data from entries
   var today=localDateStr();
   var days=[];for(var i=27;i>=0;i--)days.push(nutShiftDate(today,-i));
 
-  // Daily calorie totals from logged entries
-  var calData=days.map(function(d){
+  var calBase=(_nutTargets&&_nutTargets.cal)||2100;
+  var protTarget=(_nutTargets&&_nutTargets.prot)||175;
+  var goalWeight=(_nutTargets&&_nutTargets.goalWeight)||null;
+  var activeBase=(_nutTargets&&_nutTargets.activeBase)||NUT_ACTIVE_BASE;
+  var normalRatio=(_nutTargets&&_nutTargets.normalRatio)||0.5;
+  var cheatRatio=(_nutTargets&&_nutTargets.cheatRatio)||0.75;
+
+  // Per-day breakdown — use effective budget (same formula as the app)
+  var doneDaysStore={};try{doneDaysStore=JSON.parse(localStorage.getItem(DAY_DONE_KEY)||'{}');}catch(e){}
+
+  var dayData=days.map(function(d){
     var entries=_nutEntries.filter(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});
     var kcal=Math.round(entries.reduce(function(a,e){return a+(e.calories||0);},0));
     var prot=Math.round(entries.reduce(function(a,e){return a+(e.protein||0);},0));
-    return {date:d,kcal:kcal,prot:prot,logged:entries.length>0};
-  }).filter(function(d){return d.logged;});
+    var logged=entries.length>0;
+    var isCheat=nutIsCheatDay(d);
+    var isDone=!!doneDaysStore[d];
+    var activeCals=nutGetActiveCals(d);
+    // Calculate effective budget exactly as the app does
+    var effectiveBudget=calBase;
+    if(activeCals!==null){
+      var ratio=isCheat?cheatRatio:normalRatio;
+      effectiveBudget=calBase+Math.round((activeCals-activeBase)*ratio);
+    }
+    var surplus=logged?(kcal-effectiveBudget):null;
+    return {date:d,kcal:kcal,prot:prot,logged:logged,isCheat:isCheat,isDone:isDone,
+            activeCals:activeCals,effectiveBudget:effectiveBudget,surplus:surplus};
+  });
 
-  var calTarget=(_nutTargets&&_nutTargets.cal)||2100;
-  var protTarget=(_nutTargets&&_nutTargets.prot)||175;
-  var avgKcal=calData.length?Math.round(calData.reduce(function(a,d){return a+d.kcal;},0)/calData.length):0;
-  var avgProt=calData.length?Math.round(calData.reduce(function(a,d){return a+d.prot;},0)/calData.length):0;
+  var loggedDays=dayData.filter(function(d){return d.logged;});
+  var completeDays=loggedDays.filter(function(d){return d.isDone;});
+  var cheatDays=loggedDays.filter(function(d){return d.isCheat;});
+  var normalDays=loggedDays.filter(function(d){return !d.isCheat;});
 
-  // Weight data from the last body metrics fetch
+  function avg(arr,key){return arr.length?Math.round(arr.reduce(function(a,d){return a+(d[key]||0);},0)/arr.length):0;}
+
+  var avgKcalAll=avg(loggedDays,'kcal');
+  var avgKcalNormal=avg(normalDays,'kcal');
+  var avgKcalCheat=avg(cheatDays,'kcal');
+  var avgBudgetNormal=avg(normalDays,'effectiveBudget');
+  var avgBudgetCheat=avg(cheatDays,'effectiveBudget');
+  var avgSurplusNormal=normalDays.length?Math.round(normalDays.reduce(function(a,d){return a+(d.surplus||0);},0)/normalDays.length):0;
+  var avgProt=avg(loggedDays,'prot');
+
+  var walkSessions=(_cachedSessions||[]).filter(function(s){return s.workoutType==='Walk'&&days.indexOf(s.date)>=0;});
+
   var wtEl=document.getElementById('bodyWeightChart');
-  var wtSummary='No weight data logged.';
-  // Try to parse the rendered weight stats from the DOM
-  var wtNow=wtEl?wtEl.querySelector&&wtEl.querySelector('[style*="accent"]'):null;
-  // Build from _nutEntries body data isn't stored there — use DOM text as fallback summary
+  var wtSummary='No weight data logged yet.';
   if(wtEl&&wtEl.innerText&&wtEl.innerText.length>10){
-    wtSummary='From progress chart: '+wtEl.innerText.replace(/\s+/g,' ').trim().slice(0,200);
+    wtSummary=wtEl.innerText.replace(/\s+/g,' ').trim().slice(0,200);
   }
 
   var prompt=
-    'You are a nutrition and fitness coach. Here is my data for the last 4 weeks:\n\n'+
-    'Current calorie target: '+calTarget+' kcal/day\n'+
-    'Current protein target: '+protTarget+'g/day\n'+
-    'Days logged: '+calData.length+' of last 28\n'+
-    'Average calories eaten on logged days: '+avgKcal+' kcal\n'+
-    'Average protein on logged days: '+avgProt+'g\n'+
-    'Weight info: '+wtSummary+'\n\n'+
-    'Daily log summary (date, kcal, protein):\n'+
-    calData.slice(-14).map(function(d){return d.date+': '+d.kcal+'kcal, '+d.prot+'g protein';}).join('\n')+'\n\n'+
-    'Based on this data:\n'+
-    '1. Is my current calorie target of '+calTarget+' right, or what should I change it to and why?\n'+
-    '2. How is my weight trending relative to my calorie intake?\n'+
-    '3. One specific thing I should do differently.\n\n'+
-    'Be concise — 3 short paragraphs max. Be direct and specific with numbers.';
+    'BUDGET RULES: base='+calBase+'kcal. If AW active cals logged: normal_budget='+calBase+'+(active-'+activeBase+')*'+normalRatio+', cheat_budget='+calBase+'+(active-'+activeBase+')*'+cheatRatio+'. Cheat=travel day ~8mi walk. No active logged=flat '+calBase+'.\n'+
+    'GOAL: '+(goalWeight?goalWeight+'lbs':'not set')+'. Protein: '+protTarget+'g.\n'+
+    'WEIGHT: '+wtSummary.slice(0,120)+'\n'+
+    'STATS 28d: logged='+loggedDays.length+' ('+completeDays.length+' complete). normal='+normalDays.length+' cheat='+cheatDays.length+'. avgNormal='+avgKcalNormal+'kcal/budget'+avgBudgetNormal+'/surplus'+(avgSurplusNormal>=0?'+':'')+avgSurplusNormal+'. avgProt='+avgProt+'g.'+(cheatDays.length?' avgCheat='+avgKcalCheat+'kcal/budget'+avgBudgetCheat+'.':'')+'\n'+
+    'LOG(date,eaten,budget,surplus,prot,flags):\n'+
+    loggedDays.slice(-14).map(function(d){
+      return d.date+','+d.kcal+','+(d.activeCals!==null?d.effectiveBudget+'(AW'+d.activeCals+')':d.effectiveBudget)+','+(d.surplus>=0?'+':'')+d.surplus+','+d.prot+'g'+(d.isCheat?',CHEAT':'')+(d.isDone?',DONE':'');
+    }).join('\n')+'\n'+
+    'Q: 1)Is base='+calBase+' right'+(goalWeight?' for '+goalWeight+'lbs':'')+' or what to change? 2)Weight trend vs deficit? 3)One specific fix. 3 short paragraphs, actual numbers only.';
 
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.4,maxOutputTokens:600}})
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.3,maxOutputTokens:500}})
   })
   .then(function(r){return r.json();})
   .then(function(data){
