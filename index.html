@@ -7487,9 +7487,7 @@ function goalsSave(){
   renderHomeData(_cachedSessions||[]);
   renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
   updateHiitWeekSummary();
-  // Update home week strip subtitles
-  // Re-render home stats
-  var se=document.getElementById('wkStrength');
+  if(currentPage==='progress')loadProgressData();
   // Sync to sheet
   var msg=document.getElementById('goalsSaveMsg');
   if(msg){msg.textContent='Saving...';msg.style.color='var(--muted)';}
@@ -7518,6 +7516,7 @@ function loadGoals(){
     if(result&&result.goals){applyGoals(result.goals);saveGoalsCache(result.goals);
       renderHomeData(_cachedSessions||[]);
       renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
+      updateHiitWeekSummary();
     }
   };
   var script=document.createElement('script');script.id='s_'+cbP;
