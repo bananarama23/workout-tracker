@@ -549,7 +549,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div class="week-stat" onclick="showHistory('strength')">
         <div class="ws-num c-muted" id="wkStrength">-</div>
         <div class="ws-lbl">Strength</div>
-        <div class="ws-sub">of 3</div>
+        <div class="ws-sub">of 2</div>
       </div>
       <div class="week-stat" onclick="showHistory('hiit')">
         <div class="ws-num c-muted" id="wkHIIT">-</div>
@@ -572,30 +572,9 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <div class="ws-sub">weeks</div>
       </div>
     </div>
-    <div class="milestone" id="milestoneCard">
-      <div>
-        <div class="ms-label">Next Milestone</div>
-        <div class="ms-text" id="milestoneText">Complete a home workout</div>
-        <div class="ms-sub" id="milestoneSub"></div>
-      </div>
-      <div class="ms-icon">&#127919;</div>
-    </div>
     <div class="card" onclick="openLastSession()" style="cursor:pointer;">
       <div class="card-label">Last Session <span style="float:right;color:var(--muted);">Tap to view ›</span></div>
       <div id="lastWorkoutContent" style="color:var(--muted);font-size:0.85rem;">No sessions yet</div>
-    </div>
-    <div class="card">
-      <div class="card-label">8-Week HIIT Consistency</div>
-      <div class="ring-row">
-        <svg width="72" height="72" viewBox="0 0 80 80">
-          <circle cx="40" cy="40" r="32" stroke-width="8" fill="none" stroke="var(--border2)" transform="rotate(-90 40 40)"/>
-          <circle id="consistencyRing" cx="40" cy="40" r="32" stroke-width="8" fill="none" stroke="var(--accent)" stroke-linecap="round" transform="rotate(-90 40 40)" stroke-dasharray="201" stroke-dashoffset="201"/>
-        </svg>
-        <div class="ring-info">
-          <div class="ri-pct" id="consistencyPct">-%</div>
-          <div class="ri-lbl">HIIT sessions on target<br>over last 8 weeks</div>
-        </div>
-      </div>
     </div>
     <div class="qa-row">
       <div class="qa-btn" onclick="navTo('log');switchLogTab('hiit')">
@@ -1145,7 +1124,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
               </svg>
               <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;line-height:1;" id="nutCalConsumed">0</div>
-                <div style="font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">eaten</div>
+                <div style="font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">left</div>
               </div>
             </div>
 
@@ -1168,7 +1147,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;">
                   <span id="nutActiveAdj" style="font-size:0.68rem;font-weight:700;"></span>
-                  <button id="nutCheatBtn" onclick="nutToggleCheatDay()" style="font-size:0.58rem;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;">1:0.75</button>
+                  <button id="nutCheatBtn" onclick="nutToggleCheatDay()" style="font-size:0.58rem;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;">CHEAT DAY</button>
                 </div>
               </div>
               <div style="border-top:1px solid var(--border);padding-top:8px;" id="nutMacroBars"></div>
@@ -1303,7 +1282,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div class="log-field"><label>Unit</label>
         <select id="nff_unit" class="log-input" style="padding:12px 14px;">
           <option value="g">g</option><option value="ml">ml</option><option value="oz">oz</option>
-          <option value="cup">cup</option><option value="tbsp">tbsp</option><option value="tsp">tsp</option>
+          <option value="lb">lb</option><option value="cup">cup</option><option value="tbsp">tbsp</option><option value="tsp">tsp</option>
           <option value="piece">piece</option><option value="scoop">scoop</option><option value="slice">slice</option>
         </select>
       </div>
@@ -1331,14 +1310,25 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   <div style="background:var(--bg);border-radius:var(--r-lg);margin:60px 12px 24px;padding:20px;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;" id="nutServingFoodName">Food</div>
-      <button onclick="document.getElementById('nutServingOverlay').style.display='none'" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button id="nutServingEditBtn" onclick="nutServingEditFood()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);padding:4px 10px;font-size:0.62rem;font-weight:700;letter-spacing:0.5px;cursor:pointer;text-transform:uppercase;">EDIT</button>
+        <button onclick="document.getElementById('nutServingOverlay').style.display='none'" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
+      </div>
     </div>
     <div style="font-size:0.72rem;color:var(--muted);margin-bottom:16px;" id="nutServingDefault">Per 100g</div>
-    <!-- Amount + unit -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+    <!-- Amount + unit + servings -->
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;margin-bottom:12px;align-items:end;">
       <div class="log-field">
-        <label id="nutServingAmtLabel">Amount (g)</label>
+        <label id="nutServingAmtLabel">Amount</label>
         <input id="nutServingAmt" type="number" inputmode="decimal" step="1" value="100" oninput="_nutLastTouched='amt';nutServingPreview()" class="log-input log-input-big" style="text-align:center;">
+      </div>
+      <div class="log-field" style="margin-bottom:0;">
+        <label style="visibility:hidden;">u</label>
+        <select id="nutServingUnitSel" onchange="nutServingUnitChange()" style="background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);padding:10px 6px;font-size:0.82rem;outline:none;height:52px;">
+          <option value="native">—</option>
+          <option value="g">g</option><option value="oz">oz</option><option value="lb">lb</option>
+          <option value="ml">ml</option><option value="cup">cup</option>
+        </select>
       </div>
       <div class="log-field">
         <label>Servings</label>
@@ -1384,11 +1374,11 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div style="display:flex;gap:10px;align-items:center;flex:1;">
         <div id="wgStrength" style="display:flex;align-items:center;gap:5px;">
           <span id="wgStrIcon" style="font-size:1rem;">⬜</span>
-          <span style="font-size:0.68rem;color:var(--muted);">Strength <span id="wgStrCount" style="color:var(--text2);">0/3</span></span>
+          <span style="font-size:0.68rem;color:var(--muted);">Strength <span id="wgStrCount" style="color:var(--text2);">0/2</span></span>
         </div>
         <div id="wgHiit" style="display:flex;align-items:center;gap:5px;">
           <span id="wgHiitIcon" style="font-size:1rem;">⬜</span>
-          <span style="font-size:0.68rem;color:var(--muted);">HIIT <span id="wgHiitCount" style="color:var(--text2);">0/1</span></span>
+          <span style="font-size:0.68rem;color:var(--muted);">HIIT <span id="wgHiitCount" style="color:var(--text2);">0/2</span></span>
         </div>
         <div id="wgHiit8" style="display:flex;align-items:center;gap:5px;">
           <span id="wgHiit8Icon" style="font-size:1rem;">⬜</span>
@@ -1771,7 +1761,7 @@ function calcStreak(sessions){
     else if(s.workoutType!=='Walk')wc[s.week].str++;
   });
   var weeks=Object.keys(wc).sort().reverse(),streak=0;
-  for(var w=0;w<weeks.length;w++){if(wc[weeks[w]].str>=2&&wc[weeks[w]].hiit>=1)streak++;else break;}
+  for(var w=0;w<weeks.length;w++){if(wc[weeks[w]].str>=2&&wc[weeks[w]].hiit>=2)streak++;else break;}
   return streak;
 }
 
@@ -3638,16 +3628,17 @@ function updateWeekGoalBar(days){
     });
   });
   // Cap actuals at targets
-  strDone=Math.min(strDone,3);hiitDone=Math.min(hiitDone,1);hiit8Done=Math.min(hiit8Done,1);
+  strDone=Math.min(strDone,2);hiitDone=Math.min(hiitDone+hiit8Done,2);
 
-  var strOk=strDone>=3,hiitOk=hiitDone>=1,hiit8Ok=hiit8Done>=1;
-  var allDone=strOk&&hiitOk&&hiit8Ok;
+  var strOk=strDone>=2,hiitOk=hiitDone>=2;
+  var allDone=strOk&&hiitOk;
 
   function tick(id,ok){var el=document.getElementById(id);if(el)el.textContent=ok?'✅':'⬜';}
-  tick('wgStrIcon',strOk);tick('wgHiitIcon',hiitOk);tick('wgHiit8Icon',hiit8Ok);
+  tick('wgStrIcon',strOk);tick('wgHiitIcon',hiitOk);
+  var h8el=document.getElementById('wgHiit8');if(h8el)h8el.style.display='none';
 
   function count(id,n,t){var el=document.getElementById(id);if(el){el.textContent=n+'/'+t;el.style.color=n>=t?'var(--green)':'var(--text2)';}}
-  count('wgStrCount',strDone,3);count('wgHiitCount',hiitDone,1);count('wgHiit8Count',hiit8Done,1);
+  count('wgStrCount',strDone,2);count('wgHiitCount',hiitDone,2);
 
   var allEl=document.getElementById('wgAllDone');
   if(allEl)allEl.style.display=allDone?'block':'none';
@@ -4925,7 +4916,7 @@ function renderShareView(sessions){
   var totalStr=sessions.filter(function(s){return s.workoutType&&s.workoutType.indexOf('Strength')>=0;}).length;
   var totalHIIT=sessions.filter(function(s){return isHIIT(s.workoutType);}).length;
 
-  var strPct=Math.min(100,Math.round((wkStr/3)*100));
+  var strPct=Math.min(100,Math.round((wkStr/2)*100));
   var hiitPct=Math.min(100,Math.round((wkHIIT/2)*100));
 
   function bar(pct,color){
@@ -4949,9 +4940,9 @@ function renderShareView(sessions){
   html+='<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;">';
   html+='<div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">Strength</div>';
   html+='<div style="display:flex;align-items:baseline;gap:4px;">';
-  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2.4rem;color:'+(wkStr>=3?'var(--green)':wkStr>=2?'var(--yellow)':'var(--text)')+';line-height:1;">'+wkStr+'</div>';
+  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2.4rem;color:'+(wkStr>=2?'var(--green)':wkStr>=1?'var(--yellow)':'var(--text)')+';line-height:1;">'+wkStr+'</div>';
   html+='<div style="font-size:0.75rem;color:var(--muted);">/ 3</div></div>';
-  html+=bar(strPct,wkStr>=3?'var(--green)':wkStr>=2?'var(--yellow)':'var(--muted)');
+  html+=bar(strPct,wkStr>=2?'var(--green)':wkStr>=1?'var(--yellow)':'var(--muted)');
   html+='</div>';
   // HIIT card
   html+='<div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;">';
@@ -5062,6 +5053,10 @@ var NUT_ENTRIES_KEY='wt_nut_entries_v1';
 var NUT_TARGETS_KEY='wt_nut_targets';
 var NUT_ACTIVE_KEY='wt_nut_active'; // {date: activeCals} per day
 var NUT_CHEAT_KEY='wt_nut_cheat'; // {date: true} for 1:1 bonus days
+var NUT_NOT_EATEN_KEY='wt_nut_not_eaten'; // {"date|Meal": true}
+function nutGetNotEaten(date,meal){try{var d=JSON.parse(localStorage.getItem(NUT_NOT_EATEN_KEY)||'{}');return !!d[(date||_nutDate)+'|'+meal];}catch(e){return false;}}
+function nutSetNotEaten(date,meal,val){try{var d=JSON.parse(localStorage.getItem(NUT_NOT_EATEN_KEY)||'{}');var k=(date||_nutDate)+'|'+meal;if(val)d[k]=true;else delete d[k];localStorage.setItem(NUT_NOT_EATEN_KEY,JSON.stringify(d));}catch(e){}}
+function nutToggleNotEaten(meal){nutSetNotEaten(_nutDate,meal,!nutGetNotEaten(_nutDate,meal));nutRenderDay();}
 var _nutLastFetch=0; // timestamp of last successful sheet fetch
 var _nutSyncedIds={}; // ids confirmed in sheet
 // ─── DAY DONE ─────────────────────────────────────────────────────
@@ -5078,9 +5073,12 @@ function dayDoneToggle(){
 }
 function dayDoneRender(){
   var done=dayDoneGet();
+  var isToday=(_nutDate===localDateStr());
   var chk=document.getElementById('dayDoneChk');
   var lbl=document.getElementById('dayDoneLabel');
   var bar=document.getElementById('dayDoneBar');
+  if(bar)bar.style.display=isToday?'flex':'none';
+  if(!isToday)return;
   if(chk){chk.textContent=done?'✓':'';chk.style.background=done?'var(--green)':'var(--card2)';chk.style.borderColor=done?'var(--green)':'var(--border2)';chk.style.color=done?'#000':'';}
   if(lbl){lbl.textContent=done?'Day done — macros finalised':'Still eating — macros in progress';lbl.style.color=done?'var(--green)':'var(--text2)';}
   if(bar){bar.style.borderColor=done?'rgba(0,212,138,0.4)':'var(--border)';}
@@ -5588,11 +5586,11 @@ function nutRenderDay(){
 
   var ring=document.getElementById('nutCalRing');
   if(ring){
-    var circ=233,pct=Math.min(1,eaten/Math.max(1,calBudget));
+    var circ=233,pct=Math.min(1,remain>0?remain/Math.max(1,calBudget):0);
     ring.style.strokeDashoffset=circ-(circ*pct);
-    ring.style.stroke=eaten>calBudget?'var(--red)':'var(--green)';
+    ring.style.stroke=eaten>calBudget?'var(--red)':remain<calBudget*0.2?'var(--yellow)':'var(--green)';
   }
-  var ec=document.getElementById('nutCalConsumed');if(ec)ec.textContent=eaten.toLocaleString();
+  var ec=document.getElementById('nutCalConsumed');if(ec)ec.textContent=remain>=0?remain.toLocaleString():('−'+Math.abs(remain).toLocaleString());
   var cb2=document.getElementById('nutCalBudget');
   if(cb2){
     if(activeCals!==null&&adjustment!==0){
@@ -5609,7 +5607,7 @@ function nutRenderDay(){
   var cheatBtn=document.getElementById('nutCheatBtn');
   if(cheatBtn){
     var isCheat=nutIsCheatDay(_nutDate);
-    cheatBtn.textContent=isCheat?'1:0.75 ON':'1:0.75';
+    cheatBtn.textContent=isCheat?'CHEAT DAY ON':'CHEAT DAY';
     cheatBtn.style.background=isCheat?'var(--accent)':'var(--card2)';
     cheatBtn.style.color=isCheat?'#000':'var(--muted)';
     cheatBtn.style.borderColor=isCheat?'var(--accent)':'var(--border2)';
@@ -5647,12 +5645,15 @@ function nutRenderDay(){
   mealsEl.innerHTML=NUT_MEALS.map(function(meal){
     var me=entries.filter(function(e){return e.meal===meal;});
     var mc=Math.round(me.reduce(function(a,e){return a+(e.calories||0);},0));
-    var h='<div class="prog-section" style="margin-bottom:8px;">';
+    var notEaten=nutGetNotEaten(_nutDate,meal);
+    var h='<div class="prog-section" style="margin-bottom:8px;'+(notEaten?'opacity:0.45;':'') +'">';
     h+='<div class="prog-section-hdr">';
-    h+='<div class="prog-section-lbl">'+meal+(mc>0?' \u2014 '+mc+' kcal':'')+'</div>';
+    h+='<div class="prog-section-lbl">'+meal+(mc>0&&!notEaten?' \u2014 '+mc+' kcal':'')+(notEaten?' \u2014 not eaten':'')+'</div>';
+    h+='<div style="display:flex;gap:6px;align-items:center;">';
+    h+='<button onclick="nutToggleNotEaten(\''+meal+'\')" style="background:'+(notEaten?'var(--orange-dim)':'var(--card2)')+';border:1px solid '+(notEaten?'var(--orange)':'var(--border)')+';color:'+(notEaten?'var(--orange)':'var(--muted)')+';border-radius:20px;padding:3px 10px;font-size:0.58rem;font-weight:700;letter-spacing:0.5px;cursor:pointer;text-transform:uppercase;">'+(notEaten?'NOT EATEN':'SKIP')+'</button>';
     h+='<button onclick="nutOpenAdd(\''+meal+'\')" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:4px 12px;font-family:Bebas Neue,sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">+ ADD</button>';
-    h+='</div><div class="prog-card">';
-    if(me.length===0){h+='<div style="padding:13px 16px;font-size:0.8rem;color:var(--muted);">Nothing logged yet</div>';}
+    h+='</div></div><div class="prog-card">';
+    if(me.length===0){h+='<div style="padding:13px 16px;font-size:0.8rem;color:var(--muted);">'+(notEaten?'Marked as not eaten':'Nothing logged yet')+'</div>';}
     me.forEach(function(e){
       var gIdx=_nutEntries.indexOf(e);
       h+='<div class="sum-row" style="padding:10px 16px;cursor:pointer;" onclick="nutEditEntry('+gIdx+')">';
@@ -5805,21 +5806,51 @@ function nutRenderWeek(){
 }
 
 // ── Food list ──────────────────────────────────────────────────────
+function nutLastEatenDate(foodName){
+  // Walk backwards through entries to find most recent date for this food
+  for(var i=_nutEntries.length-1;i>=0;i--){
+    if(_nutEntries[i].food===foodName&&_nutEntries[i].meal!=='_active'&&_nutEntries[i].meal!=='_cheat')
+      return _nutEntries[i].date;
+  }
+  return null;
+}
+function nutFoodsWithRecency(){
+  // Return foods sorted: most recently eaten first, then never-eaten alphabetically
+  return _nutFoods.slice().sort(function(a,b){
+    var da=nutLastEatenDate(a.name),db=nutLastEatenDate(b.name);
+    if(da&&db)return da>db?-1:da<db?1:0;
+    if(da)return -1;
+    if(db)return 1;
+    return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;
+  });
+}
+function nutFormatLastEaten(date){
+  if(!date)return '';
+  var today=localDateStr(),yesterday=nutShiftDate(today,-1);
+  if(date===today)return 'Today';
+  if(date===yesterday)return 'Yesterday';
+  var d=new Date(date+'T12:00');
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+}
 function nutFilterFoods(){nutRenderFoodList();}
 function nutRenderFoodList(){
   var el=document.getElementById('nutFoodList');if(!el)return;
   var q=(document.getElementById('nutFoodSearch')||{}).value||'';
-  var list=_nutFoods.filter(function(f){return !q||f.name.toLowerCase().indexOf(q.toLowerCase())>=0;});
+  var sorted=nutFoodsWithRecency();
+  var list=sorted.filter(function(f){return !q||f.name.toLowerCase().indexOf(q.toLowerCase())>=0;});
   if(!list.length){
     el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">'+(q?'No match for "'+q+'"':'No foods yet \u2014 add one above')+'</div>';
     return;
   }
   el.innerHTML=list.map(function(f){
     var fi=_nutFoods.indexOf(f);
+    var lastDate=nutLastEatenDate(f.name);
+    var lastStr=lastDate?'Last: '+nutFormatLastEaten(lastDate):'Never eaten';
     return '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">'+
       '<div style="flex:1;min-width:0;">'+
         '<div style="font-size:0.88rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+f.name+'</div>'+
-        '<div style="font-size:0.62rem;color:var(--muted);margin-top:2px;">'+Math.round(f.calories)+' kcal \u00b7 P '+Math.round(f.protein)+'g \u00b7 Sodium '+Math.round(f.sodium||0)+'mg \u00b7 per '+f.serving+f.unit+'</div>'+
+        '<div style="font-size:0.62rem;color:var(--muted);margin-top:2px;">'+Math.round(f.calories)+' kcal \u00b7 P '+Math.round(f.protein)+'g \u00b7 per '+f.serving+f.unit+'</div>'+
+        '<div style="font-size:0.6rem;color:var(--muted);margin-top:1px;">'+lastStr+'</div>'+
       '</div>'+
       '<button onclick="nutEditFood('+fi+')" style="background:none;border:1px solid var(--border);border-radius:var(--r-sm);padding:5px 10px;color:var(--muted);font-size:0.72rem;cursor:pointer;flex-shrink:0;margin-left:10px;">Edit</button>'+
     '</div>';
@@ -6248,7 +6279,8 @@ function nutFilterAddList(){
     }
   }
 
-  var list=_nutFoods.filter(function(f){return !q||f.name.toLowerCase().indexOf(q.toLowerCase())>=0;});
+  var sortedFoods=nutFoodsWithRecency();
+  var list=sortedFoods.filter(function(f){return !q||f.name.toLowerCase().indexOf(q.toLowerCase())>=0;});
   if(!list.length&&!html){
     if(q){
       html+='<div style="padding:12px 4px 8px;font-size:0.8rem;color:var(--muted);">No match for "'+q+'" — create it:</div>';
@@ -6268,9 +6300,11 @@ function nutFilterAddList(){
 
   html+=list.map(function(f){
     var fi=_nutFoods.indexOf(f);
+    var lastDate=nutLastEatenDate(f.name);
+    var lastStr=lastDate?nutFormatLastEaten(lastDate):'';
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="nutPickFood('+fi+')">'+
       '<div><div style="font-size:0.88rem;font-weight:600;">'+f.name+'</div>'+
-      '<div style="font-size:0.62rem;color:var(--muted);">'+Math.round(f.calories)+' kcal \u00b7 P '+Math.round(f.protein)+'g \u00b7 Sodium '+Math.round(f.sodium||0)+'mg \u00b7 per '+f.serving+f.unit+'</div></div>'+
+      '<div style="font-size:0.62rem;color:var(--muted);">'+Math.round(f.calories)+' kcal \u00b7 P '+Math.round(f.protein)+'g \u00b7 per '+f.serving+f.unit+(lastStr?' \u00b7 '+lastStr:'')+'</div></div>'+
       '<div style="color:var(--accent);font-size:1.4rem;padding:0 6px;font-weight:900;">+</div>'+
     '</div>';
   }).join('');
@@ -6287,17 +6321,51 @@ function nutFilterAddList(){
   el.innerHTML=html;
 }
 
+// Unit conversion helpers for serving overlay
+var _nutServingUnitMultiplier=1; // multiply native amount by this to get display unit
+function nutServingUnitChange(){
+  var sel=document.getElementById('nutServingUnitSel');
+  var f=_nutServingFood;if(!sel||!f)return;
+  var u=sel.value;
+  var native=f.unit||'g';
+  // Conversion from native unit to selected display unit
+  if(u==='native'||u===native){_nutServingUnitMultiplier=1;}
+  else if((native==='g'||native==='ml')&&u==='oz'){_nutServingUnitMultiplier=1/28.3495;}
+  else if((native==='g'||native==='ml')&&u==='lb'){_nutServingUnitMultiplier=1/453.592;}
+  else if(native==='oz'&&u==='g'){_nutServingUnitMultiplier=28.3495;}
+  else if(native==='lb'&&u==='g'){_nutServingUnitMultiplier=453.592;}
+  else{_nutServingUnitMultiplier=1;}
+  // Reset amt to 1 serving in new unit
+  var amtEl=document.getElementById('nutServingAmt');
+  var lbl=document.getElementById('nutServingAmtLabel');
+  var displayUnit=u==='native'?native:u;
+  if(amtEl)amtEl.value=Math.round(f.serving*_nutServingUnitMultiplier*100)/100;
+  if(lbl)lbl.textContent='Amount ('+displayUnit+')';
+  _nutLastTouched='amt';nutServingPreview();
+}
+function nutServingEditFood(){
+  // Close serving overlay, open food form for the current food
+  var f=_nutServingFood;if(!f)return;
+  var idx=_nutFoods.indexOf(f);if(idx<0)return;
+  document.getElementById('nutServingOverlay').style.display='none';
+  nutOpenFoodForm(idx);
+}
+
 function nutPickFood(idx){
   var f=_nutFoods[idx];if(!f)return;
   _nutServingFood=f;
   _nutEditingEntryIdx=-1;
   _nutLastTouched='amt';
+  _nutServingUnitMultiplier=1;
   nutCloseAdd();
   document.getElementById('nutServingFoodName').textContent=f.name;
   document.getElementById('nutServingDefault').textContent='Macros per '+f.serving+f.unit+' serving';
   // Set amount label
   var lbl=document.getElementById('nutServingAmtLabel');
   if(lbl)lbl.textContent='Amount ('+f.unit+')';
+  // Reset unit selector to native
+  var uSel=document.getElementById('nutServingUnitSel');
+  if(uSel)uSel.value='native';
   // Default: 1 serving = base serving size
   var amtEl=document.getElementById('nutServingAmt');
   if(amtEl)amtEl.value=f.serving;
@@ -6310,19 +6378,24 @@ function nutPickFood(idx){
 
 function nutServingPreview(){
   var f=_nutServingFood;if(!f)return;
+  var mult=_nutServingUnitMultiplier||1;
   var amtEl=document.getElementById('nutServingAmt');
   var qtyEl=document.getElementById('nutServingQty');
   var amt,qty;
   if(_nutLastTouched==='qty'){
     qty=parseFloat((qtyEl||{}).value)||1;
-    amt=qty*f.serving;
-    if(amtEl)amtEl.value=Math.round(amt*10)/10;
+    amt=qty*f.serving*mult;
+    if(amtEl)amtEl.value=Math.round(amt*100)/100;
   } else {
-    amt=parseFloat((amtEl||{}).value)||f.serving;
+    var displayAmt=parseFloat((amtEl||{}).value)||f.serving*mult;
+    amt=displayAmt/mult; // convert back to native unit
     qty=f.serving>0?amt/f.serving:1;
     if(qtyEl)qtyEl.value=Math.round(qty*100)/100;
   }
-  var ratio=f.serving>0?amt/f.serving:qty;
+  var ratio=f.serving>0?(amt/mult*mult)/f.serving:qty; // native amt / native serving
+  // Recalc: native amt is displayAmt/mult
+  var nativeAmt=_nutLastTouched==='qty'?(qty*f.serving):(parseFloat((amtEl||{}).value)/mult||f.serving);
+  ratio=f.serving>0?nativeAmt/f.serving:qty;
   var box=document.getElementById('nutServingPreviewBox');if(!box)return;
   var items=[
     {l:'Calories',v:Math.round(f.calories*ratio)+''},
@@ -6344,9 +6417,11 @@ function nutConfirmServing(){
   var f=_nutServingFood;if(!f)return;
   var amtEl=document.getElementById('nutServingAmt');
   var qtyEl=document.getElementById('nutServingQty');
-  var amt=parseFloat((amtEl||{}).value)||f.serving;
-  var qty=f.serving>0?amt/f.serving:parseFloat((qtyEl||{}).value)||1;
-  var ratio=f.serving>0?amt/f.serving:qty;
+  var mult=_nutServingUnitMultiplier||1;
+  var displayAmt=parseFloat((amtEl||{}).value)||f.serving*mult;
+  var nativeAmt=displayAmt/mult; // convert back to food's native unit
+  var qty=f.serving>0?nativeAmt/f.serving:parseFloat((qtyEl||{}).value)||1;
+  var ratio=f.serving>0?nativeAmt/f.serving:qty;
   function rn(v){return Math.round(v*ratio*10)/10;}
   var isEdit=(_nutEditingEntryIdx>=0&&_nutEditingEntryIdx<_nutEntries.length);
   var oldEntry=isEdit?_nutEntries[_nutEditingEntryIdx]:null;
