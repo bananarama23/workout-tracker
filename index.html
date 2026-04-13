@@ -4185,6 +4185,7 @@ function buildPRs(sessions){
   if(el)el.innerHTML=html;
 }
 
+var _bodyWeightData=[]; // cached weight entries: [{date, weight, waist}]
 function buildBodyWeightChart(){
   var el=document.getElementById('bodyWeightChart');if(!el)return;
   el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">Loading...</div>';
@@ -4196,6 +4197,7 @@ function buildBodyWeightChart(){
       .map(function(r){return{date:r.date,weight:parseFloat(r.weight),waist:parseFloat(r.waist)||0,arm:parseFloat(r.arm)||0};})
       .sort(function(a,b){return a.date<b.date?-1:1;})
       .slice(-20);
+    _bodyWeightData=data; // cache for Gemini prompt
     if(!data.length){
       el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">No weight data yet \u2014 log via Body Metrics</div>';
       return;
@@ -5150,9 +5152,8 @@ function dayDoneRender(){
 // Init on load
 document.addEventListener('DOMContentLoaded',function(){dayDoneRender();});
 
-var NUT_ACTIVE_BASE=390; // Apple Watch base — calories above/below this adjust budget
+var NUT_ACTIVE_BASE=390; // fallback only — user-editable via Daily Targets panel
 var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
-var NUT_ACTIVE_BASE=390; // fallback only — user-editable via targets panel
 var NUT_DEFAULTS={cal:2100,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000,activeBase:390,normalRatio:0.5,cheatRatio:0.75};
 
 function nutGetActiveCals(date){
@@ -6789,22 +6790,46 @@ function progAIFeedback(){
 
   var walkSessions=(_cachedSessions||[]).filter(function(s){return s.workoutType==='Walk'&&days.indexOf(s.date)>=0;});
 
-  var wtEl=document.getElementById('bodyWeightChart');
-  var wtSummary='No weight data logged yet.';
-  if(wtEl&&wtEl.innerText&&wtEl.innerText.length>10){
-    wtSummary=wtEl.innerText.replace(/\s+/g,' ').trim().slice(0,200);
+  // Real weight data from cache
+  var wtLatest=_bodyWeightData.length?_bodyWeightData[_bodyWeightData.length-1]:null;
+  var wtFirst=_bodyWeightData.length?_bodyWeightData[0]:null;
+  var wtChange=wtLatest&&wtFirst?Math.round((wtLatest.weight-wtFirst.weight)*10)/10:null;
+  var wtTrend='No weight logged.';
+  if(wtLatest){
+    wtTrend='Current: '+wtLatest.weight+'lbs ('+wtLatest.date+').';
+    if(wtChange!==null)wtTrend+=' Change since '+wtFirst.date+': '+(wtChange>0?'+':'')+wtChange+'lbs.';
+    if(goalWeight)wtTrend+=' To goal: '+(wtLatest.weight-goalWeight>0?'+':'')+(Math.round((wtLatest.weight-goalWeight)*10)/10)+'lbs.';
+    if(_bodyWeightData.length>=3){
+      // Last 3 entries for recent trend
+      var recent=_bodyWeightData.slice(-3);
+      wtTrend+=' Recent: '+recent.map(function(w){return w.date+'='+w.weight;}).join(', ')+'.';
+    }
   }
 
   var prompt=
-    'BUDGET RULES: base='+calBase+'kcal. If AW active cals logged: normal_budget='+calBase+'+(active-'+activeBase+')*'+normalRatio+', cheat_budget='+calBase+'+(active-'+activeBase+')*'+cheatRatio+'. Cheat=travel day ~8mi walk. No active logged=flat '+calBase+'.\n'+
-    'GOAL: '+(goalWeight?goalWeight+'lbs':'not set')+'. Protein: '+protTarget+'g.\n'+
-    'WEIGHT: '+wtSummary.slice(0,120)+'\n'+
-    'STATS 28d: logged='+loggedDays.length+' ('+completeDays.length+' complete). normal='+normalDays.length+' cheat='+cheatDays.length+'. avgNormal='+avgKcalNormal+'kcal/budget'+avgBudgetNormal+'/surplus'+(avgSurplusNormal>=0?'+':'')+avgSurplusNormal+'. avgProt='+avgProt+'g.'+(cheatDays.length?' avgCheat='+avgKcalCheat+'kcal/budget'+avgBudgetCheat+'.':'')+'\n'+
-    'LOG(date,eaten,budget,surplus,prot,flags):\n'+
+    'CURRENT PLAN SETTINGS:\n'+
+    'Base calories: '+calBase+'kcal/day\n'+
+    'AW active baseline: '+activeBase+' (earn-back starts above this)\n'+
+    'Normal day ratio: '+normalRatio+' (e.g. 500 active → budget='+calBase+'+('+(500)+'-'+activeBase+')*'+normalRatio+'='+(calBase+Math.round((500-activeBase)*normalRatio))+')\n'+
+    'Cheat day ratio: '+cheatRatio+' (travel days ~8mi walk)\n'+
+    'Protein target: '+protTarget+'g/day\n'+
+    (goalWeight?'Goal weight: '+goalWeight+'lbs\n':'')+
+    '\nWEIGHT: '+wtTrend+'\n'+
+    '\nLAST 28 DAYS:\n'+
+    'Logged: '+loggedDays.length+' days ('+completeDays.length+' complete). Normal: '+normalDays.length+'. Cheat/travel: '+cheatDays.length+'.\n'+
+    'Normal days — avg eaten: '+avgKcalNormal+'kcal, avg effective budget: '+avgBudgetNormal+'kcal, avg surplus: '+(avgSurplusNormal>=0?'+':'')+avgSurplusNormal+'kcal\n'+
+    (cheatDays.length?'Cheat days — avg eaten: '+avgKcalCheat+'kcal, avg effective budget: '+avgBudgetCheat+'kcal\n':'')+
+    'Avg protein: '+avgProt+'g/day\n'+
+    '\nDAILY LOG (date,eaten,budget,surplus,protein,flags):\n'+
     loggedDays.slice(-14).map(function(d){
       return d.date+','+d.kcal+','+(d.activeCals!==null?d.effectiveBudget+'(AW'+d.activeCals+')':d.effectiveBudget)+','+(d.surplus>=0?'+':'')+d.surplus+','+d.prot+'g'+(d.isCheat?',CHEAT':'')+(d.isDone?',DONE':'');
-    }).join('\n')+'\n'+
-    'Q: 1)Is base='+calBase+' right'+(goalWeight?' for '+goalWeight+'lbs':'')+' or what to change? 2)Weight trend vs deficit? 3)One specific fix. 3 short paragraphs, actual numbers only.';
+    }).join('\n')+
+    '\n\nGiven everything above, should I keep or change these four numbers?\n'+
+    '1. Base calories (currently '+calBase+') — right for '+(goalWeight?'reaching '+goalWeight+'lbs':'my goal')+'?\n'+
+    '2. AW baseline (currently '+activeBase+') — is this the right threshold?\n'+
+    '3. Normal ratio (currently '+normalRatio+') — am I earning back the right amount?\n'+
+    '4. Cheat ratio (currently '+cheatRatio+') — right for travel days?\n'+
+    'Use my actual surplus/deficit numbers and weight trend. 4 short answers, one per number, specific values to change to if needed.';
 
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
