@@ -1148,6 +1148,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
                 <div style="display:flex;align-items:center;gap:8px;">
                   <span id="nutActiveAdj" style="font-size:0.68rem;font-weight:700;"></span>
                   <button id="nutCheatBtn" onclick="nutToggleCheatDay()" style="font-size:0.58rem;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;">CHEAT DAY</button>
+                  <button id="dayDoneBar" onclick="dayDoneToggle()" style="font-size:0.58rem;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;display:none;">DAY DONE</button>
                 </div>
               </div>
               <div style="border-top:1px solid var(--border);padding-top:8px;" id="nutMacroBars"></div>
@@ -1158,15 +1159,6 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
       <!-- Meal sections — rendered by JS -->
       <div id="nutMeals"></div>
-
-      <!-- Day Done checkbox -->
-      <div id="dayDoneBar" style="margin:0 16px 10px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="dayDoneToggle()">
-        <div>
-          <div style="font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:2px;">Day Status</div>
-          <div id="dayDoneLabel" style="font-size:0.82rem;font-weight:600;color:var(--text2);">Still eating — macros in progress</div>
-        </div>
-        <div id="dayDoneChk" style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border2);background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.2s;flex-shrink:0;"></div>
-      </div>
 
       <!-- Sync: phone is truth button -->
       <div style="margin:0 16px 8px;display:flex;align-items:center;gap:8px;">
@@ -5074,14 +5066,21 @@ function dayDoneToggle(){
 function dayDoneRender(){
   var done=dayDoneGet();
   var isToday=(_nutDate===localDateStr());
-  var chk=document.getElementById('dayDoneChk');
-  var lbl=document.getElementById('dayDoneLabel');
   var bar=document.getElementById('dayDoneBar');
-  if(bar)bar.style.display=isToday?'flex':'none';
+  if(!bar)return;
+  bar.style.display=isToday?'inline-block':'none';
   if(!isToday)return;
-  if(chk){chk.textContent=done?'✓':'';chk.style.background=done?'var(--green)':'var(--card2)';chk.style.borderColor=done?'var(--green)':'var(--border2)';chk.style.color=done?'#000':'';}
-  if(lbl){lbl.textContent=done?'Day done — macros finalised':'Still eating — macros in progress';lbl.style.color=done?'var(--green)':'var(--text2)';}
-  if(bar){bar.style.borderColor=done?'rgba(0,212,138,0.4)':'var(--border)';}
+  if(done){
+    bar.textContent='DAY DONE ✓';
+    bar.style.background='var(--green-dim)';
+    bar.style.borderColor='var(--green)';
+    bar.style.color='var(--green)';
+  } else {
+    bar.textContent='DAY DONE';
+    bar.style.background='var(--card2)';
+    bar.style.borderColor='var(--border2)';
+    bar.style.color='var(--muted)';
+  }
 }
 // Init on load
 document.addEventListener('DOMContentLoaded',function(){dayDoneRender();});
