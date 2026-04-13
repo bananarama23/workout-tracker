@@ -543,14 +543,6 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         </div>
       </div>
     </div>
-    <!-- Day Done checkbox -->
-    <div id="dayDoneBar" style="margin:0 16px 10px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="dayDoneToggle()">
-      <div>
-        <div style="font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:2px;">Day Status</div>
-        <div id="dayDoneLabel" style="font-size:0.82rem;font-weight:600;color:var(--text2);">Still eating — macros in progress</div>
-      </div>
-      <div id="dayDoneChk" style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border2);background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.2s;flex-shrink:0;"></div>
-    </div>
     <!-- Cholesterol since last test — shown on home screen -->
     <div id="homeCholCard" style="display:none;margin:0 16px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;"></div>
     <div class="week-strip">
@@ -1187,6 +1179,15 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
       <!-- Meal sections — rendered by JS -->
       <div id="nutMeals"></div>
+
+      <!-- Day Done checkbox -->
+      <div id="dayDoneBar" style="margin:0 16px 10px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="dayDoneToggle()">
+        <div>
+          <div style="font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:2px;">Day Status</div>
+          <div id="dayDoneLabel" style="font-size:0.82rem;font-weight:600;color:var(--text2);">Still eating — macros in progress</div>
+        </div>
+        <div id="dayDoneChk" style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border2);background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.2s;flex-shrink:0;"></div>
+      </div>
 
       <!-- Sync: phone is truth button -->
       <div style="margin:0 16px 8px;display:flex;align-items:center;gap:8px;">
@@ -4763,31 +4764,53 @@ function budCalc(){
   s('bSpareVal',fmt(leftOver),leftOver>=0?'var(--green)':'var(--red)');
   s('bVegasSpare',fmt(leftOver),leftOver>=0?'var(--accent)':'var(--red)');
 
-  // Savings projection — always use TODAY's real equity (not the selected future month)
+  // Savings projection — scan column B rows to find which month equity first hits the down payment target
   var projEl=document.getElementById('bProjection');
   if(projEl){
-    var todayEquity=0;
-    if(_budSheetData.monthRows&&_budSheetData.monthRows.length){
-      var todayIdx=budCurrentMonthIdx();
-      var todayRow=_budSheetData.monthRows[todayIdx]||_budSheetData.monthRows[0];
-      if(todayRow&&todayRow.equity!==null)todayEquity=Math.round(todayRow.equity);
-    } else {
-      try{var _st2=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');if(_st2.lastEquity)todayEquity=Math.round(_st2.lastEquity);}catch(e){}
+    var rows=_budSheetData.monthRows;
+    var todayIdx=budCurrentMonthIdx();
+    var foundMonth=null, foundMonths=null;
+    if(rows&&rows.length>1){
+      // Walk forward from today through all future rows
+      for(var ri=todayIdx+1;ri<rows.length;ri++){
+        if(rows[ri]&&rows[ri].equity!==null&&rows[ri].equity>=downPayment){
+          foundMonth=ri;
+          foundMonths=ri-todayIdx;
+          break;
+        }
+      }
+      // Also wrap around (rows are Dec→Nov, might need to look at earlier indices as future months)
+      if(foundMonth===null){
+        for(var rj=0;rj<todayIdx;rj++){
+          if(rows[rj]&&rows[rj].equity!==null&&rows[rj].equity>=downPayment){
+            foundMonth=rj;
+            foundMonths=(rows.length-todayIdx)+rj;
+            break;
+          }
+        }
+      }
     }
-    var dpTarget2=downPayment>0?downPayment:1;
-    var dpNeeded2=Math.max(0,dpTarget2-todayEquity);
-    if(leftOver>0&&dpNeeded2>0){
-      var months=Math.ceil(dpNeeded2/leftOver);
-      var projDate=new Date();projDate.setMonth(projDate.getMonth()+months);
-      var projStr=projDate.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
-      projEl.textContent='At this rate: '+months+' months \u2014 '+projStr;
+    if(foundMonths!==null&&foundMonths>0){
+      var projDate2=new Date();projDate2.setMonth(projDate2.getMonth()+foundMonths);
+      var projStr2=projDate2.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
+      projEl.textContent='At this rate: '+foundMonths+' months \u2014 '+projStr2;
       projEl.style.color='var(--green)';
+    } else if(foundMonths===0||currentEquity>=downPayment){
+      projEl.textContent='Down payment goal reached \u2713';
+      projEl.style.color='var(--green)';
+    } else if(leftOver>0&&dpNeeded>0){
+      // Fallback if no sheet rows: simple division
+      var months=Math.ceil(dpNeeded/leftOver);
+      var projDate3=new Date();projDate3.setMonth(projDate3.getMonth()+months);
+      var projStr3=projDate3.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
+      projEl.textContent='At this rate: ~'+months+' months \u2014 '+projStr3;
+      projEl.style.color='var(--yellow)';
     } else if(leftOver<=0){
       projEl.textContent='Increase spare to project timeline';
       projEl.style.color='var(--orange)';
     } else {
-      projEl.textContent='Down payment goal reached \u2713';
-      projEl.style.color='var(--green)';
+      projEl.textContent='No sheet data to project yet';
+      projEl.style.color='var(--muted)';
     }
   }
 
@@ -5051,7 +5074,6 @@ function dayDoneSet(val){
 }
 function dayDoneToggle(){
   var done=!dayDoneGet();dayDoneSet(done);dayDoneRender();
-  // Re-render nutrition if on that page so macros reflect final state
   if(typeof nutRenderDay==='function')nutRenderDay();
 }
 function dayDoneRender(){
@@ -5558,6 +5580,7 @@ function nutTotals(entries){
 }
 
 function nutRenderDay(){
+  dayDoneRender();
   var entries=nutDayEntries(),tot=nutTotals(entries);
   var activeCals=nutGetActiveCals(_nutDate);
   var adjustment=activeCals!==null?Math.round((activeCals-NUT_ACTIVE_BASE)*0.5):0;
