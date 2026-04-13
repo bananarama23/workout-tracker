@@ -1830,16 +1830,25 @@ function renderHomeData(sessions){
 function calcStreak(sessions){
   var wc={};
   sessions.forEach(function(s){
-    if(!wc[s.week])wc[s.week]={str:0,hiit:0};
-    if(isHIIT(s.workoutType))wc[s.week].hiit++;
-    else if(s.workoutType!=='Walk')wc[s.week].str++;
+    if(!wc[s.week])wc[s.week]={str:0,hiit:0,effort:0,dur:0,hasEffortData:false};
+    if(isHIIT(s.workoutType)){
+      wc[s.week].hiit++;
+      var eff=parseInt(s.effort)||0,dur=parseInt(s.duration)||0;
+      wc[s.week].effort+=eff;wc[s.week].dur+=dur;
+      if(eff>0||dur>0)wc[s.week].hasEffortData=true;
+    } else if(s.workoutType!=='Walk')wc[s.week].str++;
   });
   var currentWeek='Week '+getWeekNum();
   var weeks=Object.keys(wc).sort().reverse(),streak=0;
   for(var w=0;w<weeks.length;w++){
-    // Skip current week — it's in progress, don't let it break the streak
     if(weeks[w]===currentWeek)continue;
-    if(wc[weeks[w]].str>=_goals.strGoal&&wc[weeks[w]].hiit>=_goals.hiitSessions)streak++;
+    var wk=wc[weeks[w]];
+    var strOk=wk.str>=_goals.strGoal;
+    var hiitOk=wk.hiit>=_goals.hiitSessions;
+    // Only check effort/duration if this week has effort data (new sessions)
+    // Old sessions without effort stored just need session count
+    var effortOk=!wk.hasEffortData||(wk.effort>=_goals.effortGoal&&wk.dur>=_goals.durGoal);
+    if(strOk&&hiitOk&&effortOk)streak++;
     else break;
   }
   return streak;
@@ -4149,15 +4158,40 @@ function stat(val,color,lbl,target){
       (target?'<div style="font-size:0.48rem;color:var(--muted);margin-top:1px;">tgt '+target+'</div>':'')+
     '</div>';
   }
+  // Compute last-7-day avg for trend arrows (compare recent 7 days vs prior 7 days)
+  var recent7=[],prior7=[];
+  for(var ri=7;ri>=1;ri--)recent7.push(nutShiftDate(localDateStr(),-ri));
+  for(var pi=14;pi>=8;pi--)prior7.push(nutShiftDate(localDateStr(),-pi));
+  var r7logged=recent7.filter(function(d){return _nutEntries&&_nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});});
+  var p7logged=prior7.filter(function(d){return _nutEntries&&_nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});});
+  function weekAvg(days,key){if(!days.length)return null;var s=0;days.forEach(function(d){var t=nutTotals(nutDayEntries(d));s+=t[key]||0;});return Math.round(s/days.length);}
+  function trendArrow(key,moreIsBetter){
+    var rv=weekAvg(r7logged,key),pv=weekAvg(p7logged,key);
+    if(rv===null||pv===null||pv===0)return '';
+    var diff=rv-pv,pct=Math.round(Math.abs(diff)/pv*100);
+    if(Math.abs(diff)<2)return '<span style="font-size:0.55rem;color:var(--muted);">~</span>';
+    var up=diff>0;
+    var good=(moreIsBetter&&up)||(!moreIsBetter&&!up);
+    return '<span style="font-size:0.65rem;color:'+(good?'var(--green)':'var(--red)')+';">'+
+      (up?'↑':'↓')+pct+'%</span>';
+  }
+  function stat2(val,color,lbl,target,arrow){
+    return '<div style="flex:1;text-align:center;">'+
+      '<div style="font-size:0.95rem;font-weight:700;color:'+color+';">'+val+'</div>'+
+      (arrow?'<div style="margin-top:1px;">'+arrow+'</div>':'')+
+      '<div style="font-size:0.52rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:1px;">'+lbl+'</div>'+
+      (target?'<div style="font-size:0.48rem;color:var(--muted);margin-top:1px;">tgt '+target+'</div>':'')+
+    '</div>';
+  }
   card.style.display='block';
   card.innerHTML=
     '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;">Diet since blood test · '+n+' days</div>'+
     '<div style="display:flex;gap:4px;">'+
-      stat(avg('calories').toLocaleString(), col(avg('calories'),avgEffBudget,false), 'Kcal', avgEffBudget.toLocaleString())+
-      stat(avg('protein')+'g', col(avg('protein'),tProt,true), 'Protein', tProt+'g')+
-      stat(avg('fibre')+'g', col(avg('fibre'),tFib,true), 'Fibre', tFib+'g')+
-      stat(avg('satFat')+'g', col(avg('satFat'),tSat,false), 'Sat Fat', tSat+'g')+
-      stat(Math.round(avg('sodium')/100)/10+'g', col(avg('sodium'),tSod,false), 'Sodium', Math.round(tSod/100)/10+'g')+
+      stat2(avg('calories').toLocaleString(), col(avg('calories'),avgEffBudget,false), 'Kcal', avgEffBudget.toLocaleString(), trendArrow('calories',false))+
+      stat2(avg('protein')+'g', col(avg('protein'),tProt,true), 'Protein', tProt+'g', trendArrow('protein',true))+
+      stat2(avg('fibre')+'g', col(avg('fibre'),tFib,true), 'Fibre', tFib+'g', trendArrow('fibre',true))+
+      stat2(avg('satFat')+'g', col(avg('satFat'),tSat,false), 'Sat Fat', tSat+'g', trendArrow('satFat',false))+
+      stat2(Math.round(avg('sodium')/100)/10+'g', col(avg('sodium'),tSod,false), 'Sodium', Math.round(tSod/100)/10+'g', trendArrow('sodium',false))+
     '</div>';
 }
 
@@ -6050,6 +6084,7 @@ function nutShowMacroChart(key,label,unit,tKey,col){
     vals.forEach(function(v,i){if(v!==null){totalDiff+=v-targets[i];loggedCount++;}});
     var isUnder=totalDiff<=0;
 
+    var goalIsMin=key==='protein'||key==='fibre'; // these need >= target
     var html='';
     // Week label
     html+='<div style="font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">'+weekLabel+'</div>';
@@ -6062,7 +6097,6 @@ function nutShowMacroChart(key,label,unit,tKey,col){
       var hasData=v!==null;
       var filledPct=hasData?Math.min(100,Math.round((v/maxVal)*100)):0;
       var targetPct=Math.min(100,Math.round((t/maxVal)*100));
-      var goalIsMin=key==='protein'||key==='fibre'; // these need >= target
       var under=hasData&&(goalIsMin?v>=t:v<=t);
       var barCol=!hasData?'var(--border2)':under?'var(--green)':'var(--red)';
       html+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;height:100%;">';
@@ -6085,13 +6119,20 @@ function nutShowMacroChart(key,label,unit,tKey,col){
     });
     html+='</div>';
     // Cumulative summary
+    var loggedVals=vals.filter(function(v){return v!==null;});
+    var dayAvg=loggedCount?Math.round(loggedVals.reduce(function(a,b){return a+b;},0)/loggedCount):0;
     if(loggedCount>0){
       var diffAbs=Math.abs(Math.round(totalDiff));
       var summaryGood=goalIsMin?!isUnder:isUnder;
       var summaryWord=goalIsMin?(isUnder?'under':'over'):( isUnder?'under':'over');
-      html+='<div style="text-align:center;font-size:1.1rem;font-weight:700;color:'+(summaryGood?'var(--green)':'var(--red)')+';margin-bottom:4px;">'+
-        diffAbs+unit+' '+(summaryWord)+' '+(goalIsMin?'target':'budget')+' for week</div>';
-      html+='<div style="text-align:center;font-size:0.65rem;color:var(--muted);margin-bottom:16px;">'+loggedCount+' day'+(loggedCount!==1?'s':'')+' logged \u00b7 avg '+(loggedCount?Math.round(vals.filter(function(v){return v!==null;}).reduce(function(a,b){return a+b;},0)/loggedCount):0)+unit+'</div>';
+      // Prominent daily avg
+      html+='<div style="display:flex;align-items:baseline;justify-content:center;gap:4px;margin-bottom:2px;">';
+      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2.2rem;color:var(--text);line-height:1;">'+dayAvg+'</div>';
+      html+='<div style="font-size:0.7rem;color:var(--muted);">'+(unit==='kcal'?'kcal':unit)+' daily avg</div>';
+      html+='</div>';
+      html+='<div style="text-align:center;font-size:0.72rem;font-weight:700;color:'+(summaryGood?'var(--green)':'var(--red)')+';margin-bottom:2px;">'+
+        diffAbs+unit+' '+(summaryWord)+' '+(goalIsMin?'target':'budget')+' this week</div>';
+      html+='<div style="text-align:center;font-size:0.62rem;color:var(--muted);margin-bottom:16px;">'+loggedCount+' of '+weekDays.length+' days logged</div>';
     }
     return html;
   }
