@@ -567,7 +567,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <div class="ws-lbl">Walk</div>
         <div class="ws-sub" id="wkWalkSub">km</div>
       </div>
-      <div class="week-stat">
+      <div class="week-stat" onclick="showStreakHistory()">
         <div class="ws-num c-accent" id="wkStreak">-</div>
         <div class="ws-lbl">Streak</div>
         <div class="ws-sub">weeks</div>
@@ -3607,6 +3607,110 @@ function showHistory(type){
 function goEditSession(){closeHistory();navTo('log');switchLogTab('edit');}
 function closeHistory(){document.getElementById('historyOverlay').style.display='none';}
 
+function showStreakHistory(){
+  document.getElementById('historyTitle').textContent='WEEKLY OVERVIEW';
+  document.getElementById('historyOverlay').style.display='flex';
+  function render(sessions){
+    // Build 12 Monday-anchored weeks going back from last completed week
+    var today=new Date();today.setHours(0,0,0,0);
+    // Find most recent Monday
+    var dow=today.getDay();
+    var thisMon=new Date(today);thisMon.setDate(today.getDate()-(dow===0?6:dow-1));
+    var weeks=[];
+    for(var w=1;w<=12;w++){
+      var mon=new Date(thisMon);mon.setDate(thisMon.getDate()-(w*7));
+      var sun=new Date(mon);sun.setDate(mon.getDate()+6);
+      var dates=[];for(var d=0;d<7;d++){var dd=new Date(mon);dd.setDate(mon.getDate()+d);dates.push(fmtDate(dd));}
+      var weekLabel='Week '+getWeekNum(mon);
+      weeks.push({mon:mon,sun:sun,dates:dates,label:weekLabel,w:w});
+    }
+
+    // Also include current week (in progress)
+    var curDates=[];
+    for(var d=0;d<7;d++){var dd=new Date(thisMon);dd.setDate(thisMon.getDate()+d);curDates.push(fmtDate(dd));}
+    weeks.unshift({mon:new Date(thisMon),sun:new Date(thisMon.getTime()+6*86400000),dates:curDates,label:'Week '+getWeekNum(thisMon),w:0,current:true});
+
+    // Bucket sessions by date
+    var byDate={};
+    (sessions||[]).forEach(function(s){if(s.date)byDate[s.date]=(byDate[s.date]||[]).concat(s);});
+
+    var html='<div style="padding:4px 0 8px;">';
+    weeks.forEach(function(wk){
+      var str=0,hiit=0,effort=0,dur=0,types=[];
+      wk.dates.forEach(function(d){
+        (byDate[d]||[]).forEach(function(s){
+          var wt=s.workoutType||'';
+          if(wt.indexOf('Strength')>=0){str++;}
+          else if(isHIIT(wt)){hiit++;effort+=parseInt(s.effort)||0;dur+=parseInt(s.duration)||0;}
+          if(wt&&types.indexOf(wt)<0)types.push(wt);
+        });
+      });
+
+      // Goal status
+      var strOk=str>=_goals.strGoal,hiitOk=hiit>=_goals.hiitSessions;
+      var effortOk=effort>=_goals.effortGoal,durOk=dur>=_goals.durGoal;
+      var allOk=strOk&&hiitOk&&effortOk&&durOk;
+      var anyDone=str>0||hiit>0;
+
+      // Colour
+      var borderCol=wk.current?'var(--border2)':allOk?'rgba(0,212,138,0.35)':anyDone?'rgba(255,204,0,0.25)':'var(--border)';
+      var accentCol=allOk?'var(--green)':anyDone?'var(--yellow)':'var(--muted)';
+      var bg=wk.current?'var(--card2)':'var(--card)';
+
+      var monStr=wk.mon.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+      var sunStr=wk.sun.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+
+      html+='<div style="margin-bottom:8px;background:'+bg+';border:1px solid '+borderCol+';border-radius:10px;padding:10px 12px;">';
+
+      // Header row: week label + date range + status dot
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">';
+      html+='<div style="display:flex;align-items:center;gap:8px;">';
+      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:0.95rem;letter-spacing:1px;color:'+accentCol+';">'+wk.label+'</div>';
+      html+='<div style="font-size:0.62rem;color:var(--muted);">'+monStr+' \u2013 '+sunStr+'</div>';
+      if(wk.current)html+='<div style="font-size:0.55rem;font-weight:700;letter-spacing:1px;color:var(--blue);background:var(--blue-dim);padding:2px 6px;border-radius:10px;">IN PROGRESS</div>';
+      html+='</div>';
+      if(allOk&&!wk.current)html+='<div style="font-size:0.75rem;">✅</div>';
+      else if(!anyDone&&!wk.current)html+='<div style="font-size:0.65rem;color:var(--muted);">REST</div>';
+      html+='</div>';
+
+      // Stats row
+      html+='<div style="display:flex;gap:6px;align-items:center;">';
+
+      // Strength pill
+      html+='<div style="display:flex;align-items:center;gap:4px;background:var(--card2);border:1px solid '+(strOk?'rgba(0,212,138,0.4)':'var(--border)')+';border-radius:8px;padding:4px 8px;">';
+      html+='<div style="font-size:0.6rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">STR</div>';
+      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:'+(strOk?'var(--green)':str>0?'var(--yellow)':'var(--muted)')+';">'+str+'/'+_goals.strGoal+'</div>';
+      html+='</div>';
+
+      // HIIT pill
+      html+='<div style="display:flex;align-items:center;gap:4px;background:var(--card2);border:1px solid '+(hiitOk?'rgba(0,212,138,0.4)':'var(--border)')+';border-radius:8px;padding:4px 8px;">';
+      html+='<div style="font-size:0.6rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">HIIT</div>';
+      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:'+(hiitOk?'var(--green)':hiit>0?'var(--yellow)':'var(--muted)')+';">'+hiit+'/'+_goals.hiitSessions+'</div>';
+      html+='</div>';
+
+      // Effort + Duration (only if any HIIT done)
+      if(hiit>0){
+        html+='<div style="display:flex;align-items:center;gap:4px;background:var(--card2);border:1px solid '+(effortOk?'rgba(0,212,138,0.4)':'var(--border)')+';border-radius:8px;padding:4px 8px;">';
+        html+='<div style="font-size:0.6rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">EFF</div>';
+        html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:'+(effortOk?'var(--green)':'var(--yellow)')+';">'+effort+'/'+_goals.effortGoal+'</div>';
+        html+='</div>';
+        html+='<div style="display:flex;align-items:center;gap:4px;background:var(--card2);border:1px solid '+(durOk?'rgba(0,212,138,0.4)':'var(--border)')+';border-radius:8px;padding:4px 8px;">';
+        html+='<div style="font-size:0.6rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">MIN</div>';
+        html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:'+(durOk?'var(--green)':'var(--yellow)')+';">'+dur+'/'+_goals.durGoal+'</div>';
+        html+='</div>';
+      }
+
+      html+='</div>'; // stats row
+      html+='</div>'; // week card
+    });
+
+    html+='</div>';
+    document.getElementById('historyContent').innerHTML=html;
+  }
+  if(_cachedSessions){render(_cachedSessions);}
+  else{fetchHistory(function(s){_cachedSessions=s||[];render(_cachedSessions);});}
+}
+
 // ─── PLAN ─────────────────────────────────────────────────────────
 var PLAN_TYPES=['Home','Hotel','HIIT','Rest','Travel'];
 var PLAN_COLORS={'Home':'pt-home','Hotel':'pt-hotel','HIIT':'pt-hiit','Rest':'pt-rest','Travel':'pt-travel'};
@@ -5951,7 +6055,8 @@ function nutShowMacroChart(key,label,unit,tKey,col){
       var hasData=v!==null;
       var filledPct=hasData?Math.min(100,Math.round((v/maxVal)*100)):0;
       var targetPct=Math.min(100,Math.round((t/maxVal)*100));
-      var under=hasData&&v<=t;
+      var goalIsMin=key==='protein'||key==='fibre'; // these need >= target
+      var under=hasData&&(goalIsMin?v>=t:v<=t);
       var barCol=!hasData?'var(--border2)':under?'var(--green)':'var(--red)';
       html+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;height:100%;">';
       html+='<div style="flex:1;width:100%;display:flex;flex-direction:column;justify-content:flex-end;position:relative;">';
@@ -5964,8 +6069,8 @@ function nutShowMacroChart(key,label,unit,tKey,col){
       html+='</div>';
       // Checkmark or dot
       html+='<div style="height:16px;display:flex;align-items:center;justify-content:center;">';
-      if(hasData&&under)html+='<span style="color:var(--green);font-size:10px;">✓</span>';
-      else if(hasData&&!under)html+='<span style="color:var(--red);font-size:8px;">▲</span>';
+      if(hasData&&under)html+='<span style="color:var(--green);font-size:10px;">'+(goalIsMin?'✓':'✓')+'</span>';
+      else if(hasData&&!under)html+='<span style="color:var(--red);font-size:8px;">'+(goalIsMin?'▼':'▲')+'</span>';
       html+='</div>';
       // Day label
       html+='<div style="font-size:0.6rem;color:'+(isToday?'var(--accent)':'var(--muted)')+';font-weight:'+(isToday?'700':'400')+';">'+dayNames[i]+'</div>';
@@ -5975,8 +6080,10 @@ function nutShowMacroChart(key,label,unit,tKey,col){
     // Cumulative summary
     if(loggedCount>0){
       var diffAbs=Math.abs(Math.round(totalDiff));
-      html+='<div style="text-align:center;font-size:1.1rem;font-weight:700;color:'+(isUnder?'var(--green)':'var(--red)')+';margin-bottom:4px;">'+
-        diffAbs+unit+' '+(isUnder?'under':'over')+' budget for week</div>';
+      var summaryGood=goalIsMin?!isUnder:isUnder;
+      var summaryWord=goalIsMin?(isUnder?'under':'over'):( isUnder?'under':'over');
+      html+='<div style="text-align:center;font-size:1.1rem;font-weight:700;color:'+(summaryGood?'var(--green)':'var(--red)')+';margin-bottom:4px;">'+
+        diffAbs+unit+' '+(summaryWord)+' '+(goalIsMin?'target':'budget')+' for week</div>';
       html+='<div style="text-align:center;font-size:0.65rem;color:var(--muted);margin-bottom:16px;">'+loggedCount+' day'+(loggedCount!==1?'s':'')+' logged \u00b7 avg '+(loggedCount?Math.round(vals.filter(function(v){return v!==null;}).reduce(function(a,b){return a+b;},0)/loggedCount):0)+unit+'</div>';
     }
     return html;
@@ -6005,10 +6112,12 @@ function nutShowMacroChart(key,label,unit,tKey,col){
     var prevAvg=prevLogged?Math.round(prevVals.filter(function(v){return v!==null;}).reduce(function(a,b){return a+b;},0)/prevLogged):0;
     html+='<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;text-align:center;">';
     html+='<div style="font-size:0.6rem;color:var(--muted);margin-bottom:6px;">'+wLbl+'</div>';
-    html+='<div style="width:36px;height:36px;border-radius:50%;background:'+(prevUnder?'var(--green)':'var(--red)')+';display:flex;align-items:center;justify-content:center;margin:0 auto 6px;">';
-    html+='<span style="color:#fff;font-size:1rem;">'+(prevUnder?'↓':'↑')+'</span></div>';
+    var prevGoalIsMin=key==='protein'||key==='fibre';
+    var prevGood=prevGoalIsMin?!prevUnder:prevUnder;
+    html+='<div style="width:36px;height:36px;border-radius:50%;background:'+(prevGood?'var(--green)':'var(--red)')+';display:flex;align-items:center;justify-content:center;margin:0 auto 6px;">';
+    html+='<span style="color:#fff;font-size:1rem;">'+(prevGood?'✓':'✗')+'</span></div>';
     html+='<div style="font-size:0.88rem;font-weight:700;color:var(--text);">'+prevAvg+unit+'</div>';
-    html+='<div style="font-size:0.58rem;color:'+(prevUnder?'var(--green)':'var(--red)')+';">'+Math.abs(Math.round(prevDiff))+unit+' '+(prevUnder?'under':'over')+'</div>';
+    html+='<div style="font-size:0.58rem;color:'+(prevGood?'var(--green)':'var(--red)')+';">'+Math.abs(Math.round(prevDiff))+unit+' '+(prevUnder?'under':'over')+'</div>';
     html+='</div>';
   }
   html+='</div>';
