@@ -1181,9 +1181,12 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
       <!-- Daily targets (collapsible) -->
       <div style="margin:4px 16px 16px;">
-        <button onclick="nutToggleTargets()" style="width:100%;background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);padding:11px 16px;color:var(--muted);font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;font-family:'Bebas Neue',sans-serif;cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;">
-          <span style="font-size:0.9rem;">⚙</span> Daily Targets
-        </button>
+        <div style="display:flex;gap:0;border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);">
+          <button onclick="nutToggleTargets()" style="flex:1;background:transparent;padding:11px 16px;color:var(--muted);font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;font-family:'Bebas Neue',sans-serif;cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;border:none;">
+            <span style="font-size:0.9rem;">⚙</span> Daily Targets
+          </button>
+          <button onclick="nutSaveTargets()" id="nutTargetsSaveTopBtn" style="display:none;background:var(--accent);color:#000;border:none;border-left:1px solid var(--border);padding:11px 16px;font-family:'Bebas Neue',sans-serif;font-size:0.68rem;letter-spacing:2px;font-weight:900;cursor:pointer;text-transform:uppercase;">SAVE</button>
+        </div>
         <div id="nutTargetsPanel" style="display:none;background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-sm) var(--r-sm);padding:16px;">
           <div style="margin-bottom:12px;">
             <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Goal Weight (lbs)</div>
@@ -1292,6 +1295,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div style="display:flex;gap:8px;align-items:center;">
         <button onclick="nutCamOpen()" style="background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);padding:6px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;cursor:pointer;">📷 SCAN</button>
         <button onclick="nutOpenTypeFood()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);padding:6px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;cursor:pointer;">⌨ TYPE</button>
+        <button onclick="nutSaveFood()" style="background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);padding:6px 14px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;font-weight:900;cursor:pointer;">SAVE</button>
         <button onclick="nutCloseFoodForm()" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
       </div>
     </div>
@@ -1336,6 +1340,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;" id="nutServingFoodName">Food</div>
       <div style="display:flex;gap:6px;align-items:center;">
         <button id="nutServingEditBtn" onclick="nutServingEditFood()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);padding:4px 10px;font-size:0.62rem;font-weight:700;letter-spacing:0.5px;cursor:pointer;text-transform:uppercase;">EDIT</button>
+        <button onclick="nutConfirmServing()" style="background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);padding:4px 14px;font-family:'Bebas Neue',sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">ADD</button>
         <button onclick="document.getElementById('nutServingOverlay').style.display='none'" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
       </div>
     </div>
@@ -5391,13 +5396,22 @@ function nutSaveTargets(){
   if(gwEl&&gwEl.value)_nutTargets.goalWeight=parseFloat(gwEl.value)||0;
   try{localStorage.setItem(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));}catch(e){}
   var p=document.getElementById('nutTargetsPanel');if(p)p.style.display='none';
+  var saveBtn=document.getElementById('nutTargetsSaveTopBtn');if(saveBtn)saveBtn.style.display='none';
   nutRenderDay();
   nutMsg('Targets saved \u2713','var(--green)');
   setTimeout(function(){nutMsg('');},2000);
 }
 function nutToggleTargets(){
   var p=document.getElementById('nutTargetsPanel');if(!p)return;
-  if(p.style.display==='none'){nutRenderTargetInputs();p.style.display='block';}else p.style.display='none';
+  var saveBtn=document.getElementById('nutTargetsSaveTopBtn');
+  if(p.style.display==='none'){
+    nutRenderTargetInputs();
+    p.style.display='block';
+    if(saveBtn)saveBtn.style.display='block';
+  } else {
+    p.style.display='none';
+    if(saveBtn)saveBtn.style.display='none';
+  }
 }
 function nutRenderTargetInputs(){
   var c=document.getElementById('nutTargetInputs');if(!c)return;
@@ -6740,6 +6754,30 @@ function progAIFeedback(){
   if(btn){btn.textContent='Thinking...';btn.disabled=true;}
   if(card)card.style.display='block';
   if(result)result.textContent='Loading your data...';
+
+  // If weight data not yet loaded, fetch it first then proceed
+  if(!_bodyWeightData.length){
+    if(result)result.textContent='Fetching weight data...';
+    var cb='wt_bwt_ai_'+Date.now();
+    window[cb]=function(res){
+      window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
+      var rows=(res&&res.rows)?res.rows:[];
+      _bodyWeightData=rows.filter(function(r){return r.weight&&parseFloat(r.weight)>0;})
+        .map(function(r){return{date:r.date,weight:parseFloat(r.weight),waist:parseFloat(r.waist)||0};})
+        .sort(function(a,b){return a.date<b.date?-1:1;}).slice(-20);
+      progAIRunFeedback(geminiKey,btn,card,result);
+    };
+    var sc=document.createElement('script');sc.id='s_'+cb;
+    sc.onerror=function(){window[cb]=null;progAIRunFeedback(geminiKey,btn,card,result);};
+    sc.src=CLOUD_URL+'?type=getBodyMetrics&callback='+cb;
+    document.head.appendChild(sc);
+    setTimeout(function(){if(window[cb]){window[cb]=null;progAIRunFeedback(geminiKey,btn,card,result);}},8000);
+    return;
+  }
+  progAIRunFeedback(geminiKey,btn,card,result);
+}
+
+function progAIRunFeedback(geminiKey,btn,card,result){
 
   var today=localDateStr();
   var days=[];for(var i=27;i>=0;i--)days.push(nutShiftDate(today,-i));
