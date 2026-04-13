@@ -874,6 +874,17 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
     </div>
 
+    <!-- AI Calorie & Weight Feedback -->
+    <div class="prog-section" style="margin-bottom:6px;">
+      <div class="prog-section-hdr">
+        <div class="prog-section-lbl">AI Feedback</div>
+        <button onclick="progAIFeedback()" id="progAIBtn" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:4px 14px;font-family:'Bebas Neue',sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">✦ ASK GEMINI</button>
+      </div>
+      <div class="prog-card prog-card-pad" id="progAICard" style="display:none;">
+        <div id="progAIResult" style="font-size:0.82rem;line-height:1.6;color:var(--text2);"></div>
+      </div>
+    </div>
+
     <!-- Personal Records -->
     <div class="prog-section" style="margin-bottom:6px;">
       <div class="prog-section-hdr">
@@ -1279,6 +1290,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         </select>
       </div>
     </div>
+    <div class="log-field"><label>Serving description <span style="color:var(--muted);font-weight:400;">(optional, e.g. "13 crisps" or "1 medium banana")</span></label><input id="nff_servdesc" type="text" class="log-input" placeholder="e.g. 13 crisps, 1 slice, 1 medium banana"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div class="log-field"><label>Calories</label><input id="nff_cal" type="number" inputmode="decimal" class="log-input" placeholder="0"></div>
       <div class="log-field"><label>Protein (g)</label><input id="nff_prot" type="number" inputmode="decimal" class="log-input" placeholder="0"></div>
@@ -1307,24 +1319,29 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <button onclick="document.getElementById('nutServingOverlay').style.display='none'" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
       </div>
     </div>
-    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:16px;" id="nutServingDefault">Per 100g</div>
-    <!-- Amount + unit + servings -->
-    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;margin-bottom:12px;align-items:end;">
+    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:8px;" id="nutServingDefault">Per 100g</div>
+    <div id="nutPerItemRow" style="display:none;margin-bottom:12px;"></div>
+    <!-- Amount + servings row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
       <div class="log-field">
-        <label id="nutServingAmtLabel">Amount</label>
+        <label id="nutServingAmtLabel">Amount (g)</label>
         <input id="nutServingAmt" type="number" inputmode="decimal" step="1" value="100" oninput="_nutLastTouched='amt';nutServingPreview()" class="log-input log-input-big" style="text-align:center;">
-      </div>
-      <div class="log-field" style="margin-bottom:0;">
-        <label style="visibility:hidden;">u</label>
-        <select id="nutServingUnitSel" onchange="nutServingUnitChange()" style="background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);padding:10px 6px;font-size:0.82rem;outline:none;height:52px;">
-          <option value="native">—</option>
-          <option value="g">g</option><option value="oz">oz</option><option value="lb">lb</option>
-          <option value="ml">ml</option><option value="cup">cup</option>
-        </select>
       </div>
       <div class="log-field">
         <label>Servings</label>
         <input id="nutServingQty" type="number" inputmode="decimal" step="0.25" value="1" oninput="_nutLastTouched='qty';nutServingPreview()" class="log-input log-input-big" style="text-align:center;">
+      </div>
+    </div>
+    <!-- Unit picker row -->
+    <div class="log-field" style="margin-bottom:12px;">
+      <label style="font-size:0.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;display:block;margin-bottom:7px;">Convert unit</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button onclick="nutServingUnitChange('native')" class="nutUnitBtn" data-u="native" style="padding:6px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--accent);color:#000;font-size:0.7rem;font-weight:700;cursor:pointer;">Native</button>
+        <button onclick="nutServingUnitChange('g')" class="nutUnitBtn" data-u="g" style="padding:6px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);font-size:0.7rem;font-weight:700;cursor:pointer;">g</button>
+        <button onclick="nutServingUnitChange('oz')" class="nutUnitBtn" data-u="oz" style="padding:6px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);font-size:0.7rem;font-weight:700;cursor:pointer;">oz</button>
+        <button onclick="nutServingUnitChange('lb')" class="nutUnitBtn" data-u="lb" style="padding:6px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);font-size:0.7rem;font-weight:700;cursor:pointer;">lb</button>
+        <button onclick="nutServingUnitChange('ml')" class="nutUnitBtn" data-u="ml" style="padding:6px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);font-size:0.7rem;font-weight:700;cursor:pointer;">ml</button>
+        <button onclick="nutServingUnitChange('cup')" class="nutUnitBtn" data-u="cup" style="padding:6px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);font-size:0.7rem;font-weight:700;cursor:pointer;">cup</button>
       </div>
     </div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:space-around;" id="nutServingPreviewBox"></div>
@@ -3640,12 +3657,17 @@ function updateWeekGoalBar(days){
   if(bar)bar.style.borderColor=allDone?'rgba(0,212,138,0.4)':'var(--border)';
 }
 
+var _planSaveTimer=null;
 function cyclePlanType(dateStr){
   var idx=PLAN_TYPES.indexOf(_weekPlan[dateStr]||'Rest');
   _weekPlan[dateStr]=PLAN_TYPES[(idx+1)%PLAN_TYPES.length];
   renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
   if(dateStr===fmtDate(new Date()))updateTodayCard(dateStr);
-  saveWeekPlan();
+  // Debounce: wait 1.5s after last change before saving
+  var msg=document.getElementById('planMsg');
+  if(msg){msg.textContent='Unsaved...';msg.style.color='var(--muted)';}
+  if(_planSaveTimer)clearTimeout(_planSaveTimer);
+  _planSaveTimer=setTimeout(function(){_planSaveTimer=null;saveWeekPlan();},1500);
 }
 
 function saveWeekPlan(){
@@ -4375,10 +4397,14 @@ function budBuildMonthDropdown(monthRows){
   budUpdateEquityBank(monthRows,curIdx);
   var initRow=monthRows[curIdx];
   var initInp=document.getElementById('bEquityEdit');
+  _budEquitySetByCode=true;
   if(initInp&&initRow&&initRow.equity!==null)initInp.value=Math.round(initRow.equity);
+  _budEquitySetByCode=false;
 }
 
+var _budEquitySetByCode=false;
 function budEquityEditChanged(){
+  if(_budEquitySetByCode)return; // programmatic set — not a user edit
   var btn=document.getElementById('bEquitySaveBtn');
   var msg=document.getElementById('bEquitySaveMsg');
   if(btn){btn.style.background='var(--accent)';btn.style.color='#000';}
@@ -4417,14 +4443,17 @@ function budPickMonth(){
   var idx=parseInt(sel.value);
   _budSelectedMonthIdx=idx;
   budUpdateEquityBank(_budSheetData.monthRows,idx);
-  // Pre-fill equity edit input with selected month's value
+  // Pre-fill equity edit input — flag so budEquityEditChanged ignores this programmatic change
   var row=_budSheetData.monthRows&&_budSheetData.monthRows[idx];
   var inp=document.getElementById('bEquityEdit');
+  _budEquitySetByCode=true;
   if(inp&&row&&row.equity!==null)inp.value=Math.round(row.equity);
   else if(inp)inp.value='';
+  _budEquitySetByCode=false;
   var btn=document.getElementById('bEquitySaveBtn');if(btn){btn.style.background='var(--accent-dim)';btn.style.color='var(--accent)';}
   var msg=document.getElementById('bEquitySaveMsg');if(msg)msg.textContent='';
   budCalc();
+  // Do NOT call budSetStatus('edited') — just viewing a different month is not a change
 }
 
 function budSetStatus(state){
@@ -5645,14 +5674,12 @@ function nutRenderDay(){
     var me=entries.filter(function(e){return e.meal===meal;});
     var mc=Math.round(me.reduce(function(a,e){return a+(e.calories||0);},0));
     var notEaten=nutGetNotEaten(_nutDate,meal);
-    var h='<div class="prog-section" style="margin-bottom:8px;'+(notEaten?'opacity:0.45;':'') +'">';
+    var h='<div class="prog-section" style="margin-bottom:8px;">';
     h+='<div class="prog-section-hdr">';
-    h+='<div class="prog-section-lbl">'+meal+(mc>0&&!notEaten?' \u2014 '+mc+' kcal':'')+(notEaten?' \u2014 not eaten':'')+'</div>';
-    h+='<div style="display:flex;gap:6px;align-items:center;">';
-    h+='<button onclick="nutToggleNotEaten(\''+meal+'\')" style="background:'+(notEaten?'var(--orange-dim)':'var(--card2)')+';border:1px solid '+(notEaten?'var(--orange)':'var(--border)')+';color:'+(notEaten?'var(--orange)':'var(--muted)')+';border-radius:20px;padding:3px 10px;font-size:0.58rem;font-weight:700;letter-spacing:0.5px;cursor:pointer;text-transform:uppercase;">'+(notEaten?'NOT EATEN':'SKIP')+'</button>';
+    h+='<div class="prog-section-lbl">'+meal+(mc>0?' \u2014 '+mc+' kcal':'')+'</div>';
     h+='<button onclick="nutOpenAdd(\''+meal+'\')" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:4px 12px;font-family:Bebas Neue,sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">+ ADD</button>';
-    h+='</div></div><div class="prog-card">';
-    if(me.length===0){h+='<div style="padding:13px 16px;font-size:0.8rem;color:var(--muted);">'+(notEaten?'Marked as not eaten':'Nothing logged yet')+'</div>';}
+    h+='</div><div class="prog-card">';
+    if(me.length===0){h+='<div style="padding:13px 16px;font-size:0.8rem;color:var(--muted);">Nothing logged yet</div>';}
     me.forEach(function(e){
       var gIdx=_nutEntries.indexOf(e);
       h+='<div class="sum-row" style="padding:10px 16px;cursor:pointer;" onclick="nutEditEntry('+gIdx+')">';
@@ -5868,6 +5895,7 @@ function nutOpenFoodForm(idx){
   document.getElementById('nff_serving').value=f?f.serving:'';
   var unitEl=document.getElementById('nff_unit');
   if(unitEl)unitEl.value=(f&&f.unit)||'g';
+  var sdEl=document.getElementById('nff_servdesc');if(sdEl)sdEl.value=(f&&f.servingDesc)||'';
   document.getElementById('nff_cal').value=f?f.calories:'';
   document.getElementById('nff_prot').value=f?f.protein:'';
   document.getElementById('nff_carb').value=f?f.carbs:'';
@@ -6073,7 +6101,7 @@ function nutCallVision(base64,mediaType,statusEl){
     nutApiKeyShow(base64,mediaType,statusEl);
     return;
   }
-  var promptText='This is a nutrition label or food packaging. Extract and return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per serving. Sodium in mg. Use null for unknown fields.';
+  var promptText='This is a nutrition label or food packaging. Extract and return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","servingDesc":"human description e.g. 13 crisps or 1 slice or 2 biscuits — leave blank string if not on label","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per serving. Sodium in mg. Use null for unknown fields.';
   var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
   fetch(url,{
     method:'POST',
@@ -6148,6 +6176,7 @@ function nutFillFromScan(d,statusEl){
   if(d.name)setVal('nff_name',d.name);
   if(d.serving)setVal('nff_serving',d.serving);
   if(d.unit){var unitEl=document.getElementById('nff_unit');if(unitEl)unitEl.value=d.unit;}
+  var sdEl=document.getElementById('nff_servdesc');if(sdEl)sdEl.value=d.servingDesc||'';
   setVal('nff_cal',d.calories!==null?Math.round(d.calories):'');
   setVal('nff_prot',d.protein!==null?Math.round(d.protein*10)/10:'');
   setVal('nff_carb',d.carbs!==null?Math.round(d.carbs*10)/10:'');
@@ -6186,7 +6215,8 @@ function _nutDoSave(name,sNum,sUnit,calories,msg){
     fibre:parseFloat(document.getElementById('nff_fib').value)||0,
     satFat:parseFloat(document.getElementById('nff_satfat').value)||0,
     sodium:parseFloat(document.getElementById('nff_sodium').value)||0,
-    serving:sNum,unit:sUnit};
+    serving:sNum,unit:sUnit,
+    servingDesc:(document.getElementById('nff_servdesc').value||'').trim()||undefined};
   var editIdx=document.getElementById('nff_editIdx').value;
   var isNew=editIdx==='';
   if(!isNew){_nutFoods[parseInt(editIdx)]=food;}
@@ -6321,25 +6351,42 @@ function nutFilterAddList(){
 }
 
 // Unit conversion helpers for serving overlay
-var _nutServingUnitMultiplier=1; // multiply native amount by this to get display unit
-function nutServingUnitChange(){
-  var sel=document.getElementById('nutServingUnitSel');
-  var f=_nutServingFood;if(!sel||!f)return;
-  var u=sel.value;
+var _nutServingUnitMultiplier=1;
+var _nutServingCurrentUnit='native';
+function nutSetPerItem(gramsPerItem,itemName){
+  // Set amount to 1 item, let user type how many items they want
+  _nutServingUnitMultiplier=1;
+  _nutServingCurrentUnit='native';
+  var amtEl=document.getElementById('nutServingAmt');
+  var lbl=document.getElementById('nutServingAmtLabel');
+  if(amtEl)amtEl.value=gramsPerItem;
+  if(lbl)lbl.textContent='Amount ('+(_nutServingFood&&_nutServingFood.unit||'g')+') — 1 '+itemName+' = '+gramsPerItem+(_nutServingFood&&_nutServingFood.unit||'g');
+  _nutLastTouched='amt';
+  nutServingPreview();
+}
+
+function nutServingUnitChange(u){
+  var f=_nutServingFood;if(!f)return;
+  _nutServingCurrentUnit=u||'native';
   var native=f.unit||'g';
-  // Conversion from native unit to selected display unit
   if(u==='native'||u===native){_nutServingUnitMultiplier=1;}
   else if((native==='g'||native==='ml')&&u==='oz'){_nutServingUnitMultiplier=1/28.3495;}
   else if((native==='g'||native==='ml')&&u==='lb'){_nutServingUnitMultiplier=1/453.592;}
   else if(native==='oz'&&u==='g'){_nutServingUnitMultiplier=28.3495;}
   else if(native==='lb'&&u==='g'){_nutServingUnitMultiplier=453.592;}
   else{_nutServingUnitMultiplier=1;}
-  // Reset amt to 1 serving in new unit
+  var displayUnit=u==='native'?native:u;
   var amtEl=document.getElementById('nutServingAmt');
   var lbl=document.getElementById('nutServingAmtLabel');
-  var displayUnit=u==='native'?native:u;
   if(amtEl)amtEl.value=Math.round(f.serving*_nutServingUnitMultiplier*100)/100;
   if(lbl)lbl.textContent='Amount ('+displayUnit+')';
+  // Highlight active button
+  document.querySelectorAll('.nutUnitBtn').forEach(function(btn){
+    var isActive=btn.getAttribute('data-u')===_nutServingCurrentUnit||(btn.getAttribute('data-u')==='native'&&_nutServingCurrentUnit==='native');
+    btn.style.background=isActive?'var(--accent)':'var(--card2)';
+    btn.style.color=isActive?'#000':'var(--muted)';
+    btn.style.borderColor=isActive?'var(--accent)':'var(--border2)';
+  });
   _nutLastTouched='amt';nutServingPreview();
 }
 function nutServingEditFood(){
@@ -6356,15 +6403,34 @@ function nutPickFood(idx){
   _nutEditingEntryIdx=-1;
   _nutLastTouched='amt';
   _nutServingUnitMultiplier=1;
+  _nutServingCurrentUnit='native';
   nutCloseAdd();
   document.getElementById('nutServingFoodName').textContent=f.name;
-  document.getElementById('nutServingDefault').textContent='Macros per '+f.serving+f.unit+' serving';
-  // Set amount label
+  document.getElementById('nutServingDefault').textContent='Macros per '+f.serving+f.unit+' serving'+(f.servingDesc?' ('+f.servingDesc+')':'');
   var lbl=document.getElementById('nutServingAmtLabel');
   if(lbl)lbl.textContent='Amount ('+f.unit+')';
-  // Reset unit selector to native
-  var uSel=document.getElementById('nutServingUnitSel');
-  if(uSel)uSel.value='native';
+  // Show per-item button if servingDesc contains a count (e.g. "14 crisps" → per-crisp option)
+  var perItemRow=document.getElementById('nutPerItemRow');
+  if(perItemRow){
+    var descMatch=f.servingDesc&&f.servingDesc.match(/^(\d+)\s+(.+)$/);
+    if(descMatch&&f.serving>0){
+      var itemCount=parseInt(descMatch[1]);
+      var itemName=descMatch[2];
+      var gramsPerItem=Math.round((f.serving/itemCount)*100)/100;
+      perItemRow.style.display='block';
+      perItemRow.innerHTML='<button onclick="nutSetPerItem('+gramsPerItem+',\''+itemName+'\')" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:20px;padding:5px 14px;font-size:0.68rem;font-weight:700;cursor:pointer;letter-spacing:0.5px;">Per '+itemName+' ('+gramsPerItem+f.unit+')</button>';
+    } else {
+      perItemRow.style.display='none';
+      perItemRow.innerHTML='';
+    }
+  }
+  // Reset unit buttons
+  document.querySelectorAll('.nutUnitBtn').forEach(function(btn){
+    var isNative=btn.getAttribute('data-u')==='native';
+    btn.style.background=isNative?'var(--accent)':'var(--card2)';
+    btn.style.color=isNative?'#000':'var(--muted)';
+    btn.style.borderColor=isNative?'var(--accent)':'var(--border2)';
+  });
   // Default: 1 serving = base serving size
   var amtEl=document.getElementById('nutServingAmt');
   if(amtEl)amtEl.value=f.serving;
@@ -6617,6 +6683,79 @@ function nutTypeSelectFood(idx){
 }
 function nutTypeSelectTop(){}
 function nutTypeSearchFill(){var status=document.getElementById('nutScanStatus');if(status){status.style.display='none';status.innerHTML='';}}
+
+// ── Progress: AI calorie & weight feedback ────────────────────────
+function progAIFeedback(){
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  if(!geminiKey){nutApiKeyShow(null,null,null);return;}
+  var btn=document.getElementById('progAIBtn');
+  var card=document.getElementById('progAICard');
+  var result=document.getElementById('progAIResult');
+  if(btn){btn.textContent='Thinking...';btn.disabled=true;}
+  if(card)card.style.display='block';
+  if(result)result.textContent='Loading your data...';
+
+  // Gather last 28 days of weight entries from sheet cache + calorie data from entries
+  var today=localDateStr();
+  var days=[];for(var i=27;i>=0;i--)days.push(nutShiftDate(today,-i));
+
+  // Daily calorie totals from logged entries
+  var calData=days.map(function(d){
+    var entries=_nutEntries.filter(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});
+    var kcal=Math.round(entries.reduce(function(a,e){return a+(e.calories||0);},0));
+    var prot=Math.round(entries.reduce(function(a,e){return a+(e.protein||0);},0));
+    return {date:d,kcal:kcal,prot:prot,logged:entries.length>0};
+  }).filter(function(d){return d.logged;});
+
+  var calTarget=(_nutTargets&&_nutTargets.cal)||2100;
+  var protTarget=(_nutTargets&&_nutTargets.prot)||175;
+  var avgKcal=calData.length?Math.round(calData.reduce(function(a,d){return a+d.kcal;},0)/calData.length):0;
+  var avgProt=calData.length?Math.round(calData.reduce(function(a,d){return a+d.prot;},0)/calData.length):0;
+
+  // Weight data from the last body metrics fetch
+  var wtEl=document.getElementById('bodyWeightChart');
+  var wtSummary='No weight data logged.';
+  // Try to parse the rendered weight stats from the DOM
+  var wtNow=wtEl?wtEl.querySelector&&wtEl.querySelector('[style*="accent"]'):null;
+  // Build from _nutEntries body data isn't stored there — use DOM text as fallback summary
+  if(wtEl&&wtEl.innerText&&wtEl.innerText.length>10){
+    wtSummary='From progress chart: '+wtEl.innerText.replace(/\s+/g,' ').trim().slice(0,200);
+  }
+
+  var prompt=
+    'You are a nutrition and fitness coach. Here is my data for the last 4 weeks:\n\n'+
+    'Current calorie target: '+calTarget+' kcal/day\n'+
+    'Current protein target: '+protTarget+'g/day\n'+
+    'Days logged: '+calData.length+' of last 28\n'+
+    'Average calories eaten on logged days: '+avgKcal+' kcal\n'+
+    'Average protein on logged days: '+avgProt+'g\n'+
+    'Weight info: '+wtSummary+'\n\n'+
+    'Daily log summary (date, kcal, protein):\n'+
+    calData.slice(-14).map(function(d){return d.date+': '+d.kcal+'kcal, '+d.prot+'g protein';}).join('\n')+'\n\n'+
+    'Based on this data:\n'+
+    '1. Is my current calorie target of '+calTarget+' right, or what should I change it to and why?\n'+
+    '2. How is my weight trending relative to my calorie intake?\n'+
+    '3. One specific thing I should do differently.\n\n'+
+    'Be concise — 3 short paragraphs max. Be direct and specific with numbers.';
+
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.4,maxOutputTokens:600}})
+  })
+  .then(function(r){return r.json();})
+  .then(function(data){
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
+    if(!text){if(result)result.textContent='No response — try again.';return;}
+    if(result){
+      result.innerHTML=text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
+    }
+    if(btn){btn.textContent='✦ REFRESH';btn.disabled=false;}
+  })
+  .catch(function(err){
+    if(result)result.textContent='Error: '+(err.message||'network problem')+' — try again.';
+    if(btn){btn.textContent='✦ ASK GEMINI';btn.disabled=false;}
+  });
+}
 
 // ── Inline Gemini add from meal overlay ───────────────────────────
 var _nutAddInlineMode=false;
