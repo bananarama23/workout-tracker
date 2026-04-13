@@ -3653,30 +3653,74 @@ function renderPlanGrid(days,today){
   var isNextWeek=_planWeekOffset>0;
   days.forEach(function(d,i){
     var ds=fmtDate(d),type=_weekPlan[ds]||'Rest';
+    var extras=_weekPlan[ds+'_extra']||[];
     var isToday=ds===today;
     var isPast=!isNextWeek&&ds<today;
     var daySessions=_cachedSessions?_cachedSessions.filter(function(sess){return sess.date===ds;}):[]; 
     var isDone=daySessions.length>0;
-    html+='<div class="plan-day'+(isToday?' today':isPast?' past':'')+'" onclick="cyclePlanType(\''+ds+'\')">';
-    html+='<div class="pd-left"><div class="pd-day">'+dayNames[i]+'</div><div><div class="pd-date">'+d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</div></div>';
+    html+='<div class="plan-day'+(isToday?' today':isPast?' past':'')+'" style="align-items:flex-start;padding:12px 16px;">';
+    html+='<div class="pd-left" style="cursor:pointer;" onclick="cyclePlanType(\''+ds+'\')">'+
+      '<div class="pd-day">'+dayNames[i]+'</div>'+
+      '<div class="pd-date">'+d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</div>';
     if(isToday)html+='<span class="today-badge">TODAY</span>';
     html+='</div>';
+    html+='<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">';
     if(daySessions.length>1){
-      // Multiple sessions — show each as a small badge
-      html+='<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-end;">';
       daySessions.forEach(function(sess){
         var wt=sess.workoutType||type;
         var cls=PLAN_COLORS[wt]||'pt-rest';
-        html+='<div class="pt-btn '+cls+'">\u2713 '+wt.toUpperCase()+'</div>';
+        html+='<div class="pt-btn '+cls+'">✓ '+wt.toUpperCase()+'</div>';
       });
-      html+='</div>';
     } else {
-      html+='<div class="pt-btn '+(PLAN_COLORS[type]||'pt-rest')+'">'+(isDone?'\u2713 ':'')+type.toUpperCase()+'</div>';
+      var mainDone=isDone&&daySessions.length===1;
+      html+='<div style="display:flex;align-items:center;gap:6px;">';
+      html+='<div class="pt-btn '+(PLAN_COLORS[type]||'pt-rest')+'" style="cursor:pointer;" onclick="event.stopPropagation();cyclePlanType(\''+ds+'\')">'+( mainDone?'✓ ':'')+type.toUpperCase()+'</div>';
+      html+='<button onclick="event.stopPropagation();addPlanExtra(\''+ds+'\')" style="width:22px;height:22px;border-radius:50%;background:var(--card2);border:1px solid var(--border2);color:var(--muted);font-size:1rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;padding:0;">+</button>';
+      html+='</div>';
+      extras.forEach(function(exType,ei){
+        html+='<div style="display:flex;align-items:center;gap:6px;">';
+        html+='<div class="pt-btn '+(PLAN_COLORS[exType]||'pt-rest')+'" style="cursor:pointer;" onclick="event.stopPropagation();cyclePlanExtra(\''+ds+'\','+ei+')">'+exType.toUpperCase()+'</div>';
+        html+='<button onclick="event.stopPropagation();removePlanExtra(\''+ds+'\','+ei+')" style="width:22px;height:22px;border-radius:50%;background:var(--red-dim);border:1px solid var(--red);color:var(--red);font-size:1rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;padding:0;">−</button>';
+        html+='</div>';
+      });
     }
+    html+='</div>';
     html+='</div>';
   });
   var grid=document.getElementById('planGrid');if(grid)grid.innerHTML=html;
   updateWeekGoalBar(days);
+}
+
+function addPlanExtra(dateStr){
+  if(!_weekPlan[dateStr+'_extra'])_weekPlan[dateStr+'_extra']=[];
+  var existing=[_weekPlan[dateStr]].concat(_weekPlan[dateStr+'_extra']||[]);
+  var next=PLAN_TYPES.find(function(t){return t!=='Rest'&&existing.indexOf(t)<0;})||'HIIT';
+  _weekPlan[dateStr+'_extra'].push(next);
+  renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
+  debounceSavePlan();
+}
+
+function removePlanExtra(dateStr,idx){
+  if(!_weekPlan[dateStr+'_extra'])return;
+  _weekPlan[dateStr+'_extra'].splice(idx,1);
+  if(_weekPlan[dateStr+'_extra'].length===0)delete _weekPlan[dateStr+'_extra'];
+  renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
+  debounceSavePlan();
+}
+
+function cyclePlanExtra(dateStr,idx){
+  var extras=_weekPlan[dateStr+'_extra'];if(!extras||idx>=extras.length)return;
+  var ci=PLAN_TYPES.indexOf(extras[idx]);
+  extras[idx]=PLAN_TYPES[(ci+1)%PLAN_TYPES.length];
+  renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
+  debounceSavePlan();
+}
+
+function debounceSavePlan(){
+  var msg=document.getElementById('planMsg');
+  if(msg){msg.textContent='Unsaved...';msg.style.color='var(--muted)';}
+  if(_planSaveTimer)clearTimeout(_planSaveTimer);
+  _planSaveTimer=setTimeout(function(){_planSaveTimer=null;saveWeekPlan();},1500);
 }
 
 function updateWeekGoalBar(days){
@@ -3721,11 +3765,7 @@ function cyclePlanType(dateStr){
   _weekPlan[dateStr]=PLAN_TYPES[(idx+1)%PLAN_TYPES.length];
   renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
   if(dateStr===fmtDate(new Date()))updateTodayCard(dateStr);
-  // Debounce: wait 1.5s after last change before saving
-  var msg=document.getElementById('planMsg');
-  if(msg){msg.textContent='Unsaved...';msg.style.color='var(--muted)';}
-  if(_planSaveTimer)clearTimeout(_planSaveTimer);
-  _planSaveTimer=setTimeout(function(){_planSaveTimer=null;saveWeekPlan();},1500);
+  debounceSavePlan();
 }
 
 function saveWeekPlan(){
@@ -6784,6 +6824,11 @@ function nutConfirmServing(){
     sodium:rn(f.sodium||0),servings:Math.round(qty*100)/100,
     id:(isEdit&&oldEntry&&oldEntry.id)?oldEntry.id:now,
     updatedAt:now};
+  if(_nutPerItemGrams>0){
+    entry.perItemGrams=_nutPerItemGrams;
+    entry.perItemName=_nutPerItemName;
+    entry.perItemCount=parseFloat((amtEl||{}).value)||1;
+  }
 
   if(isEdit){
     _nutEntries[_nutEditingEntryIdx]=entry;
@@ -6832,8 +6877,43 @@ function nutEditEntry(idx){
   var amtEl=document.getElementById('nutServingAmt');
   var qtyEl=document.getElementById('nutServingQty');
   var currentServings=e.servings||1;
-  if(amtEl)amtEl.value=Math.round(currentServings*food.serving*10)/10;
-  if(qtyEl)qtyEl.value=currentServings;
+  if(e.perItemGrams>0&&e.perItemCount>0){
+    _nutPerItemGrams=e.perItemGrams;
+    _nutPerItemName=e.perItemName||'item';
+    _nutServingUnitMultiplier=1;
+    _nutServingCurrentUnit='native';
+    var perItemRow=document.getElementById('nutPerItemRow');
+    if(perItemRow){
+      perItemRow.style.display='block';
+      perItemRow.innerHTML='<button id="nutPerItemBtn" onclick="nutSetPerItem('+e.perItemGrams+',\''+e.perItemName+'\')" style="background:var(--purple);border:1px solid var(--purple);color:#fff;border-radius:20px;padding:5px 14px;font-size:0.68rem;font-weight:700;cursor:pointer;letter-spacing:0.5px;">Count '+e.perItemName+'s ('+e.perItemGrams+food.unit+' each)</button>';
+    }
+    document.querySelectorAll('.nutUnitBtn').forEach(function(btn){
+      btn.style.background='var(--card2)';btn.style.color='var(--muted)';btn.style.borderColor='var(--border2)';
+    });
+    if(lbl)lbl.textContent='Number of '+e.perItemName+'s';
+    if(amtEl){amtEl.value=e.perItemCount;amtEl.step='1';}
+    var gramsTotal=Math.round(e.perItemCount*e.perItemGrams*10)/10;
+    if(qtyEl)qtyEl.value=gramsTotal+food.unit;
+    var qtyLbl=document.getElementById('nutServingQtyLabel');
+    if(qtyLbl)qtyLbl.textContent='= ('+gramsTotal+food.unit+')';
+    _nutLastTouched='amt';
+  } else {
+    _nutPerItemGrams=0;_nutPerItemName='';
+    var perItemRow=document.getElementById('nutPerItemRow');
+    if(perItemRow){
+      var descMatch=food.servingDesc&&food.servingDesc.match(/^(?:about\s+)?(\d+)\s+([a-zA-Z]+)/i);
+      if(descMatch&&food.serving>0){
+        var piCount=parseInt(descMatch[1]);var piName=descMatch[2].toLowerCase();
+        var piGrams=Math.round((food.serving/piCount)*100)/100;
+        perItemRow.style.display='block';
+        perItemRow.innerHTML='<button id="nutPerItemBtn" onclick="nutSetPerItem('+piGrams+',\''+piName+'\')" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:20px;padding:5px 14px;font-size:0.68rem;font-weight:700;cursor:pointer;letter-spacing:0.5px;">Count '+piName+'s ('+piGrams+food.unit+' each)</button>';
+      } else {
+        perItemRow.style.display='none';perItemRow.innerHTML='';
+      }
+    }
+    if(amtEl)amtEl.value=Math.round(currentServings*food.serving*10)/10;
+    if(qtyEl)qtyEl.value=currentServings;
+  }
   nutServingPreview();
   var ov=document.getElementById('nutServingOverlay');
   if(ov){ov.style.display='flex';ov.scrollTop=0;}
@@ -7094,7 +7174,7 @@ function progAIRunFeedback(geminiKey,btn,card,result){
     '1. Base calories (currently '+calBase+') — right for '+(goalWeight?'reaching '+goalWeight+'lbs':'my goal')+'?\n'+
     '2. AW baseline (currently '+activeBase+') — is this the right threshold?\n'+
     '3. Normal ratio (currently '+normalRatio+') — am I earning back the right amount?\n'+
-    '4. Cheat ratio (currently '+cheatRatio+') — am I earning back the right amount on travel/cheat days? Remember: on cheat days a near-zero surplus or small surplus is the TARGET (maintenance), not a problem. Only suggest changing this if cheat days are causing an unhealthy surplus that's hurting the overall weight trend.\n'+
+    '4. Cheat ratio (currently '+cheatRatio+') — am I earning back the right amount on travel/cheat days? Remember: on cheat days a near-zero surplus or small surplus is the TARGET (maintenance), not a problem. Only suggest changing this if cheat days are causing an unhealthy surplus that\'s hurting the overall weight trend.\n'+
     'Use my actual surplus/deficit numbers and weight trend. 4 short answers, one per number, specific values to change to if needed. Do not penalize cheat days for being near maintenance — that is intentional.';
 
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
