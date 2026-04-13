@@ -1288,9 +1288,10 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 </style>
 
 <!-- NUTRITION: Create / edit food overlay -->
-<div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-  <div style="background:var(--bg);border-radius:var(--r-lg);margin:40px 12px calc(var(--nav-h) + var(--safe-b) + 40px);padding:20px;box-sizing:border-box;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+<div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;">
+  <!-- Sticky header - always visible -->
+  <div style="position:absolute;top:0;left:0;right:0;background:var(--bg);border-radius:var(--r-lg) var(--r-lg) 0 0;margin:40px 12px 0;padding:16px 20px 12px;z-index:1;border-bottom:1px solid var(--border);box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutFoodFormTitle">ADD FOOD</div>
       <div style="display:flex;gap:8px;align-items:center;">
         <button onclick="nutCamOpen()" style="background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);padding:6px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;cursor:pointer;">📷 SCAN</button>
@@ -1299,9 +1300,13 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <button onclick="nutCloseFoodForm()" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
       </div>
     </div>
+  </div>
+  <!-- Scrollable body -->
+  <div id="nutFoodFormBody" style="position:absolute;top:40px;left:12px;right:12px;bottom:0;background:var(--bg);border-radius:0 0 var(--r-lg) var(--r-lg);overflow-y:scroll;-webkit-overflow-scrolling:touch;">
+    <div style="padding:16px 20px calc(var(--nav-h) + var(--safe-b) + 40px);">
     <!-- Scan status -->
     <div id="nutScanStatus" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;font-size:0.82rem;color:var(--muted);text-align:center;"></div>
-    <div style="text-align:right;margin:-8px 0 10px;"><button onclick="nutApiKeyShow(null,null,null)" style="background:none;border:none;color:var(--muted);font-size:0.62rem;cursor:pointer;padding:0;">⚙ Gemini key</button></div>
+    <div style="text-align:right;margin:0 0 10px;"><button onclick="nutApiKeyShow(null,null,null)" style="background:none;border:none;color:var(--muted);font-size:0.62rem;cursor:pointer;padding:0;">⚙ Gemini key</button></div>
     <input type="file" id="nutPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="nutHandlePhoto(this)">
     <div class="log-field"><label>Food Name</label><input id="nff_name" type="text" class="log-input" placeholder="e.g. Chicken Breast"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -1314,7 +1319,11 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         </select>
       </div>
     </div>
-    <div class="log-field"><label>Serving description <span style="color:var(--muted);font-weight:400;">(optional, e.g. "13 crisps" or "1 medium banana")</span></label><input id="nff_servdesc" type="text" class="log-input" placeholder="e.g. 13 crisps, 1 slice, 1 medium banana"></div>
+    <div class="log-field">
+      <label>Serving description <span style="color:var(--muted);font-weight:400;">(optional, e.g. "13 crisps" or "1 medium banana")</span></label>
+      <input id="nff_servdesc" type="text" class="log-input" placeholder="e.g. 13 crisps, 1 slice, 1 medium banana" oninput="nffServDescPreview()">
+      <div id="nff_servdesc_preview" style="font-size:0.68rem;color:var(--green);margin-top:5px;min-height:16px;"></div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div class="log-field"><label>Calories</label><input id="nff_cal" type="number" inputmode="decimal" class="log-input" placeholder="0"></div>
       <div class="log-field"><label>Protein (g)</label><input id="nff_prot" type="number" inputmode="decimal" class="log-input" placeholder="0"></div>
@@ -1329,6 +1338,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <div style="display:flex;gap:8px;">
       <button onclick="nutSaveFood()" style="flex:1;padding:14px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">SAVE FOOD</button>
       <button id="nutDeleteFoodBtn" onclick="nutDeleteFood()" style="display:none;padding:14px 18px;background:var(--red-dim);color:var(--red);border:1px solid var(--red);border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;cursor:pointer;">DELETE</button>
+    </div>
     </div>
   </div>
 </div>
@@ -5946,6 +5956,25 @@ function nutRenderFoodList(){
 // ── Food form ──────────────────────────────────────────────────────
 function nutShowAddFood(){nutOpenFoodForm();}
 function nutEditFood(idx){nutOpenFoodForm(idx);}
+function nffServDescPreview(){
+  var desc=(document.getElementById('nff_servdesc').value||'').trim();
+  var serving=parseFloat(document.getElementById('nff_serving').value)||0;
+  var unit=(document.getElementById('nff_unit')||{}).value||'g';
+  var el=document.getElementById('nff_servdesc_preview');
+  if(!el)return;
+  if(!desc||!serving){el.textContent='';return;}
+  var m=desc.match(/(\d+)\s+([a-zA-Z]+)/i);
+  if(m){
+    var count=parseInt(m[1]);
+    var name=m[2].toLowerCase();
+    var perItem=Math.round((serving/count)*100)/100;
+    el.textContent='→ '+perItem+unit+' per '+name+' · tap food to get per-'+name+' option when logging';
+    el.style.color='var(--green)';
+  } else {
+    el.textContent='';
+  }
+}
+
 function nutOpenFoodForm(idx){
   var isEdit=idx!==undefined,f=isEdit?_nutFoods[idx]:null;
   var title=document.getElementById('nutFoodFormTitle');if(title)title.textContent=isEdit?'EDIT FOOD':'ADD FOOD';
@@ -5956,6 +5985,7 @@ function nutOpenFoodForm(idx){
   var unitEl=document.getElementById('nff_unit');
   if(unitEl)unitEl.value=(f&&f.unit)||'g';
   var sdEl=document.getElementById('nff_servdesc');if(sdEl)sdEl.value=(f&&f.servingDesc)||'';
+  nffServDescPreview();
   document.getElementById('nff_cal').value=f?f.calories:'';
   document.getElementById('nff_prot').value=f?f.protein:'';
   document.getElementById('nff_carb').value=f?f.carbs:'';
@@ -5967,7 +5997,16 @@ function nutOpenFoodForm(idx){
   // Clear scan/type status from previous use
   var ss=document.getElementById('nutScanStatus');if(ss){ss.style.display='none';ss.innerHTML='';}
   var ov=document.getElementById('nutFoodFormOverlay');
-  if(ov){ov.style.display='flex';ov.scrollTop=0;}
+  var body=document.getElementById('nutFoodFormBody');
+  if(ov){ov.style.display='block';}
+  if(body){
+    body.scrollTop=0;
+    // Set top to clear the sticky header — measure it after render
+    setTimeout(function(){
+      var hdr=ov&&ov.querySelector('[style*="position:absolute;top:0"]');
+      if(hdr&&body)body.style.top=(40+hdr.offsetHeight)+'px';
+    },0);
+  }
 }
 function nutCloseFoodForm(){var ov=document.getElementById('nutFoodFormOverlay');if(ov)ov.style.display='none';}
 
@@ -6161,7 +6200,7 @@ function nutCallVision(base64,mediaType,statusEl){
     nutApiKeyShow(base64,mediaType,statusEl);
     return;
   }
-  var promptText='This is a nutrition label or food packaging. Extract and return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","servingDesc":"human description e.g. 13 crisps or 1 slice or 2 biscuits — leave blank string if not on label","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per serving. Sodium in mg. Use null for unknown fields.';
+  var promptText='This is a nutrition label or food packaging. Extract and return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","servingDesc":"if label shows a count like \'About 13 Chips\' or \'2 biscuits\' put ONLY that e.g. \'13 chips\' or \'2 biscuits\' — blank string if no count on label","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. IMPORTANT: if label shows both oz and grams (e.g. \'1 oz (28g)\'), use grams for serving and unit. All values per serving. Sodium in mg. Use null for unknown fields.';
   var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
   fetch(url,{
     method:'POST',
