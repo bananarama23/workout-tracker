@@ -1398,7 +1398,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <button onclick="nutServingUnitChange('cup')" class="nutUnitBtn" data-u="cup" style="padding:6px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);font-size:0.7rem;font-weight:700;cursor:pointer;">cup</button>
       </div>
     </div>
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:space-around;" id="nutServingPreviewBox"></div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:space-around;" id="nutServingPreviewBox"></div>
+    <div id="nutServingMacroBars" style="background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:16px;display:none;"></div>
     <button onclick="nutConfirmServing()" style="width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:2px;font-weight:900;cursor:pointer;">ADD TO LOG</button>
   </div>
 </div>
@@ -4375,98 +4376,86 @@ function buildPRs(sessions){
   function feelCol(f){return f==='Medium'?'var(--green)':f==='Medium-hard'?'var(--yellow)':f==='Hard'?'var(--red)':'var(--muted)';}
   function fmtDate(d){var dt=parseLocalDate(d);return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 
-  var html='';
-  exerciseNames.forEach(function(name){
-    var hist=exHistory[name];
-    if(!hist.length)return;
-    var last=hist[hist.length-1];
-    var prev=hist.length>1?hist[hist.length-2]:null;
-    var isPlank=last.isPlank;
+  var _prExpanded={};
+  function prToggle(name){_prExpanded[name]=!_prExpanded[name];buildPRs_render();}
+  function buildPRs_render(){
+    var rows='';
+    exerciseNames.forEach(function(name){
+      var hist=exHistory[name];if(!hist.length)return;
+      var last=hist[hist.length-1],prev=hist.length>1?hist[hist.length-2]:null;
+      var isPlank=last.isPlank;
+      var best=hist.reduce(function(b,h){return h.total>b.total?h:b;},hist[0]);
+      var trend='';
+      if(prev){if(last.total>prev.total)trend='up';else if(last.total<prev.total)trend='down';else trend='same';}
+      var trendCol=trend==='up'?'var(--green)':trend==='down'?'var(--red)':'var(--yellow)';
+      var trendArrow=trend==='up'?'↑':trend==='down'?'↓':'→';
+      var trendLbl=trend==='up'?'Improving':trend==='down'?'Down':'Holding';
+      var expanded=!!_prExpanded[name];
+      var lastVal=isPlank?(last.sets[0]||0)+'s/'+(last.sets[1]||0)+'s':last.total+' reps';
+      var sets=(!isPlank&&last.sets.length>1)?' · '+last.sets.join('/'):' ';
 
-    // Find best
-    var best=hist.reduce(function(b,h){return h.total>b.total?h:b;},hist[0]);
+      // Collapsed row
+      rows+='<div style="border-bottom:1px solid var(--border);">';
+      rows+='<div onclick="prToggle(\''+name+'\')" style="display:flex;align-items:center;padding:11px 16px;cursor:pointer;gap:10px;">';
+      rows+='<div style="flex:1;min-width:0;">';
+      rows+='<div style="font-size:0.85rem;font-weight:600;">'+shortName(name)+'</div>';
+      rows+='<div style="font-size:0.62rem;color:var(--muted);margin-top:1px;">'+lastVal+sets+'</div>';
+      rows+='</div>';
+      rows+='<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">';
+      if(trend)rows+='<span style="font-size:0.68rem;font-weight:700;color:'+trendCol+';">'+trendArrow+' '+trendLbl+'</span>';
+      rows+='<span style="font-size:0.6rem;color:var(--muted);">'+(expanded?'▲':'▼')+'</span>';
+      rows+='</div></div>';
 
-    // Trend vs previous session
-    var trend='';
-    if(prev){
-      if(last.total>prev.total)trend='up';
-      else if(last.total<prev.total)trend='down';
-      else trend='same';
-    }
-
-    html+='<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin:0 16px 10px;">';
-
-    // Header row
-    html+='<div style="background:var(--card2);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">';
-    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.15rem;letter-spacing:2px;">'+shortName(name)+'</div>';
-    // Trend badge
-    if(trend==='up')html+='<div style="background:rgba(0,212,138,0.15);color:var(--green);font-size:0.65rem;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:0.5px;">▲ Improving</div>';
-    else if(trend==='down')html+='<div style="background:rgba(255,58,92,0.12);color:var(--red);font-size:0.65rem;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:0.5px;">▼ Down</div>';
-    else if(trend==='same')html+='<div style="background:rgba(255,204,0,0.12);color:var(--yellow);font-size:0.65rem;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:0.5px;">→ Holding</div>';
-    html+='</div>';
-
-    // Stats row
-    html+='<div style="display:flex;border-bottom:1px solid var(--border);">';
-
-    if(isPlank){
-      // Plank: show L and R seconds
-      var lSec=last.sets[0]||0, rSec=last.sets[1]||0;
-      var bestL=0,bestR=0;
-      hist.forEach(function(h){if((h.sets[0]||0)>bestL)bestL=h.sets[0]||0;if((h.sets[1]||0)>bestR)bestR=h.sets[1]||0;});
-      html+='<div style="flex:1;padding:12px 16px;border-right:1px solid var(--border);text-align:center;">';
-      html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:4px;">Left</div>';
-      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.9rem;line-height:1;color:var(--accent);">'+lSec+'<span style="font-size:0.9rem;color:var(--muted);">s</span></div>';
-      html+='<div style="font-size:0.62rem;color:var(--muted);margin-top:2px;">best '+bestL+'s</div>';
-      html+='</div>';
-      html+='<div style="flex:1;padding:12px 16px;text-align:center;">';
-      html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:4px;">Right</div>';
-      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.9rem;line-height:1;color:var(--accent);">'+rSec+'<span style="font-size:0.9rem;color:var(--muted);">s</span></div>';
-      html+='<div style="font-size:0.62rem;color:var(--muted);margin-top:2px;">best '+bestR+'s</div>';
-      html+='</div>';
-    } else {
-      // Show last session total + best total
-      html+='<div style="flex:1;padding:12px 16px;border-right:1px solid var(--border);text-align:center;">';
-      html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:4px;">Last session</div>';
-      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.9rem;line-height:1;color:var(--accent);">'+last.total+'<span style="font-size:0.9rem;color:var(--muted);"> reps</span></div>';
-      // Set breakdown
-      if(last.sets.length>1){
-        html+='<div style="font-size:0.68rem;color:var(--muted);margin-top:3px;">'+last.sets.join(' / ')+'</div>';
+      // Expanded detail
+      if(expanded){
+        rows+='<div style="background:var(--card2);padding:14px 16px;border-top:1px solid var(--border);">';
+        if(isPlank){
+          var bestL=0,bestR=0;
+          hist.forEach(function(h){if((h.sets[0]||0)>bestL)bestL=h.sets[0]||0;if((h.sets[1]||0)>bestR)bestR=h.sets[1]||0;});
+          rows+='<div style="display:flex;gap:20px;margin-bottom:10px;">';
+          rows+='<div><div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:1px;">Last L</div>';
+          rows+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.6rem;color:var(--accent);">'+(last.sets[0]||0)+'<span style="font-size:0.8rem;color:var(--muted);">s</span></div>';
+          rows+='<div style="font-size:0.6rem;color:var(--muted);">PB '+bestL+'s</div></div>';
+          rows+='<div><div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:1px;">Last R</div>';
+          rows+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.6rem;color:var(--accent);">'+(last.sets[1]||0)+'<span style="font-size:0.8rem;color:var(--muted);">s</span></div>';
+          rows+='<div style="font-size:0.6rem;color:var(--muted);">PB '+bestR+'s</div></div>';
+          rows+='</div>';
+        } else {
+          rows+='<div style="display:flex;margin-bottom:10px;">';
+          rows+='<div style="flex:1;border-right:1px solid var(--border);padding-right:14px;">';
+          rows+='<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:1px;margin-bottom:2px;">Last session</div>';
+          rows+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.6rem;color:var(--accent);line-height:1;">'+last.total+' <span style="font-size:0.8rem;color:var(--muted);">reps</span></div>';
+          if(last.sets.length>1)rows+='<div style="font-size:0.65rem;color:var(--muted);margin-top:2px;">'+last.sets.join(' / ')+'</div>';
+          rows+='</div>';
+          rows+='<div style="flex:1;padding-left:14px;">';
+          rows+='<div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:1px;margin-bottom:2px;">Personal best</div>';
+          rows+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.6rem;color:'+(last.total>=best.total?'var(--green)':'var(--text)')+';line-height:1;">'+best.total+' <span style="font-size:0.8rem;color:var(--muted);">reps</span></div>';
+          rows+='<div style="font-size:0.6rem;color:var(--muted);margin-top:2px;">'+fmtDate(best.date)+'</div>';
+          rows+='</div></div>';
+          if(hist.length>=2){
+            var maxT=Math.max.apply(null,hist.map(function(h){return h.total;}));
+            var recent=hist.slice(-8);
+            rows+='<div style="display:flex;align-items:flex-end;gap:3px;height:28px;margin-bottom:8px;">';
+            recent.forEach(function(h){
+              var pct=maxT>0?Math.round((h.total/maxT)*100):0;
+              var col=h===best?'var(--green)':h===last?'var(--accent)':'var(--border2)';
+              rows+='<div style="flex:1;background:'+col+';border-radius:2px 2px 0 0;height:'+Math.max(4,pct)+'%;min-height:4px;"></div>';
+            });
+            rows+='</div>';
+          }
+        }
+        rows+='<div style="display:flex;justify-content:space-between;">';
+        rows+='<div style="font-size:0.62rem;color:var(--muted);display:flex;align-items:center;gap:6px;">';
+        if(last.feel)rows+='<span style="font-weight:700;color:'+feelCol(last.feel)+';">'+last.feel+'</span>';
+        rows+='<span>'+fmtDate(last.date)+'</span></div>';
+        rows+='<span style="font-size:0.62rem;color:var(--muted);">'+hist.length+' session'+(hist.length!==1?'s':'')+'</span>';
+        rows+='</div></div>';
       }
-      html+='</div>';
-      html+='<div style="flex:1;padding:12px 16px;text-align:center;">';
-      html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:4px;">Personal best</div>';
-      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.9rem;line-height:1;color:'+(last.total>=best.total?'var(--green)':'var(--text)')+';">'+best.total+'<span style="font-size:0.9rem;color:var(--muted);"> reps</span></div>';
-      html+='<div style="font-size:0.62rem;color:var(--muted);margin-top:3px;">'+fmtDate(best.date)+'</div>';
-      html+='</div>';
-    }
-    html+='</div>';
-
-    // Footer: feel + date + session count
-    html+='<div style="padding:8px 16px;display:flex;align-items:center;justify-content:space-between;">';
-    html+='<div style="display:flex;align-items:center;gap:8px;">';
-    if(last.feel){html+='<span style="font-size:0.65rem;font-weight:700;color:'+feelCol(last.feel)+';">'+last.feel+'</span>';}
-    html+='<span style="font-size:0.65rem;color:var(--muted);">'+fmtDate(last.date)+'</span>';
-    html+='</div>';
-    html+='<span style="font-size:0.65rem;color:var(--muted);">'+hist.length+' session'+(hist.length!==1?'s':'')+'</span>';
-    html+='</div>';
-
-    // Mini progress bar if we have multiple sessions
-    if(hist.length>=2&&!isPlank){
-      var maxT=Math.max.apply(null,hist.map(function(h){return h.total;}));
-      var recentSessions=hist.slice(-8);
-      html+='<div style="padding:0 16px 12px;display:flex;align-items:flex-end;gap:3px;height:36px;">';
-      recentSessions.forEach(function(h){
-        var pct=maxT>0?Math.round((h.total/maxT)*100):0;
-        var col=h===best?'var(--green)':h===last?'var(--accent)':'var(--border2)';
-        html+='<div style="flex:1;background:'+col+';border-radius:2px 2px 0 0;height:'+Math.max(4,pct)+'%;min-height:4px;"></div>';
-      });
-      html+='</div>';
-    }
-
-    html+='</div>';
-  });
-
-  if(el)el.innerHTML=html;
+      rows+='</div>';
+    });
+    if(el)el.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin:0 16px;">'+rows+'</div>';
+  }
+  buildPRs_render();
 }
 
 var _bodyWeightData=[]; // cached weight entries: [{date, weight, waist}]
@@ -7113,6 +7102,44 @@ function nutServingPreview(){
       '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;line-height:1;">'+it.v+'</div>'+
       '<div style="color:var(--muted);font-size:0.58rem;margin-top:1px;">'+it.l+'</div></div>';
   }).join('');
+
+  // Live macro impact bars — today's totals + this item
+  var barsEl=document.getElementById('nutServingMacroBars');
+  if(barsEl&&_nutEntries&&_nutDate){
+    var todayTot=nutTotals(nutDayEntries(_nutDate));
+    // Subtract existing entry if editing so we don't double-count
+    var editEntry=(_nutEditingEntryIdx>=0&&_nutEditingEntryIdx<_nutEntries.length)?_nutEntries[_nutEditingEntryIdx]:null;
+    var thisItem={
+      protein:Math.round(f.protein*ratio),
+      fibre:Math.round(f.fibre*ratio),
+      satFat:Math.round(f.satFat*ratio),
+      carbs:Math.round(f.carbs*ratio)
+    };
+    var barsHtml='<div style="font-size:0.52rem;color:var(--muted);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">Impact on today</div>';
+    NUT_MACRO_DEFS.forEach(function(m){
+      var existing=Math.round((todayTot[m.key]||0)-(editEntry?editEntry[m.key]||0:0));
+      var adding=thisItem[m.key]||0;
+      var total=existing+adding;
+      var target=_nutTargets[m.tKey]||0;
+      var pctExist=target>0?Math.min(100,Math.round((existing/target)*100)):0;
+      var pctAdd=target>0?Math.min(100-pctExist,Math.round((adding/target)*100)):0;
+      var over=target>0&&total>target;
+      var goodOver=m.key==='protein'||m.key==='fibre';
+      var addCol=over&&!goodOver?'var(--red)':m.col;
+      barsHtml+=
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">'+
+        '<div style="font-size:0.58rem;color:var(--muted);width:44px;flex-shrink:0;">'+m.label+'</div>'+
+        '<div style="flex:1;height:5px;background:var(--border2);border-radius:3px;overflow:hidden;position:relative;">'+
+          '<div style="position:absolute;left:0;top:0;height:100%;width:'+pctExist+'%;background:'+m.col+';opacity:0.35;border-radius:3px;"></div>'+
+          '<div style="position:absolute;left:'+pctExist+'%;top:0;height:100%;width:'+pctAdd+'%;background:'+addCol+';border-radius:3px;transition:width 0.2s;"></div>'+
+        '</div>'+
+        '<div style="font-size:0.58rem;font-weight:700;min-width:54px;text-align:right;color:'+(over&&!goodOver?'var(--red)':over&&goodOver?m.col:'var(--text2)')+';">'+ 
+          total+(target>0?'/'+target:'')+m.unit+'</div>'+
+        '</div>';
+    });
+    barsEl.innerHTML=barsHtml;
+    barsEl.style.display='block';
+  }
 }
 
 function nutConfirmServing(){
