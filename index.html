@@ -5565,6 +5565,43 @@ initDates();
 setHIITPreset(17,6);
 setSyncBadge('loading',null);
 
+// ─── NUTRITION CONSTANTS & STATE (must be before boot block) ─────
+var NUT_FOODS_KEY='wt_foods_v2';
+var NUT_ENTRIES_KEY='wt_nut_entries_v1';
+var NUT_TARGETS_KEY='wt_nut_targets';
+var _nutTargetsStored={};
+var NUT_ACTIVE_KEY='wt_nut_active';
+var NUT_CHEAT_KEY='wt_nut_cheat';
+var NUT_NOT_EATEN_KEY='wt_nut_not_eaten';
+var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
+var _nutSyncQueue=[];
+var NUT_EXTENDED_CACHE_KEY='wt_nut_extended_v1';
+var DAY_DONE_KEY='wt_daydone';
+var _dayDoneStore={};
+var _nutActiveStore={};
+var _nutCheatStore={};
+var _nutNotEaten={};
+var NUT_ACTIVE_BASE=390;
+var NUT_DEFAULTS={cal:2100,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000,activeBase:390,normalRatio:0.5,cheatRatio:0.75};
+var NUT_MEALS=['Breakfast','Lunch','Dinner','Snacks'];
+var NUT_MACRO_DEFS=[
+  {key:'protein',label:'Protein',unit:'g',tKey:'prot',  col:'#9B7FFF'},
+  {key:'fibre',  label:'Fibre',  unit:'g',tKey:'fib',   col:'#3B9BF6'},
+  {key:'satFat', label:'Sat Fat',unit:'g',tKey:'satfat',col:'var(--orange)'},
+  {key:'carbs',  label:'Carbs',  unit:'g',tKey:'carb',  col:'var(--yellow)'},
+];
+var _nutDate=localDateStr();
+var _nutTab='day';
+var _nutFoods=[];
+var _nutEntries=[];
+var _nutAddMeal='';
+var _nutServingFood=null;
+var _nutLastFetch=0;
+var _nutSyncedIds={};
+var _nutLastTouched='amt';
+var _nutPerItemGrams=0;
+var _nutPerItemName='';
+// ─────────────────────────────────────────────────────────────────
 // ── Boot: migrate localStorage → IDB, then start app ──────────────
 // Run trim weekly to keep IDB lean (sheet is the permanent record)
 var _trimKey='wt_last_trim';
@@ -5600,18 +5637,11 @@ wtDB.migrate().then(function(){
   }
 });
 // ─── NUTRITION ────────────────────────────────────────────────────
-var NUT_FOODS_KEY='wt_foods_v2';
-var NUT_ENTRIES_KEY='wt_nut_entries_v1';
-var NUT_TARGETS_KEY='wt_nut_targets';
-var _nutTargetsStored={};
-var NUT_ACTIVE_KEY='wt_nut_active'; // {date: activeCals} per day
-var NUT_CHEAT_KEY='wt_nut_cheat'; // {date: true} for 1:1 bonus days
-var NUT_NOT_EATEN_KEY='wt_nut_not_eaten'; // {"date|Meal": true}
 function nutGetNotEaten(date,meal){
   // sync read from in-memory mirror _nutNotEaten
   return !!(_nutNotEaten&&_nutNotEaten[(date||_nutDate)+'|'+meal]);
 }
-var _nutNotEaten={};
+// _nutNotEaten declared above
 function _nutNotEatenLoad(){return wtDB.get(NUT_NOT_EATEN_KEY).then(function(r){try{_nutNotEaten=JSON.parse(r||'{}');}catch(e){_nutNotEaten={};}});}
 function nutSetNotEaten(date,meal,val){
   var k=(date||_nutDate)+'|'+meal;
@@ -5619,11 +5649,9 @@ function nutSetNotEaten(date,meal,val){
   wtDB.set(NUT_NOT_EATEN_KEY,JSON.stringify(_nutNotEaten));
 }
 function nutToggleNotEaten(meal){nutSetNotEaten(_nutDate,meal,!nutGetNotEaten(_nutDate,meal));nutRenderDay();}
-var _nutLastFetch=0; // timestamp of last successful sheet fetch
-var _nutSyncedIds={}; // ids confirmed in sheet
+// _nutLastFetch/_nutSyncedIds declared above
 // ─── DAY DONE ─────────────────────────────────────────────────────
-var DAY_DONE_KEY='wt_daydone';
-var _dayDoneStore={};
+// DAY_DONE_KEY/_dayDoneStore declared above
 function dayDoneGet(){
   return !!(_dayDoneStore&&_dayDoneStore[localDateStr()]);
 }
@@ -5658,10 +5686,9 @@ function dayDoneRender(){
 // Init on load
 document.addEventListener('DOMContentLoaded',function(){dayDoneRender();});
 
-var NUT_ACTIVE_BASE=390; // fallback only — user-editable via Daily Targets panel
-var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
-var _nutSyncQueue=[];
-var NUT_DEFAULTS={cal:2100,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000,activeBase:390,normalRatio:0.5,cheatRatio:0.75};
+// NUT_ACTIVE_BASE declared above
+// NUT_SYNC_QUEUE_KEY declared above
+// NUT_DEFAULTS declared above
 
 function nutGetActiveCals(date){
   var d=date||_nutDate;
@@ -5673,7 +5700,7 @@ function nutGetActiveCals(date){
   var v=_nutActiveStore&&_nutActiveStore[d];
   return(v!==undefined&&v!==null)?parseFloat(v):null;
 }
-var _nutActiveStore={};
+// _nutActiveStore declared above
 function _nutActiveLoad(){return wtDB.get(NUT_ACTIVE_KEY).then(function(r){try{_nutActiveStore=JSON.parse(r||'{}');}catch(e){_nutActiveStore={};}});}
 function nutSetActiveCals(date,val){
   var d=date||_nutDate;
@@ -5703,7 +5730,7 @@ function nutIsCheatDay(date){
   if(_nutEntries&&_nutEntries.some(function(e){return e.date===d&&e.meal==='_cheat'&&e.food==='CheatDay';}))return true;
   return !!(_nutCheatStore&&_nutCheatStore[d]);
 }
-var _nutCheatStore={};
+// _nutCheatStore declared above
 function _nutCheatLoad(){return wtDB.get(NUT_CHEAT_KEY).then(function(r){try{_nutCheatStore=JSON.parse(r||'{}');}catch(e){_nutCheatStore={};}});}
 function nutSetCheatDay(date,on){
   var d=date||_nutDate;
@@ -5831,12 +5858,11 @@ function nutSyncAction(action,msgEl,cb){
   });
 }
 
-var _nutDate=localDateStr();
-var _nutTab='day';
-var _nutLastTouched='amt';
-var _nutFoods=[];
-var _nutEntries=[];
-var NUT_EXTENDED_CACHE_KEY='wt_nut_extended_v1';
+// _nutDate/_nutTab declared above
+// _nutLastTouched declared above
+// _nutFoods declared above
+// _nutEntries declared above
+// NUT_EXTENDED_CACHE_KEY declared above
 // Returns Mon-Sun date array for the last complete week (always ends last Sunday)
 function lastCompleteWeekDates(){
   var today=new Date();today.setHours(0,0,0,0);
@@ -5858,17 +5884,11 @@ function lastWeekNutAvg(key){
 function saveExtendedCache(entries,from){wtDB.set(NUT_EXTENDED_CACHE_KEY,JSON.stringify({entries:entries,from:from,ts:Date.now()}));}
 function loadExtendedCache(from){return null;} // now async only
 function loadExtendedCacheAsync(from){return wtDB.get(NUT_EXTENDED_CACHE_KEY).then(function(r){try{if(!r)return null;var o=JSON.parse(r);return(o&&o.from===from&&(Date.now()-o.ts)<24*60*60*1000)?o.entries:null;}catch(e){return null;}});}
-var _nutAddMeal='';
-var _nutServingFood=null;
+// _nutAddMeal/_nutServingFood declared above
 var _nutTargets={};
 
-var NUT_MEALS=['Breakfast','Lunch','Dinner','Snacks'];
-var NUT_MACRO_DEFS=[
-  {key:'protein',label:'Protein',unit:'g',tKey:'prot',  col:'#9B7FFF'},
-  {key:'fibre',  label:'Fibre',  unit:'g',tKey:'fib',   col:'#3B9BF6'},
-  {key:'satFat', label:'Sat Fat',unit:'g',tKey:'satfat',col:'var(--orange)'},
-  {key:'carbs',  label:'Carbs',  unit:'g',tKey:'carb',  col:'var(--yellow)'},
-];
+// NUT_MEALS declared above
+// NUT_MACRO_DEFS declared above
 
 // ── Sync badge helpers ─────────────────────────────────────────────
 function nutBadge(state,txt){
@@ -7136,8 +7156,7 @@ function nutFilterAddList(){
 // Unit conversion helpers for serving overlay
 var _nutServingUnitMultiplier=1;
 var _nutServingCurrentUnit='native';
-var _nutPerItemGrams=0;  // grams per single item when in per-item mode
-var _nutPerItemName='';  // e.g. "chip"
+// _nutPerItemGrams/_nutPerItemName declared above
 
 function nutSetPerItem(gramsPerItem,itemName){
   var f=_nutServingFood;if(!f)return;
