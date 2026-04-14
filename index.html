@@ -894,15 +894,19 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <div class="prog-section-lbl">Personal Records</div>
       </div>
       <div class="prog-card" style="overflow:hidden;margin:0 16px 8px;">
-        <div onclick="bwToggle()" id="bwRow" style="display:flex;align-items:center;padding:11px 16px;cursor:pointer;gap:10px;">
-          <div style="flex:1;">
-            <div style="font-size:0.85rem;font-weight:600;">Body Weight</div>
-            <div id="bwRowSub" style="font-size:0.62rem;color:var(--muted);margin-top:1px;">Loading...</div>
+        <div style="border-bottom:1px solid var(--border);">
+          <div onclick="bwToggle()" id="bwRow" style="display:flex;align-items:center;padding:11px 16px;cursor:pointer;gap:10px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:0.85rem;font-weight:600;">Body Weight</div>
+              <div id="bwRowSub" style="font-size:0.62rem;color:var(--muted);margin-top:1px;">Loading...</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+              <span id="bwChevron" style="font-size:0.6rem;color:var(--muted);">▼</span>
+            </div>
           </div>
-          <span id="bwChevron" style="font-size:0.6rem;color:var(--muted);">▼</span>
-        </div>
-        <div id="bodyWeightOuter" style="display:none;border-top:1px solid var(--border);background:var(--card2);padding:12px 16px;">
-          <div id="bodyWeightChart"></div>
+          <div id="bodyWeightOuter" style="display:none;border-top:1px solid var(--border);background:var(--card2);padding:12px 16px;">
+            <div id="bodyWeightChart"></div>
+          </div>
         </div>
         <div id="prGrid">
           <div style="text-align:center;color:var(--muted);padding:20px 0;font-size:0.85rem;">No records yet</div>
@@ -5911,6 +5915,20 @@ function nutInit(){
   nutMsg('Loading from sheet...');
   nutFetchFoods();
   nutFetchEntries();
+  // Attach swipe-to-change-day (once only)
+  var nutPage=document.getElementById('page-nutrition');
+  if(nutPage&&!nutPage._swipeInit){
+    nutPage._swipeInit=true;
+    var _tx=0,_ty=0;
+    nutPage.addEventListener('touchstart',function(e){_tx=e.touches[0].clientX;_ty=e.touches[0].clientY;},{passive:true});
+    nutPage.addEventListener('touchend',function(e){
+      var dx=e.changedTouches[0].clientX-_tx;
+      var dy=e.changedTouches[0].clientY-_ty;
+      if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5){
+        if(dx<0)nutNextDay();else nutPrevDay();
+      }
+    },{passive:true});
+  }
 }
 
 function _nutShowUnsyncedBadge(){
