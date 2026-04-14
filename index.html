@@ -5518,25 +5518,25 @@ if(window.location.search.indexOf('share')>=0){
   initShareMode();
 } else {
   navTo('home');
-  // Pre-load nutrition entries: localStorage first (fast), IDB fallback if evicted
+  // Pre-load nutrition entries from localStorage so home diet card renders immediately
   try{_nutEntries=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');}catch(e){_nutEntries=[];}
-  if(_nutEntries.length){
-    setTimeout(loadHomeData,200);
-  } else {
-    // localStorage may have been evicted by iOS — restore from IDB then render
-    wtDB.get(NUT_ENTRIES_KEY).then(function(raw){
-      try{if(raw){var parsed=JSON.parse(raw);if(parsed.length){_nutEntries=parsed;}}}catch(e){}
-      var restoreKeys=[NUT_ACTIVE_KEY,NUT_CHEAT_KEY,NUT_NOT_EATEN_KEY,DAY_DONE_KEY,
-                       NUT_TARGETS_KEY,CACHE_KEY,PLAN_CACHE_KEY,GOALS_CACHE_KEY,
-                       HIST_KEY,BUD_KEY,'wt_gemini_key','wt_seq_defaults','wt_thismonth',
-                       BODY_WEIGHT_CACHE_KEY,NUT_SYNC_QUEUE_KEY];
-      return Promise.all(restoreKeys.map(function(k){
-        if(localStorage.getItem(k)!==null)return Promise.resolve(); // already there
-        return wtDB.get(k).then(function(v){
-          if(v!==null)try{localStorage.setItem(k,v);}catch(e){}
+  setTimeout(loadHomeData,200);
+  // If localStorage was evicted by iOS, restore from IDB in background after render
+  if(!_nutEntries.length){
+    setTimeout(function(){
+      wtDB.get('wt_nut_entries_v1').then(function(raw){
+        try{if(raw){var parsed=JSON.parse(raw);if(parsed.length){_nutEntries=parsed;renderHomeData(_cachedSessions||[]);}}}catch(e){}
+        // Restore other evicted keys so sync reads work again
+        ['wt_nut_active','wt_nut_cheat','wt_nut_not_eaten','wt_daydone',
+         'wt_nut_targets','wt_sheet_cache','wt_plan_cache','wt_goals_v1',
+         'wt_hist_v3','wt_budget','wt_gemini_key','wt_seq_defaults','wt_thismonth',
+         'wt_bw_cache_v1','wt_nut_sync_q'].forEach(function(k){
+          if(localStorage.getItem(k)===null){
+            wtDB.get(k).then(function(v){if(v!==null)try{localStorage.setItem(k,v);}catch(e){}});
+          }
         });
-      }));
-    }).then(function(){loadHomeData();});
+      });
+    },500);
   }
   // Load goals from sheet (uses localStorage cache immediately, then updates from sheet)
   _goalsLoaded=true;loadGoals();
