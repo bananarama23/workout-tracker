@@ -1505,6 +1505,34 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
 <script>
 
+// ─── GLOBAL ERROR CATCHER (debug) ───────────────────
+window.onerror=function(msg,src,line,col,err){
+  var text='ERROR: '+msg+'\nFile: '+(src||'?')+'\nLine: '+line+':'+col+'\nStack: '+((err&&err.stack)||'n/a');
+  var box=document.createElement('div');
+  box.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#c00;color:#fff;font-size:12px;padding:12px 14px;white-space:pre-wrap;word-break:break-all;max-height:50vh;overflow-y:auto;font-family:monospace;';
+  box.textContent=text;
+  var close=document.createElement('button');
+  close.textContent='✕ Copy & Close';
+  close.style.cssText='display:block;margin-top:8px;padding:6px 12px;background:#fff;color:#c00;border:none;border-radius:4px;font-weight:bold;cursor:pointer;font-size:12px;';
+  close.onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(text);box.remove();};
+  box.appendChild(close);
+  document.body?document.body.appendChild(box):setTimeout(function(){document.body.appendChild(box);},500);
+  return false;
+};
+window.addEventListener('unhandledrejection',function(e){
+  var msg='UNHANDLED PROMISE: '+(e.reason&&e.reason.stack?e.reason.stack:String(e.reason));
+  var box=document.createElement('div');
+  box.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#c60;color:#fff;font-size:12px;padding:12px 14px;white-space:pre-wrap;word-break:break-all;max-height:50vh;overflow-y:auto;font-family:monospace;';
+  box.textContent=msg;
+  var close=document.createElement('button');
+  close.textContent='✕ Copy & Close';
+  close.style.cssText='display:block;margin-top:8px;padding:6px 12px;background:#fff;color:#c60;border:none;border-radius:4px;font-weight:bold;cursor:pointer;font-size:12px;';
+  close.onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(msg);box.remove();};
+  box.appendChild(close);
+  document.body?document.body.appendChild(box):setTimeout(function(){document.body.appendChild(box);},500);
+});
+// ────────────────────────────────────────────────────
+
 // ─── INDEXEDDB WRAPPER ──────────────────────────────
 var wtDB=(function(){
   var DB='wtApp',VER=1,ST='kv',_db=null;
