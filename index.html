@@ -4116,16 +4116,21 @@ function renderHomeCholCard(){
   var last=readings[readings.length-1];
   var daysSince=Math.floor((Date.now()-new Date(last.date).getTime())/(1000*60*60*24));
 
-  // If test is older than our fetch window, fetch extended data first then re-render
+  // If test is older than our fetch window, may need extended data
   if(daysSince>29&&_nutEntries&&!_nutEntries.some(function(e){return e.date===last.date;})){
-    nutFetchEntries(last.date);
-    // nutFetchEntries will call nutRenderDay + nutRenderWeek on completion
-    // but not renderHomeCholCard — patch that here
-    var _origRender=window._nutEntriesCb;
-    var _cbKey='wt_homechol_'+Date.now();
-    // Instead just re-call after a delay to let the fetch settle
-    setTimeout(function(){renderHomeCholCard();},3000);
-    return;
+    // Try cache first — render immediately if fresh (< 24h)
+    var cached=loadExtendedCache(last.date);
+    if(cached){
+      // Merge cached extended entries with current _nutEntries
+      var extDates=cached.map(function(e){return e.date;});
+      var merged=_nutEntries.filter(function(e){return extDates.indexOf(e.date)<0;}).concat(cached);
+      _nutEntries=merged;
+      // Fall through to render with merged data
+    } else {
+      // No cache — fetch in background, re-render when done (nutFetchEntries calls renderHomeCholCard on completion)
+      nutFetchEntries(last.date);
+      return; // nutFetchEntries completion calls renderHomeCholCard via line 5918
+    }
   }
 
   // Gather logged days since last test
@@ -4159,17 +4164,14 @@ function stat(val,color,lbl,target){
     '</div>';
   }
   // Compute last-7-day avg for trend arrows (compare recent 7 days vs prior 7 days)
-  var recent7=[],prior7=[];
-  for(var ri=7;ri>=1;ri--)recent7.push(nutShiftDate(localDateStr(),-ri));
-  for(var pi=14;pi>=8;pi--)prior7.push(nutShiftDate(localDateStr(),-pi));
-  var r7logged=recent7.filter(function(d){return _nutEntries&&_nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});});
-  var p7logged=prior7.filter(function(d){return _nutEntries&&_nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});});
-  function weekAvg(days,key){if(!days.length)return null;var s=0;days.forEach(function(d){var t=nutTotals(nutDayEntries(d));s+=t[key]||0;});return Math.round(s/days.length);}
+  // trendArrow uses lastWeekNutAvg() — compares last complete Mon-Sun week vs overall avg
   function trendArrow(key,moreIsBetter){
-    var rv=weekAvg(r7logged,key),pv=weekAvg(p7logged,key);
-    if(rv===null||pv===null||pv===0)return '';
-    var diff=rv-pv,pct=Math.round(Math.abs(diff)/pv*100);
-    if(Math.abs(diff)<2)return '<span style="font-size:0.55rem;color:var(--muted);">~</span>';
+    // Compare last complete Mon-Sun week vs overall average since blood test
+    var weekVal=lastWeekNutAvg(key);
+    var overallAvg=avg(key);
+    if(weekVal===null||!overallAvg)return '';
+    var diff=weekVal-overallAvg,pct=Math.round(Math.abs(diff)/overallAvg*100);
+    if(pct<3)return '<span style="font-size:0.55rem;color:var(--muted);">~</span>';
     var up=diff>0;
     var good=(moreIsBetter&&up)||(!moreIsBetter&&!up);
     return '<span style="font-size:0.65rem;color:'+(good?'var(--green)':'var(--red)')+';">'+
@@ -4480,26 +4482,29 @@ function buildBodyWeightChart(){
       el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">No weight data yet \u2014 log via Body Metrics</div>';
       return;
     }
-    // Stats row
+    // Compact stats + chart
     var latest=data[data.length-1];
     var first=data[0];
     var change=Math.round((latest.weight-first.weight)*10)/10;
     var changeCol=change<=0?'var(--green)':'var(--red)';
-    var html='<div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px;">';
-    html+='<div style="flex:1;text-align:center;padding:10px 4px;">';
-    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.8rem;color:var(--accent);line-height:1;">'+latest.weight+'</div>';
-    html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-top:2px;">lbs now</div></div>';
-    html+='<div style="flex:1;text-align:center;padding:10px 4px;border-left:1px solid var(--border);">';
-    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.8rem;color:'+changeCol+';line-height:1;">'+(change>0?'+':'')+change+'</div>';
-    html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-top:2px;">since start</div></div>';
+    var html='<div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">';
+    html+='<div style="display:flex;align-items:baseline;gap:6px;">';
+    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2rem;color:var(--accent);line-height:1;">'+latest.weight+'</div>';
+    html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">lbs</div>';
+    html+='</div>';
+    html+='<div style="display:flex;align-items:baseline;gap:4px;">';
+    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;color:'+changeCol+';line-height:1;">'+(change>0?'+':'')+change+'</div>';
+    html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">since start</div>';
+    html+='</div>';
     if(latest.waist>0){
-      html+='<div style="flex:1;text-align:center;padding:10px 4px;border-left:1px solid var(--border);">';
-      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.8rem;color:var(--text);line-height:1;">'+latest.waist+'"</div>';
-      html+='<div style="font-size:0.55rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;margin-top:2px;">waist</div></div>';
+      html+='<div style="display:flex;align-items:baseline;gap:4px;">';
+      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;color:var(--text2);line-height:1;">'+latest.waist+'"</div>';
+      html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">waist</div>';
+      html+='</div>';
     }
     html+='</div>';
-    // Canvas chart
-    html+='<canvas id="bodyWtCanvas" style="width:100%;height:130px;display:block;"></canvas>';
+    // Canvas chart — compact height
+    html+='<canvas id="bodyWtCanvas" style="width:100%;height:80px;display:block;"></canvas>';
     el.innerHTML=html;
     setTimeout(function(){
       var canvas=document.getElementById('bodyWtCanvas');
@@ -5615,6 +5620,27 @@ var _nutTab='day';
 var _nutLastTouched='amt';
 var _nutFoods=[];
 var _nutEntries=[];
+var NUT_EXTENDED_CACHE_KEY='wt_nut_extended_v1';
+// Returns Mon-Sun date array for the last complete week (always ends last Sunday)
+function lastCompleteWeekDates(){
+  var today=new Date();today.setHours(0,0,0,0);
+  var dow=today.getDay(); // 0=Sun
+  // Last Sunday = today - dow days (if today is Sun, that's today; but we want LAST Sun = prev week end)
+  var lastSun=new Date(today);lastSun.setDate(today.getDate()-(dow===0?7:dow));
+  var lastMon=new Date(lastSun);lastMon.setDate(lastSun.getDate()-6);
+  var days=[];
+  for(var i=0;i<7;i++){var d=new Date(lastMon);d.setDate(lastMon.getDate()+i);days.push(fmtDate(d));}
+  return days;
+}
+function lastWeekNutAvg(key){
+  var days=lastCompleteWeekDates();
+  var logged=days.filter(function(d){return _nutEntries&&_nutEntries.some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});});
+  if(!logged.length)return null;
+  var tot=0;logged.forEach(function(d){var t=nutTotals(nutDayEntries(d));tot+=(t[key]||0);});
+  return Math.round(tot/logged.length);
+}
+function saveExtendedCache(entries,from){try{localStorage.setItem(NUT_EXTENDED_CACHE_KEY,JSON.stringify({entries:entries,from:from,ts:Date.now()}));}catch(e){}}
+function loadExtendedCache(from){try{var r=localStorage.getItem(NUT_EXTENDED_CACHE_KEY);if(!r)return null;var o=JSON.parse(r);if(o&&o.from===from&&(Date.now()-o.ts)<24*60*60*1000)return o.entries;return null;}catch(e){return null;}}
 var _nutAddMeal='';
 var _nutServingFood=null;
 var _nutTargets={};
@@ -5892,6 +5918,10 @@ function nutFetchEntries(extendedFrom){
         });
       }
       try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
+      // If this was an extended fetch (from < 29 days), cache the older entries separately
+      if(extendedFrom&&extendedFrom!==nutShiftDate(localDateStr(),-29)){
+        saveExtendedCache(sheetEntries.filter(function(e){return e.date<nutShiftDate(localDateStr(),-29);}),extendedFrom);
+      }
       _nutLastFetch=Date.now();
       // Track which ids are confirmed in sheet for per-entry status dots
       sheetEntries.forEach(function(e){if(e.id)_nutSyncedIds[String(e.id)]=true;});
@@ -6237,9 +6267,32 @@ function nutRenderWeek(){
     var cFib=avgFib>=tFib?'var(--green)':'var(--red)';
     var cSat=avgSat<=tSat?'var(--green)':'var(--red)';
     var cSod=avgSod<=tSod?'var(--green)':'var(--red)';
-    function stat(val,color,lbl,tgt){
+    // Split logged days into two halves for trend comparison
+    var half=Math.floor(loggedDays.length/2);
+    var firstHalf=loggedDays.slice(0,half),secondHalf=loggedDays.slice(half);
+    function halfAvg(days,key){
+      if(!days.length)return null;
+      var tot=0;days.forEach(function(d){var t=nutTotals(nutDayEntries(d));tot+=(t[key]||0);});
+      return Math.round(tot/days.length);
+    }
+    function blockTrend(key,moreIsBetter){
+      // Last complete Mon-Sun week vs overall average in this block
+      var weekVal=lastWeekNutAvg(key);
+      var n2=loggedDays.length||1;
+      var tot2=0;loggedDays.forEach(function(d){var t=nutTotals(nutDayEntries(d));tot2+=(t[key]||0);});
+      var overallAvg=Math.round(tot2/n2);
+      if(weekVal===null||!overallAvg)return '';
+      var diff=weekVal-overallAvg,pct=Math.round(Math.abs(diff)/overallAvg*100);
+      if(pct<3)return '<span style="font-size:0.55rem;color:var(--muted);">~</span>';
+      var up=diff>0;
+      var good=(moreIsBetter&&up)||(!moreIsBetter&&!up);
+      return '<span style="font-size:0.65rem;color:'+(good?'var(--green)':'var(--red)')+';">'+
+        (up?'↑':'↓')+pct+'%</span>';
+    }
+    function stat(val,color,lbl,tgt,arrow){
       return '<div style="flex:1;text-align:center;">'+
-        '<div style="font-size:0.95rem;font-weight:700;color:'+color+';">'+val+'</div>'+
+        '<div style="font-size:0.95rem;font-weight:700;color:'+color+';line-height:1;">'+val+'</div>'+
+        '<div style="font-size:0.65rem;min-height:14px;line-height:1.2;margin-top:1px;">'+(arrow||'')+'</div>'+
         '<div style="font-size:0.52rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:1px;">'+lbl+'</div>'+
         (tgt?'<div style="font-size:0.48rem;color:var(--muted);margin-top:1px;">tgt '+tgt+'</div>':'')+
       '</div>';
@@ -6247,11 +6300,11 @@ function nutRenderWeek(){
     return '<div style="margin-bottom:6px;">'+
       '<div style="font-size:0.6rem;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;">'+label+' \u00b7 '+loggedDays.length+' days logged</div>'+
       '<div style="display:flex;gap:4px;">'+
-        stat(avgCal.toLocaleString(),cCal,'Kcal',avgEffBudget.toLocaleString())+
-        stat(avgProt+'g',cProt,'Protein',tProt+'g')+
-        stat(avgFib+'g',cFib,'Fibre',tFib+'g')+
-        stat(avgSat+'g',cSat,'Sat Fat',tSat+'g')+
-        stat(Math.round(avgSod/100)/10+'g',cSod,'Sodium',Math.round(tSod/100)/10+'g')+
+        stat(avgCal.toLocaleString(),cCal,'Kcal',avgEffBudget.toLocaleString(),blockTrend('calories',false))+
+        stat(avgProt+'g',cProt,'Protein',tProt+'g',blockTrend('protein',true))+
+        stat(avgFib+'g',cFib,'Fibre',tFib+'g',blockTrend('fibre',true))+
+        stat(avgSat+'g',cSat,'Sat Fat',tSat+'g',blockTrend('satFat',false))+
+        stat(Math.round(avgSod/100)/10+'g',cSod,'Sodium',Math.round(tSod/100)/10+'g',blockTrend('sodium',false))+
       '</div>'+
     '</div>';
   }
@@ -6891,18 +6944,48 @@ function nutServingUnitChange(u){
   if(qtyLbl)qtyLbl.textContent='Servings';
   var perBtn=document.getElementById('nutPerItemBtn');
   if(perBtn){perBtn.style.background='var(--card2)';perBtn.style.color='var(--text2)';perBtn.style.borderColor='var(--border2)';}
-  _nutServingCurrentUnit=u||'native';
   var native=f.unit||'g';
-  if(u==='native'||u===native){_nutServingUnitMultiplier=1;}
-  else if((native==='g'||native==='ml')&&u==='oz'){_nutServingUnitMultiplier=1/28.3495;}
-  else if((native==='g'||native==='ml')&&u==='lb'){_nutServingUnitMultiplier=1/453.592;}
-  else if(native==='oz'&&u==='g'){_nutServingUnitMultiplier=28.3495;}
-  else if(native==='lb'&&u==='g'){_nutServingUnitMultiplier=453.592;}
-  else{_nutServingUnitMultiplier=1;}
-  var displayUnit=u==='native'?native:u;
+
+  // Read current display amount and convert back to native grams/ml first
   var amtEl=document.getElementById('nutServingAmt');
+  var currentDisplay=parseFloat((amtEl||{}).value)||f.serving;
+  // Convert current display → native using OLD multiplier
+  var nativeAmt=currentDisplay/_nutServingUnitMultiplier;
+
+  // Multiplier table: native unit → display unit (how many display units per 1 native unit)
+  function toMult(fromNative, toUnit){
+    if(toUnit==='native'||toUnit===fromNative)return 1;
+    // g/ml native
+    if(fromNative==='g'||fromNative==='ml'){
+      if(toUnit==='oz')return 1/28.3495;
+      if(toUnit==='lb')return 1/453.592;
+      if(toUnit==='cup')return 1/240;  // approx for ml; for g depends on density — use ml equiv
+      return 1;
+    }
+    // oz native
+    if(fromNative==='oz'){
+      if(toUnit==='g')return 28.3495;
+      if(toUnit==='lb')return 1/16;
+      if(toUnit==='cup')return 1/8;
+      return 1;
+    }
+    // lb native
+    if(fromNative==='lb'){
+      if(toUnit==='g')return 453.592;
+      if(toUnit==='oz')return 16;
+      if(toUnit==='cup')return 2;
+      return 1;
+    }
+    return 1;
+  }
+
+  _nutServingCurrentUnit=u||'native';
+  _nutServingUnitMultiplier=toMult(native,u);
+  var displayUnit=u==='native'?native:u;
   var lbl=document.getElementById('nutServingAmtLabel');
-  if(amtEl)amtEl.value=Math.round(f.serving*_nutServingUnitMultiplier*100)/100;
+  // Convert native amount to new display unit
+  var newDisplay=Math.round(nativeAmt*_nutServingUnitMultiplier*100)/100;
+  if(amtEl)amtEl.value=newDisplay;
   if(lbl)lbl.textContent='Amount ('+displayUnit+')';
   // Highlight active button
   document.querySelectorAll('.nutUnitBtn').forEach(function(btn){
@@ -7044,6 +7127,10 @@ function nutConfirmServing(){
     entry.perItemGrams=_nutPerItemGrams;
     entry.perItemName=_nutPerItemName;
     entry.perItemCount=parseFloat((amtEl||{}).value)||1;
+  } else {
+    // Save display amount and unit so editing restores exactly what was typed
+    entry._displayAmt=parseFloat((amtEl||{}).value)||null;
+    entry._displayUnit=_nutServingCurrentUnit||'native';
   }
 
   if(isEdit){
@@ -7127,8 +7214,14 @@ function nutEditEntry(idx){
         perItemRowE.style.display='none';perItemRowE.innerHTML='';
       }
     }
-    if(amtEl)amtEl.value=Math.round(currentServings*food.serving*10)/10;
-    if(qtyEl)qtyEl.value=currentServings;
+    if(e._displayAmt&&e._displayUnit){
+      // Restore exact unit and amount the user typed — no floating point round-trip
+      nutServingUnitChange(e._displayUnit);
+      if(amtEl){amtEl.value=e._displayAmt;}
+    } else {
+      if(amtEl)amtEl.value=Math.round(currentServings*food.serving*10)/10;
+      if(qtyEl)qtyEl.value=currentServings;
+    }
   }
   nutServingPreview();
   var ov=document.getElementById('nutServingOverlay');
