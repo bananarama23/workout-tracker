@@ -871,13 +871,19 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   </div>
   <div class="page-body" style="padding-top:16px;">
 
-    <!-- Body Weight -->
+    <!-- Body Weight — collapsible -->
     <div class="prog-section" style="margin-bottom:6px;">
-      <div class="prog-section-hdr">
-        <div class="prog-section-lbl">Body Weight</div>
-      </div>
-      <div class="prog-card" id="bodyWeightOuter" style="padding:12px 16px;min-height:0;">
-        <div id="bodyWeightChart"></div>
+      <div class="prog-card" style="overflow:hidden;margin:0 16px;">
+        <div onclick="bwToggle()" id="bwRow" style="display:flex;align-items:center;padding:11px 16px;cursor:pointer;gap:10px;">
+          <div style="flex:1;">
+            <div style="font-size:0.85rem;font-weight:600;">Body Weight</div>
+            <div id="bwRowSub" style="font-size:0.62rem;color:var(--muted);margin-top:1px;">Loading...</div>
+          </div>
+          <span id="bwChevron" style="font-size:0.6rem;color:var(--muted);">▼</span>
+        </div>
+        <div id="bodyWeightOuter" style="display:none;border-top:1px solid var(--border);background:var(--card2);padding:12px 16px;">
+          <div id="bodyWeightChart"></div>
+        </div>
       </div>
     </div>
 
@@ -4333,6 +4339,25 @@ function buildHeatmap(sessions){
   if(hc)hc.innerHTML=html;
 }
 
+var _bwExpanded=false;
+function bwToggle(){
+  _bwExpanded=!_bwExpanded;
+  var outer=document.getElementById('bodyWeightOuter');
+  var chev=document.getElementById('bwChevron');
+  if(outer)outer.style.display=_bwExpanded?'block':'none';
+  if(chev)chev.textContent=_bwExpanded?'▲':'▼';
+  if(_bwExpanded&&_bodyWeightData.length){
+    // Ensure chart renders now that container is visible
+    setTimeout(function(){
+      var canvas=document.getElementById('bodyWtCanvas');
+      if(canvas&&_bodyWeightData.length>=2){
+        drawLineChart(canvas,_bodyWeightData.map(function(d){return d.date;}),_bodyWeightData.map(function(d){return d.weight;}),null,null,'var(--blue)');
+      }
+    },30);
+  }
+}
+var _prExpanded={};
+function prToggle(name){_prExpanded[name]=!_prExpanded[name];if(window._buildPRs_render)window._buildPRs_render();}
 function buildPRs(sessions){
   var el=document.getElementById('prGrid');
   if(!sessions||!sessions.length){
@@ -4376,8 +4401,8 @@ function buildPRs(sessions){
   function feelCol(f){return f==='Medium'?'var(--green)':f==='Medium-hard'?'var(--yellow)':f==='Hard'?'var(--red)':'var(--muted)';}
   function fmtDate(d){var dt=parseLocalDate(d);return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 
-  var _prExpanded={};
-  function prToggle(name){_prExpanded[name]=!_prExpanded[name];buildPRs_render();}
+  buildPRs_render();
+  window._buildPRs_render=buildPRs_render;
   function buildPRs_render(){
     var rows='';
     exerciseNames.forEach(function(name){
@@ -4499,7 +4524,13 @@ function buildBodyWeightChart(){
   // Render from cache immediately
   try{
     var cached=localStorage.getItem(BODY_WEIGHT_CACHE_KEY);
-    if(cached){var cd=JSON.parse(cached);if(cd&&cd.length){_bodyWeightData=cd;renderBodyWeightData(el,cd);if(outer)outer.style.display='block';}}
+    if(cached){var cd=JSON.parse(cached);if(cd&&cd.length){
+      _bodyWeightData=cd;renderBodyWeightData(el,cd);
+      var lt=cd[cd.length-1],fi=cd[0];
+      var ch=Math.round((lt.weight-fi.weight)*10)/10;
+      var sub=document.getElementById('bwRowSub');
+      if(sub)sub.textContent=lt.weight+' lbs · '+(ch>0?'+':'')+ch+' since start';
+    }}
     else{if(outer)outer.style.display='none';} // hide card until data arrives
   }catch(e){}
   if(!_bodyWeightData.length) el.innerHTML=''; // stay empty while loading — no blank space
@@ -4514,8 +4545,14 @@ function buildBodyWeightChart(){
     _bodyWeightData=data; // cache for Gemini prompt
     try{localStorage.setItem(BODY_WEIGHT_CACHE_KEY,JSON.stringify(data));}catch(e){}
     var outer=document.getElementById('bodyWeightOuter');
-    if(outer)outer.style.display='block';
     renderBodyWeightData(el,data);
+    // Update collapsed row subtitle
+    if(data.length){
+      var sub=document.getElementById('bwRowSub');
+      var lt=data[data.length-1],fi=data[0];
+      var ch=Math.round((lt.weight-fi.weight)*10)/10;
+      if(sub)sub.textContent=lt.weight+' lbs · '+(ch>0?'+':'')+ch+' since start';
+    }
   };
   var sc=document.createElement('script');sc.id='s_'+cb;
   sc.onerror=function(){window[cb]=null;if(el)el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">Could not load weight data</div>';};
