@@ -876,8 +876,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div class="prog-section-hdr">
         <div class="prog-section-lbl">Body Weight</div>
       </div>
-      <div class="prog-card prog-card-pad">
-        <div id="bodyWeightChart" style="color:var(--muted);font-size:0.85rem;text-align:center;padding:10px 0;">No data yet</div>
+      <div class="prog-card" id="bodyWeightOuter" style="padding:12px 16px;min-height:0;">
+        <div id="bodyWeightChart"></div>
       </div>
     </div>
 
@@ -4472,7 +4472,7 @@ function buildPRs(sessions){
 var _bodyWeightData=[]; // cached weight entries: [{date, weight, waist}]
 function renderBodyWeightData(el,data){
   if(!data||!data.length){
-    el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">No weight data — log via Body Metrics</div>';
+    el.innerHTML='<div style="color:var(--muted);font-size:0.72rem;">No weight data — log via Body Metrics</div>';
     return;
   }
   var latest=data[data.length-1],first=data[0];
@@ -4506,12 +4506,14 @@ function renderBodyWeightData(el,data){
 
 function buildBodyWeightChart(){
   var el=document.getElementById('bodyWeightChart');if(!el)return;
+  var outer=document.getElementById('bodyWeightOuter');
   // Render from cache immediately
   try{
     var cached=localStorage.getItem(BODY_WEIGHT_CACHE_KEY);
-    if(cached){var cd=JSON.parse(cached);if(cd&&cd.length){_bodyWeightData=cd;renderBodyWeightData(el,cd);}}
+    if(cached){var cd=JSON.parse(cached);if(cd&&cd.length){_bodyWeightData=cd;renderBodyWeightData(el,cd);if(outer)outer.style.display='block';}}
+    else{if(outer)outer.style.display='none';} // hide card until data arrives
   }catch(e){}
-  if(!_bodyWeightData.length) el.innerHTML='<div style="color:var(--muted);font-size:0.7rem;text-align:center;padding:6px 0;">Loading...</div>';
+  if(!_bodyWeightData.length) el.innerHTML=''; // stay empty while loading — no blank space
   var cb='wt_bwt_'+Date.now();
   window[cb]=function(result){
     window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
@@ -4522,6 +4524,8 @@ function buildBodyWeightChart(){
       .slice(-20);
     _bodyWeightData=data; // cache for Gemini prompt
     try{localStorage.setItem(BODY_WEIGHT_CACHE_KEY,JSON.stringify(data));}catch(e){}
+    var outer=document.getElementById('bodyWeightOuter');
+    if(outer)outer.style.display='block';
     renderBodyWeightData(el,data);
   };
   var sc=document.createElement('script');sc.id='s_'+cb;
