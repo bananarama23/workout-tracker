@@ -1157,16 +1157,18 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
                 <span style="font-size:0.9rem;font-weight:700;" id="nutCalRemaining">2,100</span>
               </div>
               <!-- Active calories row -->
-              <div id="nutActiveRow" style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);padding-top:8px;margin-bottom:8px;">
-                <div style="display:flex;align-items:center;gap:6px;">
-                  <span style="font-size:0.6rem;color:var(--muted);">🏃 Active</span>
-                  <input id="nutActiveInp" type="number" inputmode="numeric" placeholder="390" style="width:60px;background:var(--card2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:0.9rem;text-align:center;padding:3px 6px;outline:none;" oninput="nutActiveChanged()" onblur="nutActiveBlur()">
-                  <span style="font-size:0.58rem;color:var(--muted);">kcal</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:8px;">
-                  <span id="nutActiveAdj" style="font-size:0.68rem;font-weight:700;"></span>
-                  <button id="nutCheatBtn" onclick="nutToggleCheatDay()" style="font-size:0.58rem;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;">CHEAT DAY</button>
-                  <button id="dayDoneBar" onclick="dayDoneToggle()" style="font-size:0.58rem;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;display:none;">DAY DONE</button>
+              <div id="nutActiveRow" style="border-top:1px solid var(--border);padding-top:8px;margin-bottom:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="font-size:0.6rem;color:var(--muted);">Active</span>
+                    <input id="nutActiveInp" type="number" inputmode="numeric" placeholder="390" style="width:56px;background:var(--card2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:0.9rem;text-align:center;padding:3px 6px;outline:none;" oninput="nutActiveChanged()" onblur="nutActiveBlur()">
+                    <span style="font-size:0.58rem;color:var(--muted);">kcal</span>
+                    <span id="nutActiveAdj" style="font-size:0.65rem;font-weight:700;"></span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <button id="nutCheatBtn" onclick="nutToggleCheatDay()" style="font-size:0.56rem;font-weight:700;letter-spacing:0.5px;padding:3px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;white-space:nowrap;">CHEAT</button>
+                    <button id="dayDoneBar" onclick="dayDoneToggle()" style="font-size:0.56rem;font-weight:700;letter-spacing:0.5px;padding:3px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;white-space:nowrap;display:none;">DONE ✓</button>
+                  </div>
                 </div>
               </div>
               <div style="border-top:1px solid var(--border);padding-top:8px;" id="nutMacroBars"></div>
@@ -4170,8 +4172,10 @@ function stat(val,color,lbl,target){
     var weekVal=lastWeekNutAvg(key);
     var overallAvg=avg(key);
     if(weekVal===null||!overallAvg)return '';
+    // Need at least 14 days to have meaningful trend vs overall avg
+    if(n<14)return '';
     var diff=weekVal-overallAvg,pct=Math.round(Math.abs(diff)/overallAvg*100);
-    if(pct<3)return '<span style="font-size:0.55rem;color:var(--muted);">~</span>';
+    if(pct<3)return '';
     var up=diff>0;
     var good=(moreIsBetter&&up)||(!moreIsBetter&&!up);
     return '<span style="font-size:0.65rem;color:'+(good?'var(--green)':'var(--red)')+';">'+
@@ -4180,7 +4184,7 @@ function stat(val,color,lbl,target){
   function stat2(val,color,lbl,target,arrow){
     return '<div style="flex:1;text-align:center;">'+
       '<div style="font-size:0.95rem;font-weight:700;color:'+color+';">'+val+'</div>'+
-      (arrow?'<div style="margin-top:1px;">'+arrow+'</div>':'')+
+      (arrow?'<div style="margin-top:1px;font-size:0.65rem;">'+arrow+'</div>':'')+
       '<div style="font-size:0.52rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:1px;">'+lbl+'</div>'+
       (target?'<div style="font-size:0.48rem;color:var(--muted);margin-top:1px;">tgt '+target+'</div>':'')+
     '</div>';
@@ -6282,8 +6286,9 @@ function nutRenderWeek(){
       var tot2=0;loggedDays.forEach(function(d){var t=nutTotals(nutDayEntries(d));tot2+=(t[key]||0);});
       var overallAvg=Math.round(tot2/n2);
       if(weekVal===null||!overallAvg)return '';
+      if(loggedDays.length<14)return '';
       var diff=weekVal-overallAvg,pct=Math.round(Math.abs(diff)/overallAvg*100);
-      if(pct<3)return '<span style="font-size:0.55rem;color:var(--muted);">~</span>';
+      if(pct<3)return '';
       var up=diff>0;
       var good=(moreIsBetter&&up)||(!moreIsBetter&&!up);
       return '<span style="font-size:0.65rem;color:'+(good?'var(--green)':'var(--red)')+';">'+
