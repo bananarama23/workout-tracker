@@ -7773,7 +7773,7 @@ function progAIParseResponse(text){
     }
     if(settingIdx<0)return;
     var chunk=lower.slice(Math.max(0,settingIdx-20),settingIdx+300);
-    if(/keep|no change|stay|remain/.test(chunk.slice(0,80)))return;
+    if(/\bkeep\b|\bno change\b|\bstay\b|\bremain\b/.test(chunk.slice(0,80)))return;
     var numMatch=chunk.match(/(?:change(?:\s+to)?|increase(?:\s+to)?|reduce(?:\s+to)?|lower(?:\s+to)?|raise(?:\s+to)?|set(?:\s+to)?|try|use|consider|suggest)\s+(?:a\s+)?(\d+(?:\.\d+)?)/);
     if(!numMatch)numMatch=chunk.match(/(?:to|:\s*)(\d+(?:\.\d+)?)/);
     if(!numMatch)return;
