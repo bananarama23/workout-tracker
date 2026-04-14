@@ -1501,6 +1501,7 @@ var HIST_KEY='wt_hist_v3';
 var CACHE_KEY='wt_sheet_cache';
 var PLAN_CACHE_KEY='wt_plan_cache';
 var GOALS_CACHE_KEY='wt_goals_v1';
+var BODY_WEIGHT_CACHE_KEY='wt_bw_cache_v1';
 var _goals={strGoal:2,hiitSessions:2,effortGoal:13,durGoal:28};
 var _goalsLoaded=false;
 function loadGoalsCache(){try{var r=localStorage.getItem(GOALS_CACHE_KEY);if(!r)return null;return JSON.parse(r);}catch(e){return null;}}
@@ -4469,9 +4470,48 @@ function buildPRs(sessions){
 }
 
 var _bodyWeightData=[]; // cached weight entries: [{date, weight, waist}]
+function renderBodyWeightData(el,data){
+  if(!data||!data.length){
+    el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">No weight data — log via Body Metrics</div>';
+    return;
+  }
+  var latest=data[data.length-1],first=data[0];
+  var change=Math.round((latest.weight-first.weight)*10)/10;
+  var changeCol=change<=0?'var(--green)':'var(--red)';
+  var html='<div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">';
+  html+='<div style="display:flex;align-items:baseline;gap:6px;">';
+  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2rem;color:var(--accent);line-height:1;">'+latest.weight+'</div>';
+  html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">lbs</div>';
+  html+='</div>';
+  html+='<div style="display:flex;align-items:baseline;gap:4px;">';
+  html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;color:'+changeCol+';line-height:1;">'+(change>0?'+':'')+change+'</div>';
+  html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">since start</div>';
+  html+='</div>';
+  if(latest.waist>0){
+    html+='<div style="display:flex;align-items:baseline;gap:4px;">';
+    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;color:var(--text2);line-height:1;">'+latest.waist+'"</div>';
+    html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">waist</div>';
+    html+='</div>';
+  }
+  html+='</div>';
+  html+='<canvas id="bodyWtCanvas" style="width:100%;height:80px;display:block;"></canvas>';
+  el.innerHTML=html;
+  setTimeout(function(){
+    var canvas=document.getElementById('bodyWtCanvas');
+    if(canvas&&data.length>=2){
+      drawLineChart(canvas,data.map(function(d){return d.date;}),data.map(function(d){return d.weight;}),null,null,'var(--blue)');
+    }
+  },50);
+}
+
 function buildBodyWeightChart(){
   var el=document.getElementById('bodyWeightChart');if(!el)return;
-  el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">Loading...</div>';
+  // Render from cache immediately
+  try{
+    var cached=localStorage.getItem(BODY_WEIGHT_CACHE_KEY);
+    if(cached){var cd=JSON.parse(cached);if(cd&&cd.length){_bodyWeightData=cd;renderBodyWeightData(el,cd);}}
+  }catch(e){}
+  if(!_bodyWeightData.length) el.innerHTML='<div style="color:var(--muted);font-size:0.7rem;text-align:center;padding:6px 0;">Loading...</div>';
   var cb='wt_bwt_'+Date.now();
   window[cb]=function(result){
     window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
@@ -4481,40 +4521,8 @@ function buildBodyWeightChart(){
       .sort(function(a,b){return a.date<b.date?-1:1;})
       .slice(-20);
     _bodyWeightData=data; // cache for Gemini prompt
-    if(!data.length){
-      el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">No weight data yet \u2014 log via Body Metrics</div>';
-      return;
-    }
-    // Compact stats + chart
-    var latest=data[data.length-1];
-    var first=data[0];
-    var change=Math.round((latest.weight-first.weight)*10)/10;
-    var changeCol=change<=0?'var(--green)':'var(--red)';
-    var html='<div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">';
-    html+='<div style="display:flex;align-items:baseline;gap:6px;">';
-    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2rem;color:var(--accent);line-height:1;">'+latest.weight+'</div>';
-    html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">lbs</div>';
-    html+='</div>';
-    html+='<div style="display:flex;align-items:baseline;gap:4px;">';
-    html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;color:'+changeCol+';line-height:1;">'+(change>0?'+':'')+change+'</div>';
-    html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">since start</div>';
-    html+='</div>';
-    if(latest.waist>0){
-      html+='<div style="display:flex;align-items:baseline;gap:4px;">';
-      html+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;color:var(--text2);line-height:1;">'+latest.waist+'"</div>';
-      html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">waist</div>';
-      html+='</div>';
-    }
-    html+='</div>';
-    // Canvas chart — compact height
-    html+='<canvas id="bodyWtCanvas" style="width:100%;height:80px;display:block;"></canvas>';
-    el.innerHTML=html;
-    setTimeout(function(){
-      var canvas=document.getElementById('bodyWtCanvas');
-      if(canvas&&data.length>=2){
-        drawLineChart(canvas,data.map(function(d){return d.date;}),data.map(function(d){return d.weight;}),null,null,'var(--blue)');
-      }
-    },50);
+    try{localStorage.setItem(BODY_WEIGHT_CACHE_KEY,JSON.stringify(data));}catch(e){}
+    renderBodyWeightData(el,data);
   };
   var sc=document.createElement('script');sc.id='s_'+cb;
   sc.onerror=function(){window[cb]=null;if(el)el.innerHTML='<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:10px 0;">Could not load weight data</div>';};
@@ -5390,6 +5398,8 @@ if(window.location.search.indexOf('share')>=0){
   initShareMode();
 } else {
   navTo('home');
+  // Pre-load nutrition entries from localStorage so home diet card renders immediately
+  try{_nutEntries=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');}catch(e){_nutEntries=[];}
   setTimeout(loadHomeData,200);
   // Load goals from sheet (uses localStorage cache immediately, then updates from sheet)
   _goalsLoaded=true;loadGoals();
