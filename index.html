@@ -871,9 +871,13 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   </div>
   <div class="page-body" style="padding-top:16px;">
 
-    <!-- Body Weight — collapsible -->
+    <!-- Personal Records (includes Body Weight at top) -->
     <div class="prog-section" style="margin-bottom:6px;">
-      <div class="prog-card" style="overflow:hidden;margin:0 16px;">
+      <div class="prog-section-hdr">
+        <div class="prog-section-lbl">Personal Records</div>
+      </div>
+      <!-- Body Weight — collapsible, inside PR section -->
+      <div class="prog-card" style="overflow:hidden;margin:0 16px 8px;">
         <div onclick="bwToggle()" id="bwRow" style="display:flex;align-items:center;padding:11px 16px;cursor:pointer;gap:10px;">
           <div style="flex:1;">
             <div style="font-size:0.85rem;font-weight:600;">Body Weight</div>
@@ -885,6 +889,9 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <div id="bodyWeightChart"></div>
         </div>
       </div>
+      <div id="prGrid" style="margin:0 16px;">
+        <div style="text-align:center;color:var(--muted);padding:20px 0;font-size:0.85rem;">No records yet</div>
+      </div>
     </div>
 
     <!-- AI Calorie & Weight Feedback -->
@@ -895,16 +902,12 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
       <div class="prog-card prog-card-pad" id="progAICard" style="display:none;">
         <div id="progAIResult" style="font-size:0.82rem;line-height:1.6;color:var(--text2);"></div>
-      </div>
-    </div>
-
-    <!-- Personal Records -->
-    <div class="prog-section" style="margin-bottom:6px;">
-      <div class="prog-section-hdr">
-        <div class="prog-section-lbl">Personal Records</div>
-      </div>
-      <div id="prGrid" style="margin:0 16px;">
-        <div style="text-align:center;color:var(--muted);padding:20px 0;font-size:0.85rem;">No records yet</div>
+        <div id="progAIParseWrap" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
+          <div style="font-size:0.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">Suggested Changes Detected</div>
+          <div id="progAIParseRows" style="margin-bottom:10px;"></div>
+          <button onclick="progAIApplyParsed()" style="width:100%;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">APPLY CHANGES TO DAILY TARGETS</button>
+          <div id="progAIApplyMsg" style="font-size:0.72rem;text-align:center;min-height:18px;margin-top:6px;color:var(--muted);"></div>
+        </div>
       </div>
     </div>
 
@@ -5516,9 +5519,30 @@ if(window.location.search.indexOf('share')>=0){
   initShareMode();
 } else {
   navTo('home');
-  // Pre-load nutrition entries from localStorage so home diet card renders immediately
+  // Pre-load nutrition entries: localStorage first (fast), IDB fallback if evicted
   try{_nutEntries=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');}catch(e){_nutEntries=[];}
-  setTimeout(loadHomeData,200);
+  if(_nutEntries.length){
+    // localStorage intact — render normally
+    setTimeout(loadHomeData,200);
+  } else {
+    // localStorage may have been evicted — check IDB before first render
+    wtDB.get(NUT_ENTRIES_KEY).then(function(raw){
+      try{if(raw){var parsed=JSON.parse(raw);if(parsed.length){_nutEntries=parsed;}}}catch(e){}
+      // Also restore other evicted keys IDB→localStorage so sync reads work again
+      var restoreKeys=[NUT_ACTIVE_KEY,NUT_CHEAT_KEY,NUT_NOT_EATEN_KEY,DAY_DONE_KEY,
+                       NUT_TARGETS_KEY,CACHE_KEY,PLAN_CACHE_KEY,GOALS_CACHE_KEY,
+                       HIST_KEY,BUD_KEY,'wt_gemini_key','wt_seq_defaults','wt_thismonth',
+                       BODY_WEIGHT_CACHE_KEY,NUT_SYNC_QUEUE_KEY];
+      return Promise.all(restoreKeys.map(function(k){
+        if(localStorage.getItem(k)!==null)return Promise.resolve(); // already there
+        return wtDB.get(k).then(function(v){
+          if(v!==null)try{localStorage.setItem(k,v);}catch(e){}
+        });
+      }));
+    }).then(function(){
+      loadHomeData();
+    });
+  }
   // Load goals from sheet (uses localStorage cache immediately, then updates from sheet)
   _goalsLoaded=true;loadGoals();
   // Fetch seq defaults from sheet so custom sequences work on any browser
@@ -7678,11 +7702,121 @@ function progAIRunFeedback(geminiKey,btn,card,result){
       result.innerHTML=text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
     }
     if(btn){btn.textContent='✦ REFRESH';btn.disabled=false;}
+    // Parse for suggested number changes
+    progAIParseResponse(text);
   })
   .catch(function(err){
     if(result)result.textContent='Error: '+(err.message||'network problem')+' — try again.';
     if(btn){btn.textContent='✦ ASK GEMINI';btn.disabled=false;}
   });
+}
+
+// ── Parse Gemini AI feedback for suggested target changes ──────────
+var _progAIParsed = {}; // {cal, activeBase, normalRatio, cheatRatio}
+
+function progAIParseResponse(text){
+  var parsed = {};
+  var wrap = document.getElementById('progAIParseWrap');
+  var rows  = document.getElementById('progAIParseRows');
+  if(!wrap || !rows) return;
+
+  var current = {
+    cal:         (_nutTargets&&_nutTargets.cal)||2100,
+    activeBase:  (_nutTargets&&_nutTargets.activeBase)||390,
+    normalRatio: (_nutTargets&&_nutTargets.normalRatio)||0.5,
+    cheatRatio:  (_nutTargets&&_nutTargets.cheatRatio)||0.75
+  };
+
+  // Patterns: look for "change to X", "increase to X", "reduce to X",
+  // "set to X", "try X" near each setting name.
+  // Also detect explicit "Keep" — those are no-ops.
+  var SETTINGS = [
+    { key:'cal',         labels:['base calorie','base cal','calories'],          type:'int',   unit:'kcal' },
+    { key:'activeBase',  labels:['aw baseline','active.*baseline','baseline'],   type:'int',   unit:'kcal' },
+    { key:'normalRatio', labels:['normal ratio','normalratio'],                  type:'float', unit:''     },
+    { key:'cheatRatio',  labels:['cheat ratio','cheatratio'],                    type:'float', unit:''     },
+  ];
+
+  var lower = text.toLowerCase();
+
+  SETTINGS.forEach(function(s){
+    // Find where this setting is discussed
+    var settingIdx = -1;
+    for(var i=0;i<s.labels.length;i++){
+      var idx = lower.search(new RegExp(s.labels[i]));
+      if(idx >= 0){ settingIdx = idx; break; }
+    }
+    if(settingIdx < 0) return;
+
+    // Grab the sentence/paragraph around it (~300 chars)
+    var chunk = lower.slice(Math.max(0, settingIdx-20), settingIdx+300);
+
+    // If "keep" or "no change" appears before any number suggestion → skip
+    if(/keep|no change|stay|remain/.test(chunk.slice(0,80))) return;
+
+    // Look for "to X" or "try X" or "increase.*to X" with a number
+    var numMatch = chunk.match(/(?:change(?:\s+to)?|increase(?:\s+to)?|reduce(?:\s+to)?|lower(?:\s+to)?|raise(?:\s+to)?|set(?:\s+to)?|try|use|consider|suggest)\s+(?:a\s+)?(\d+(?:\.\d+)?)/);
+    if(!numMatch){
+      // Fallback: "to X.X" or ": X.X" near the label
+      numMatch = chunk.match(/(?:to|:\s*)(\d+(?:\.\d+)?)/);
+    }
+    if(!numMatch) return;
+
+    var val = s.type==='float' ? parseFloat(numMatch[1]) : parseInt(numMatch[1]);
+    if(isNaN(val)) return;
+
+    // Sanity bounds
+    if(s.key==='cal' && (val < 1200 || val > 4000)) return;
+    if(s.key==='activeBase' && (val < 100 || val > 1000)) return;
+    if((s.key==='normalRatio'||s.key==='cheatRatio') && (val <= 0 || val > 1)) return;
+
+    // Only flag if actually different from current
+    if(val === current[s.key]) return;
+
+    parsed[s.key] = val;
+  });
+
+  _progAIParsed = parsed;
+
+  var keys = Object.keys(parsed);
+  if(!keys.length){ wrap.style.display='none'; return; }
+
+  var LABELS = {cal:'Base Calories', activeBase:'AW Baseline', normalRatio:'Normal Ratio', cheatRatio:'Cheat Ratio'};
+  var UNITS  = {cal:'kcal', activeBase:'kcal', normalRatio:'', cheatRatio:''};
+
+  rows.innerHTML = keys.map(function(k){
+    var cur = current[k];
+    var nw  = parsed[k];
+    var arrow = nw > cur ? '↑' : '↓';
+    var col   = ''; // neutral — Gemini said change, user decides
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);">' +
+      '<div style="font-size:0.8rem;font-weight:600;">' + LABELS[k] + '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<span style="font-size:0.75rem;color:var(--muted);">' + cur + UNITS[k] + '</span>' +
+        '<span style="color:var(--accent);">' + arrow + '</span>' +
+        '<span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--accent);">' + nw + UNITS[k] + '</span>' +
+      '</div></div>';
+  }).join('');
+
+  wrap.style.display = 'block';
+}
+
+function progAIApplyParsed(){
+  var keys = Object.keys(_progAIParsed);
+  if(!keys.length) return;
+
+  keys.forEach(function(k){ _nutTargets[k] = _progAIParsed[k]; });
+  try{localStorage.setItem(NUT_TARGETS_KEY, JSON.stringify(_nutTargets));}catch(e){}
+
+  var msg = document.getElementById('progAIApplyMsg');
+  var wrap = document.getElementById('progAIParseWrap');
+  if(msg){ msg.textContent = '✓ Applied — targets updated'; msg.style.color = 'var(--green)'; }
+  if(wrap){ setTimeout(function(){ wrap.style.display='none'; }, 2500); }
+
+  // Re-render nutrition day so new budgets take effect immediately
+  if(typeof nutRenderDay === 'function') nutRenderDay();
+
+  _progAIParsed = {};
 }
 
 // ── Inline Gemini add from meal overlay ───────────────────────────
