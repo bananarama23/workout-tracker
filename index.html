@@ -7215,9 +7215,9 @@ function nutEditEntry(idx){
       }
     }
     if(e._displayAmt&&e._displayUnit){
-      // Restore exact unit and amount the user typed — no floating point round-trip
-      nutServingUnitChange(e._displayUnit);
+      // Set amount first so nutServingUnitChange reads correct value for multiplier calc
       if(amtEl){amtEl.value=e._displayAmt;}
+      nutServingUnitChange(e._displayUnit);
     } else {
       if(amtEl)amtEl.value=Math.round(currentServings*food.serving*10)/10;
       if(qtyEl)qtyEl.value=currentServings;
