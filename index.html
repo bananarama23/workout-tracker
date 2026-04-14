@@ -920,7 +920,11 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     </div>
 
     <div class="refresh-link" onclick="loadProgressData()">↻ Refresh</div>
-    <div class="clear-link"><button onclick="if(confirm('Clear all local data?')){localStorage.removeItem('wt_hist_v3');loadHomeData();}">clear local data</button></div>
+    <div class="clear-link">
+  <button onclick="if(confirm('Clear all local data?')){wtDB.del('wt_hist_v3').then(function(){_cachedSessions=[];_sheetSessions=null;loadHomeData();});}" >clear local data</button>
+  &nbsp;·&nbsp;
+  <button onclick="wtDB.usage().then(function(u){alert('IDB storage used:\n'+u.totalKB+'KB total\n\n'+Object.entries(u.breakdown).sort(function(a,b){return b[1]-a[1];}).map(function(e){return e[0].replace('wt_','')+': '+Math.round(e[1]/1024)+'KB';}).join('\n'));});">storage usage</button>
+</div>
   </div>
 </div>
 
@@ -1502,6 +1506,134 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 </div>
 
 <script>
+
+// ─── INDEXEDDB WRAPPER ──────────────────────────────────────────
+// Replaces localStorage for all app data (no 5MB cap on iOS)
+var wtDB=(function(){
+  var DB='wtApp',VER=1,ST='kv',_db=null;
+  function open(){
+    if(_db)return Promise.resolve(_db);
+    return new Promise(function(res,rej){
+      var r=indexedDB.open(DB,VER);
+      r.onupgradeneeded=function(e){e.target.result.createObjectStore(ST);};
+      r.onsuccess=function(e){_db=e.target.result;res(_db);};
+      r.onerror=function(e){rej(e.target.error);};
+    });
+  }
+  function get(k){
+    return open().then(function(db){
+      return new Promise(function(res){
+        var r=db.transaction(ST,'readonly').objectStore(ST).get(k);
+        r.onsuccess=function(){res(r.result!==undefined?r.result:null);};
+        r.onerror=function(){res(null);};
+      });
+    }).catch(function(){return null;});
+  }
+  function set(k,v){
+    return open().then(function(db){
+      return new Promise(function(res){
+        var r=db.transaction(ST,'readwrite').objectStore(ST).put(v,k);
+        r.onsuccess=function(){res(true);};
+        r.onerror=function(){res(false);};
+      });
+    }).catch(function(){return false;});
+  }
+  function del(k){
+    return open().then(function(db){
+      return new Promise(function(res){
+        var r=db.transaction(ST,'readwrite').objectStore(ST).delete(k);
+        r.onsuccess=function(){res(true);};
+        r.onerror=function(){res(false);};
+      });
+    }).catch(function(){return false;});
+  }
+  // One-time migration: copy every key from localStorage → IDB, then clear it
+  function migrate(){
+    var KEYS=['wt_hist_v3','wt_sheet_cache','wt_plan_cache','wt_goals_v1',
+      'wt_bw_cache_v1','wt_nut_entries_v1','wt_foods_v2','wt_nut_targets',
+      'wt_nut_active','wt_nut_cheat','wt_nut_not_eaten','wt_nut_sync_q',
+      'wt_seq_defaults','wt_budget','wt_thismonth','wt_budget_dirty',
+      'wt_gemini_key','wt_daydone','wt_nut_extended_v1'];
+    return get('__migrated__').then(function(done){
+      if(done)return;
+      var ps=KEYS.map(function(k){
+        var v=localStorage.getItem(k);
+        if(v===null)return Promise.resolve();
+        return set(k,v).then(function(){localStorage.removeItem(k);});
+      });
+      return Promise.all(ps).then(function(){return set('__migrated__','1');});
+    });
+  }
+  // Estimate storage used by all app keys (bytes)
+  function usage(){
+    var KEYS=['wt_hist_v3','wt_sheet_cache','wt_plan_cache','wt_goals_v1',
+      'wt_bw_cache_v1','wt_nut_entries_v1','wt_foods_v2','wt_nut_targets',
+      'wt_nut_active','wt_nut_cheat','wt_nut_not_eaten','wt_nut_sync_q',
+      'wt_seq_defaults','wt_budget','wt_thismonth','wt_budget_dirty',
+      'wt_gemini_key','wt_daydone','wt_nut_extended_v1'];
+    return Promise.all(KEYS.map(function(k){
+      return get(k).then(function(v){return v?v.length:0;});
+    })).then(function(sizes){
+      var total=sizes.reduce(function(a,b){return a+b;},0);
+      var breakdown={};
+      KEYS.forEach(function(k,i){if(sizes[i]>0)breakdown[k]=sizes[i];});
+      return{totalBytes:total,totalKB:Math.round(total/1024),breakdown:breakdown};
+    });
+  }
+
+  // Trim old per-day data to keep IDB lean. Sheet is truth — IDB is just a fast cache.
+  // keepDays: how many days of nut entries / active / cheat / daydone / notEaten to keep locally.
+  function trim(keepDays){
+    keepDays=keepDays||90;
+    var cutoff=new Date();cutoff.setDate(cutoff.getDate()-keepDays);
+    var cutStr=cutoff.getFullYear()+'-'+String(cutoff.getMonth()+1).padStart(2,'0')+'-'+String(cutoff.getDate()).padStart(2,'0');
+    var ops=[];
+    // Nutrition entries
+    ops.push(get('wt_nut_entries_v1').then(function(raw){
+      if(!raw)return;
+      try{
+        var arr=JSON.parse(raw);
+        var trimmed=arr.filter(function(e){return e.date>=cutStr;});
+        if(trimmed.length<arr.length)return set('wt_nut_entries_v1',JSON.stringify(trimmed));
+      }catch(e){}
+    }));
+    // Active cals
+    ops.push(get('wt_nut_active').then(function(raw){
+      if(!raw)return;
+      try{var obj=JSON.parse(raw);Object.keys(obj).forEach(function(d){if(d<cutStr)delete obj[d];});return set('wt_nut_active',JSON.stringify(obj));}catch(e){}
+    }));
+    // Cheat days
+    ops.push(get('wt_nut_cheat').then(function(raw){
+      if(!raw)return;
+      try{var obj=JSON.parse(raw);Object.keys(obj).forEach(function(d){if(d<cutStr)delete obj[d];});return set('wt_nut_cheat',JSON.stringify(obj));}catch(e){}
+    }));
+    // Day done
+    ops.push(get('wt_daydone').then(function(raw){
+      if(!raw)return;
+      try{var obj=JSON.parse(raw);Object.keys(obj).forEach(function(d){if(d<cutStr)delete obj[d];});return set('wt_daydone',JSON.stringify(obj));}catch(e){}
+    }));
+    // Not eaten
+    ops.push(get('wt_nut_not_eaten').then(function(raw){
+      if(!raw)return;
+      try{var obj=JSON.parse(raw);Object.keys(obj).forEach(function(k){if(k.slice(0,10)<cutStr)delete obj[k];});return set('wt_nut_not_eaten',JSON.stringify(obj));}catch(e){}
+    }));
+    // Sheet cache — keep only last 90 days of sessions
+    ops.push(get('wt_sheet_cache').then(function(raw){
+      if(!raw)return;
+      try{
+        var o=JSON.parse(raw);
+        if(o&&o.sessions){
+          o.sessions=o.sessions.filter(function(s){return s.date>=cutStr;});
+          return set('wt_sheet_cache',JSON.stringify(o));
+        }
+      }catch(e){}
+    }));
+    return Promise.all(ops);
+  }
+
+  return{get:get,set:set,del:del,migrate:migrate,usage:usage,trim:trim};
+})();
+// ────────────────────────────────────────────────────────────────
 // ─── CONSTANTS ────────────────────────────────────────────────────
 var CLOUD_URL='https://script.google.com/macros/s/AKfycbyWZ1VoxhQ5OPgnWRIpnYgDw9RvjepJvZEKaycOJ807cpB_bwDA0rCwGj_W_ZVbWZ1t/exec';
 var HIST_KEY='wt_hist_v3';
@@ -1511,20 +1643,23 @@ var GOALS_CACHE_KEY='wt_goals_v1';
 var BODY_WEIGHT_CACHE_KEY='wt_bw_cache_v1';
 var _goals={strGoal:2,hiitSessions:2,effortGoal:13,durGoal:28};
 var _goalsLoaded=false;
-function loadGoalsCache(){try{var r=localStorage.getItem(GOALS_CACHE_KEY);if(!r)return null;return JSON.parse(r);}catch(e){return null;}}
-function saveGoalsCache(g){try{localStorage.setItem(GOALS_CACHE_KEY,JSON.stringify(g));}catch(e){}}
+function loadGoalsCache(){return null;}
+function loadGoalsCacheAsync(){return wtDB.get(GOALS_CACHE_KEY).then(function(r){try{return r?JSON.parse(r):null;}catch(e){return null;}});}
+function saveGoalsCache(g){wtDB.set(GOALS_CACHE_KEY,JSON.stringify(g));}
 function applyGoals(g){if(!g)return;_goals.strGoal=parseInt(g.strGoal)||2;_goals.hiitSessions=parseInt(g.hiitSessions)||2;_goals.effortGoal=parseInt(g.effortGoal)||13;_goals.durGoal=parseInt(g.durGoal)||28;}
 var CACHE_MAX_AGE=2*60*60*1000;
-function savePlanCache(plan){try{localStorage.setItem(PLAN_CACHE_KEY,JSON.stringify({plan:plan,ts:Date.now()}));}catch(e){}}
-function loadPlanCache(){try{var r=localStorage.getItem(PLAN_CACHE_KEY);if(!r)return null;var o=JSON.parse(r);return(o&&o.plan)?o:null;}catch(e){return null;}}
+function savePlanCache(plan){wtDB.set(PLAN_CACHE_KEY,JSON.stringify({plan:plan,ts:Date.now()}));}
+function loadPlanCache(){return null;}
+function loadPlanCacheAsync(){return wtDB.get(PLAN_CACHE_KEY).then(function(r){try{if(!r)return null;var o=JSON.parse(r);return(o&&o.plan)?o:null;}catch(e){return null;}});}
 function localDateStr(){
   var d=new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 
 // ─── CACHE ────────────────────────────────────────────────────────
-function saveCache(s){try{localStorage.setItem(CACHE_KEY,JSON.stringify({sessions:s,ts:Date.now()}));}catch(e){}}
-function loadCache(){try{var r=localStorage.getItem(CACHE_KEY);if(!r)return null;var o=JSON.parse(r);return(o&&o.sessions)?o:null;}catch(e){return null;}}
+function saveCache(s){wtDB.set(CACHE_KEY,JSON.stringify({sessions:s,ts:Date.now()}));}
+function loadCache(){return null;}
+function loadCacheAsync(){return wtDB.get(CACHE_KEY).then(function(r){try{if(!r)return null;var o=JSON.parse(r);return(o&&o.sessions)?o:null;}catch(e){return null;}});}
 function cacheAgeStr(ts){var s=Math.round((Date.now()-ts)/1000);if(s<60)return 'just now';if(s<3600)return Math.floor(s/60)+'m ago';return Math.floor(s/3600)+'h ago';}
 
 function setSyncBadges(state,detail){
@@ -1571,9 +1706,12 @@ function getSheetSessions(cb){
     if(result&&result.sessions&&result.sessions.length){
       _sheetSessions=result.sessions;saveCache(result.sessions);setSyncBadges('live');
     } else {
-      var c=loadCache();
+      loadCacheAsync().then(function(c){
       if(c){_sheetSessions=c.sessions;setSyncBadges('cached',cacheAgeStr(c.ts));}
       else{_sheetSessions=[];setSyncBadges('offline');}
+      var cbs=_fetchCbs.slice();_fetchCbs=[];
+      cbs.forEach(function(fn){fn(_sheetSessions);});
+    });return;
     }
     var cbs=_fetchCbs.slice();_fetchCbs=[];
     cbs.forEach(function(fn){fn(_sheetSessions);});
@@ -1582,28 +1720,32 @@ function getSheetSessions(cb){
   script.src=CLOUD_URL+'?type=getHistory&callback='+cbName;
   script.onerror=function(){
     _fetchInProgress=false;
-    var c=loadCache();
-    if(c){_sheetSessions=c.sessions;setSyncBadges('cached',cacheAgeStr(c.ts));}
-    else{_sheetSessions=[];setSyncBadges('offline');}
-    var cbs=_fetchCbs.slice();_fetchCbs=[];
-    cbs.forEach(function(fn){fn(_sheetSessions);});
+    loadCacheAsync().then(function(c){
+      if(c){_sheetSessions=c.sessions;setSyncBadges('cached',cacheAgeStr(c.ts));}
+      else{_sheetSessions=[];setSyncBadges('offline');}
+      var cbs=_fetchCbs.slice();_fetchCbs=[];
+      cbs.forEach(function(fn){fn(_sheetSessions);});
+    });
   };
   document.head.appendChild(script);
   setTimeout(function(){
     if(!window[cbName])return;
     window[cbName]=null;_fetchInProgress=false;
-    var c=loadCache();
-    if(c){_sheetSessions=c.sessions;setSyncBadges('cached',cacheAgeStr(c.ts));}
-    else{_sheetSessions=[];setSyncBadges('offline');}
-    var cbs=_fetchCbs.slice();_fetchCbs=[];
-    cbs.forEach(function(fn){fn(_sheetSessions);});
+    loadCacheAsync().then(function(c){
+      if(c){_sheetSessions=c.sessions;setSyncBadges('cached',cacheAgeStr(c.ts));}
+      else{_sheetSessions=[];setSyncBadges('offline');}
+      var cbs=_fetchCbs.slice();_fetchCbs=[];
+      cbs.forEach(function(fn){fn(_sheetSessions);});
+    });
   },15000);
 }
 
 function fetchHistory(cb){
   if(_sheetSessions){cb(_sheetSessions);return;}
-  var c=loadCache();if(c)cb(c.sessions);
-  getSheetSessions(function(s){cb(s);});
+  loadCacheAsync().then(function(c){
+    if(c)cb(c.sessions);
+    getSheetSessions(function(s){cb(s);});
+  });
 }
 
 // ─── WAKE LOCK ────────────────────────────────────────────────────
@@ -1693,14 +1835,16 @@ function navTo(page){
 }
 
 // ─── LOCAL HISTORY ────────────────────────────────────────────────
-function loadHist(){try{return JSON.parse(localStorage.getItem(HIST_KEY)||'{}');}catch(e){return {};}}
-function saveHist(d){try{localStorage.setItem(HIST_KEY,JSON.stringify(d));}catch(e){}}
+function loadHist(){return{};}
+function loadHistAsync(){return wtDB.get(HIST_KEY).then(function(r){try{return JSON.parse(r||'{}');}catch(e){return{};}});}
+function saveHist(d){wtDB.set(HIST_KEY,JSON.stringify(d));}
 function recSession(sd){
-  var h=loadHist();
-  if(!h[sd.date])h[sd.date]=[];h[sd.date].push(sd);
-  var cut=new Date();cut.setDate(cut.getDate()-90);
-  Object.keys(h).forEach(function(k){if(new Date(k)<cut)delete h[k];});
-  saveHist(h);
+  loadHistAsync().then(function(h){
+    if(!h[sd.date])h[sd.date]=[];h[sd.date].push(sd);
+    var cut=new Date();cut.setDate(cut.getDate()-90);
+    Object.keys(h).forEach(function(k){if(new Date(k)<cut)delete h[k];});
+    saveHist(h);
+  });
 }
 function getWeekNum(d){
   d=d?new Date(d):new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()+3-(d.getDay()+6)%7);
@@ -1736,17 +1880,20 @@ function loadHomeData(){
   var now=new Date(),h=now.getHours();
   document.getElementById('greeting').textContent=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
   document.getElementById('todayDate').textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
-  var cached=loadCache();
-  // Render instantly from cache — today's plan, diet card etc. show immediately
-  _cachedSessions=cached?cached.sessions:[];
-  renderHomeData(_cachedSessions);
-  setSyncBadges(cached?'cached':'loading', cached?cacheAgeStr(cached.ts):null);
-  // Always fetch fresh in background — cache render above gives instant display
-  fetchHistory(function(sessions){
-    _cachedSessions=sessions||[];
-    saveCache(_cachedSessions);
-    renderHomeData(_cachedSessions);
-    setSyncBadges('live', null);
+  setSyncBadges('loading',null);
+  // Load from IDB first for instant render, then fetch fresh
+  loadCacheAsync().then(function(cached){
+    _cachedSessions=cached?cached.sessions:[];
+    if(_cachedSessions.length){
+      renderHomeData(_cachedSessions);
+      setSyncBadges('cached',cacheAgeStr(cached.ts));
+    }
+    fetchHistory(function(sessions){
+      _cachedSessions=sessions||[];
+      saveCache(_cachedSessions);
+      renderHomeData(_cachedSessions);
+      setSyncBadges('live',null);
+    });
   });
 }
 
@@ -1772,7 +1919,7 @@ function renderHomeData(sessions){
   var nutStreakEl=document.getElementById('wkNutStreak');
   if(nutStreakEl){
     try{
-      var cachedEnt=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');
+      var cachedEnt=_nutEntries||[];
       var weekDates=getWeekDates(0).map(function(d){return fmtDate(d);});
       var daysLogged=weekDates.filter(function(d){return cachedEnt.some(function(e){return e.date===d;});}).length;
       nutStreakEl.textContent=daysLogged;
@@ -2001,7 +2148,12 @@ function showWorkoutPreview(type){
     exs=type==='home'
       ?homeEx.map(function(e){return JSON.parse(JSON.stringify(e));})
       :hotelEx.map(function(e){return JSON.parse(JSON.stringify(e));});
-    exs=applySeqDefaults(exs);
+    loadSeqDefaultsAsync().then(function(defs){
+      if(Object.keys(defs).length){exs=exs.map(function(ex){if(defs[ex.name]&&ex.seq)ex.seq=JSON.parse(JSON.stringify(defs[ex.name]));return ex;});}
+      _previewSkipped=exs.map(function(){return false;});
+      renderPreview();
+    });
+    exs=applySeqDefaults(exs); // immediate render with un-customised defaults; async above overwrites
   }
   _previewSkipped=exs.map(function(){return false;});
   // Show preview page
@@ -2924,20 +3076,18 @@ function seqPlayDone(){
 
 function saveSeqAsDefault(){
   var ex=exs[curEx];if(!ex||!ex.seq)return;
-  try{
-    var stored=JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||'{}');
+  wtDB.get(SEQ_DEFAULTS_KEY).then(function(raw){
+    var stored=raw?JSON.parse(raw):{};
     stored[ex.name]=JSON.parse(JSON.stringify(ex.seq));
-    localStorage.setItem(SEQ_DEFAULTS_KEY,JSON.stringify(stored));
+    wtDB.set(SEQ_DEFAULTS_KEY,JSON.stringify(stored));
     // Visual feedback
     var btn=document.querySelector('.seq-add-btn[onclick="saveSeqAsDefault()"]');
     if(btn){var orig=btn.textContent;btn.textContent='Saved!';setTimeout(function(){btn.textContent=orig;},1500);}
-  }catch(e){alert('Could not save: '+e.message);}
+  }).catch(function(e){alert('Could not save: '+e.message);});
 }
 
-function loadSeqDefaults(){
-  try{return JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||'{}');}
-  catch(e){return {};}
-}
+function loadSeqDefaults(){return{};} // sync stub — use loadSeqDefaultsAsync
+function loadSeqDefaultsAsync(){return wtDB.get(SEQ_DEFAULTS_KEY).then(function(r){try{return JSON.parse(r||'{}');}catch(e){return{};}});}
 
 function fetchSeqDefaultsFromSheet(){
   // Fetch once on startup — merges sheet into localStorage so new browsers pick up saved sequences
@@ -2946,9 +3096,11 @@ function fetchSeqDefaultsFromSheet(){
     window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
     if(result&&result.status==='ok'&&result.defaults&&Object.keys(result.defaults).length){
       try{
-        var local=JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||'{}');
-        var merged=Object.assign({},local,result.defaults);
-        localStorage.setItem(SEQ_DEFAULTS_KEY,JSON.stringify(merged));
+        wtDB.get(SEQ_DEFAULTS_KEY).then(function(raw){
+          var local=raw?JSON.parse(raw):{};
+          var merged=Object.assign({},local,result.defaults);
+          wtDB.set(SEQ_DEFAULTS_KEY,JSON.stringify(merged));
+        });
       }catch(e){}
     }
   };
@@ -2959,18 +3111,7 @@ function fetchSeqDefaultsFromSheet(){
   setTimeout(function(){if(window[cb]){window[cb]=null;}},10000);
 }
 
-function applySeqDefaults(exercises){
-  var defaults=loadSeqDefaults();
-  if(!Object.keys(defaults).length)return exercises;
-  return exercises.map(function(ex){
-    if(defaults[ex.name]&&ex.seq){
-      // Only apply if sheet hasn't provided a custom sequence
-      // (sheet sequences come through parseSheetExercises which always sets seq explicitly)
-      ex.seq=JSON.parse(JSON.stringify(defaults[ex.name]));
-    }
-    return ex;
-  });
-}
+function applySeqDefaults(exercises){return exercises;} // now handled async via loadSeqDefaultsAsync
 function runNextRep(total){
   if(!mRun)return;curRep++;
   if(curRep>total){mRun=false;setVW('Done!','');return;}
@@ -3793,7 +3934,7 @@ function overlayCompletedWorkouts(planData,sessions){
 
 function loadWeekPlan(){
   var today=fmtDate(new Date());
-  var pc=loadPlanCache();
+  loadPlanCacheAsync().then(function(pc){
   if(pc){
     var pd=overlayCompletedWorkouts(JSON.parse(JSON.stringify(pc.plan)),_cachedSessions||[]);
     _weekPlan=pd;_cachedPlan=pd;
@@ -3827,6 +3968,7 @@ function loadWeekPlan(){
     if(!pc){var pd=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=pd;_cachedPlan=pd;
     renderPlanGrid(getWeekDates(_planWeekOffset),today);updateTodayCard(today);}
   },15000);
+  }); // end loadPlanCacheAsync
 }
 
 function renderPlanGrid(days,today){
@@ -4521,19 +4663,17 @@ function renderBodyWeightData(el,data){
 function buildBodyWeightChart(){
   var el=document.getElementById('bodyWeightChart');if(!el)return;
   var outer=document.getElementById('bodyWeightOuter');
-  // Render from cache immediately
-  try{
-    var cached=localStorage.getItem(BODY_WEIGHT_CACHE_KEY);
-    if(cached){var cd=JSON.parse(cached);if(cd&&cd.length){
+  // Render from IDB cache immediately
+  wtDB.get(BODY_WEIGHT_CACHE_KEY).then(function(cached){
+    if(cached){try{var cd=JSON.parse(cached);if(cd&&cd.length){
       _bodyWeightData=cd;renderBodyWeightData(el,cd);
       var lt=cd[cd.length-1],fi=cd[0];
       var ch=Math.round((lt.weight-fi.weight)*10)/10;
       var sub=document.getElementById('bwRowSub');
       if(sub)sub.textContent=lt.weight+' lbs · '+(ch>0?'+':'')+ch+' since start';
-    }}
-    else{if(outer)outer.style.display='none';} // hide card until data arrives
-  }catch(e){}
-  if(!_bodyWeightData.length) el.innerHTML=''; // stay empty while loading — no blank space
+    }}catch(e){}}
+    else{if(outer)outer.style.display='none';}
+    if(!_bodyWeightData.length) el.innerHTML='';
   var cb='wt_bwt_'+Date.now();
   window[cb]=function(result){
     window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
@@ -4543,7 +4683,7 @@ function buildBodyWeightChart(){
       .sort(function(a,b){return a.date<b.date?-1:1;})
       .slice(-20);
     _bodyWeightData=data; // cache for Gemini prompt
-    try{localStorage.setItem(BODY_WEIGHT_CACHE_KEY,JSON.stringify(data));}catch(e){}
+    wtDB.set(BODY_WEIGHT_CACHE_KEY,JSON.stringify(data));
     var outer=document.getElementById('bodyWeightOuter');
     renderBodyWeightData(el,data);
     // Update collapsed row subtitle
@@ -4774,7 +4914,7 @@ function budSaveEquity(){
     _budSheetData.monthRows[idx].equity=newEquity;
   }
   // Persist in localStorage fallback
-  try{var st=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');st.lastEquity=newEquity;localStorage.setItem(BUD_KEY,JSON.stringify(st));}catch(e){}
+  wtDB.get(BUD_KEY).then(function(raw){var st=raw?JSON.parse(raw):{};st.lastEquity=newEquity;wtDB.set(BUD_KEY,JSON.stringify(st));});
   budUpdateEquityBank(_budSheetData.monthRows,idx);
   budCalc();
   budSetStatus('edited');
@@ -4805,16 +4945,16 @@ function budPickMonth(){
 function budSetStatus(state){
   var el=document.getElementById('budgetUpdated');
   if(!el)return;
-  if(state==='synced'){el.textContent='Synced from sheet';try{localStorage.removeItem('wt_budget_dirty');}catch(e){}}
-  else if(state==='saved'){el.textContent='Saved to sheet';try{localStorage.removeItem('wt_budget_dirty');}catch(e){}}
-  else if(state==='edited'){el.textContent='Unsaved edits — tap SAVE TO SHEET';try{localStorage.setItem('wt_budget_dirty','1');}catch(e){}}
+  if(state==='synced'){el.textContent='Synced from sheet';wtDB.del('wt_budget_dirty');}
+  else if(state==='saved'){el.textContent='Saved to sheet';wtDB.del('wt_budget_dirty');}
+  else if(state==='edited'){el.textContent='Unsaved edits — tap SAVE TO SHEET';wtDB.set('wt_budget_dirty','1');}
 }
 
 function budUpdateEquityBank(monthRows,idx){
   if(!monthRows||!monthRows.length){
     // Fall back to stored equity if sheet hasn't loaded yet
-    try{
-      var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
+    wtDB.get(BUD_KEY).then(function(raw){
+      var stored=raw?JSON.parse(raw):{};
       if(stored.lastEquity){
         var eq=Math.round(stored.lastEquity);
         var dp=g('bDownPayment');
@@ -4822,7 +4962,7 @@ function budUpdateEquityBank(monthRows,idx){
         s('bEquity',fmt(eq));
         s('bBank',fmt(bk),bk>=0?'var(--green)':'var(--red)');
       }
-    }catch(e){}
+    }).catch(function(){});
     return;
   }
   var row=monthRows[idx]||monthRows[0];
@@ -4833,23 +4973,23 @@ function budUpdateEquityBank(monthRows,idx){
     s('bEquity',fmt(eq2));
     s('bBank',fmt(bk2),bk2>=0?'var(--green)':'var(--red)');
     // Cache equity for offline fallback
-    try{
-      var st=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
+    wtDB.get(BUD_KEY).then(function(raw){
+      var st=raw?JSON.parse(raw):{};
       st.lastEquity=row.equity;
-      localStorage.setItem(BUD_KEY,JSON.stringify(st));
-    }catch(e){}
+      wtDB.set(BUD_KEY,JSON.stringify(st));
+    });
   }
 }
 
 function budApplyStored(){
-  try{
-    var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
+  wtDB.get(BUD_KEY).then(function(raw){
+    var stored=raw?JSON.parse(raw):{};
     function rv(id,def){var el=document.getElementById(id);if(el&&stored[id]!==undefined&&stored[id]!==null)el.value=stored[id];else if(el&&def!==undefined)el.value=def;}
     rv('bHousePrice',744000);rv('bDownPayment',500000);
     rv('bPayRate',231);
     // bThisMonth: restore from stored, dedicated key, OR auto-seed from current month's hours
     var tmVal=stored.bThisMonth;
-    if(!tmVal||tmVal===''){try{tmVal=localStorage.getItem('wt_thismonth')||'';}catch(e){}}
+    // wt_thismonth also in BUD_KEY.bThisMonth (read above from stored)
     if(!tmVal||tmVal===''){
       // Auto-seed from the current month in the stored hours array
       var hours2=stored.monthHours;
@@ -4876,7 +5016,8 @@ function budApplyStored(){
         var el=document.getElementById('bHours_'+parseInt(i));if(el&&hours[i])el.value=hours[i];
       });
     }
-  }catch(e){}
+    budCalc();
+  }); // end wtDB.get(BUD_KEY)
 }
 
 // Called by oninput on all budget inputs — marks as edited on device
@@ -4895,19 +5036,20 @@ function budFetchFromSheet(){
     window[cbName]=null;var sc=document.getElementById('s_'+cbName);if(sc)sc.parentNode.removeChild(sc);
     if(result&&result.status==='ok'&&result.data){
       var d=result.data;
-      var isDirty=false;try{isDirty=localStorage.getItem('wt_budget_dirty')==='1';}catch(e){}
+      wtDB.get('wt_budget_dirty').then(function(dirtyVal){
+      var isDirty=dirtyVal==='1';
       if(!isDirty){
         // Populate all editable inputs from sheet — sheet is source of truth on load
-        try{
-          var stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
+        wtDB.get(BUD_KEY).then(function(rawStored){
+          var stored=rawStored?JSON.parse(rawStored):{};
           ['bHousePrice','bDownPayment','bPayRate',
            'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
            'vCarIns','vUmbrella','vPropTax','vHouseIns'].forEach(function(k){
             if(d[k]!==null&&d[k]!==undefined)stored[k]=d[k];
           });
           if(Array.isArray(d.monthHours))stored.monthHours=d.monthHours;
-          localStorage.setItem(BUD_KEY,JSON.stringify(stored));
-        }catch(e){}
+          wtDB.set(BUD_KEY,JSON.stringify(stored));
+        }).catch(function(){});
         budApplyStored();
       } else {
         budSetStatus('edited');
@@ -4922,6 +5064,7 @@ function budFetchFromSheet(){
       budCalc();
       budSyncBadge(isDirty?'cached':'live');
       if(!isDirty)budSetStatus('synced');
+      }); // end wtDB.get dirty
     }else{
       budSyncBadge('cached','local');
     }
@@ -4935,7 +5078,7 @@ function budFetchFromSheet(){
 
 function budReset(){
   // Clear local cache and force fresh fetch from sheet
-  try{localStorage.removeItem(BUD_KEY);}catch(e){}
+  wtDB.del(BUD_KEY);
   _budSheetData={monthRows:[]};
   _budSelectedMonthIdx=-1;
   var upd=document.getElementById('budgetUpdated');if(upd)upd.textContent='Tap values to edit';
@@ -4947,9 +5090,8 @@ function budReset(){
 }
 
 function budSave(){
-  try{
-    var data={};
-    try{data=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');}catch(e){data={};}
+  wtDB.get(BUD_KEY).then(function(raw){
+    var data=raw?JSON.parse(raw):{};
     ['bHousePrice','bDownPayment','bPayRate',
      'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
      'vCarIns','vUmbrella','vPropTax','vHouseIns'].forEach(function(id){
@@ -4959,7 +5101,7 @@ function budSave(){
     var tmEl=document.getElementById('bThisMonth');
     if(tmEl&&tmEl.value!==''){
       data.bThisMonth=tmEl.value;
-      try{localStorage.setItem('wt_thismonth',tmEl.value);}catch(e){}
+      wtDB.set('wt_thismonth',tmEl.value);
     }
     // Only persist monthHours that the user has explicitly entered (non-empty inputs)
     // This avoids overwriting sheet formula values for months the user hasn't touched
@@ -4969,27 +5111,28 @@ function budSave(){
       if(el&&el.value!==''){monthHoursEdited[i]=parseFloat(el.value)||0;}
     });
     data.monthHours=monthHoursEdited;
-    localStorage.setItem(BUD_KEY,JSON.stringify(data));
-  }catch(e){}
+    wtDB.set(BUD_KEY,JSON.stringify(data));
+  }); // end wtDB.get(BUD_KEY)
 }
 
 function budSaveToSheet(){
-  budSave();
+  budSave(); // writes to IDB async — sheet payload built from live inputs below
   var el=document.getElementById('budMsg'),btn=document.getElementById('budSaveBtn');
   if(el){el.textContent='Saving to sheet...';el.style.background='var(--blue-dim)';el.style.color='var(--blue)';}
   if(btn)btn.disabled=true;
   budSyncBadge('loading');
-  var stored={};try{stored=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');}catch(e){}
-  // monthHours as JSON string so it survives URL encoding
+  // Build sheetData directly from live DOM inputs
   var sheetData={};
-  Object.keys(stored).forEach(function(k){
-    if(k==='monthHours'){
-      // Send as JSON string — object with only explicitly-edited months
-      sheetData[k]=JSON.stringify(stored[k]);
-    } else {
-      sheetData[k]=stored[k];
-    }
+  ['bHousePrice','bDownPayment','bPayRate',
+   'vElec','vHoa','vTmobile','vApa','vAtt','vChase',
+   'vCarIns','vUmbrella','vPropTax','vHouseIns'].forEach(function(id){
+    var el=document.getElementById(id);if(el&&el.value!=='')sheetData[id]=el.value;
   });
+  var tmEl3=document.getElementById('bThisMonth');
+  if(tmEl3&&tmEl3.value!=='')sheetData.bThisMonth=tmEl3.value;
+  var mhSheet={};
+  BUD_MONTHS.forEach(function(_,i){var el=document.getElementById('bHours_'+i);if(el&&el.value!=='')mhSheet[i]=parseFloat(el.value)||0;});
+  sheetData.monthHours=JSON.stringify(mhSheet); // JSON string so it survives URL encoding
   var payload={type:'budget',data:sheetData};
   var enc=encodeURIComponent(JSON.stringify(payload));
   var cbName='wt_budsave_'+Date.now();
@@ -5062,7 +5205,7 @@ function budCalc(){
     if(mrow&&mrow.equity!==null)currentEquity=Math.round(mrow.equity);
   } else {
     // Try stored fallback
-    try{var st=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');if(st.lastEquity)currentEquity=Math.round(st.lastEquity);}catch(e){}
+    // lastEquity fallback — budSaveEquity already writes to IDB asynchronously
   }
 
   // Down payment progress: equity (what we have) vs downPayment input (target)
@@ -5420,41 +5563,74 @@ function renderShareView(sessions){
 buildEffBtns();
 initDates();
 setHIITPreset(17,6);
-var _ic=loadCache();
-setSyncBadge(_ic?'cached':'loading',_ic?cacheAgeStr(_ic.ts):null);
+setSyncBadge('loading',null);
 
-// Check for share mode (?share in URL)
-if(window.location.search.indexOf('share')>=0){
-  initShareMode();
-} else {
-  navTo('home');
-  // Pre-load nutrition entries from localStorage so home diet card renders immediately
-  try{_nutEntries=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');}catch(e){_nutEntries=[];}
-  setTimeout(loadHomeData,200);
-  // Load goals from sheet (uses localStorage cache immediately, then updates from sheet)
-  _goalsLoaded=true;loadGoals();
-  // Fetch seq defaults from sheet so custom sequences work on any browser
-  setTimeout(fetchSeqDefaultsFromSheet,3000);
-}
+// ── Boot: migrate localStorage → IDB, then start app ──────────────
+// Run trim weekly to keep IDB lean (sheet is the permanent record)
+var _trimKey='wt_last_trim';
+wtDB.get(_trimKey).then(function(lastTrim){
+  var weekMs=7*24*60*60*1000;
+  if(!lastTrim||Date.now()-parseInt(lastTrim)>weekMs){
+    wtDB.trim(90).then(function(){wtDB.set(_trimKey,String(Date.now()));});
+  }
+});
+
+wtDB.migrate().then(function(){
+  // Load all in-memory mirrors from IDB before first render
+  return Promise.all([
+    wtDB.get(NUT_TARGETS_KEY).then(function(r){try{_nutTargetsStored=r?JSON.parse(r):{};}catch(e){_nutTargetsStored={};}nutLoadTargets();}),
+    wtDB.get(NUT_ACTIVE_KEY).then(function(r){try{_nutActiveStore=JSON.parse(r||'{}');}catch(e){_nutActiveStore={}}}),
+    wtDB.get(NUT_CHEAT_KEY).then(function(r){try{_nutCheatStore=JSON.parse(r||'{}');}catch(e){_nutCheatStore={}}}),
+    wtDB.get(NUT_NOT_EATEN_KEY).then(function(r){try{_nutNotEaten=JSON.parse(r||'{}');}catch(e){_nutNotEaten={}}}),
+    wtDB.get(NUT_SYNC_QUEUE_KEY).then(function(r){try{_nutSyncQueue=JSON.parse(r||'[]');}catch(e){_nutSyncQueue=[]}}),
+    wtDB.get(DAY_DONE_KEY).then(function(r){try{_dayDoneStore=JSON.parse(r||'{}');}catch(e){_dayDoneStore={}}}),
+    wtDB.get(NUT_ENTRIES_KEY).then(function(r){try{_nutEntries=JSON.parse(r||'[]');}catch(e){_nutEntries=[]}}),
+    wtDB.get(NUT_FOODS_KEY).then(function(r){try{_nutFoods=JSON.parse(r||'[]');}catch(e){_nutFoods=[]}}),
+    loadCacheAsync().then(function(c){if(c){_sheetSessions=c.sessions;_cachedSessions=c.sessions;setSyncBadge('cached',cacheAgeStr(c.ts));}}),
+  ]);
+}).then(function(){
+  // Check for share mode (?share in URL)
+  if(window.location.search.indexOf('share')>=0){
+    initShareMode();
+  } else {
+    navTo('home');
+    loadHomeData();
+    _goalsLoaded=true;loadGoals();
+    setTimeout(fetchSeqDefaultsFromSheet,3000);
+  }
+});
 // ─── NUTRITION ────────────────────────────────────────────────────
 var NUT_FOODS_KEY='wt_foods_v2';
 var NUT_ENTRIES_KEY='wt_nut_entries_v1';
 var NUT_TARGETS_KEY='wt_nut_targets';
+var _nutTargetsStored={};
 var NUT_ACTIVE_KEY='wt_nut_active'; // {date: activeCals} per day
 var NUT_CHEAT_KEY='wt_nut_cheat'; // {date: true} for 1:1 bonus days
 var NUT_NOT_EATEN_KEY='wt_nut_not_eaten'; // {"date|Meal": true}
-function nutGetNotEaten(date,meal){try{var d=JSON.parse(localStorage.getItem(NUT_NOT_EATEN_KEY)||'{}');return !!d[(date||_nutDate)+'|'+meal];}catch(e){return false;}}
-function nutSetNotEaten(date,meal,val){try{var d=JSON.parse(localStorage.getItem(NUT_NOT_EATEN_KEY)||'{}');var k=(date||_nutDate)+'|'+meal;if(val)d[k]=true;else delete d[k];localStorage.setItem(NUT_NOT_EATEN_KEY,JSON.stringify(d));}catch(e){}}
+function nutGetNotEaten(date,meal){
+  // sync read from in-memory mirror _nutNotEaten
+  return !!(_nutNotEaten&&_nutNotEaten[(date||_nutDate)+'|'+meal]);
+}
+var _nutNotEaten={};
+function _nutNotEatenLoad(){return wtDB.get(NUT_NOT_EATEN_KEY).then(function(r){try{_nutNotEaten=JSON.parse(r||'{}');}catch(e){_nutNotEaten={};}});}
+function nutSetNotEaten(date,meal,val){
+  var k=(date||_nutDate)+'|'+meal;
+  if(val)_nutNotEaten[k]=true;else delete _nutNotEaten[k];
+  wtDB.set(NUT_NOT_EATEN_KEY,JSON.stringify(_nutNotEaten));
+}
 function nutToggleNotEaten(meal){nutSetNotEaten(_nutDate,meal,!nutGetNotEaten(_nutDate,meal));nutRenderDay();}
 var _nutLastFetch=0; // timestamp of last successful sheet fetch
 var _nutSyncedIds={}; // ids confirmed in sheet
 // ─── DAY DONE ─────────────────────────────────────────────────────
 var DAY_DONE_KEY='wt_daydone';
+var _dayDoneStore={};
 function dayDoneGet(){
-  try{var d=JSON.parse(localStorage.getItem(DAY_DONE_KEY)||'{}');return d[localDateStr()]===true;}catch(e){return false;}
+  return !!(_dayDoneStore&&_dayDoneStore[localDateStr()]);
 }
 function dayDoneSet(val){
-  try{var d=JSON.parse(localStorage.getItem(DAY_DONE_KEY)||'{}');d[localDateStr()]=val;localStorage.setItem(DAY_DONE_KEY,JSON.stringify(d));}catch(e){}
+  if(!_dayDoneStore)_dayDoneStore={};
+  _dayDoneStore[localDateStr()]=val;
+  wtDB.set(DAY_DONE_KEY,JSON.stringify(_dayDoneStore));
 }
 function dayDoneToggle(){
   var done=!dayDoneGet();dayDoneSet(done);dayDoneRender();
@@ -5484,6 +5660,7 @@ document.addEventListener('DOMContentLoaded',function(){dayDoneRender();});
 
 var NUT_ACTIVE_BASE=390; // fallback only — user-editable via Daily Targets panel
 var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
+var _nutSyncQueue=[];
 var NUT_DEFAULTS={cal:2100,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000,activeBase:390,normalRatio:0.5,cheatRatio:0.75};
 
 function nutGetActiveCals(date){
@@ -5492,12 +5669,12 @@ function nutGetActiveCals(date){
     var entry=_nutEntries.find(function(e){return e.date===d&&e.meal==='_active'&&e.food==='AppleWatch';});
     if(entry)return entry.calories;
   }
-  try{
-    var stored=JSON.parse(localStorage.getItem(NUT_ACTIVE_KEY)||'{}');
-    var v=stored[d];
-    return(v!==undefined&&v!==null)?parseFloat(v):null;
-  }catch(e){return null;}
+  // fallback to in-memory mirror
+  var v=_nutActiveStore&&_nutActiveStore[d];
+  return(v!==undefined&&v!==null)?parseFloat(v):null;
 }
+var _nutActiveStore={};
+function _nutActiveLoad(){return wtDB.get(NUT_ACTIVE_KEY).then(function(r){try{_nutActiveStore=JSON.parse(r||'{}');}catch(e){_nutActiveStore={};}});}
 function nutSetActiveCals(date,val){
   var d=date||_nutDate;
   // Remove from memory
@@ -5505,12 +5682,10 @@ function nutSetActiveCals(date,val){
     return !(e.date===d&&e.meal==='_active'&&e.food==='AppleWatch');
   });
   var isEmpty=val===null||val===''||isNaN(parseFloat(val));
-  // Update localStorage cache
-  try{
-    var stored=JSON.parse(localStorage.getItem(NUT_ACTIVE_KEY)||'{}');
-    if(isEmpty){delete stored[d];}else{stored[d]=parseFloat(val);}
-    localStorage.setItem(NUT_ACTIVE_KEY,JSON.stringify(stored));
-  }catch(e){}
+  // Update in-memory mirror + IDB
+  if(!_nutActiveStore)_nutActiveStore={};
+  if(isEmpty){delete _nutActiveStore[d];}else{_nutActiveStore[d]=parseFloat(val);}
+  wtDB.set(NUT_ACTIVE_KEY,JSON.stringify(_nutActiveStore));
   // Always delete from sheet first (clears any old/duplicate rows for this date+_active)
   // then re-log if we have a value. Use a stable id so GAS upsert works correctly.
   var stableId='active_'+d; // same id every time for this date — GAS will upsert
@@ -5525,18 +5700,16 @@ function nutSetActiveCals(date,val){
 }
 function nutIsCheatDay(date){
   var d=date||_nutDate;
-  // Check memory first (from sheet fetch), then localStorage cache
   if(_nutEntries&&_nutEntries.some(function(e){return e.date===d&&e.meal==='_cheat'&&e.food==='CheatDay';}))return true;
-  try{var stored=JSON.parse(localStorage.getItem(NUT_CHEAT_KEY)||'{}');return !!stored[d];}catch(e){return false;}
+  return !!(_nutCheatStore&&_nutCheatStore[d]);
 }
+var _nutCheatStore={};
+function _nutCheatLoad(){return wtDB.get(NUT_CHEAT_KEY).then(function(r){try{_nutCheatStore=JSON.parse(r||'{}');}catch(e){_nutCheatStore={};}});}
 function nutSetCheatDay(date,on){
   var d=date||_nutDate;
-  // Update localStorage cache
-  try{
-    var stored=JSON.parse(localStorage.getItem(NUT_CHEAT_KEY)||'{}');
-    if(on){stored[d]=true;}else{delete stored[d];}
-    localStorage.setItem(NUT_CHEAT_KEY,JSON.stringify(stored));
-  }catch(e){}
+  if(!_nutCheatStore)_nutCheatStore={};
+  if(on){_nutCheatStore[d]=true;}else{delete _nutCheatStore[d];}
+  wtDB.set(NUT_CHEAT_KEY,JSON.stringify(_nutCheatStore));
   // Remove from memory
   if(_nutEntries)_nutEntries=_nutEntries.filter(function(e){
     return !(e.date===d&&e.meal==='_cheat'&&e.food==='CheatDay');
@@ -5590,21 +5763,21 @@ function nutActiveBlur(){
 // ── Sync queue — persists failed GAS calls and retries on next open ──────────
 function nutQueuePush(action){
   try{
-    var q=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');
+    var q=_nutSyncQueue||[];
     q.push({action:action,ts:Date.now(),attempts:0});
-    localStorage.setItem(NUT_SYNC_QUEUE_KEY,JSON.stringify(q));
+    _nutSyncQueue=q;wtDB.set(NUT_SYNC_QUEUE_KEY,JSON.stringify(q));
   }catch(e){}
 }
 function nutQueueRemove(ts){
   try{
-    var q=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');
+    var q=_nutSyncQueue||[];
     q=q.filter(function(i){return i.ts!==ts;});
-    localStorage.setItem(NUT_SYNC_QUEUE_KEY,JSON.stringify(q));
+    _nutSyncQueue=q;wtDB.set(NUT_SYNC_QUEUE_KEY,JSON.stringify(q));
   }catch(e){}
 }
 function nutQueueFlush(){
   try{
-    var q=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');
+    var q=_nutSyncQueue||[];
     if(!q.length)return;
     var now=Date.now();
     // Only retry items older than 10s, not yet maxed out
@@ -5612,7 +5785,7 @@ function nutQueueFlush(){
     if(!pending.length)return;
     // Increment attempts and save before firing (so crash doesn't reset counter)
     pending.forEach(function(item){item.attempts=(item.attempts||0)+1;});
-    localStorage.setItem(NUT_SYNC_QUEUE_KEY,JSON.stringify(q));
+    _nutSyncQueue=q;wtDB.set(NUT_SYNC_QUEUE_KEY,JSON.stringify(q));
     var qLen=pending.length;
     var done=0;
     pending.forEach(function(item){
@@ -5621,13 +5794,13 @@ function nutQueueFlush(){
         if(ok){
           // Remove from queue
           try{
-            var q2=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');
+            var q2=_nutSyncQueue||[];
             q2=q2.filter(function(i){return i.ts!==item.ts;});
-            localStorage.setItem(NUT_SYNC_QUEUE_KEY,JSON.stringify(q2));
+            _nutSyncQueue=q2;wtDB.set(NUT_SYNC_QUEUE_KEY,JSON.stringify(q2));
           }catch(e){}
           // Show live badge if all done
           if(done===qLen){
-            var remaining=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]').length;
+            var remaining=(_nutSyncQueue||[]).length;
             if(!remaining){nutBadge('live','Live');nutMsg('Synced \u2713','var(--green)');setTimeout(function(){nutMsg('');},2000);}
           }
         }
@@ -5682,8 +5855,9 @@ function lastWeekNutAvg(key){
   var tot=0;logged.forEach(function(d){var t=nutTotals(nutDayEntries(d));tot+=(t[key]||0);});
   return Math.round(tot/logged.length);
 }
-function saveExtendedCache(entries,from){try{localStorage.setItem(NUT_EXTENDED_CACHE_KEY,JSON.stringify({entries:entries,from:from,ts:Date.now()}));}catch(e){}}
-function loadExtendedCache(from){try{var r=localStorage.getItem(NUT_EXTENDED_CACHE_KEY);if(!r)return null;var o=JSON.parse(r);if(o&&o.from===from&&(Date.now()-o.ts)<24*60*60*1000)return o.entries;return null;}catch(e){return null;}}
+function saveExtendedCache(entries,from){wtDB.set(NUT_EXTENDED_CACHE_KEY,JSON.stringify({entries:entries,from:from,ts:Date.now()}));}
+function loadExtendedCache(from){return null;} // now async only
+function loadExtendedCacheAsync(from){return wtDB.get(NUT_EXTENDED_CACHE_KEY).then(function(r){try{if(!r)return null;var o=JSON.parse(r);return(o&&o.from===from&&(Date.now()-o.ts)<24*60*60*1000)?o.entries:null;}catch(e){return null;}});}
 var _nutAddMeal='';
 var _nutServingFood=null;
 var _nutTargets={};
@@ -5715,7 +5889,7 @@ function nutMsg(txt,col){
 function nutLoadTargets(){
   _nutTargets=JSON.parse(JSON.stringify(NUT_DEFAULTS));
   try{
-    var saved=JSON.parse(localStorage.getItem(NUT_TARGETS_KEY)||'{}');
+    var saved=_nutTargetsStored||{};
     Object.keys(saved).forEach(function(k){
       var v=parseFloat(saved[k]);
       // Ratios and activeBase can be any positive number including <1
@@ -5724,7 +5898,7 @@ function nutLoadTargets(){
       if(k==='goalWeight'&&saved[k])_nutTargets.goalWeight=parseFloat(saved[k]);
     });
   }catch(e){}
-  try{localStorage.setItem(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));}catch(e){}
+  _nutTargetsStored=_nutTargets;wtDB.set(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));
 }
 function nutSaveTargets(){
   var map={cal:'nutT_cal',prot:'nutT_prot',carb:'nutT_carb',fat:'nutT_fat',fib:'nutT_fib',satfat:'nutT_satfat',sodium:'nutT_sodium'};
@@ -5740,7 +5914,7 @@ function nutSaveTargets(){
   var crEl=document.getElementById('nutT_cheatRatio');if(crEl&&crEl.value)_nutTargets.cheatRatio=parseFloat(crEl.value)||0.75;
   var gwEl=document.getElementById('nutT_goalweight');
   if(gwEl&&gwEl.value)_nutTargets.goalWeight=parseFloat(gwEl.value)||0;
-  try{localStorage.setItem(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));}catch(e){}
+  _nutTargetsStored=_nutTargets;wtDB.set(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));
   var p=document.getElementById('nutTargetsPanel');if(p)p.style.display='none';
   var saveBtn=document.getElementById('nutTargetsSaveTopBtn');if(saveBtn)saveBtn.style.display='none';
   nutRenderDay();
@@ -5779,17 +5953,27 @@ function nutRenderTargetInputs(){
 // ── Init ───────────────────────────────────────────────────────────
 function nutInit(){
   nutLoadTargets();
-  try{_nutFoods=JSON.parse(localStorage.getItem(NUT_FOODS_KEY)||'[]');}catch(e){_nutFoods=[];}
-  // Load cached entries immediately so day renders without waiting for sheet
-  try{_nutEntries=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');}catch(e){_nutEntries=[];}
-  _nutDate=localDateStr();
+  // Load foods, entries, and all mirrors from IDB in parallel, then render
+  Promise.all([
+    wtDB.get(NUT_FOODS_KEY).then(function(r){try{_nutFoods=JSON.parse(r||'[]');}catch(e){_nutFoods=[];}}),
+    wtDB.get(NUT_ENTRIES_KEY).then(function(r){try{_nutEntries=JSON.parse(r||'[]');}catch(e){_nutEntries=[];}}),
+    _nutNotEatenLoad(),
+    _nutActiveLoad(),
+    _nutCheatLoad(),
+    wtDB.get(NUT_SYNC_QUEUE_KEY).then(function(r){try{_nutSyncQueue=JSON.parse(r||'[]');}catch(e){_nutSyncQueue=[];}}),
+    wtDB.get(NUT_TARGETS_KEY).then(function(r){try{_nutTargetsStored=r?JSON.parse(r):{};}catch(e){_nutTargetsStored={};}})
+  ]).then(function(){
+    nutLoadTargets(); // re-apply now that _nutTargetsStored is populated
+    _nutDate=localDateStr();
+    nutSetDateLabel();
+    switchNutTab('day');
+    nutRenderDay();
+    _nutShowUnsyncedBadge();
+    nutQueueFlush();
+  }); // end Promise.all IDB reads
+  _nutDate=localDateStr(); // also set immediately for label before IDB resolves
   nutSetDateLabel();
-  switchNutTab('day');
-  nutRenderDay(); // render from cache immediately
-  // Show unsynced count badge before fetch
-  _nutShowUnsyncedBadge();
-  // Flush queue aggressively on open (before fetch so push happens first)
-  nutQueueFlush();
+  // (unsynced badge + queue flush moved inside IDB Promise.all above)
   nutBadge('load','Syncing');
   nutMsg('Loading from sheet...');
   nutFetchFoods();
@@ -5798,7 +5982,7 @@ function nutInit(){
 
 function _nutShowUnsyncedBadge(){
   try{
-    var q=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');
+    var q=_nutSyncQueue||[];
     if(q.length){
       nutBadge('cached','Cached');
       nutMsg(q.length+' item'+(q.length>1?'s':'')+' unsynced','var(--yellow)');
@@ -5883,7 +6067,7 @@ function nutFetchFoods(){
     window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
     if(res&&res.status==='ok'&&res.foods){
       _nutFoods=res.foods;
-      try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
+      wtDB.set(NUT_FOODS_KEY,JSON.stringify(_nutFoods));
       // Always re-render wherever foods are shown
       if(_nutTab==='foods')nutRenderFoodList();
       nutFilterAddList(); // refresh add overlay if open
@@ -5907,7 +6091,7 @@ function nutFetchEntries(extendedFrom){
       // ── Reconciliation: find local entries missing from sheet ──────
       // Match on id if present, fall back to date|meal|food for old entries without id
       var localEntries=[];
-      try{localEntries=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');}catch(e){}
+      localEntries=_nutEntries||[];
       var windowLocal=localEntries.filter(function(e){return e.date>=from&&e.date<=to&&e.meal!=='_active';});
       // Build lookup sets from sheet — by id AND by date|meal|food for legacy entries
       var sheetIds={},sheetKeys={};
@@ -5938,20 +6122,19 @@ function nutFetchEntries(extendedFrom){
       _nutEntries=outsideWindow.concat(sheetEntries);
       // Sync _active entries back to NUT_ACTIVE_KEY cache for nutEffectiveBudget
       try{
-        var activeStored=JSON.parse(localStorage.getItem(NUT_ACTIVE_KEY)||'{}');
+        if(!_nutActiveStore)_nutActiveStore={};
         sheetEntries.forEach(function(e){
-          if(e.meal==='_active'&&e.food==='AppleWatch')activeStored[e.date]=e.calories;
+          if(e.meal==='_active'&&e.food==='AppleWatch')_nutActiveStore[e.date]=e.calories;
         });
-        localStorage.setItem(NUT_ACTIVE_KEY,JSON.stringify(activeStored));
+        wtDB.set(NUT_ACTIVE_KEY,JSON.stringify(_nutActiveStore));
       }catch(er){}
       // Sync _cheat entries back to NUT_CHEAT_KEY cache
       try{
-        var cheatStored=JSON.parse(localStorage.getItem(NUT_CHEAT_KEY)||'{}');
-        // Reset to only what sheet has (sheet is truth for cheat days)
+        if(!_nutCheatStore)_nutCheatStore={};
         sheetEntries.forEach(function(e){
-          if(e.meal==='_cheat'&&e.food==='CheatDay')cheatStored[e.date]=true;
+          if(e.meal==='_cheat'&&e.food==='CheatDay')_nutCheatStore[e.date]=true;
         });
-        localStorage.setItem(NUT_CHEAT_KEY,JSON.stringify(cheatStored));
+        wtDB.set(NUT_CHEAT_KEY,JSON.stringify(_nutCheatStore));
       }catch(er){}
       // Add missing entries to view (they're being pushed)
       if(missing.length){
@@ -5960,7 +6143,7 @@ function nutFetchEntries(extendedFrom){
           if(!already)_nutEntries.push(m);
         });
       }
-      try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
+      wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));
       // If this was an extended fetch (from < 29 days), cache the older entries separately
       if(extendedFrom&&extendedFrom!==nutShiftDate(localDateStr(),-29)){
         saveExtendedCache(sheetEntries.filter(function(e){return e.date<nutShiftDate(localDateStr(),-29);}),extendedFrom);
@@ -6666,7 +6849,7 @@ function nutApiKeyShow(base64,mediaType,statusEl){
   _nutVisionPending=(base64)?{base64:base64,mediaType:mediaType,statusEl:statusEl}:null;
   var inp=document.getElementById('nutApiKeyInput');
   // Pre-fill with existing key so user can see/edit it
-  if(inp)inp.value=localStorage.getItem('wt_gemini_key')||'';
+  if(inp){wtDB.get('wt_gemini_key').then(function(k){inp.value=k||'';});}
   var msg=document.getElementById('nutApiKeyMsg');
   if(msg)msg.textContent=base64?'':'Enter or update your Gemini API key';
   var ov=document.getElementById('nutApiKeyOverlay');
@@ -6684,7 +6867,7 @@ function nutApiKeySave(){
     if(msg)msg.textContent='Key looks too short — paste it from AI Studio';
     return;
   }
-  localStorage.setItem('wt_gemini_key',key);
+  wtDB.set('wt_gemini_key',key);
   var ov=document.getElementById('nutApiKeyOverlay');if(ov)ov.style.display='none';
   if(_nutVisionPending){
     var p=_nutVisionPending;_nutVisionPending=null;
@@ -6694,7 +6877,8 @@ function nutApiKeySave(){
 
 function nutCallVision(base64,mediaType,statusEl){
   if(statusEl){statusEl.style.display='block';statusEl.style.color='var(--muted)';statusEl.textContent='Scanning with AI...';}
-  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  wtDB.get('wt_gemini_key').then(function(geminiKey){
+  geminiKey=geminiKey||'';
   if(!geminiKey){
     nutApiKeyShow(base64,mediaType,statusEl);
     return;
@@ -6714,7 +6898,7 @@ function nutCallVision(base64,mediaType,statusEl){
       return r.json().then(function(err){
         var msg=err&&err.error&&err.error.message||('HTTP '+r.status);
         if(r.status===400||r.status===401||r.status===403){
-          localStorage.removeItem('wt_gemini_key');
+          wtDB.del('wt_gemini_key');
           throw new Error('BAD_KEY:'+msg);
         }
         throw new Error(msg);
@@ -6750,7 +6934,7 @@ function nutCallVision(base64,mediaType,statusEl){
   .catch(function(err){
     var msg=err&&err.message||'';
     if(msg.indexOf('BAD_KEY')>=0){
-      localStorage.removeItem('wt_gemini_key');
+      wtDB.del('wt_gemini_key');
       nutApiKeyShow(base64,mediaType,statusEl);
       var kmsg=document.getElementById('nutApiKeyMsg');
       if(kmsg)kmsg.textContent='Key was rejected — paste a fresh one from AI Studio';
@@ -6760,6 +6944,7 @@ function nutCallVision(base64,mediaType,statusEl){
       if(statusEl){statusEl.textContent='Error: '+(msg||'unknown')+' \u2014 fill in manually';statusEl.style.color='var(--orange)';}
     }
   });
+  }); // end wtDB.get geminiKey
 }
 
 function nutFillFromScan(d,statusEl){
@@ -6819,7 +7004,7 @@ function _nutDoSave(name,sNum,sUnit,calories,msg){
   var isNew=editIdx==='';
   if(!isNew){_nutFoods[parseInt(editIdx)]=food;}
   else{_nutFoods.push(food);_nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});}
-  try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
+  wtDB.set(NUT_FOODS_KEY,JSON.stringify(_nutFoods));
   nutRenderFoodList();
   if(msg){msg.textContent='Saving...';msg.style.color='var(--muted)';}
   function afterSave(){
@@ -6852,7 +7037,7 @@ function nutDeleteFood(){
   var idx=parseInt(editIdx),f=_nutFoods[idx];if(!f)return;
   if(!confirm('Delete "'+f.name+'"?'))return;
   _nutFoods.splice(idx,1);
-  try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
+  wtDB.set(NUT_FOODS_KEY,JSON.stringify(_nutFoods));
   nutRenderFoodList();nutCloseFoodForm();
   fetch(CLOUD_URL,{
     method:'POST',
@@ -7222,7 +7407,7 @@ function nutConfirmServing(){
   }
   _nutEditingEntryIdx=-1;
   // Persist immediately
-  try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
+  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));
 
   var ov=document.getElementById('nutServingOverlay');if(ov)ov.style.display='none';
   nutRenderDay();
@@ -7345,7 +7530,7 @@ function nutMoveToMeal(idx,newMeal){
   var e=_nutEntries[idx];if(!e)return;
   var oldEntry=JSON.parse(JSON.stringify(e));
   e.meal=newMeal;
-  try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(err){}
+  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));
   nutRenderDay();
   nutBadge('load','Saving');
   var steps=[
@@ -7366,7 +7551,7 @@ function nutDelEntry(idx){
   var e=_nutEntries[idx];if(!e)return;
   var action={type:'deleteNutritionRow',date:e.date,meal:e.meal,food:e.food};
   _nutEntries.splice(idx,1);
-  try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(err){}
+  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));
   nutRenderDay();
   nutBadge('load','Saving');
   nutSyncAction(action,null,function(ok){
@@ -7399,7 +7584,8 @@ function nutTypeGeminiSearch(){
   if(!q.trim())return;
   var statusEl=document.getElementById('nutTypeSearchStatus');
   if(statusEl){statusEl.textContent='Asking Gemini...';statusEl.style.color='var(--muted)';}
-  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  wtDB.get('wt_gemini_key').then(function(_gkRaw){
+  var geminiKey=_gkRaw||'';
   if(!geminiKey){nutApiKeyShow(null,null,null);if(statusEl){statusEl.textContent='Enter your Gemini key then search again';statusEl.style.color='var(--orange)';}return;}
   var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
@@ -7407,7 +7593,7 @@ function nutTypeGeminiSearch(){
     body:JSON.stringify({contents:[{parts:[{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
   })
   .then(function(r){
-    if(!r.ok){return r.json().then(function(err){var msg=err&&err.error&&err.error.message||('HTTP '+r.status);if(r.status===400||r.status===401||r.status===403){localStorage.removeItem('wt_gemini_key');throw new Error('BAD_KEY:'+msg);}throw new Error(msg);});}
+    if(!r.ok){return r.json().then(function(err){var msg=err&&err.error&&err.error.message||('HTTP '+r.status);if(r.status===400||r.status===401||r.status===403){wtDB.del('wt_gemini_key');throw new Error('BAD_KEY:'+msg);}throw new Error(msg);});}
     return r.json();
   })
   .then(function(data){
@@ -7425,7 +7611,7 @@ function nutTypeGeminiSearch(){
   })
   .catch(function(err){
     var msg=err&&err.message||'';
-    if(msg.indexOf('BAD_KEY')>=0){localStorage.removeItem('wt_gemini_key');nutApiKeyShow(null,null,null);if(statusEl){statusEl.textContent='Invalid key — re-enter in the overlay';statusEl.style.color='var(--orange)';}}
+    if(msg.indexOf('BAD_KEY')>=0){wtDB.del('wt_gemini_key');nutApiKeyShow(null,null,null);if(statusEl){statusEl.textContent='Invalid key — re-enter in the overlay';statusEl.style.color='var(--orange)';}}
     else{if(statusEl){statusEl.textContent='Error: '+(msg||'network problem')+' — try again';statusEl.style.color='var(--orange)';}}
   });
 }
@@ -7444,7 +7630,8 @@ function nutTypeSearchFill(){var status=document.getElementById('nutScanStatus')
 
 // ── Progress: AI calorie & weight feedback ────────────────────────
 function progAIFeedback(){
-  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  wtDB.get('wt_gemini_key').then(function(_gkRaw){
+  var geminiKey=_gkRaw||'';
   if(!geminiKey){nutApiKeyShow(null,null,null);return;}
   var btn=document.getElementById('progAIBtn');
   var card=document.getElementById('progAICard');
@@ -7488,7 +7675,7 @@ function progAIRunFeedback(geminiKey,btn,card,result){
   var cheatRatio=(_nutTargets&&_nutTargets.cheatRatio)||0.75;
 
   // Per-day breakdown — use effective budget (same formula as the app)
-  var doneDaysStore={};try{doneDaysStore=JSON.parse(localStorage.getItem(DAY_DONE_KEY)||'{}');}catch(e){}
+  var doneDaysStore=_dayDoneStore||{};
 
   var dayData=days.map(function(d){
     var entries=_nutEntries.filter(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});
@@ -7593,7 +7780,8 @@ function nutAddInlineStatus(txt,col){var el=document.getElementById('nutAddInlin
 function nutAddInlineGemini(){
   var q=(document.getElementById('nutAddSearch')||{}).value||'';
   if(!q.trim()){nutAddInlineStatus('Type a food name first','var(--orange)');return;}
-  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  wtDB.get('wt_gemini_key').then(function(_gkRaw){
+  var geminiKey=_gkRaw||'';
   if(!geminiKey){nutCloseAdd();nutApiKeyShow(null,null,null);return;}
   nutAddInlineStatus('Asking Gemini...','var(--muted)');
   var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
@@ -7601,7 +7789,7 @@ function nutAddInlineGemini(){
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
   })
-  .then(function(r){if(!r.ok){return r.json().then(function(err){var msg=err&&err.error&&err.error.message||('HTTP '+r.status);if(r.status===400||r.status===401||r.status===403)localStorage.removeItem('wt_gemini_key');throw new Error(msg);});}return r.json();})
+  .then(function(r){if(!r.ok){return r.json().then(function(err){var msg=err&&err.error&&err.error.message||('HTTP '+r.status);if(r.status===400||r.status===401||r.status===403)wtDB.del('wt_gemini_key');throw new Error(msg);});}return r.json();})
   .then(function(data){
     var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
     if(!text){nutAddInlineStatus('No result — try a clearer description','var(--orange)');return;}
@@ -7613,7 +7801,7 @@ function nutAddInlineGemini(){
   })
   .catch(function(err){
     var msg=err&&err.message||'';
-    if(msg.indexOf('401')>=0||msg.indexOf('403')>=0){localStorage.removeItem('wt_gemini_key');nutCloseAdd();nutApiKeyShow(null,null,null);}
+    if(msg.indexOf('401')>=0||msg.indexOf('403')>=0){wtDB.del('wt_gemini_key');nutCloseAdd();nutApiKeyShow(null,null,null);}
     else{nutAddInlineStatus('Error: '+(msg||'network problem'),'var(--orange)');}
   });
 }
@@ -7632,7 +7820,7 @@ function nutAddInlineFinish(food){
     var existing=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===food.name.toLowerCase();});
     if(existing>=0){_nutFoods[existing]=food;}
     else{_nutFoods.push(food);_nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});}
-    try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
+    wtDB.set(NUT_FOODS_KEY,JSON.stringify(_nutFoods));
     fetch(CLOUD_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({type:'addFood',food:food,_nonce:Date.now()})}).catch(function(){});
   }
   nutCloseAdd();
@@ -7729,9 +7917,13 @@ function goalsSave(){
   },10000);
 }
 function loadGoals(){
-  // Apply cache immediately
-  var cached=loadGoalsCache();
-  if(cached)applyGoals(cached);
+  // Apply cache from IDB immediately
+  loadGoalsCacheAsync().then(function(cached){
+    if(cached)applyGoals(cached);
+    renderHomeData(_cachedSessions||[]);
+    renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
+    updateHiitWeekSummary();
+  });
   // Fetch from sheet in background
   var cbP='wt_getgoals_'+Date.now();
   window[cbP]=function(result){
