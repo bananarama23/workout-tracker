@@ -871,7 +871,24 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   </div>
   <div class="page-body" style="padding-top:16px;">
 
-    <!-- Personal Records (Body Weight at top) -->
+    <!-- AI Calorie & Weight Feedback -->
+    <div class="prog-section" style="margin-bottom:6px;">
+      <div class="prog-section-hdr">
+        <div class="prog-section-lbl">AI Feedback</div>
+        <button onclick="progAIFeedback()" id="progAIBtn" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:4px 14px;font-family:'Bebas Neue',sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">✦ ASK GEMINI</button>
+      </div>
+      <div class="prog-card prog-card-pad" id="progAICard" style="display:none;">
+        <div id="progAIResult" style="font-size:0.82rem;line-height:1.6;color:var(--text2);"></div>
+        <div id="progAIParseWrap" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
+          <div style="font-size:0.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">Suggested Changes Detected</div>
+          <div id="progAIParseRows" style="margin-bottom:10px;"></div>
+          <button onclick="progAIApplyParsed()" style="width:100%;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">APPLY CHANGES TO DAILY TARGETS</button>
+          <div id="progAIApplyMsg" style="font-size:0.72rem;text-align:center;min-height:18px;margin-top:6px;color:var(--muted);"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Personal Records -->
     <div class="prog-section" style="margin-bottom:6px;">
       <div class="prog-section-hdr">
         <div class="prog-section-lbl">Personal Records</div>
@@ -888,27 +905,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <div id="bodyWeightChart"></div>
         </div>
       </div>
-    </div>
-
-    <!-- AI Calorie & Weight Feedback -->
-    <div class="prog-section" style="margin-bottom:6px;">
-      <div class="prog-section-hdr">
-        <div class="prog-section-lbl">AI Feedback</div>
-        <button onclick="progAIFeedback()" id="progAIBtn" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:4px 14px;font-family:'Bebas Neue',sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">✦ ASK GEMINI</button>
-      </div>
-      <div class="prog-card prog-card-pad" id="progAICard" style="display:none;">
-        <div id="progAIResult" style="font-size:0.82rem;line-height:1.6;color:var(--text2);"></div>
       <div id="prGrid" style="margin:0 16px;">
         <div style="text-align:center;color:var(--muted);padding:20px 0;font-size:0.85rem;">No records yet</div>
-      </div>
-      </div>
-      <div class="prog-card" style="overflow:hidden;margin:0 16px 8px;">
-        <div id="progAIParseWrap" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
-          <div style="font-size:0.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">Suggested Changes Detected</div>
-          <div id="progAIParseRows" style="margin-bottom:10px;"></div>
-          <button onclick="progAIApplyParsed()" style="width:100%;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">APPLY CHANGES TO DAILY TARGETS</button>
-          <div id="progAIApplyMsg" style="font-size:0.72rem;text-align:center;min-height:18px;margin-top:6px;color:var(--muted);"></div>
-        </div>
       </div>
     </div>
 
