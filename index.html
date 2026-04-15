@@ -939,6 +939,17 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
     </div>
 
+    <!-- Cholesterol AI Feedback -->
+    <div class="prog-section" style="margin-bottom:6px;">
+      <div class="prog-section-hdr">
+        <div class="prog-section-lbl">Cholesterol AI</div>
+        <button onclick="cholAIFeedback()" id="cholAIBtn" style="background:var(--blue);color:#fff;border:none;border-radius:20px;padding:4px 14px;font-family:'Bebas Neue',sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">✦ ASK GEMINI</button>
+      </div>
+      <div class="prog-card prog-card-pad" id="cholAICard" style="display:none;">
+        <div id="cholAIResult" style="font-size:0.82rem;line-height:1.6;color:var(--text2);"></div>
+      </div>
+    </div>
+
     <div class="refresh-link" onclick="loadProgressData()">↻ Refresh</div>
     <div class="clear-link"><button onclick="if(confirm('Clear all local data?')){localStorage.removeItem('wt_hist_v3');loadHomeData();}">clear local data</button> &nbsp;·&nbsp; <button onclick="wtDB.usage().then(function(u){alert('IDB used: '+u.totalKB+'KB');});">storage</button></div>
   </div>
@@ -1890,8 +1901,21 @@ function renderHomeData(sessions){
       var cachedEnt=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');
       var weekDates=getWeekDates(0).map(function(d){return fmtDate(d);});
       var daysLogged=weekDates.filter(function(d){return cachedEnt.some(function(e){return e.date===d;});}).length;
-      nutStreakEl.textContent=daysLogged;
-      nutStreakEl.className='ws-num '+(daysLogged>=5?'c-green':daysLogged>=3?'c-yellow':'c-muted');
+      if(daysLogged>0){
+        nutStreakEl.textContent=daysLogged;
+        nutStreakEl.className='ws-num '+(daysLogged>=5?'c-green':daysLogged>=3?'c-yellow':'c-muted');
+      } else {
+        // localStorage empty — try IDB in background
+        nutStreakEl.textContent='-';
+        wtDB.get(NUT_ENTRIES_KEY).then(function(raw){
+          try{
+            var idbEnt=raw?JSON.parse(raw):[];
+            var dl=weekDates.filter(function(d){return idbEnt.some(function(e){return e.date===d;});}).length;
+            nutStreakEl.textContent=dl||'-';
+            nutStreakEl.className='ws-num '+(dl>=5?'c-green':dl>=3?'c-yellow':'c-muted');
+          }catch(e2){}
+        }).catch(function(){});
+      }
     }catch(e){nutStreakEl.textContent='-';}
   }
 
@@ -4685,7 +4709,7 @@ function buildPRs(sessions){
       }
       rows+='</div>';
     });
-    if(el)el.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin:0 16px;">'+rows+'</div>';
+    if(el)el.innerHTML=rows;
   }
   buildPRs_render();
 }
@@ -6217,7 +6241,7 @@ function nutFetchEntries(extendedFrom){
           if(!already)_nutEntries.push(m);
         });
       }
-      wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));
+      wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
       // If this was an extended fetch (from < 29 days), cache the older entries separately
       if(extendedFrom&&extendedFrom!==nutShiftDate(localDateStr(),-29)){
         saveExtendedCache(sheetEntries.filter(function(e){return e.date<nutShiftDate(localDateStr(),-29);}),extendedFrom);
@@ -7500,7 +7524,7 @@ function nutConfirmServing(){
   }
   _nutEditingEntryIdx=-1;
   // Persist immediately
-  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));
+  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
 
   var ov=document.getElementById('nutServingOverlay');if(ov)ov.style.display='none';
   nutRenderDay();
@@ -7623,7 +7647,7 @@ function nutMoveToMeal(idx,newMeal){
   var e=_nutEntries[idx];if(!e)return;
   var oldEntry=JSON.parse(JSON.stringify(e));
   e.meal=newMeal;
-  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));
+  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
   nutRenderDay();
   nutBadge('load','Saving');
   var steps=[
@@ -7644,7 +7668,7 @@ function nutDelEntry(idx){
   var e=_nutEntries[idx];if(!e)return;
   var action={type:'deleteNutritionRow',date:e.date,meal:e.meal,food:e.food};
   _nutEntries.splice(idx,1);
-  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));
+  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
   nutRenderDay();
   nutBadge('load','Saving');
   nutSyncAction(action,null,function(ok){
@@ -7950,6 +7974,100 @@ function progAIApplyParsed(){
   if(wrap){setTimeout(function(){wrap.style.display='none';},2500);}
   if(typeof nutRenderDay==='function')nutRenderDay();
   _progAIParsed={};
+}
+
+// ── Cholesterol AI Feedback ─────────────────────────────────────
+function cholAIFeedback(){
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  if(!geminiKey){nutApiKeyShow(null,null,null);return;}
+  var btn=document.getElementById('cholAIBtn');
+  var card=document.getElementById('cholAICard');
+  var result=document.getElementById('cholAIResult');
+  if(btn){btn.textContent='Thinking...';btn.disabled=true;}
+  if(card)card.style.display='block';
+  if(result)result.textContent='Building your cholesterol report...';
+
+  // Cholesterol history
+  var cholStr='No cholesterol readings logged.';
+  if(_cholReadings&&_cholReadings.length){
+    cholStr=_cholReadings.map(function(r){
+      var d=r.isBaseline?'Nov 2024 (baseline)':r.date;
+      return d+': HDL='+r.hdl+', LDL='+r.ldl+', TC/HDL='+r.ratio;
+    }).join('\n');
+  }
+
+  // Find last non-baseline test date
+  var lastTestDate=null;
+  if(_cholReadings&&_cholReadings.length){
+    var nonBaseline=_cholReadings.filter(function(r){return !r.isBaseline;});
+    lastTestDate=nonBaseline.length?nonBaseline[nonBaseline.length-1].date:_cholReadings[_cholReadings.length-1].date;
+  }
+
+  // Diet since last test
+  var dietStr='No diet data since last test.';
+  var daysSince=0;
+  if(lastTestDate&&_nutEntries&&_nutEntries.length){
+    var sinceEntries=_nutEntries.filter(function(e){return e.date>lastTestDate&&e.meal!=='_active'&&e.meal!=='_cheat';});
+    var sinceDates=[];
+    sinceEntries.forEach(function(e){if(sinceDates.indexOf(e.date)<0)sinceDates.push(e.date);});
+    sinceDates.sort();
+    daysSince=sinceDates.length;
+    if(daysSince>0){
+      function avgNut(key){
+        var tot=sinceDates.reduce(function(a,d){
+          return a+sinceEntries.filter(function(e){return e.date===d;}).reduce(function(b,e){return b+(e[key]||0);},0);
+        },0);
+        return Math.round(tot/daysSince);
+      }
+      var tgt=_nutTargets||{};
+      var cheatCount=sinceDates.filter(function(d){return nutIsCheatDay(d);}).length;
+      dietStr='Days logged since last test: '+daysSince+' (from '+lastTestDate+').\n'+
+        'Avg daily: '+avgNut('calories')+' kcal (target '+(tgt.cal||2100)+'), '+
+        avgNut('protein')+'g protein (target '+(tgt.prot||175)+'g), '+
+        avgNut('fibre')+'g fibre (target '+(tgt.fib||30)+'g), '+
+        avgNut('satFat')+'g sat fat (target '+(tgt.satfat||14)+'g), '+
+        avgNut('sodium')+'mg sodium (target '+(tgt.sodium||3000)+'mg).\n'+
+        'Cheat days: '+cheatCount+'/'+daysSince+'.';
+    }
+  }
+
+  // Exercise since last test
+  var workoutStr='No workout data.';
+  if(lastTestDate&&_cachedSessions&&_cachedSessions.length){
+    var seSess=_cachedSessions.filter(function(s){return s.date>lastTestDate;});
+    var strC=seSess.filter(function(s){return (s.workoutType||'').indexOf('Strength')>=0;}).length;
+    var hiitC=seSess.filter(function(s){return isHIIT(s.workoutType);}).length;
+    var walkC=seSess.filter(function(s){return s.workoutType==='Walk';}).length;
+    if(seSess.length)workoutStr='Since last test: '+strC+' strength, '+hiitC+' HIIT, '+walkC+' walks.';
+  }
+
+  var prompt=
+    'You are a health advisor reviewing cholesterol trends and lifestyle factors. Be specific, concise, and actionable. No disclaimers.\n\n'+
+    'CHOLESTEROL HISTORY (oldest to newest):\n'+cholStr+'\n\n'+
+    'DIET SINCE LAST BLOOD TEST ('+daysSince+' days logged):\n'+dietStr+'\n\n'+
+    'EXERCISE SINCE LAST BLOOD TEST:\n'+workoutStr+'\n\n'+
+    'Provide:\n'+
+    '1. **Trend assessment** — are HDL, LDL and ratio moving the right direction? How significant is the change?\n'+
+    '2. **Diet impact** — how is the current sat fat, fibre, and sodium intake likely affecting these numbers?\n'+
+    '3. **Prediction** — will HDL, LDL and ratio likely improve or worsen at next test given current diet and exercise? Give estimated numbers.\n'+
+    '4. **Top 3 changes** — highest-impact dietary or lifestyle changes to improve HDL and LDL\n'+
+    '5. **Next test targets** — specific HDL, LDL and ratio numbers to aim for';
+
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.3,maxOutputTokens:800}})
+  })
+  .then(function(r){return r.json();})
+  .then(function(data){
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
+    if(btn){btn.textContent='✦ REFRESH';btn.disabled=false;}
+    if(!text){if(result)result.textContent='No response — try again.';return;}
+    if(result)result.innerHTML=text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
+  })
+  .catch(function(err){
+    if(btn){btn.textContent='✦ ASK GEMINI';btn.disabled=false;}
+    if(result)result.textContent='Error: '+(err.message||'network problem')+' — try again.';
+  });
 }
 
 // ── Inline Gemini add from meal overlay ───────────────────────────
