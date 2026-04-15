@@ -1,4 +1,14 @@
-<!DOCTYPE html>
+function footerNextAction(){
+  if(phase==='between'){
+    clearInterval(timerInt);
+    _betweenTok=((_betweenTok||0)+1)%9999;
+    var ra=document.getElementById('restAdj');if(ra)ra.classList.add('hidden');
+    phase='idle';updBtn();renderEx();
+    return;
+  }
+  var last=!exs[curEx]||curSet>=exs[curEx].sets-1;
+  if(last){nextEx();}else{nextSet();}
+}<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2086,7 +2096,7 @@ var hotelEx=[
 ];
 
 // ─── SESSION STATE ────────────────────────────────────────────────
-var exs=[],wType='home',logs=[],curEx=0,curSet=0,phase='idle';
+var exs=[],wType='home',logs=[],curEx=0,curSet=0,phase='idle',_betweenTok=0;
 var _seqEditMode=false;
 var _targetEditMode=false;
 var timerInt=null,tLeft=0,tTotal=0,curRestSecs=0;
@@ -2141,71 +2151,61 @@ function previewParsePaste(){
   var text=(inp?inp.value:'').trim();
   if(!text){if(msg){msg.textContent='Paste something first';msg.style.color='var(--orange)';}return;}
 
-  // ── Name map: Claude/ChatGPT names → internal names ──────────────
-  var NAME_MAP={
-    'pull-up ladder':'PULL-UPS','pull up ladder':'PULL-UPS',
-    'pull-up':'PULL-UPS','pull-ups':'PULL-UPS','pullup':'PULL-UPS','pullups':'PULL-UPS',
-    'close-grip push-up':'CLOSE-GRIP PUSH-UPS','close grip push-up':'CLOSE-GRIP PUSH-UPS',
-    'close-grip push-ups':'CLOSE-GRIP PUSH-UPS','close grip push-ups':'CLOSE-GRIP PUSH-UPS',
-    'dip':'DIPS','dips':'DIPS',
-    'leg raise':'LEG RAISES','leg raises':'LEG RAISES',
-    'single-leg glute bridge':'SINGLE-LEG GLUTE BRIDGES','single leg glute bridge':'SINGLE-LEG GLUTE BRIDGES',
-    'single-leg glute bridges':'SINGLE-LEG GLUTE BRIDGES','single leg glute bridges':'SINGLE-LEG GLUTE BRIDGES',
-    'glute bridge':'SINGLE-LEG GLUTE BRIDGES','glute bridges':'SINGLE-LEG GLUTE BRIDGES',
-    'side plank':'SIDE PLANKS','side planks':'SIDE PLANKS',
-    'supinated pull-up':'SUPINATED PULL-UPS','supinated pull-ups':'SUPINATED PULL-UPS',
-    'supinated pullup':'SUPINATED PULL-UPS','supinated pullups':'SUPINATED PULL-UPS',
-  };
-
+  // ── Name normalisation: token list, first match wins ─────────────
+  var NAME_RULES=[
+    ['SUPINATED PULL-UPS',       ['supinated pull','supinated pullup']],
+    ['PULL-UPS',                 ['pull-up ladder','pull up ladder','pull-ups','pull-up','pullups','pullup']],
+    ['CLOSE-GRIP PUSH-UPS',      ['close-grip push','close grip push','close grip pu']],
+    ['DIAMOND PUSH-UPS',         ['diamond push']],
+    ['PIKE PUSH-UPS',            ['pike push']],
+    ['ARCHER PUSH-UPS',          ['archer push']],
+    ['PUSH-UPS',                 ['push-up','push-ups','pushup','pushups']],
+    ['DIPS',                     ['tricep dip','triceps dip','dip']],
+    ['SINGLE-LEG GLUTE BRIDGES', ['single-leg glute','single leg glute','sl glute','glute bridge']],
+    ['LEG RAISES',               ['leg raise','hanging knee','hanging leg']],
+    ['HOLLOW BODY HOLD',         ['hollow body','hollow hold']],
+    ['SIDE PLANKS',              ['side plank']],
+    ['AUSTRALIAN PULL-UPS',      ['australian pull','aussie pull']],
+    ['HIIT',                     ['hiit','interval']],
+    ['WALK',                     ['walk']],
+  ];
   function normaliseName(raw){
-    var lower=raw.toLowerCase().replace(/\s+/g,' ').trim();
-    if(NAME_MAP[lower])return NAME_MAP[lower];
-    for(var k in NAME_MAP){if(lower.indexOf(k)>=0)return NAME_MAP[k];}
-    return raw.toUpperCase();
+    var clean=raw.replace(/\b(progression|new target|upgrade|pr\b|pb\b)\b/gi,'').trim();
+    var lower=clean.toLowerCase().replace(/\s+/g,' ').trim();
+    for(var ri=0;ri<NAME_RULES.length;ri++){
+      var tokens=NAME_RULES[ri][1];
+      for(var ti=0;ti<tokens.length;ti++){if(lower.indexOf(tokens[ti])>=0)return NAME_RULES[ri][0];}
+    }
+    return clean.toUpperCase();
   }
 
-  // ── Strip leading number/emoji from a header line ─────────────────
+  // ── Strip leading emoji/number prefix ────────────────────────────
   function stripLeading(s){
-    // Strip leading non-digit emoji (e.g. 🔥) before numbered prefix
     s=s.replace(/^[^\d\u2460-\u2468\*]+(?=\d|[\u2460-\u2468])/,'').trim();
-    // Keycap sequence: digit + U+FE0F + U+20E3
     s=s.replace(/^\d\uFE0F\u20E3\s*/,'');
-    // Circled numbers ①-⑨ (U+2460-U+2468)
     s=s.replace(/^[\u2460-\u2468]\s*/,'');
-    // Plain digit prefix: "1. " "1) " "1 "
-    s=s.replace(/^\d{1,2}[\.\)\s]\s*/,'');
-    // Markdown bold
+    s=s.replace(/^\d{1,2}[\.)\s]\s*/,'');
     s=s.replace(/\*\*/g,'');
     return s.trim();
   }
 
   // ── Detect exercise header lines ──────────────────────────────────
   function isHeader(line){
-    var l=line.trim();
-    if(!l)return false;
-    // Strip leading non-digit emoji (e.g. 🔥 before 3️⃣) before testing
+    var l=line.trim(); if(!l)return false;
     var lc=l.replace(/^[^\d\u2460-\u2468\*]+/,'');
-    // 1️⃣  — digit + variation selector U+FE0F + combining enclosing keycap U+20E3
     if(/^\d\uFE0F\u20E3/.test(lc))return true;
-    // ①②③… circled numbers
     if(/^[\u2460-\u2468]/.test(lc))return true;
-    // "1. " or "1) "
-    if(/^\d{1,2}[\.\)]\s/.test(lc))return true;
-    // **Bold exercise name**
+    if(/^\d{1,2}[\.)] /.test(lc))return true;
     if(/^\*\*[A-Z]/.test(l)&&l.length<80)return true;
     return false;
   }
 
-  // ── Split into blocks ─────────────────────────────────────────────
+  // ── Split text into per-exercise blocks ───────────────────────────
   var lines=text.split('\n');
   var blocks=[],current=null;
   lines.forEach(function(line){
-    if(isHeader(line)){
-      if(current)blocks.push(current);
-      current={header:line.trim(),lines:[]};
-    } else if(current){
-      current.lines.push(line);
-    }
+    if(isHeader(line)){if(current)blocks.push(current);current={header:line.trim(),lines:[]};}
+    else if(current){current.lines.push(line);}
   });
   if(current)blocks.push(current);
 
@@ -2214,97 +2214,100 @@ function previewParsePaste(){
     return;
   }
 
-  // ── Parse reps / rest from each block ────────────────────────────
+  // ── Parse reps: "4/4/3/3", "3x12", "3 sets of 12", "12, 10, 8" ──
   function parseReps(str){
-    var parts=str.split(/[\/,]/).map(function(p){return parseInt(p.trim());}).filter(function(n){return !isNaN(n)&&n>0;});
-    return parts;
+    if(!str||!str.trim())return[];
+    var xm=str.match(/^(\d+)\s*[xX]\s*(\d+)/);
+    if(xm){var r=[];for(var i=0;i<parseInt(xm[1]);i++)r.push(parseInt(xm[2]));return r;}
+    var sm=str.match(/(\d+)\s*sets?\s*of\s*(\d+)/i);
+    if(sm){var r=[];for(var i=0;i<parseInt(sm[1]);i++)r.push(parseInt(sm[2]));return r;}
+    return str.split(/[\/,\s]+/).map(function(p){return parseInt(p);}).filter(function(n){return !isNaN(n)&&n>0&&n<500;});
   }
-  function parseRest(blines){
-    for(var i=0;i<blines.length;i++){
-      var m=blines[i].match(/[Rr]est[:\s]+(\d+)\s*sec/);
-      if(m)return parseInt(m[1]);
+
+  // ── Parse rest from header + bullet lines ────────────────────────
+  function parseRest(header,blines){
+    var all=[header].concat(blines);
+    for(var i=0;i<all.length;i++){
+      var l=all[i];
+      var m=l.match(/[Rr]est[^\d]*(\d+)\s*s(?:ec(?:onds?)?)?(?!\d)/) ||
+             l.match(/(\d+)\s*s(?:econds?)?\s+rest/i) ||
+             l.match(/[Rr]est[^\d]*(\d+)/);
+      if(m){var v=parseInt(m[1]);if(v>=5&&v<=600)return v;}
     }
     return null;
   }
+
   function parseForm(blines){
     for(var i=0;i<blines.length;i++){
-      var l=blines[i].replace(/^[\s\*\-]+/,'').trim(); // strip bullet prefix
+      var l=blines[i].replace(/^[\s\*\-•]+/,'').trim();
       var m=l.match(/[Ff]orm[:\s]+(.+)/);
-      if(m){
-        return m[1].replace(/·/g,'·').trim();
-      }
+      if(m)return m[1].trim();
     }
     return null;
   }
   function parseTweak(blines){
     for(var i=0;i<blines.length;i++){
       var m=blines[i].match(/[Tt]weak[:\s]+(.+)|[Nn]ote[:\s]+(.+)/);
-      if(m)return (m[1]||m[2]).trim();
+      if(m)return(m[1]||m[2]).trim();
     }
     return null;
   }
   function parseGoal(blines){
-    var goal=null;
     for(var i=0;i<blines.length;i++){
-      var l=blines[i].replace(/^[\s\*\-]+/,'').trim(); // strip bullet prefix
+      var l=blines[i].replace(/^[\s\*\-•]+/,'').trim();
       var m=l.match(/🎯\s*[Gg]oal[:\s]*(.*)/) || l.match(/^[Gg]oal[:\s]+(.+)/);
       if(m){
-        goal=(m[1]||'').trim();
-        // Grab 👉 continuation lines immediately following
+        var goal=(m[1]||'').trim();
         for(var j=i+1;j<blines.length;j++){
-          var next=blines[j].replace(/^[\s\*\-]+/,'').trim();
-          if(next.indexOf('\uD83D\uDC49')===0||next.indexOf('👉')===0){
-            var cont=next.replace(/^👉\s*/,'').trim();
-            if(cont)goal+=' — '+cont;
-          } else if(next){
-            break; // stop at first non-empty, non-arrow line
-          }
+          var next=blines[j].replace(/^[\s\*\-•]+/,'').trim();
+          if(next.indexOf('👉')===0){goal+=' — '+next.replace(/^👉\s*/,'').trim();}
+          else if(next)break;
         }
-        break;
+        return goal||null;
       }
     }
-    return goal||null;
+    return null;
+  }
+  function parseRepsFromSetLines(blines){
+    var rc=[];
+    blines.forEach(function(l){var m=l.match(/[Ss]et\s*\d+[:\s]+(\d+)/);if(m)rc.push(parseInt(m[1]));});
+    return rc;
   }
 
   var parsed=[];
   blocks.forEach(function(block){
     var cleaned=stripLeading(block.header);
 
-    // Split on em-dash or hyphen-dash: "Pull-Up Ladder – 4 / 4 / 3 / 3"
-    var dashIdx=cleaned.search(/\s[–\-]\s|\s–/);
+    // Split name from reps on dash/colon
+    var dashIdx=cleaned.search(/\s[–\-—:]\s|\s[–—]/);
     var namePart=dashIdx>=0?cleaned.slice(0,dashIdx).trim():cleaned;
-    var repsPart=dashIdx>=0?cleaned.slice(dashIdx).replace(/^[\s–\-]+/,'').trim():'';
+    var repsPart=dashIdx>=0?cleaned.slice(dashIdx).replace(/^[\s–\-—:]+/,'').trim():'';
 
-    // Handle split reps across two lines: "20 /" on header, "16 (NEW TARGET)" on next line
+    // Handle split reps: "20 /" on header, rest on next line
     if(repsPart.match(/\d+\s*\/\s*$/)&&block.lines.length){
       var nextNums=block.lines[0].replace(/[^0-9\/\s]/g,'').trim();
       if(nextNums)repsPart=repsPart+' '+nextNums;
     }
 
     var internalName=normaliseName(namePart);
-    var rc=parseReps(repsPart);
     var isPlank=internalName.indexOf('PLANK')>=0;
+    var rc;
 
-    // Planks: get seconds from header
     if(isPlank){
-      var secMatch=cleaned.match(/(\d+)\s*sec/);
-      var secs=secMatch?parseInt(secMatch[1]):60;
-      rc=[secs,secs];
+      var secMatch=cleaned.match(/(\d+)\s*s(?:ec)?/)||block.lines.join(' ').match(/(\d+)\s*s(?:ec)?/);
+      rc=[(secMatch?parseInt(secMatch[1]):60),(secMatch?parseInt(secMatch[1]):60)];
+    } else {
+      rc=parseReps(repsPart);
+      if(!rc.length)rc=parseReps(cleaned);          // try full header
+      if(!rc.length)rc=parseRepsFromSetLines(block.lines); // try Set 1: N lines
+      if(!rc.length)rc=[10,10];                     // last resort
     }
 
-    // No reps found: count Set lines in block
-    if(!rc.length&&!isPlank){
-      var setCount=0;
-      block.lines.forEach(function(l){if(/set\s*\d+/i.test(l))setCount++;});
-      for(var s=0;s<(setCount||2);s++)rc.push(10);
-    }
-
-    var rest=parseRest(block.lines);
+    var rest=parseRest(cleaned,block.lines);
     var parsedForm=parseForm(block.lines);
     var parsedTweak=parseTweak(block.lines);
     var parsedGoal=parseGoal(block.lines);
 
-    // Merge with built-in exercise (preserves seq/watch/cues from defaults)
     var defaults=wType==='home'?homeEx:hotelEx;
     var existing=null;
     for(var i=0;i<defaults.length;i++){if(defaults[i].name===internalName){existing=defaults[i];break;}}
@@ -2312,12 +2315,9 @@ function previewParsePaste(){
       name:internalName,sets:rc.length,reps:rc.join('/'),rc:rc,
       rest:rest||60,form:'',tweak:null,watch:null,isPlank:isPlank,seq:null
     };
-    // Always apply parsed values on top
-    ex.rc=rc;
-    ex.sets=rc.length;
+    ex.rc=rc; ex.sets=rc.length;
     ex.reps=ex.isPlank?(rc[0]||60)+' sec/side':rc.join('/');
     if(rest)ex.rest=rest;
-    // Override form/tweak from paste if present; otherwise keep built-in defaults
     if(parsedForm)ex.form=parsedForm;
     if(parsedTweak)ex.tweak=parsedTweak;
     if(parsedGoal)ex.goal=parsedGoal;
@@ -3199,12 +3199,19 @@ function updBtn(){
     fs.style.display=isResting?'block':'none';
     fs.disabled=!isResting;
   }
+
+  // Skip Exercise button: visible unless mid-plank
+  var fse=document.getElementById('footerSkipEx');
+  if(fse){
+    var isPlankActive=exs[curEx]&&exs[curEx].isPlank&&phase==='active';
+    fse.style.display=isPlankActive?'none':'block';
+  }
 }
 
 function footerNextAction(){
   if(phase==='between'){
-    // curEx already incremented by showBetweenPrompt — just skip the 2-min timer
     clearInterval(timerInt);
+    _betweenTok=((_betweenTok||0)+1)%9999;
     var ra=document.getElementById('restAdj');if(ra)ra.classList.add('hidden');
     phase='idle';updBtn();renderEx();
     return;
@@ -3227,9 +3234,9 @@ function reqSkip(){if(phase==='resting'||phase==='between')document.getElementBy
 function confSkip(){
   document.getElementById('skipOverlay').classList.remove('show');
   clearInterval(timerInt);
+  _betweenTok=((_betweenTok||0)+1)%9999;
   var ra=document.getElementById('restAdj');if(ra)ra.classList.add('hidden');
   if(phase==='between'){
-    // Already incremented curEx in showBetweenPrompt — just go to idle
     phase='idle';updBtn();renderEx();
   } else {
     restDone();
@@ -3249,6 +3256,7 @@ function confSkipEx(){
   logs[curEx].skipReason=reason;
   var el=document.getElementById('skipExOverlay');if(el)el.style.display='none';
   clearInterval(timerInt);stopMetro();
+  _betweenTok=((_betweenTok||0)+1)%9999;
   if(curEx<exs.length-1){curEx++;curSet=0;phase='idle';updBtn();renderEx();}
   else{finishWorkout();}
 }
@@ -3294,48 +3302,51 @@ function restDone(){
 
 function showBetweenPrompt(){
   if(curEx>=exs.length-1){finishWorkout();return;}
+  clearInterval(timerInt); // stop any running rest timer immediately
   curEx++;curSet=0;phase='between';
-  renderEx();
-  setTimeout(function(){
-    updBtn();
-    var nx=exs[curEx];
-    tLeft=120;tTotal=120;_timerEndWall=Date.now()+120000;
-    var pb=document.getElementById('phBadge');if(pb){pb.textContent='2 MIN REST';pb.className='ph-badge phb-between';}
-    var tl=document.getElementById('timerLbl');
-    if(tl)tl.innerHTML='BETWEEN EXERCISES'+(nx?'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent);margin-top:3px;">NEXT: '+nx.name+'</div>':'');
-    var ra=document.getElementById('restAdj');if(ra)ra.classList.remove('hidden');
-    var rl=document.getElementById('restLbl');if(rl)rl.textContent='120 sec rest';
-    var tc=document.getElementById('tCount');if(tc)tc.textContent=tLeft;
-    var ts=document.getElementById('tSub');if(ts)ts.textContent='seconds';
-    setRing(1,true);bRS();
-    if(nx)speak('Exercise done. Rest 2 minutes. '+nx.name+' is next.');
-    clearInterval(timerInt);
-    timerInt=setInterval(function(){
-      tLeft=Math.max(0,Math.round((_timerEndWall-Date.now())/1000));
-      var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
-      var fb=document.getElementById('footerMain');if(fb&&fb.disabled)fb.textContent=tLeft+'s';
-      setRing(tLeft/tTotal,true);
-      var rl2=document.getElementById('restLbl');if(rl2)rl2.textContent=tLeft+' sec left';
-      if(tLeft<=3&&tLeft>0)bCD();
-      if(tLeft<=0){
-        clearInterval(timerInt);bRE();speak('Go');
-        var ra2=document.getElementById('restAdj');if(ra2)ra2.classList.add('hidden');
-        phase='idle';updBtn();
-        var pb2=document.getElementById('phBadge');if(pb2){pb2.textContent='READY';pb2.className='ph-badge phb-ready';}
-        var tl2=document.getElementById('timerLbl');if(tl2)tl2.textContent='TAP TO START';
-        var tc3=document.getElementById('tCount');if(tc3)tc3.textContent='-';
-        var ts2=document.getElementById('tSub');if(ts2)ts2.textContent='start';
-        setRing(0,false);
-      }
-    },500);
-  },50);
+  // Increment token so any stale deferred callbacks become no-ops
+  _betweenTok=((_betweenTok||0)+1)%9999;
+  var myTok=_betweenTok;
+  renderEx();updBtn();
+  var nx=exs[curEx];
+  tLeft=120;tTotal=120;_timerEndWall=Date.now()+120000;
+  var pb=document.getElementById('phBadge');if(pb){pb.textContent='2 MIN REST';pb.className='ph-badge phb-between';}
+  var tl=document.getElementById('timerLbl');
+  if(tl){var nxDiv=nx?'<div style="font-size:1.1rem;letter-spacing:2px;color:var(--accent);margin-top:3px;">NEXT: '+nx.name+'</div>':'';tl.innerHTML='BETWEEN EXERCISES'+nxDiv;}
+  var ra=document.getElementById('restAdj');if(ra)ra.classList.remove('hidden');
+  var rl=document.getElementById('restLbl');if(rl)rl.textContent='120 sec rest';
+  var tc=document.getElementById('tCount');if(tc)tc.textContent=tLeft;
+  var ts=document.getElementById('tSub');if(ts)ts.textContent='seconds';
+  setRing(1,true);bRS();
+  if(nx)speak('Exercise done. Rest 2 minutes. '+nx.name+' is next.');
+  timerInt=setInterval(function(){
+    if(_betweenTok!==myTok){clearInterval(timerInt);return;} // stale — bail
+    tLeft=Math.max(0,Math.round((_timerEndWall-Date.now())/1000));
+    var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
+    var fb=document.getElementById('footerMain');if(fb&&fb.disabled)fb.textContent=tLeft+'s';
+    setRing(tLeft/tTotal,true);
+    var rl2=document.getElementById('restLbl');if(rl2)rl2.textContent=tLeft+' sec left';
+    if(tLeft<=3&&tLeft>0)bCD();
+    if(tLeft<=0){
+      clearInterval(timerInt);bRE();speak('Go');
+      if(_betweenTok!==myTok)return; // user already moved on
+      var ra2=document.getElementById('restAdj');if(ra2)ra2.classList.add('hidden');
+      phase='idle';updBtn();
+      var pb2=document.getElementById('phBadge');if(pb2){pb2.textContent='READY';pb2.className='ph-badge phb-ready';}
+      var tl2=document.getElementById('timerLbl');if(tl2)tl2.textContent='TAP TO START';
+      var tc3=document.getElementById('tCount');if(tc3)tc3.textContent='-';
+      var ts2=document.getElementById('tSub');if(ts2)ts2.textContent='start';
+      setRing(0,false);
+    }
+  },500);
 }
+
 
 function nextEx(){
   saveCurrentInputs();clearInterval(timerInt);stopMetro();
+  _betweenTok=((_betweenTok||0)+1)%9999; // cancel any pending between timer
   curSet=0;_seqEditMode=false;_targetEditMode=false;
   if(phase==='between'){
-    // curEx already incremented — just start the exercise
     phase='idle';updBtn();renderEx();
   } else {
     if(curEx<exs.length-1){curEx++;showBetweenPrompt();}
@@ -7815,32 +7826,44 @@ function progAIParseResponse(text){
     cheatRatio:(_nutTargets&&_nutTargets.cheatRatio)||0.75
   };
   var SETTINGS=[
-    {key:'cal',        labels:['base calorie','base cal','calories'],        type:'int'},
-    {key:'activeBase', labels:['aw baseline','active baseline','baseline'],  type:'int'},
-    {key:'normalRatio',labels:['normal ratio'],                              type:'float'},
-    {key:'cheatRatio', labels:['cheat ratio'],                               type:'float'},
+    {key:'cal',         labels:['base calorie','base cal','daily calorie','calorie target','calories'],  type:'int',   min:1200,max:4000},
+    {key:'activeBase',  labels:['aw baseline','active baseline','active watch baseline','baseline'],     type:'int',   min:100, max:1000},
+    {key:'normalRatio', labels:['normal ratio','normal day ratio','non-cheat ratio'],                   type:'float', min:0.1, max:1.0},
+    {key:'cheatRatio',  labels:['cheat ratio','cheat day ratio'],                                       type:'float', min:0.1, max:1.0},
   ];
-  var lower=text.toLowerCase();
+
+  // Split text into sentences for more precise per-sentence parsing
+  var sentences=text.replace(/([.!?])\s+/g,'$1\n').split('\n').map(function(s){return s.trim();}).filter(Boolean);
+
   SETTINGS.forEach(function(s){
-    var settingIdx=-1;
-    for(var i=0;i<s.labels.length;i++){
-      var idx=lower.indexOf(s.labels[i]);
-      if(idx>=0){settingIdx=idx;break;}
+    // Find which sentence(s) mention this setting
+    for(var si=0;si<sentences.length;si++){
+      var sent=sentences[si].toLowerCase();
+      var found=false;
+      for(var li=0;li<s.labels.length;li++){if(sent.indexOf(s.labels[li])>=0){found=true;break;}}
+      if(!found)continue;
+
+      // Skip sentences that say to keep it unchanged
+      if(/\bkeep\b|\bno change\b|\bstay\b|\bremain\b|\bunchanged\b|\bmaintain\b/.test(sent))continue;
+
+      // Try to extract a recommended number from this sentence
+      // Pattern 1: "change/increase/reduce/set/try/suggest X to N" or "recommend N"
+      var m=sent.match(/(?:change|increase|reduce|lower|raise|set|try|use|consider|suggest|recommend|move|adjust|bump|bring)[^.]*?(?:to|at|of)\s*(\d+(?:\.\d+)?)/);
+      // Pattern 2: "→ N" or "to N" or ": N" directly after label
+      if(!m)m=sent.match(/(?:→|to|:|-)\s*(\d+(?:\.\d+)?)/);
+      // Pattern 3: bare number in a short recommendation sentence
+      if(!m&&sent.length<120)m=sent.match(/\b(\d+(?:\.\d+)?)\b/);
+      if(!m)continue;
+
+      var val=s.type==='float'?parseFloat(m[1]):parseInt(m[1]);
+      if(isNaN(val)||val<s.min||val>s.max)continue;
+      if(val===current[s.key])continue;
+
+      parsed[s.key]=val;
+      break; // found a value for this setting, move on
     }
-    if(settingIdx<0)return;
-    var chunk=lower.slice(Math.max(0,settingIdx-20),settingIdx+300);
-    if(/\bkeep\b|\bno change\b|\bstay\b|\bremain\b/.test(chunk.slice(0,80)))return;
-    var numMatch=chunk.match(/(?:change(?:\s+to)?|increase(?:\s+to)?|reduce(?:\s+to)?|lower(?:\s+to)?|raise(?:\s+to)?|set(?:\s+to)?|try|use|consider|suggest)\s+(?:a\s+)?(\d+(?:\.\d+)?)/);
-    if(!numMatch)numMatch=chunk.match(/(?:to|:\s*)(\d+(?:\.\d+)?)/);
-    if(!numMatch)return;
-    var val=s.type==='float'?parseFloat(numMatch[1]):parseInt(numMatch[1]);
-    if(isNaN(val))return;
-    if(s.key==='cal'&&(val<1200||val>4000))return;
-    if(s.key==='activeBase'&&(val<100||val>1000))return;
-    if((s.key==='normalRatio'||s.key==='cheatRatio')&&(val<=0||val>1))return;
-    if(val===current[s.key])return;
-    parsed[s.key]=val;
   });
+
   _progAIParsed=parsed;
   var keys=Object.keys(parsed);
   if(!keys.length){wrap.style.display='none';return;}
@@ -7848,16 +7871,18 @@ function progAIParseResponse(text){
   var UNITS={cal:'kcal',activeBase:'kcal',normalRatio:'',cheatRatio:''};
   rows.innerHTML=keys.map(function(k){
     var cur=current[k],nw=parsed[k],arrow=nw>cur?'\u2191':'\u2193';
+    var color=nw>cur?'var(--green)':'var(--orange)';
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);">'+
       '<div style="font-size:0.8rem;font-weight:600;">'+LABELS[k]+'</div>'+
       '<div style="display:flex;align-items:center;gap:8px;">'+
         '<span style="font-size:0.75rem;color:var(--muted);">'+cur+UNITS[k]+'</span>'+
-        '<span style="color:var(--accent);">'+arrow+'</span>'+
-        '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;color:var(--accent);">'+nw+UNITS[k]+'</span>'+
+        '<span style="color:'+color+';">'+arrow+'</span>'+
+        '<span style="font-size:1.1rem;font-weight:700;color:'+color+';">'+nw+UNITS[k]+'</span>'+
       '</div></div>';
   }).join('');
   wrap.style.display='block';
 }
+
 
 function progAIApplyParsed(){
   var keys=Object.keys(_progAIParsed);
