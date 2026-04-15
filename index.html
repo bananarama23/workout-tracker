@@ -1756,12 +1756,17 @@ function bRE(){beep(950,0.25);setTimeout(function(){beep(1250,0.3);},230);}
 // ─── SPEECH ───────────────────────────────────────────────────────
 var syn=window.speechSynthesis;var vcs=[];
 syn.onvoiceschanged=function(){vcs=syn.getVoices();};
-function speak(txt,rate){
-  rate=rate||0.92;syn.cancel();
-  var u=new SpeechSynthesisUtterance(txt);
-  u.rate=rate;u.pitch=1.0;u.volume=vol;
-  var pv=null;for(var i=0;i<vcs.length;i++){if(vcs[i].lang.indexOf('en')===0&&vcs[i].localService){pv=vcs[i];break;}}
-  if(pv)u.voice=pv;syn.speak(u);
+function speak(txt,rate,delay){
+  delay=delay||0;
+  rate=rate||0.92;
+  var doSpeak=function(){
+    syn.cancel();
+    var u=new SpeechSynthesisUtterance(txt);
+    u.rate=rate;u.pitch=1.0;u.volume=vol;
+    var pv=null;for(var i=0;i<vcs.length;i++){if(vcs[i].lang.indexOf('en')===0&&vcs[i].localService){pv=vcs[i];break;}}
+    if(pv)u.voice=pv;syn.speak(u);
+  };
+  if(delay)setTimeout(doSpeak,delay);else doSpeak();
 }
 
 // ─── DIM ──────────────────────────────────────────────────────────
@@ -2475,7 +2480,7 @@ function startFromPreview(){
   // Initialise logs
   logs=[];
   exs.forEach(function(ex){
-    var lg={sets:[],feel:'',notes:''};
+    var lg={sets:[],feel:'',notes:'',skipped:false,skipReason:''};
     for(var j=0;j<ex.sets;j++)lg.sets.push({reps:'',time:''});
     logs.push(lg);
   });
@@ -3268,7 +3273,7 @@ function runRestTimer(secs){
     var rl2=document.getElementById('restLbl');if(rl2)rl2.textContent=tLeft+' sec left';
     if(tLeft<=3&&tLeft>0)bCD();
     if(tLeft<=0){
-      clearInterval(timerInt);bRE();speak('Go');
+      clearInterval(timerInt);bRE();speak('Go',0.92,500);
       var fb2=document.getElementById('footerMain');if(fb2){fb2.textContent='START SET';fb2.className='btn b-start';fb2.disabled=false;}
       restDone();
     }
@@ -3337,8 +3342,8 @@ function nextEx(){
   }
 }
 function prevEx(){saveCurrentInputs();clearInterval(timerInt);stopMetro();curSet=0;_seqEditMode=false;_targetEditMode=false;curEx=Math.max(curEx-1,0);phase='idle';renderEx();}
-function nextSet(){if(curSet<exs[curEx].sets-1){stopMetro();clearInterval(timerInt);saveCurrentInputs();curSet++;phase='idle';updBtn();renderEx();}}
-function prevSet(){if(curSet>0){saveCurrentInputs();curSet--;phase='idle';updBtn();renderEx();}}
+function nextSet(){if(phase==='resting'||phase==='between')return;if(curSet<exs[curEx].sets-1){stopMetro();clearInterval(timerInt);saveCurrentInputs();curSet++;phase='idle';updBtn();renderEx();}}
+function prevSet(){if(phase==='resting'||phase==='between')return;if(curSet>0){saveCurrentInputs();curSet--;phase='idle';updBtn();renderEx();}}
 function jumpToSet(idx){if(idx===curSet)return;saveCurrentInputs();curSet=idx;phase='idle';updBtn();renderEx();}
 
 var swipeX=0,swipeY=0;
