@@ -3337,9 +3337,11 @@ function nextEx(){
   _betweenTok=((_betweenTok||0)+1)%9999; // cancel any pending between timer
   curSet=0;_seqEditMode=false;_targetEditMode=false;
   if(phase==='between'){
+    // curEx already incremented by showBetweenPrompt — just go idle
     phase='idle';updBtn();renderEx();
   } else {
-    if(curEx<exs.length-1){curEx++;showBetweenPrompt();}
+    // showBetweenPrompt handles the curEx increment itself
+    showBetweenPrompt();
   }
 }
 function prevEx(){saveCurrentInputs();clearInterval(timerInt);stopMetro();curSet=0;_seqEditMode=false;_targetEditMode=false;curEx=Math.max(curEx-1,0);phase='idle';renderEx();}
