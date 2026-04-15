@@ -666,6 +666,14 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 </div>
 
 <!-- SESSION PAGE -->
+<div id="skipExOverlay" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.85);display:flex;align-items:flex-end;" onclick="if(event.target===this)cancSkipEx()">
+  <div style="width:100%;background:var(--card);border-radius:16px 16px 0 0;padding:20px 20px calc(20px + var(--safe-b));border-top:1px solid var(--border);">
+    <div style="font-size:0.62rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">SKIP EXERCISE — REASON</div>
+    <textarea id="skipExReason" class="notes-inp" placeholder="Why are you skipping? (optional)" style="width:100%;height:72px;margin-bottom:12px;"></textarea>
+    <button onclick="confSkipEx()" style="width:100%;padding:14px;background:var(--orange);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;margin-bottom:8px;">SKIP THIS EXERCISE</button>
+    <button onclick="cancSkipEx()" style="width:100%;padding:12px;background:var(--card2);color:var(--text2);border:1px solid var(--border);border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:0.9rem;letter-spacing:2px;cursor:pointer;">CANCEL</button>
+  </div>
+</div>
 <div class="page hidden" id="page-session">
   <div class="sess-header">
     <button class="sess-back" onclick="endSession()">&#8592;</button>
@@ -680,6 +688,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <button class="btn b-skip" id="footerPrev" onclick="prevEx()" style="flex:0 0 72px;">PREV</button>
     <button class="btn b-start" id="footerMain" onclick="handleMain()" style="flex:1;">START SET</button>
     <button class="btn b-skip" id="footerSkip" onclick="reqSkip()" style="flex:0 0 72px;display:none;background:var(--orange-dim);color:var(--orange);border-color:rgba(255,104,48,0.3);">SKIP</button>
+    <button class="btn b-skip" id="footerSkipEx" onclick="reqSkipEx()" style="flex:0 0 56px;background:var(--card2);color:var(--muted);border-color:var(--border);font-size:0.62rem;letter-spacing:1px;" title="Skip exercise">SKIP EX</button>
     <button class="btn b-skip" id="footerNext" onclick="footerNextAction()" style="flex:0 0 72px;">NEXT</button>
   </div>
 </div>
@@ -1727,6 +1736,8 @@ function resAC(){if(AC.state==='suspended')AC.resume();}
 document.addEventListener('touchstart',resAC,{once:true});
 document.addEventListener('click',resAC,{once:true});
 function beep(f,d,delay){
+  // Resume AC if iOS suspended it (e.g. after speech synthesis)
+  if(AC.state==='suspended'){AC.resume().then(function(){beep(f,d,delay);});return;}
   delay=delay||0;var t=AC.currentTime+delay;
   ['square','sine'].forEach(function(type){
     var o=AC.createOscillator(),g=AC.createGain(),c=AC.createDynamicsCompressor();
@@ -2150,6 +2161,8 @@ function previewParsePaste(){
 
   // ── Strip leading number/emoji from a header line ─────────────────
   function stripLeading(s){
+    // Strip leading non-digit emoji (e.g. 🔥) before numbered prefix
+    s=s.replace(/^[^\d\u2460-\u2468\*]+(?=\d|[\u2460-\u2468])/,'').trim();
     // Keycap sequence: digit + U+FE0F + U+20E3
     s=s.replace(/^\d\uFE0F\u20E3\s*/,'');
     // Circled numbers ①-⑨ (U+2460-U+2468)
@@ -2165,12 +2178,14 @@ function previewParsePaste(){
   function isHeader(line){
     var l=line.trim();
     if(!l)return false;
+    // Strip leading non-digit emoji (e.g. 🔥 before 3️⃣) before testing
+    var lc=l.replace(/^[^\d\u2460-\u2468\*]+/,'');
     // 1️⃣  — digit + variation selector U+FE0F + combining enclosing keycap U+20E3
-    if(/^\d\uFE0F\u20E3/.test(l))return true;
+    if(/^\d\uFE0F\u20E3/.test(lc))return true;
     // ①②③… circled numbers
-    if(/^[\u2460-\u2468]/.test(l))return true;
+    if(/^[\u2460-\u2468]/.test(lc))return true;
     // "1. " or "1) "
-    if(/^\d{1,2}[\.\)]\s/.test(l))return true;
+    if(/^\d{1,2}[\.\)]\s/.test(lc))return true;
     // **Bold exercise name**
     if(/^\*\*[A-Z]/.test(l)&&l.length<80)return true;
     return false;
@@ -2556,6 +2571,30 @@ function saveCurrentInputs(){
   var n=document.getElementById('notesInp');if(n)logs[curEx].notes=n.value||logs[curEx].notes;
 }
 
+function restoreTimerUI(){
+  // Called after renderEx() when a timer is already running — restores display
+  if(phase!=='resting'&&phase!=='between')return;
+  var tl=document.getElementById('timerLbl');
+  var tc=document.getElementById('tCount');
+  var ts=document.getElementById('tSub');
+  var pb=document.getElementById('phBadge');
+  var rl=document.getElementById('restLbl');
+  var ra=document.getElementById('restAdj');
+  var cur=Math.max(0,Math.round((_timerEndWall-Date.now())/1000));
+  if(tc)tc.textContent=cur;
+  if(ts)ts.textContent='seconds';
+  if(rl)rl.textContent=cur+' sec left';
+  if(ra)ra.classList.remove('hidden');
+  setRing(cur/tTotal,true);
+  if(phase==='between'){
+    var nx=exs[curEx];
+    if(pb){pb.textContent='2 MIN REST';pb.className='ph-badge phb-between';}
+    if(tl)tl.innerHTML='BETWEEN EXERCISES'+(nx?'<div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent);margin-top:3px;">NEXT: '+nx.name+'</div>':'');
+  } else {
+    if(pb){pb.textContent='REST';pb.className='ph-badge phb-rest';}
+    if(tl)tl.textContent='REST TIMER';
+  }
+}
 function renderEx(){
   var ex=exs[curEx];
   document.getElementById('sessionTitle').textContent=(wType==='home'?'HOME':'HOTEL')+' WORKOUT';
@@ -2692,6 +2731,7 @@ function renderEx(){
   document.getElementById('sessionContent').innerHTML+=bh;
   initSwipe();
   if(_seqEditMode)initSeqDrag();
+  restoreTimerUI();
 }
 
 function setFeel(v){
@@ -3170,7 +3210,9 @@ function footerNextAction(){
 
 function adjRest(d){
   if(phase!=='resting'&&phase!=='between')return;
-  tLeft=Math.max(5,tLeft+d);tTotal=Math.max(5,tTotal+d);
+  _timerEndWall+=d*1000;
+  tLeft=Math.max(5,Math.round((_timerEndWall-Date.now())/1000));
+  tTotal=Math.max(5,tTotal+d);
   var tc=document.getElementById('tCount');if(tc)tc.textContent=tLeft;
   var rl=document.getElementById('restLbl');if(rl)rl.textContent=tLeft+' sec left';
   setRing(tLeft/tTotal,true);
@@ -3190,9 +3232,27 @@ function confSkip(){
 }
 function cancSkip(){document.getElementById('skipOverlay').classList.remove('show');}
 
+function reqSkipEx(){
+  var el=document.getElementById('skipExOverlay');
+  if(el){el.style.display='flex';var r=document.getElementById('skipExReason');if(r)r.value=logs[curEx].skipReason||'';}
+}
+function cancSkipEx(){var el=document.getElementById('skipExOverlay');if(el)el.style.display='none';}
+function confSkipEx(){
+  var r=document.getElementById('skipExReason');
+  var reason=(r?r.value:'').trim();
+  logs[curEx].skipped=true;
+  logs[curEx].skipReason=reason;
+  var el=document.getElementById('skipExOverlay');if(el)el.style.display='none';
+  clearInterval(timerInt);stopMetro();
+  if(curEx<exs.length-1){curEx++;curSet=0;phase='idle';updBtn();renderEx();}
+  else{finishWorkout();}
+}
+
+var _timerEndWall=0;
 function runRestTimer(secs){
   stopMetro();clearInterval(timerInt);
   curRestSecs=secs;tLeft=secs;tTotal=secs;phase='resting';updBtn();
+  _timerEndWall=Date.now()+secs*1000;
   var pb=document.getElementById('phBadge');if(pb){pb.textContent='REST';pb.className='ph-badge phb-rest';}
   var tl=document.getElementById('timerLbl');if(tl)tl.textContent='REST TIMER';
   var ra=document.getElementById('restAdj');if(ra)ra.classList.remove('hidden');
@@ -3201,7 +3261,7 @@ function runRestTimer(secs){
   var ts=document.getElementById('tSub');if(ts)ts.textContent='seconds';
   setRing(1,true);bRS();
   timerInt=setInterval(function(){
-    tLeft--;
+    tLeft=Math.max(0,Math.round((_timerEndWall-Date.now())/1000));
     var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
     var fb=document.getElementById('footerMain');if(fb&&fb.disabled)fb.textContent=tLeft+'s';
     setRing(tLeft/tTotal,true);
@@ -3212,11 +3272,12 @@ function runRestTimer(secs){
       var fb2=document.getElementById('footerMain');if(fb2){fb2.textContent='START SET';fb2.className='btn b-start';fb2.disabled=false;}
       restDone();
     }
-  },1000);
+  },500);
 }
 
 function restDone(){
   var ra=document.getElementById('restAdj');if(ra)ra.classList.add('hidden');
+  if(phase==='between'){phase='idle';updBtn();renderEx();return;}
   curSet++;
   if(curSet>=exs[curEx].sets){
     if(curEx<exs.length-1){showBetweenPrompt();}
@@ -3233,7 +3294,7 @@ function showBetweenPrompt(){
   setTimeout(function(){
     updBtn();
     var nx=exs[curEx];
-    tLeft=120;tTotal=120;
+    tLeft=120;tTotal=120;_timerEndWall=Date.now()+120000;
     var pb=document.getElementById('phBadge');if(pb){pb.textContent='2 MIN REST';pb.className='ph-badge phb-between';}
     var tl=document.getElementById('timerLbl');
     if(tl)tl.innerHTML='BETWEEN EXERCISES'+(nx?'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent);margin-top:3px;">NEXT: '+nx.name+'</div>':'');
@@ -3245,7 +3306,7 @@ function showBetweenPrompt(){
     if(nx)speak('Exercise done. Rest 2 minutes. '+nx.name+' is next.');
     clearInterval(timerInt);
     timerInt=setInterval(function(){
-      tLeft--;
+      tLeft=Math.max(0,Math.round((_timerEndWall-Date.now())/1000));
       var tc2=document.getElementById('tCount');if(tc2)tc2.textContent=tLeft;
       var fb=document.getElementById('footerMain');if(fb&&fb.disabled)fb.textContent=tLeft+'s';
       setRing(tLeft/tTotal,true);
@@ -3261,7 +3322,7 @@ function showBetweenPrompt(){
         var ts2=document.getElementById('tSub');if(ts2)ts2.textContent='start';
         setRing(0,false);
       }
-    },1000);
+    },500);
   },50);
 }
 
@@ -3302,10 +3363,8 @@ function setRing(frac,isRest){
 function finishWorkout(){
   stopMetro();clearInterval(timerInt);
   var dur=wkStart?Math.round((Date.now()-wkStart)/60000):0;
-  exs.forEach(function(ex,ei){
-    if(!ex.isPlank){ex.rc.forEach(function(_,si){var inp=document.getElementById('si'+si);if(inp&&inp.value)logs[ei].sets[si].reps=inp.value;});}
-    else{[0,1].forEach(function(pi){var inp=document.getElementById('pi'+pi);if(inp&&inp.value)logs[ei].sets[pi].time=inp.value;});}
-  });
+  // Save current set's input before reading logs (oninput keeps the rest current)
+  saveCurrentInputs();
   var week='Week '+getWeekNum();
   var wtLbl=wType==='home'?'Home Strength':'Hotel Strength';
   var sd={date:localDateStr(),week:week,workoutType:wtLbl,bodyFeel:bodyFeel,duration:dur,exercises:[]};
@@ -3329,6 +3388,7 @@ function finishWorkout(){
       log.sets.forEach(function(s,si){rows+='<div style="flex:1;text-align:center"><div style="font-size:0.58rem;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;">S'+(si+1)+'</div><input type="number" inputmode="numeric" style="width:100%;font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text);padding:6px;" value="'+(s.reps||'')+'" oninput="logs['+ei+'].sets['+si+'].reps=this.value"></div>';});
       rows+='</div>';
     }
+    if(log.skipped)rows+='<div class="sum-notes" style="color:var(--orange);">Skipped'+(log.skipReason?': '+log.skipReason:'')+'</div>';
     if(log.notes)rows+='<div class="sum-notes">'+log.notes+'</div>';
     rows+='</div><span class="sum-feel '+fc+'">'+(log.feel||'-')+'</span></div>';
   });
@@ -3370,6 +3430,7 @@ function buildCopyTxt(sessionNote){
     if(ex.isPlank){txt+='  Left: '+(log.sets[0].time||'?')+' sec / Right: '+(log.sets[1].time||'?')+' sec\n';}
     else{log.sets.forEach(function(s,si){txt+='  Set '+(si+1)+': '+(s.reps||ex.rc[si])+' reps\n';});}
     txt+='  Feel: '+(log.feel||'-')+'\n';
+    if(log.skipped)txt+='  SKIPPED'+( log.skipReason?': '+log.skipReason:'')+'\n';
     if(log.notes)txt+='  Notes: '+log.notes+'\n';
     txt+='\n';
   });
