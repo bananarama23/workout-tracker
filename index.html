@@ -1,14 +1,4 @@
-function footerNextAction(){
-  if(phase==='between'){
-    clearInterval(timerInt);
-    _betweenTok=((_betweenTok||0)+1)%9999;
-    var ra=document.getElementById('restAdj');if(ra)ra.classList.add('hidden');
-    phase='idle';updBtn();renderEx();
-    return;
-  }
-  var last=!exs[curEx]||curSet>=exs[curEx].sets-1;
-  if(last){nextEx();}else{nextSet();}
-}<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
