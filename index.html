@@ -2594,7 +2594,7 @@ function restoreTimerUI(){
   if(phase==='between'){
     var nx=exs[curEx];
     if(pb){pb.textContent='2 MIN REST';pb.className='ph-badge phb-between';}
-    if(tl)tl.innerHTML='BETWEEN EXERCISES'+(nx?'<div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent);margin-top:3px;">NEXT: '+nx.name+'</div>':'');
+    if(tl){var nxDiv=nx?'<div style="font-size:1.1rem;letter-spacing:2px;color:var(--accent);margin-top:3px;">NEXT: '+nx.name+'</div>':'';tl.innerHTML='BETWEEN EXERCISES'+nxDiv;}
   } else {
     if(pb){pb.textContent='REST';pb.className='ph-badge phb-rest';}
     if(tl)tl.textContent='REST TIMER';
