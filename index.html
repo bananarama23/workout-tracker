@@ -5577,6 +5577,17 @@ function renderShareView(sessions){
   wrap.innerHTML=html;
 }
 
+// ─── NUT KEYS early (must be before init block) ──────────────────
+var NUT_FOODS_KEY='wt_foods_v2';
+var NUT_ENTRIES_KEY='wt_nut_entries_v1';
+var NUT_TARGETS_KEY='wt_nut_targets';
+var NUT_ACTIVE_KEY='wt_nut_active';
+var NUT_CHEAT_KEY='wt_nut_cheat';
+var NUT_NOT_EATEN_KEY='wt_nut_not_eaten';
+var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
+var DAY_DONE_KEY='wt_daydone';
+var _nutEntries=[];
+// ─────────────────────────────────────────────────────────────────
 buildEffBtns();
 initDates();
 setHIITPreset(17,6);
@@ -5849,7 +5860,7 @@ var _nutDate=localDateStr();
 var _nutTab='day';
 var _nutLastTouched='amt';
 var _nutFoods=[];
-var _nutEntries=[];
+if(!_nutEntries||!_nutEntries.length)_nutEntries=[];
 var NUT_EXTENDED_CACHE_KEY='wt_nut_extended_v1';
 // Returns Mon-Sun date array for the last complete week (always ends last Sunday)
 function lastCompleteWeekDates(){
