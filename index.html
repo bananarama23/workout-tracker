@@ -903,20 +903,6 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <div class="prog-section-lbl">Personal Records</div>
       </div>
       <div class="prog-card" style="overflow:hidden;margin:0 16px 8px;">
-        <div style="border-bottom:1px solid var(--border);">
-          <div onclick="bwToggle()" id="bwRow" style="display:flex;align-items:center;padding:11px 16px;cursor:pointer;gap:10px;">
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:0.85rem;font-weight:600;">Body Weight</div>
-              <div id="bwRowSub" style="font-size:0.62rem;color:var(--muted);margin-top:1px;">Loading...</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-              <span id="bwChevron" style="font-size:0.6rem;color:var(--muted);">▼</span>
-            </div>
-          </div>
-          <div id="bodyWeightOuter" style="display:none;border-top:1px solid var(--border);background:var(--card2);padding:12px 16px;">
-            <div id="bodyWeightChart"></div>
-          </div>
-        </div>
         <div id="prGrid">
           <div style="text-align:center;color:var(--muted);padding:20px 0;font-size:0.85rem;">No records yet</div>
         </div>
@@ -4505,17 +4491,13 @@ function buildHeatmap(sessions){
 var _bwExpanded=false;
 function bwToggle(){
   _bwExpanded=!_bwExpanded;
-  var outer=document.getElementById('bodyWeightOuter');
-  var chev=document.getElementById('bwChevron');
-  if(outer)outer.style.display=_bwExpanded?'block':'none';
-  if(chev)chev.textContent=_bwExpanded?'▲':'▼';
+  // Re-render the whole grid so BW row reflects expanded state
+  if(window._buildPRs_render){window._buildPRs_render();}
+  // Draw chart if expanded and data ready
   if(_bwExpanded&&_bodyWeightData.length){
-    // Ensure chart renders now that container is visible
     setTimeout(function(){
-      var canvas=document.getElementById('bodyWtCanvas');
-      if(canvas&&_bodyWeightData.length>=2){
-        drawLineChart(canvas,_bodyWeightData.map(function(d){return d.date;}),_bodyWeightData.map(function(d){return d.weight;}),null,null,'var(--blue)');
-      }
+      var el=document.getElementById('bodyWeightChart');
+      if(el&&_bodyWeightData.length)renderBodyWeightData(el,_bodyWeightData);
     },30);
   }
 }
@@ -4568,6 +4550,39 @@ function buildPRs(sessions){
   window._buildPRs_render=buildPRs_render;
   function buildPRs_render(){
     var rows='';
+
+    // ── Body Weight row — same style as PR rows ──────────────────
+    var bwExpanded=!!_bwExpanded;
+    var bwSub=_bodyWeightData.length?(function(){
+      var lt=_bodyWeightData[_bodyWeightData.length-1],fi=_bodyWeightData[0];
+      var ch=Math.round((lt.weight-fi.weight)*10)/10;
+      return lt.weight+' lbs · '+(ch>0?'+':'')+ch+' since start';
+    })():'Loading...';
+    var bwTrend='',bwTrendCol='var(--muted)';
+    if(_bodyWeightData.length>=2){
+      var last2=_bodyWeightData[_bodyWeightData.length-1],prev2=_bodyWeightData[_bodyWeightData.length-2];
+      if(last2.weight<prev2.weight){bwTrend='↓ Down';bwTrendCol='var(--green)';}
+      else if(last2.weight>prev2.weight){bwTrend='↑ Up';bwTrendCol='var(--red)';}
+      else{bwTrend='→ Holding';bwTrendCol='var(--yellow)';}
+    }
+    rows+='<div style="border-bottom:1px solid var(--border);">';
+    rows+='<div onclick="bwToggle()" id="bwRow" style="display:flex;align-items:center;padding:11px 16px;cursor:pointer;gap:10px;">';
+    rows+='<div style="flex:1;min-width:0;">';
+    rows+='<div style="font-size:0.85rem;font-weight:600;">Body Weight</div>';
+    rows+='<div id="bwRowSub" style="font-size:0.62rem;color:var(--muted);margin-top:1px;">'+bwSub+'</div>';
+    rows+='</div>';
+    rows+='<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">';
+    if(bwTrend)rows+='<span style="font-size:0.68rem;font-weight:700;color:'+bwTrendCol+';">'+bwTrend+'</span>';
+    rows+='<span id="bwChevron" style="font-size:0.6rem;color:var(--muted);">'+(bwExpanded?'▲':'▼')+'</span>';
+    rows+='</div></div>';
+    if(bwExpanded){
+      rows+='<div id="bodyWeightOuter" style="border-top:1px solid var(--border);background:var(--card2);padding:12px 16px;">';
+      rows+='<div id="bodyWeightChart"></div>';
+      rows+='</div>';
+    } else {
+      rows+='<div id="bodyWeightOuter" style="display:none;"><div id="bodyWeightChart"></div></div>';
+    }
+    rows+='</div>';
     exerciseNames.forEach(function(name){
       var hist=exHistory[name];if(!hist.length)return;
       var last=hist[hist.length-1],prev=hist.length>1?hist[hist.length-2]:null;
@@ -4688,11 +4703,9 @@ function buildBodyWeightChart(){
   try{
     var cached=localStorage.getItem(BODY_WEIGHT_CACHE_KEY);
     if(cached){var cd=JSON.parse(cached);if(cd&&cd.length){
-      _bodyWeightData=cd;renderBodyWeightData(el,cd);
-      var lt=cd[cd.length-1],fi=cd[0];
-      var ch=Math.round((lt.weight-fi.weight)*10)/10;
-      var sub=document.getElementById('bwRowSub');
-      if(sub)sub.textContent=lt.weight+' lbs · '+(ch>0?'+':'')+ch+' since start';
+      _bodyWeightData=cd;
+      if(window._buildPRs_render)window._buildPRs_render();
+      if(_bwExpanded){setTimeout(function(){var el=document.getElementById('bodyWeightChart');if(el)renderBodyWeightData(el,cd);},30);}
     }}
     else{if(outer)outer.style.display='none';} // hide card until data arrives
   }catch(e){}
@@ -4707,14 +4720,14 @@ function buildBodyWeightChart(){
       .slice(-20);
     _bodyWeightData=data; // cache for Gemini prompt
     var _bwv=JSON.stringify(data);try{localStorage.setItem(BODY_WEIGHT_CACHE_KEY,_bwv);}catch(e){}wtDB.set(BODY_WEIGHT_CACHE_KEY,_bwv);
-    var outer=document.getElementById('bodyWeightOuter');
-    renderBodyWeightData(el,data);
-    // Update collapsed row subtitle
-    if(data.length){
-      var sub=document.getElementById('bwRowSub');
-      var lt=data[data.length-1],fi=data[0];
-      var ch=Math.round((lt.weight-fi.weight)*10)/10;
-      if(sub)sub.textContent=lt.weight+' lbs · '+(ch>0?'+':'')+ch+' since start';
+    // Refresh the PR grid so BW row shows updated data and trend
+    if(window._buildPRs_render)window._buildPRs_render();
+    // If expanded, re-render the chart
+    if(_bwExpanded){
+      setTimeout(function(){
+        var el=document.getElementById('bodyWeightChart');
+        if(el&&data.length)renderBodyWeightData(el,data);
+      },30);
     }
   };
   var sc=document.createElement('script');sc.id='s_'+cb;
