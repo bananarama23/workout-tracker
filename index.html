@@ -91,11 +91,11 @@ button:active{opacity:0.82;}
 .card-label{font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;font-weight:700;}
 
 /* HOME */
-.today-hero{margin:16px 16px 10px;border-radius:var(--r-lg);padding:22px;background:linear-gradient(135deg,#111900 0%,#0A0F00 100%);border:1px solid rgba(200,255,0,0.22);position:relative;overflow:hidden;cursor:pointer;transition:transform 0.15s;}
+.today-hero{margin:10px 16px 6px;border-radius:var(--r-lg);padding:14px 18px;background:linear-gradient(135deg,#111900 0%,#0A0F00 100%);border:1px solid rgba(200,255,0,0.22);position:relative;overflow:hidden;cursor:pointer;transition:transform 0.15s;}
 .today-hero:active{transform:scale(0.985);}
 .today-hero::after{content:'';position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:radial-gradient(circle,rgba(200,255,0,0.18) 0%,transparent 70%);pointer-events:none;}
 .th-label{font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:rgba(200,255,0,0.5);margin-bottom:5px;font-weight:700;}
-.th-type{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:3px;color:var(--accent);line-height:1;}
+.th-type{font-family:'Bebas Neue',sans-serif;font-size:1.7rem;letter-spacing:3px;color:var(--accent);line-height:1;}
 .th-tap{font-size:0.72rem;color:rgba(255,255,255,0.35);margin-top:8px;}
 
 .week-strip{display:flex;gap:8px;padding:0 16px;margin-bottom:10px;}
@@ -548,6 +548,25 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <div style="font-size:0.78rem;font-weight:700;color:rgba(255,255,255,0.7);margin-top:1px;" id="tomorrowType">Rest</div>
         </div>
       </div>
+    </div>
+    <!-- Week goal bar — mirrored from Plan page -->
+    <div id="weekGoalBarHome" style="margin:0 16px 8px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <div style="display:flex;gap:10px;align-items:center;flex:1;">
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span id="wgStrIconH" style="font-size:0.9rem;">⬜</span>
+          <span style="font-size:0.65rem;color:var(--muted);">Strength <span id="wgStrCountH" style="color:var(--text2);">0/2</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span id="wgHiitIconH" style="font-size:0.9rem;">⬜</span>
+          <span style="font-size:0.65rem;color:var(--muted);">Effort <span id="wgHiitEffortH" style="color:var(--text2);">0/13</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span id="wgHiitDurIconH" style="font-size:0.9rem;">⬜</span>
+          <span style="font-size:0.65rem;color:var(--muted);">Min <span id="wgHiitDurCountH" style="color:var(--text2);">0/28</span></span>
+        </div>
+      </div>
+      <div id="wgAllDoneH" style="display:none;font-size:0.68rem;font-weight:700;color:var(--green);letter-spacing:0.5px;">WEEK MET ✓</div>
+      <button onclick="goalsOpen()" style="background:none;border:none;color:var(--muted);font-size:1rem;padding:4px;cursor:pointer;flex-shrink:0;" title="Edit goals"><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="2.5"/><path d="M9 2v1.5M9 14.5V16M2 9h1.5M14.5 9H16M4.1 4.1l1 1M12.9 12.9l1 1M12.9 4.1l1-1M4.1 12.9l1-1"/></svg></button>
     </div>
     <!-- Cholesterol since last test — shown on home screen -->
     <div id="homeCholCard" style="display:none;margin:0 16px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;"></div>
@@ -4078,17 +4097,27 @@ function updateWeekGoalBar(days){
 
   function tick(id,ok){var el=document.getElementById(id);if(el)el.textContent=ok?'✅':'⬜';}
   tick('wgStrIcon',strOk);tick('wgHiitIcon',effortOk);tick('wgHiitDurIcon',durOk);
+  // Mirror on home screen
+  tick('wgStrIconH',strOk);tick('wgHiitIconH',effortOk);tick('wgHiitDurIconH',durOk);
 
   function count(id,n,t){var el=document.getElementById(id);if(el){el.textContent=n+'/'+t;el.style.color=n>=t?'var(--green)':'var(--text2)';}}
   count('wgStrCount',strDone,STR_GOAL);
   count('wgHiitEffort',hiitEffort,EFFORT_GOAL);
   count('wgHiitDurCount',hiitDuration,DUR_GOAL);
+  // Mirror on home screen
+  count('wgStrCountH',strDone,STR_GOAL);
+  count('wgHiitEffortH',hiitEffort,EFFORT_GOAL);
+  count('wgHiitDurCountH',hiitDuration,DUR_GOAL);
 
   var allEl=document.getElementById('wgAllDone');
   if(allEl)allEl.style.display=allDone?'block':'none';
+  var allElH=document.getElementById('wgAllDoneH');
+  if(allElH)allElH.style.display=allDone?'block':'none';
 
   var bar=document.getElementById('weekGoalBar');
   if(bar)bar.style.borderColor=allDone?'rgba(0,212,138,0.4)':'var(--border)';
+  var barH=document.getElementById('weekGoalBarHome');
+  if(barH)barH.style.borderColor=allDone?'rgba(0,212,138,0.4)':'var(--border)';
 }
 
 var _planSaveTimer=null;
@@ -7375,12 +7404,33 @@ function nutServingPreview(){
     // Subtract existing entry if editing so we don't double-count
     var editEntry=(_nutEditingEntryIdx>=0&&_nutEditingEntryIdx<_nutEntries.length)?_nutEntries[_nutEditingEntryIdx]:null;
     var thisItem={
+      calories:Math.round(f.calories*ratio),
       protein:Math.round(f.protein*ratio),
       fibre:Math.round(f.fibre*ratio),
       satFat:Math.round(f.satFat*ratio),
       carbs:Math.round(f.carbs*ratio)
     };
     var barsHtml='<div style="font-size:0.52rem;color:var(--muted);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">Impact on today</div>';
+    // Calories row first
+    (function(){
+      var existingCal=Math.round((todayTot.calories||0)-(editEntry?editEntry.calories||0:0));
+      var addingCal=thisItem.calories||0;
+      var totalCal=existingCal+addingCal;
+      var targetCal=nutEffectiveBudget(_nutDate)||2100;
+      var pctExist=Math.min(100,Math.round((existingCal/targetCal)*100));
+      var pctAdd=Math.min(100-pctExist,Math.round((addingCal/targetCal)*100));
+      var over=totalCal>targetCal;
+      barsHtml+=
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">'+
+        '<div style="font-size:0.58rem;color:var(--muted);width:44px;flex-shrink:0;">Kcal</div>'+
+        '<div style="flex:1;height:5px;background:var(--border2);border-radius:3px;overflow:hidden;position:relative;">'+
+          '<div style="position:absolute;left:0;top:0;height:100%;width:'+pctExist+'%;background:var(--accent);opacity:0.35;border-radius:3px;"></div>'+
+          '<div style="position:absolute;left:'+pctExist+'%;top:0;height:100%;width:'+pctAdd+'%;background:'+(over?'var(--red)':'var(--accent)')+';border-radius:3px;transition:width 0.2s;"></div>'+
+        '</div>'+
+        '<div style="font-size:0.58rem;font-weight:700;min-width:54px;text-align:right;color:'+(over?'var(--red)':'var(--text2)')+';">'+
+          totalCal+'/'+targetCal+'</div>'+
+        '</div>';
+    })();
     NUT_MACRO_DEFS.forEach(function(m){
       var existing=Math.round((todayTot[m.key]||0)-(editEntry?editEntry[m.key]||0:0));
       var adding=thisItem[m.key]||0;
@@ -8067,7 +8117,7 @@ function loadGoals(){
 
 <!-- GOALS SETTINGS OVERLAY -->
 <div id="goalsOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;align-items:flex-end;justify-content:center;" class="overlay-anim">
-  <div style="background:var(--card);border-radius:var(--r-lg) var(--r-lg) 0 0;padding:24px 20px 40px;width:100%;max-width:480px;border-top:1px solid var(--border2);animation:slideUp 0.22s cubic-bezier(0.32,0.72,0,1) both;">
+  <div style="background:var(--card);border-radius:var(--r-lg) var(--r-lg) 0 0;padding:24px 20px calc(40px + var(--nav-h) + var(--safe-b));width:100%;max-width:480px;border-top:1px solid var(--border2);animation:slideUp 0.22s cubic-bezier(0.32,0.72,0,1) both;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;">WEEKLY GOALS</div>
       <button onclick="goalsClose()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
