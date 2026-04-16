@@ -1389,7 +1389,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 <!-- NUTRITION: Create / edit food overlay -->
 <div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;" class="overlay-anim">
   <!-- Sticky header - always visible -->
-  <div style="position:absolute;top:0;left:0;right:0;background:var(--bg);border-radius:var(--r-lg) var(--r-lg) 0 0;margin:40px 12px 0;padding:16px 20px 12px;z-index:1;border-bottom:1px solid var(--border);box-sizing:border-box;">
+  <div id="nutFoodFormHdr" style="position:absolute;top:0;left:0;right:0;background:var(--bg);border-radius:var(--r-lg) var(--r-lg) 0 0;margin:40px 12px 0;padding:16px 20px 12px;z-index:1;border-bottom:1px solid var(--border);box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutFoodFormTitle">ADD FOOD</div>
       <div style="display:flex;gap:8px;align-items:center;">
@@ -1400,8 +1400,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
     </div>
   </div>
-  <!-- Scrollable body -->
-  <div id="nutFoodFormBody" style="position:absolute;top:40px;left:12px;right:12px;bottom:0;background:var(--bg);border-radius:0 0 var(--r-lg) var(--r-lg);overflow-y:scroll;-webkit-overflow-scrolling:touch;">
+  <!-- Scrollable body — top set by JS after header measures -->
+  <div id="nutFoodFormBody" style="position:absolute;top:120px;left:12px;right:12px;bottom:0;background:var(--bg);border-radius:0 0 var(--r-lg) var(--r-lg);overflow-y:scroll;-webkit-overflow-scrolling:touch;">
     <div style="padding:16px 20px calc(var(--nav-h) + var(--safe-b) + 40px);">
     <!-- Scan status -->
     <div id="nutScanStatus" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;font-size:0.82rem;color:var(--muted);text-align:center;"></div>
@@ -6058,7 +6058,6 @@ wtDB.migrate(); // silently copies localStorage → IDB on first run
 })();
 // ─── NUTRITION ────────────────────────────────────────────────────
 var NUT_FOODS_KEY='wt_foods_v2';
-var NUT_ENTRIES_KEY='wt_nut_entries_v1';
 var NUT_TARGETS_KEY='wt_nut_targets';
 var NUT_ACTIVE_KEY='wt_nut_active'; // {date: activeCals} per day
 var NUT_CHEAT_KEY='wt_nut_cheat'; // {date: true} for 1:1 bonus days
@@ -6103,7 +6102,6 @@ function dayDoneRender(){
 document.addEventListener('DOMContentLoaded',function(){dayDoneRender();});
 
 var NUT_ACTIVE_BASE=390; // fallback only — user-editable via Daily Targets panel
-var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
 var NUT_DEFAULTS={cal:2100,prot:175,carb:0,fat:0,fib:30,satfat:14,sodium:3000,activeBase:390,normalRatio:0.5,cheatRatio:0.75};
 
 function nutGetActiveCals(date){
@@ -7159,10 +7157,14 @@ function nutOpenFoodForm(idx){
   if(ov){ov.style.display='block';}
   if(body){
     body.scrollTop=0;
-    // Set top to clear the sticky header — measure it after render
+    // Measure header height after render and set body top accordingly
     setTimeout(function(){
-      var hdr=ov&&ov.querySelector('[style*="position:absolute;top:0"]');
-      if(hdr&&body)body.style.top=(40+hdr.offsetHeight)+'px';
+      var hdr=document.getElementById('nutFoodFormHdr');
+      if(hdr&&body){
+        var hdrBottom=hdr.getBoundingClientRect().bottom;
+        var ovTop=ov.getBoundingClientRect().top;
+        body.style.top=(hdrBottom-ovTop)+'px';
+      }
     },0);
   }
 }
@@ -7977,13 +7979,26 @@ function nutEditEntry(idx){
   var e=_nutEntries[idx];if(!e)return;
   // Find the food in the database to get base macros
   var food=_nutFoods.find(function(f){return f.name===e.food;});
+  var currentServings=e.servings||1;
+  // Validate: if food exists but its macros × servings don't match the logged entry,
+  // the food definition has changed — reconstruct from the entry instead
+  if(food&&currentServings>0){
+    var expectedCal=Math.round(food.calories*currentServings*10)/10;
+    var loggedCal=Math.round((e.calories||0)*10)/10;
+    // Allow 5% tolerance for rounding
+    var tolerance=Math.max(5,Math.abs(loggedCal)*0.05);
+    if(Math.abs(expectedCal-loggedCal)>tolerance){
+      // Food definition has drifted — rebuild from entry
+      food=null;
+    }
+  }
   if(!food){
-    // Food not in DB — create a temporary food object from the entry
-    // Reverse-calculate per-serving values from the logged amount
-    var servings=e.servings||1;
+    // Food not in DB or definition has changed — reconstruct from logged entry
+    var servings=currentServings||1;
     food={name:e.food,calories:e.calories/servings,protein:e.protein/servings,
       carbs:e.carbs/servings,fat:e.fat/servings,fibre:e.fibre/servings,
-      satFat:e.satFat/servings,sodium:(e.sodium||0)/servings,serving:100,unit:'g'};
+      satFat:e.satFat/servings,sodium:(e.sodium||0)/servings,
+      serving:1,unit:e._displayUnit&&e._displayUnit!=='native'?e._displayUnit:'serving'};
   }
   // Store the index so we can replace (not add) on confirm
   _nutServingFood=food;
@@ -8031,13 +8046,18 @@ function nutEditEntry(idx){
         perItemRowE.style.display='none';perItemRowE.innerHTML='';
       }
     }
-    if(e._displayAmt&&e._displayUnit){
-      // Set amount first so nutServingUnitChange reads correct value for multiplier calc
+    if(e._displayAmt&&e._displayUnit&&e._displayUnit!=='native'){
+      // Non-native unit (oz, lb, cup) — restore display amount and unit
       if(amtEl){amtEl.value=e._displayAmt;}
       nutServingUnitChange(e._displayUnit);
     } else {
-      if(amtEl)amtEl.value=Math.round(currentServings*food.serving*10)/10;
-      if(qtyEl)qtyEl.value=currentServings;
+      // Native unit — always recalculate from servings × food.serving
+      // This is robust even if food.serving changed since the entry was logged
+      _nutServingUnitMultiplier=1;
+      _nutServingCurrentUnit='native';
+      var nativeAmtRestore=Math.round(currentServings*food.serving*10)/10;
+      if(amtEl)amtEl.value=nativeAmtRestore;
+      if(qtyEl)qtyEl.value=Math.round(currentServings*100)/100;
     }
   }
   nutServingPreview();
@@ -8417,7 +8437,7 @@ function progAIApplyParsed(){
 function exportAllData(){
   var out={
     exportDate: new Date().toISOString(),
-    appVersion: 'v1.0',
+    appVersion: 'v1.1',
     sessions: _cachedSessions||[],
     nutritionEntries: _nutEntries||[],
     foods: _nutFoods||[],
