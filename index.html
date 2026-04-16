@@ -1017,6 +1017,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <span style="font-size:0.75rem;color:var(--text2);">View month</span>
           <select id="bMonthPicker" onchange="budPickMonth()" style="background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:0.82rem;padding:5px 10px;outline:none;"></select>
         </div>
+        <!-- Equity sparkline -->
+        <div id="bEquitySparkline" style="margin-bottom:12px;"></div>
         <div style="display:flex;gap:10px;margin-bottom:12px;">
           <div style="flex:1;background:var(--card2);border-radius:var(--r-sm);padding:12px;">
             <div style="font-size:0.55rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Equity</div>
@@ -1025,6 +1027,28 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <div style="flex:1;background:var(--card2);border-radius:var(--r-sm);padding:12px;">
             <div style="font-size:0.55rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px;">Bank</div>
             <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;line-height:1;" id="bBank">—</div>
+          </div>
+        </div>
+        <!-- Month P&L — calculated from hours × pay rate minus bills -->
+        <div id="bMonthPL" style="display:none;background:var(--card2);border-radius:var(--r-sm);padding:12px;margin-bottom:12px;">
+          <div style="font-size:0.55rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">Month P&amp;L — <span id="bMonthPLLabel"></span></div>
+          <div style="display:flex;gap:8px;">
+            <div style="flex:1;text-align:center;">
+              <div style="font-size:0.85rem;font-weight:700;" id="bMonthIncome">—</div>
+              <div style="font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px;">After tax</div>
+            </div>
+            <div style="flex:1;text-align:center;">
+              <div style="font-size:0.85rem;font-weight:700;color:var(--red);" id="bMonthBills">—</div>
+              <div style="font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px;">Bills</div>
+            </div>
+            <div style="flex:1;text-align:center;">
+              <div style="font-size:0.85rem;font-weight:700;" id="bMonthSpare">—</div>
+              <div style="font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px;">Spare</div>
+            </div>
+            <div style="flex:1;text-align:center;">
+              <div style="font-size:0.85rem;font-weight:700;color:var(--accent);" id="bMonthHours">—</div>
+              <div style="font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px;">Hours</div>
+            </div>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
@@ -5211,6 +5235,7 @@ function budBuildMonthDropdown(monthRows){
   _budEquitySetByCode=true;
   if(initInp&&initRow&&initRow.equity!==null)initInp.value=Math.round(initRow.equity);
   _budEquitySetByCode=false;
+  budRenderMonthPL(curIdx);
 }
 
 var _budEquitySetByCode=false;
@@ -5264,7 +5289,64 @@ function budPickMonth(){
   var btn=document.getElementById('bEquitySaveBtn');if(btn){btn.style.background='var(--accent-dim)';btn.style.color='var(--accent)';}
   var msg=document.getElementById('bEquitySaveMsg');if(msg)msg.textContent='';
   budCalc();
+  budRenderMonthPL(idx);
   // Do NOT call budSetStatus('edited') — just viewing a different month is not a change
+}
+
+function budRenderMonthPL(idx){
+  var rows=_budSheetData.monthRows;
+  if(!rows||!rows.length)return;
+  var row=rows[idx];
+  if(!row||!row.hours)return;
+  var payRate=g('bPayRate');
+  if(!payRate)return;
+  var gross=Math.round(row.hours*payRate);
+  var afterTax=Math.round(gross*0.74);
+  // Reconstruct bills from current inputs (same as budCalc)
+  var rate=0.065/12,nper=360,mortgage=g('bHousePrice')-g('bDownPayment');
+  var mortPmt=mortgage>0?Math.round(mortgage*rate/(1-Math.pow(1+rate,-nper))):0;
+  var oneOff=Math.round((g('vCarIns')+g('vUmbrella')+g('vPropTax')+g('vHouseIns'))/12);
+  var bills=Math.round(mortPmt+g('vElec')+g('vHoa')+g('vTmobile')+g('vApa')+g('vAtt')+g('vChase')+oneOff);
+  var spare=afterTax-bills;
+  // Month-over-month spare vs adjacent months
+  var moLabel=row.label;
+  var plEl=document.getElementById('bMonthPL');
+  if(plEl)plEl.style.display='block';
+  var lbl=document.getElementById('bMonthPLLabel');if(lbl)lbl.textContent=moLabel;
+  var incEl=document.getElementById('bMonthIncome');if(incEl){incEl.textContent=fmt(afterTax);incEl.style.color='var(--green)';}
+  var bllEl=document.getElementById('bMonthBills');if(bllEl)bllEl.textContent=fmt(bills);
+  var sprEl=document.getElementById('bMonthSpare');if(sprEl){sprEl.textContent=fmt(spare);sprEl.style.color=spare>=0?'var(--green)':'var(--red)';}
+  var hrEl=document.getElementById('bMonthHours');if(hrEl)hrEl.textContent=row.hours.toFixed(1)+'h';
+  // Equity sparkline
+  budRenderSparkline(rows,idx);
+}
+
+function budRenderSparkline(rows,selectedIdx){
+  var el=document.getElementById('bEquitySparkline');if(!el)return;
+  var valid=rows.filter(function(r){return r.equity!==null&&r.equity>0;});
+  if(valid.length<2){el.innerHTML='';return;}
+  var W=300,H=48,pad=2;
+  var vals=rows.map(function(r){return r.equity||0;});
+  var minV=Math.min.apply(null,vals.filter(Boolean));
+  var maxV=Math.max.apply(null,vals);
+  var range=maxV-minV||1;
+  var n=rows.length;
+  function cx(i){return pad+i*(W-pad*2)/(n-1);}
+  function cy(v){return H-pad-(v-minV)/range*(H-pad*2);}
+  var pts=rows.map(function(r,i){return cx(i)+','+cy(r.equity||minV);}).join(' ');
+  var selX=cx(selectedIdx),selY=cy(rows[selectedIdx].equity||minV);
+  var selRow=rows[selectedIdx];
+  var html='<svg width="100%" viewBox="0 0 '+W+' '+H+'" style="display:block;margin-bottom:4px;">'+
+    '<polyline points="'+pts+'" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>'+
+    // Highlight selected month
+    '<circle cx="'+selX+'" cy="'+selY+'" r="3.5" fill="var(--accent)"/>'+
+    '</svg>'+
+    '<div style="display:flex;justify-content:space-between;font-size:0.52rem;color:var(--muted);margin-bottom:4px;">'+
+      '<span>'+rows[0].label+'</span>'+
+      '<span style="color:var(--accent);font-weight:700;">'+selRow.label+': '+fmt(selRow.equity||0)+'</span>'+
+      '<span>'+rows[rows.length-1].label+'</span>'+
+    '</div>';
+  el.innerHTML=html;
 }
 
 function budSetStatus(state){
