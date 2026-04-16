@@ -943,7 +943,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <div class="prog-section" style="margin-bottom:6px;">
       <div class="prog-section-hdr">
         <div class="prog-section-lbl">Cholesterol AI</div>
-        <button onclick="cholAIFeedback()" id="cholAIBtn" style="background:var(--blue);color:#fff;border:none;border-radius:20px;padding:4px 14px;font-family:'Bebas Neue',sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">✦ ASK GEMINI</button>
+        <button onclick="cholAIFeedback()" id="cholAIBtn" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:4px 14px;font-family:'Bebas Neue',sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">✦ ASK GEMINI</button>
       </div>
       <div class="prog-card prog-card-pad" id="cholAICard" style="display:none;">
         <div id="cholAIResult" style="font-size:0.82rem;line-height:1.6;color:var(--text2);"></div>
@@ -8031,27 +8031,50 @@ function cholAIFeedback(){
     }
   }
 
-  // Exercise since last test
+  // Exercise since last test — with detail
   var workoutStr='No workout data.';
   if(lastTestDate&&_cachedSessions&&_cachedSessions.length){
     var seSess=_cachedSessions.filter(function(s){return s.date>lastTestDate;});
-    var strC=seSess.filter(function(s){return (s.workoutType||'').indexOf('Strength')>=0;}).length;
-    var hiitC=seSess.filter(function(s){return isHIIT(s.workoutType);}).length;
-    var walkC=seSess.filter(function(s){return s.workoutType==='Walk';}).length;
-    if(seSess.length)workoutStr='Since last test: '+strC+' strength, '+hiitC+' HIIT, '+walkC+' walks.';
+    var strSess=seSess.filter(function(s){return (s.workoutType||'').indexOf('Strength')>=0;});
+    var hiitSess=seSess.filter(function(s){return isHIIT(s.workoutType);});
+    var walkSess=seSess.filter(function(s){return s.workoutType==='Walk';});
+    if(seSess.length){
+      var avgEffort=hiitSess.length?Math.round(hiitSess.reduce(function(a,s){return a+(parseInt(s.effort)||0);},0)/hiitSess.length):0;
+      var avgDur=hiitSess.length?Math.round(hiitSess.reduce(function(a,s){return a+(parseInt(s.duration)||0);},0)/hiitSess.length):0;
+      var totalWalkKm=walkSess.reduce(function(a,s){var ex=(s.exercises||[])[0]||{};return a+(parseFloat(ex.result||0)||0);},0);
+      workoutStr='Since last test ('+seSess.length+' total sessions):\n'+
+        '- Strength: '+strSess.length+' sessions\n'+
+        '- HIIT: '+hiitSess.length+' sessions'+(avgEffort?' (avg effort '+avgEffort+', avg '+avgDur+' min)':'')+'\n'+
+        '- Walks: '+walkSess.length+(totalWalkKm>0?' ('+Math.round(totalWalkKm)+'km total)':'');
+    }
+  }
+
+  // Weight trend
+  var weightStr='No weight data.';
+  if(_bodyWeightData&&_bodyWeightData.length){
+    var wLast=_bodyWeightData[_bodyWeightData.length-1];
+    var wFirst=_bodyWeightData[0];
+    var wChange=Math.round((wLast.weight-wFirst.weight)*10)/10;
+    weightStr='Current: '+wLast.weight+'lbs ('+wLast.date+'). Change since '+wFirst.date+': '+(wChange>0?'+':'')+wChange+'lbs.';
+    if(_bodyWeightData.length>=3){
+      var wRecent=_bodyWeightData.slice(-3);
+      weightStr+=' Recent trend: '+wRecent.map(function(w){return w.date+'='+w.weight;}).join(', ')+'.';
+    }
   }
 
   var prompt=
     'You are a health advisor reviewing cholesterol trends and lifestyle factors. Be specific, concise, and actionable. No disclaimers.\n\n'+
     'CHOLESTEROL HISTORY (oldest to newest):\n'+cholStr+'\n\n'+
-    'DIET SINCE LAST BLOOD TEST ('+daysSince+' days logged):\n'+dietStr+'\n\n'+
+    'DIET SINCE LAST BLOOD TEST ('+daysSince+' days logged):\n'+dietStr+'\n'+
+    'Note: "cheat days" in this app mean eating out or travel days — not uncontrolled binges. Sat fat on these days is moderately higher, not extreme.\n\n'+
     'EXERCISE SINCE LAST BLOOD TEST:\n'+workoutStr+'\n\n'+
+    'BODY WEIGHT:\n'+weightStr+'\n\n'+
     'Provide:\n'+
     '1. **Trend assessment** — are HDL, LDL and ratio moving the right direction? How significant is the change?\n'+
-    '2. **Diet impact** — how is the current sat fat, fibre, and sodium intake likely affecting these numbers?\n'+
-    '3. **Prediction** — will HDL, LDL and ratio likely improve or worsen at next test given current diet and exercise? Give estimated numbers.\n'+
-    '4. **Top 3 changes** — highest-impact dietary or lifestyle changes to improve HDL and LDL\n'+
-    '5. **Next test targets** — specific HDL, LDL and ratio numbers to aim for';
+    '2. **Diet impact** — how is sat fat, fibre, and sodium intake likely affecting these numbers? Factor in that cheat days are restaurant meals, not binges.\n'+
+    '3. **Prediction** — will HDL, LDL and ratio improve or worsen at next test? Give estimated numbers based on current trajectory.\n'+
+    '4. **Top 3 changes** — highest-impact changes to improve HDL and LDL further\n'+
+    '5. **Next test targets** — specific HDL, LDL and ratio to aim for';
 
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
