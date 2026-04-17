@@ -2362,26 +2362,50 @@ function previewParsePaste(){
   }
   function parseTweak(blines){
     for(var i=0;i<blines.length;i++){
-      var m=blines[i].match(/[Tt]weak[:\s]+(.+)|[Nn]ote[:\s]+(.+)/);
-      if(m)return(m[1]||m[2]).trim();
+      var clean=blines[i].replace(/^[\s\*\-•]+/,'').trim();
+      // Stop at goal block
+      if(/^[Gg]oal\s*[:\s]/i.test(clean))break;
+      var m=clean.match(/^[Tt]weak[:\s]+(.+)/)||clean.match(/^[Ss]trict\s+[Nn]ote[:\s]+(.+)/i)||clean.match(/^[Nn]ote[:\s]+(.+)/i);
+      if(m)return m[1].trim();
     }
     return null;
   }
   function parseGoal(blines){
-    for(var i=0;i<blines.length;i++){
-      var l=blines[i].replace(/^[\s\*\-•]+/,'').trim();
-      var m=l.match(/🎯\s*[Gg]oal[:\s]*(.*)/) || l.match(/^[Gg]oal[:\s]+(.+)/);
-      if(m){
-        var goal=(m[1]||'').trim();
-        for(var j=i+1;j<blines.length;j++){
-          var next=blines[j].replace(/^[\s\*\-•]+/,'').trim();
-          if(next.indexOf('👉')===0){goal+=' — '+next.replace(/^👉\s*/,'').trim();}
-          else if(next)break;
-        }
-        return goal||null;
-      }
+    // Strip emojis + variation selectors from start of a line
+    function stripNoise(s){
+      return s.replace(/^[\s\*\-•]+/,'')
+              .replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F\u20E3\u200D]+/gu,'')
+              .replace(/^[\s\*\-•]+/,'')
+              .trim();
     }
-    return null;
+    var goalStart=-1;
+    for(var i=0;i<blines.length;i++){
+      var clean=stripNoise(blines[i]);
+      if(/^[Gg]oal\s*[:\s]/i.test(clean)||/^[Gg]oal\s*$/i.test(clean)){goalStart=i;break;}
+    }
+    if(goalStart===-1)return null;
+
+    var parts=[];
+    var sameLine=stripNoise(blines[goalStart]).replace(/^[Gg]oal\s*:?\s*/i,'').trim();
+    if(sameLine)parts.push(sameLine);
+
+    for(var j=goalStart+1;j<blines.length;j++){
+      var stripped=stripNoise(blines[j]);
+      if(!stripped)continue;
+      if(/^[Ff]orm\s*:/i.test(stripped))break;
+      if(/^[Rr]est\s*:/i.test(stripped))break;
+      if(/^[Ff]eel\s*[:\[]/i.test(stripped))break;
+      if(/^[Ss]et\s*\d+\s*[:\s]/i.test(stripped))break;
+      if(/^[Tt]weak\s*:/i.test(stripped))break;
+      if(/^\d{1,2}[.)]\s/.test(stripped))break;
+      var text=stripped.replace(/^(Expect|See below)\s*:?\s*/i,'').trim();
+      if(!text)continue;
+      var isWarning=/^([Ss]trict\s+)?[Nn]ote\s*:/i.test(text)||/^[Ww]arning\s*:/i.test(text);
+      var prefix=isWarning?'\u26A0 ':'';
+      text=text.replace(/^([Ss]trict\s+)?[Nn]ote\s*:\s*/i,'').replace(/^[Ww]arning\s*:\s*/i,'').trim();
+      if(text)parts.push(prefix+text);
+    }
+    return parts.length?parts.join(' \u00b7 '):null;
   }
   function parseRepsFromSetLines(blines){
     var rc=[];
