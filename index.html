@@ -7511,7 +7511,7 @@ function nutCallVision(base64,mediaType,statusEl){
     nutApiKeyShow(base64,mediaType,statusEl);
     return;
   }
-  var promptText='This is a nutrition label or food packaging. Extract and return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","servingDesc":"if label shows a count like \'About 13 Chips\' or \'2 biscuits\' put ONLY that e.g. \'13 chips\' or \'2 biscuits\' — blank string if no count on label","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. IMPORTANT: if label shows both oz and grams (e.g. \'1 oz (28g)\'), use grams for serving and unit. All values per serving. Sodium in mg. Use null for unknown fields.';
+  var promptText='You are scanning either a nutrition label OR a photo of food. Extract and return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or oz","servingDesc":"if label shows a count like \'About 13 Chips\' or \'2 biscuits\' put ONLY that e.g. \'13 chips\' or \'2 biscuits\' — blank string if no count","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. RULES: (1) Always use g or ml for unit — never use piece, serving, scoop, count or similar. (2) If this is a nutrition label, use the exact values shown. (3) If this is a photo of food with no label, estimate the macros per 100g using your knowledge of that food — set serving to 100 and unit to g. (4) If label shows both oz and grams, use grams. (5) All values per serving. Sodium in mg. Use null for unknown fields.';
   var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
   fetch(url,{
     method:'POST',
@@ -7576,6 +7576,9 @@ function nutCallVision(base64,mediaType,statusEl){
 
 function nutFillFromScan(d,statusEl){
   if(!d){if(statusEl){statusEl.textContent='Could not parse \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}return;}
+  // Sanitize vague units before filling form
+  var vagueUnits=['piece','pieces','serving','servings','scoop','scoops','item','items','unit','units','count'];
+  if(d.unit&&vagueUnits.indexOf(d.unit.toLowerCase().trim())>=0){d.unit='g';d.serving=100;}
   // If we came from the Add overlay camera, skip the food form and go straight to serving
   if(_nutAddInlineMode){
     _nutAddInlineMode=false;
@@ -8744,6 +8747,13 @@ function nutAddInlineFinish(food){
   food.carbs=parseFloat(food.carbs)||0;food.fat=parseFloat(food.fat)||0;
   food.fibre=parseFloat(food.fibre)||0;food.satFat=parseFloat(food.satFat)||0;
   food.sodium=parseFloat(food.sodium)||0;food.serving=parseFloat(food.serving)||100;food.unit=food.unit||'g';
+  // Sanitize vague units: piece/serving/scoop → g with 100g baseline
+  var vagueUnits=['piece','pieces','serving','servings','scoop','scoops','item','items','unit','units','count'];
+  if(vagueUnits.indexOf((food.unit||'').toLowerCase().trim())>=0){
+    food.unit='g';
+    food.serving=100;
+    food._unitWasVague=true;
+  }
   food.id=Date.now();food.updatedAt=food.id;
   // Check save-to-foods checkbox — default true if not found
   var saveChk=document.getElementById('nutSaveToFoodsCheck');
