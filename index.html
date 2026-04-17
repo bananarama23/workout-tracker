@@ -2375,38 +2375,31 @@ function previewParsePaste(){
   }
   function parseGoal(blines){
     function stripNoise(s){
-      // Cover U+2300-27BF (misc technical/symbols incl ⏱), U+1F000-1FAFF (emoji)
       return s.replace(/^[\s\*\-•]+/,'')
                .replace(/^[\u{2300}-\u{27BF}\u{1F000}-\u{1FAFF}\uFE0F\u20E3\u200D]+/gu,'')
-               .replace(/^[\s\*\-•]+/,'')
-               .trim();
+               .replace(/^[\s\*\-•]+/,'').trim();
     }
-    function isEmdash(s){
-      // Pure em/en-dash separator lines, possibly with spaces
-      return /^[\s\u2014\u2013\-]{2,}$/.test(s)&&/[\u2014\u2013\-]/.test(s);
+    function isDash(s){
+      // Any line that is purely dashes/em-dashes (1 or more)
+      return /^[\u2014\u2013\-]+$/.test(s.trim());
     }
-    // Goal marker: "Goal:", "STRICT RULE:", "Rule:" — all preceded by optional emoji
     var goalStart=-1;
     for(var i=0;i<blines.length;i++){
       var clean=stripNoise(blines[i]);
-      if(/^[Gg]oal\s*[:\s]/i.test(clean)||/^[Gg]oal\s*$/i.test(clean))  {goalStart=i;break;}
-      if(/^[Ss]trict\s+[Rr]ule\s*:/i.test(clean))                        {goalStart=i;break;}
-      if(/^[Rr]ule\s*:/i.test(clean))                                     {goalStart=i;break;}
+      if(/^[Gg]oal\s*[:\s]/i.test(clean)||/^[Gg]oal\s*$/i.test(clean)){goalStart=i;break;}
+      if(/^[Ss]trict\s+[Rr]ule\s*:/i.test(clean)){goalStart=i;break;}
+      if(/^[Rr]ule\s*:/i.test(clean)){goalStart=i;break;}
     }
     if(goalStart===-1)return null;
     var parts=[];
-    // Inline text after the marker keyword
-    var sameLine=stripNoise(blines[goalStart])
-                  .replace(/^([Gg]oal|[Ss]trict\s+[Rr]ule|[Rr]ule)\s*:?\s*/i,'').trim();
-    if(sameLine&&!isEmdash(sameLine))parts.push(sameLine);
+    var sameLine=stripNoise(blines[goalStart]).replace(/^([Gg]oal|[Ss]trict\s+[Rr]ule|[Rr]ule)\s*:?\s*/i,'').trim();
+    if(sameLine&&!isDash(sameLine))parts.push(sameLine);
     for(var j=goalStart+1;j<blines.length;j++){
       var raw=blines[j];
-      // Skip markdown code fences
       if(/^\s*```/.test(raw))continue;
       var stripped=stripNoise(raw);
       if(!stripped)continue;
-      // Hard stops — section-level separators / new fields
-      if(isEmdash(stripped))break;
+      if(isDash(stripped))break;
       if(/^Time\s*[:\~]/i.test(stripped))break;
       if(/^\d+[-\u2013]\d+\s*min/i.test(stripped))break;
       if(/^(Strict\s+Focus|Edge\s+Day\s+Focus|Focus\s+Today)/i.test(stripped))break;
@@ -2418,18 +2411,16 @@ function previewParsePaste(){
       if(/^[Ss]et\s*\d+\s*[:\s]/i.test(stripped))break;
       if(/^[Tt]weak\s*:/i.test(stripped))break;
       if(/^\d{1,2}[.)]\s/.test(stripped))break;
-      // Drop pure section labels (Expect:, If needed:, See below:)
       var text=stripped.replace(/^(Expect|If needed|See below)\s*:?\s*/i,'').trim();
-      if(!text||isEmdash(text))continue;
-      // Warning lines
+      if(!text||isDash(text))continue;
       var isWarning=/^([Ss]trict\s+)?[Nn]ote\s*:/i.test(text)||/^[Ww]arning\s*:/i.test(text);
       var prefix=isWarning?'\u26A0 ':'';
       text=text.replace(/^([Ss]trict\s+)?[Nn]ote\s*:\s*/i,'').replace(/^[Ww]arning\s*:\s*/i,'').trim();
       if(text)parts.push(prefix+text);
     }
-    // Strip any trailing em-dash fragments from each part
-    parts=parts.map(function(p){return p.replace(/\s*[\u2014\u2013\-]{2,}\s*$/,'').trim();}).filter(Boolean);
-    var result=parts.join(' \u00b7 ').replace(/\s*\u00b7\s*$/,'').trim();
+    // Strip trailing dashes from every part, then strip trailing separator from result
+    parts=parts.map(function(p){return p.replace(/\s*[\u2014\u2013\-]+\s*$/,'').trim();}).filter(Boolean);
+    var result=parts.join(' \u00b7 ').replace(/\s*[\u00b7\u2014\u2013\-\s]+$/,'').trim();
     return result||null;
   }
   function parseRepsFromSetLines(blines){
