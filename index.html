@@ -196,6 +196,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 .cue-form{background:var(--card2);border-left:2px solid var(--muted);border-radius:0 var(--r-sm) var(--r-sm) 0;padding:9px 12px;margin-bottom:8px;font-size:0.75rem;color:var(--text2);line-height:1.65;}
 .cue-tweak{background:var(--orange-dim);border-left:2px solid var(--orange);border-radius:0 var(--r-sm) var(--r-sm) 0;padding:8px 12px;margin-bottom:8px;font-size:0.75rem;color:var(--orange);font-weight:600;}
 .cue-watch{background:var(--blue-dim);border-left:2px solid var(--blue);border-radius:0 var(--r-sm) var(--r-sm) 0;padding:8px 12px;margin-bottom:8px;font-size:0.75rem;color:var(--blue);line-height:1.65;white-space:pre-line;}
+.cue-goal{background:rgba(200,255,0,0.07);border-left:3px solid var(--accent);border-radius:0 var(--r-sm) var(--r-sm) 0;padding:8px 12px;margin-bottom:8px;font-size:0.75rem;color:var(--accent);line-height:1.65;font-weight:600;}
 
 .seq-section{margin-bottom:10px;}
 .seq-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
@@ -1796,8 +1797,8 @@ var AC=new(window.AudioContext||window.webkitAudioContext)();
 var vol=1.0;
 function setVol(v){vol=parseFloat(v);}
 function resAC(){if(AC.state==='suspended')AC.resume();}
-document.addEventListener('touchstart',resAC,{once:true});
-document.addEventListener('click',resAC,{once:true});
+document.addEventListener('touchstart',resAC,{passive:true});
+document.addEventListener('click',resAC,{passive:true});
 function beep(f,d,delay){
   // Resume AC if iOS suspended it (e.g. after speech synthesis)
   if(AC.state==='suspended'){AC.resume().then(function(){beep(f,d,delay);});return;}
@@ -1836,7 +1837,9 @@ function speak(txt,rate,delay){
     var u=new SpeechSynthesisUtterance(txt);
     u.rate=rate;u.pitch=1.0;u.volume=vol;
     var pv=null;for(var i=0;i<vcs.length;i++){if(vcs[i].lang.indexOf('en')===0&&vcs[i].localService){pv=vcs[i];break;}}
-    if(pv)u.voice=pv;syn.speak(u);
+    if(pv)u.voice=pv;
+    u.onend=function(){resAC();};
+    syn.speak(u);
   };
   if(delay)setTimeout(doSpeak,delay);else doSpeak();
 }
@@ -2363,43 +2366,53 @@ function previewParsePaste(){
   function parseTweak(blines){
     for(var i=0;i<blines.length;i++){
       var clean=blines[i].replace(/^[\s\*\-•]+/,'').trim();
-      // Stop at goal block
-      if(/^[Gg]oal\s*[:\s]/i.test(clean))break;
+      if(/^[Gg]oal\s*[:\s]/i.test(clean)||/^[Gg]oal\s*$/i.test(clean))break;
       var m=clean.match(/^[Tt]weak[:\s]+(.+)/)||clean.match(/^[Ss]trict\s+[Nn]ote[:\s]+(.+)/i)||clean.match(/^[Nn]ote[:\s]+(.+)/i);
       if(m)return m[1].trim();
     }
     return null;
   }
   function parseGoal(blines){
-    // Strip emojis + variation selectors from start of a line
     function stripNoise(s){
       return s.replace(/^[\s\*\-•]+/,'')
-              .replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F\u20E3\u200D]+/gu,'')
-              .replace(/^[\s\*\-•]+/,'')
-              .trim();
+               .replace(/^[\u{2300}-\u{27BF}\u{1F000}-\u{1FAFF}\uFE0F\u20E3\u200D]+/gu,'')
+               .replace(/^[\s\*\-•]+/,'')
+               .trim();
     }
+    function isEmdash(s){return /^[\u2014\u2013\-]{3,}$/.test(s)||/^[\u2014\u2013]{1,}$/.test(s);}
     var goalStart=-1;
     for(var i=0;i<blines.length;i++){
       var clean=stripNoise(blines[i]);
       if(/^[Gg]oal\s*[:\s]/i.test(clean)||/^[Gg]oal\s*$/i.test(clean)){goalStart=i;break;}
     }
     if(goalStart===-1)return null;
-
     var parts=[];
     var sameLine=stripNoise(blines[goalStart]).replace(/^[Gg]oal\s*:?\s*/i,'').trim();
-    if(sameLine)parts.push(sameLine);
-
+    if(sameLine&&!isEmdash(sameLine))parts.push(sameLine);
     for(var j=goalStart+1;j<blines.length;j++){
-      var stripped=stripNoise(blines[j]);
+      var raw=blines[j];
+      // Skip code fences
+      if(/^\s*```/.test(raw))continue;
+      var stripped=stripNoise(raw);
       if(!stripped)continue;
+      // Stop at em-dash separator lines (——— or ---)
+      if(isEmdash(stripped))break;
+      // Stop at time/section markers
+      if(/^Time\s*[:\~]/i.test(stripped)||/^\d+[-–]\d+\s*min/i.test(stripped))break;
+      if(/^Strict\s+Focus/i.test(stripped))break;
+      if(/^Bottom\s+line/i.test(stripped))break;
+      if(/^Send\s+results/i.test(stripped))break;
+      if(/^(Red|Green)\s+flags?/i.test(stripped))break;
+      // Stop at known field names
       if(/^[Ff]orm\s*:/i.test(stripped))break;
       if(/^[Rr]est\s*:/i.test(stripped))break;
       if(/^[Ff]eel\s*[:\[]/i.test(stripped))break;
       if(/^[Ss]et\s*\d+\s*[:\s]/i.test(stripped))break;
       if(/^[Tt]weak\s*:/i.test(stripped))break;
       if(/^\d{1,2}[.)]\s/.test(stripped))break;
+      // Drop pure section labels
       var text=stripped.replace(/^(Expect|See below)\s*:?\s*/i,'').trim();
-      if(!text)continue;
+      if(!text||isEmdash(text))continue;
       var isWarning=/^([Ss]trict\s+)?[Nn]ote\s*:/i.test(text)||/^[Ww]arning\s*:/i.test(text);
       var prefix=isWarning?'\u26A0 ':'';
       text=text.replace(/^([Ss]trict\s+)?[Nn]ote\s*:\s*/i,'').replace(/^[Ww]arning\s*:\s*/i,'').trim();
@@ -2567,7 +2580,12 @@ function renderPreview(){
   // Start button
   html+='<div style="padding:0 16px 8px;">';
   var activeCount=exs.filter(function(_,ei){return !_previewSkipped[ei];}).length;
-  html+='<button class="preview-start-btn" onclick="startFromPreview()">START WORKOUT &nbsp;('+activeCount+' exercises)</button>';
+  var timeEst='';
+  if(_cachedSessions&&_cachedSessions.length){
+    var strSess=_cachedSessions.filter(function(s){return s.workoutType&&s.workoutType.indexOf('Strength')!==-1&&parseInt(s.duration)>0;});
+    if(strSess.length){var recent=strSess.slice(-6);var avgMin=Math.round(recent.reduce(function(a,s){return a+(parseInt(s.duration)||0);},0)/recent.length);if(avgMin>0)timeEst=' · ~'+avgMin+' min';}
+  }
+  html+='<button class="preview-start-btn" onclick="startFromPreview()">START WORKOUT &nbsp;('+activeCount+' exercises'+timeEst+')</button>';
   html+='</div>';
   document.getElementById('previewContent').innerHTML=html;
 }
@@ -2834,6 +2852,7 @@ function renderEx(){
   if(ex.form)h+='<div class="cue-form">'+ex.form+'</div>';
   if(ex.tweak)h+='<div class="cue-tweak">! '+ex.tweak+'</div>';
   if(ex.watch)h+='<div class="cue-watch">'+ex.watch+'</div>';
+  if(ex.goal)h+='<div class="cue-goal">🎯 '+ex.goal+'</div>';
   if(ex.seq){
     var seqEd=_seqEditMode;
     h+='<div class="seq-section">';
@@ -2911,7 +2930,7 @@ function renderEx(){
     h+='<div class="log-pl-box"><label>Right (sec)</label><input type="number" inputmode="numeric" id="pi1" placeholder="-" value="'+(logs[curEx].sets[1].time||'')+'" oninput="logs['+curEx+'].sets[1].time=this.value"></div>';
     h+='</div>';
   } else {
-    h+='<div class="log-sets-row"><div class="log-set-box"><label>Set '+(curSet+1)+' of '+ex.sets+' (target: '+ex.rc[curSet]+')</label><input type="number" inputmode="numeric" id="si0" placeholder="'+ex.rc[curSet]+'" value="'+(logs[curEx].sets[curSet].reps||'')+'" oninput="logs['+curEx+'].sets['+curSet+'].reps=this.value"></div></div>';
+    h+='<div class="log-sets-row"><div class="log-set-box"><label>Set '+(curSet+1)+' of '+ex.sets+' (target: '+ex.rc[curSet]+')</label><input type="number" inputmode="numeric" id="si0" placeholder="'+ex.rc[curSet]+'" value="'+(logs[curEx].sets[curSet].reps||ex.rc[curSet])+'" oninput="logs['+curEx+'].sets['+curSet+'].reps=this.value"></div></div>';
   }
   var fo=logs[curEx].feel;
   h+='<div class="feel-row">';
@@ -3399,11 +3418,12 @@ function updBtn(){
     fs.disabled=!isResting;
   }
 
-  // Skip Exercise button: visible unless mid-plank
+  // Skip Exercise button: visible unless mid-plank or resting
   var fse=document.getElementById('footerSkipEx');
   if(fse){
     var isPlankActive=exs[curEx]&&exs[curEx].isPlank&&phase==='active';
-    fse.style.display=isPlankActive?'none':'block';
+    var isResting2=(phase==='resting'||phase==='between');
+    fse.style.display=(isPlankActive||isResting2)?'none':'block';
   }
 }
 
@@ -3614,7 +3634,7 @@ function finishWorkout(){
       rows+='</div>';
     } else {
       rows+='<div style="display:flex;gap:6px;margin-top:5px;">';
-      log.sets.forEach(function(s,si){rows+='<div style="flex:1;text-align:center"><div style="font-size:0.58rem;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;">S'+(si+1)+'</div><input type="number" inputmode="numeric" style="width:100%;font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text);padding:6px;" value="'+(s.reps||'')+'" oninput="logs['+ei+'].sets['+si+'].reps=this.value"></div>';});
+      log.sets.forEach(function(s,si){rows+='<div style="flex:1;text-align:center"><div style="font-size:0.58rem;color:var(--muted);margin-bottom:3px;font-weight:700;text-transform:uppercase;">S'+(si+1)+'</div><input type="number" inputmode="numeric" style="width:100%;font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text);padding:6px;" value="'+(s.reps||ex.rc[si]||'')+'" oninput="logs['+ei+'].sets['+si+'].reps=this.value"></div>';});
       rows+='</div>';
     }
     if(log.skipped)rows+='<div class="sum-notes" style="color:var(--orange);">Skipped'+(log.skipReason?': '+log.skipReason:'')+'</div>';
