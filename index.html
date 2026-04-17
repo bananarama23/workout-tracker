@@ -2269,6 +2269,65 @@ function previewParsePaste(){
   var text=(inp?inp.value:'').trim();
   if(!text){if(msg){msg.textContent='Paste something first';msg.style.color='var(--orange)';}return;}
 
+  // ── Structured format fast-path ───────────────────────────────────
+  // Matches lines like: EX: Pull-Up Ladder | SETS: 4/4/3/3 | REST: 85 | GOAL: No rep drop
+  (function(){
+    var EX_RE=/^EX:\s*(.+?)\s*\|\s*SETS:\s*([\d\/]+)\s*\|\s*REST:\s*(\d+)(?:\s*\|\s*GOAL:\s*(.+))?/i;
+    var structLines=text.split('\n').map(function(l){return l.trim();}).filter(function(l){return l&&!/^(HOME|HOTEL|HIIT|SESSION|DAY|REST|---)/i.test(l);});
+    var exLines=structLines.filter(function(l){return EX_RE.test(l);});
+    if(exLines.length>=2){
+      // All exercise lines parsed — use structured path, skip legacy parser
+      var NAME_RULES2=[
+        ['SUPINATED PULL-UPS',       ['supinated pull','supinated pullup']],
+        ['PULL-UPS',                 ['pull-up ladder','pull up ladder','pull-ups','pull-up','pullups','pullup']],
+        ['CLOSE-GRIP PUSH-UPS',      ['close-grip push','close grip push','close grip pu']],
+        ['DIAMOND PUSH-UPS',         ['diamond push']],
+        ['PIKE PUSH-UPS',            ['pike push']],
+        ['ARCHER PUSH-UPS',          ['archer push']],
+        ['PUSH-UPS',                 ['push-up','push-ups','pushup','pushups']],
+        ['DIPS',                     ['tricep dip','triceps dip','dip']],
+        ['SINGLE-LEG GLUTE BRIDGES', ['single-leg glute','single leg glute','sl glute','glute bridge']],
+        ['LEG RAISES',               ['leg raise','hanging knee','hanging leg']],
+        ['HOLLOW BODY HOLD',         ['hollow body','hollow hold']],
+        ['SIDE PLANKS',              ['side plank']],
+        ['AUSTRALIAN PULL-UPS',      ['australian pull','aussie pull']],
+      ];
+      function normS(raw){
+        var lower=raw.toLowerCase().replace(/\s+/g,' ').trim();
+        for(var ri=0;ri<NAME_RULES2.length;ri++){var toks=NAME_RULES2[ri][1];for(var ti=0;ti<toks.length;ti++){if(lower.indexOf(toks[ti])>=0)return NAME_RULES2[ri][0];}}
+        return raw.toUpperCase().trim();
+      }
+      var parsed2=[];
+      exLines.forEach(function(line){
+        var m=line.match(EX_RE);if(!m)return;
+        var internalName=normS(m[1]);
+        var isPlank=internalName.indexOf('PLANK')>=0;
+        var rc=m[2].split('/').map(function(p){return parseInt(p);}).filter(function(n){return !isNaN(n)&&n>0&&n<500;});
+        if(!rc.length)rc=[10,10];
+        var rest=parseInt(m[3])||60;
+        var goal=m[4]?m[4].trim():null;
+        var defaults=wType==='home'?homeEx:hotelEx;
+        var existing=null;
+        for(var i=0;i<defaults.length;i++){if(defaults[i].name===internalName){existing=defaults[i];break;}}
+        var ex=existing?JSON.parse(JSON.stringify(existing)):{name:internalName,sets:rc.length,reps:rc.join('/'),rc:rc,rest:rest,form:'',tweak:null,watch:null,isPlank:isPlank,seq:null};
+        ex.rc=rc;ex.sets=rc.length;
+        ex.reps=isPlank?(rc[0]||60)+' sec/side':rc.join('/');
+        ex.rest=rest;
+        if(goal)ex.goal=goal;
+        parsed2.push(ex);
+      });
+      if(parsed2.length){
+        exs=parsed2;
+        _previewSkipped=exs.map(function(){return false;});
+        renderPreview();
+        var msg2=document.getElementById('previewPasteMsg');
+        if(msg2){msg2.textContent='\u2713 '+parsed2.length+' exercise'+(parsed2.length>1?'s':'')+' loaded (structured format)';msg2.style.color='var(--green)';}
+        return;
+      }
+    }
+  })();
+  if(exs&&exs.length&&document.getElementById('previewPasteMsg')&&document.getElementById('previewPasteMsg').textContent.indexOf('structured')>=0)return;
+
   // ── Name normalisation: token list, first match wins ─────────────
   var NAME_RULES=[
     ['SUPINATED PULL-UPS',       ['supinated pull','supinated pullup']],
@@ -2310,10 +2369,17 @@ function previewParsePaste(){
   // ── Detect exercise header lines ──────────────────────────────────
   function isHeader(line){
     var l=line.trim(); if(!l)return false;
-    var lc=l.replace(/^[^\d\u2460-\u2468\*]+/,'');
+    var lc=l.replace(/^[\u{1F000}-\u{1FAFF}\uFE0F\u20E3\u200D\u26A0\u2600-\u27BF\s]+/gu,'');
     if(/^\d\uFE0F\u20E3/.test(lc))return true;
     if(/^[\u2460-\u2468]/.test(lc))return true;
-    if(/^\d{1,2}[\.)] /.test(lc))return true;
+    // Numbered list: only match if line looks like "N. Exercise Name" not "N. sentence with verb"
+    if(/^\d{1,2}[\.)] /.test(lc)){
+      var rest=lc.replace(/^\d{1,2}[\.)] /,'');
+      // Must contain a dash/reps pattern OR start with capital and have no lowercase verb words
+      if(/[\u2013\u2014\-]\s*\d/.test(rest)||/^\d/.test(rest))return false; // "1. Dips progression" starts lowercase after number — skip
+      if(/^[A-Z][a-z\-\s]+[A-Z]/.test(rest)||/[–\-]\s*\d/.test(rest))return true;
+      return false;
+    }
     if(/^\*\*[A-Z]/.test(l)&&l.length<80)return true;
     return false;
   }
