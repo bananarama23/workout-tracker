@@ -7416,7 +7416,7 @@ function nutApiKeyTest(){
   if(!key){if(msg)msg.textContent='Enter a key first';return;}
   if(btn){btn.textContent='Testing...';btn.disabled=true;}
   if(msg){msg.textContent='';msg.style.color='var(--muted)';}
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:'Say OK'}]}],generationConfig:{maxOutputTokens:5}})
   }).then(function(r){return r.json();}).then(function(d){
@@ -7452,7 +7452,7 @@ function nutCallVision(base64,mediaType,statusEl){
     return;
   }
   var promptText='This is a nutrition label or food packaging. Extract and return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","servingDesc":"if label shows a count like \'About 13 Chips\' or \'2 biscuits\' put ONLY that e.g. \'13 chips\' or \'2 biscuits\' — blank string if no count on label","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. IMPORTANT: if label shows both oz and grams (e.g. \'1 oz (28g)\'), use grams for serving and unit. All values per serving. Sodium in mg. Use null for unknown fields.';
-  var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
+  var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey;
   fetch(url,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -8255,7 +8255,7 @@ function nutTypeGeminiSearch(){
   var geminiKey=localStorage.getItem('wt_gemini_key')||'';
   if(!geminiKey){nutApiKeyShow(null,null,null);if(statusEl){statusEl.textContent='Enter your Gemini key then search again';statusEl.style.color='var(--orange)';}return;}
   var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
   })
@@ -8425,7 +8425,7 @@ function progAIRunFeedback(geminiKey,btn,card,result){
     '4. Cheat ratio (currently '+cheatRatio+') — am I earning back the right amount on travel/cheat days? Remember: on cheat days a near-zero surplus or small surplus is the TARGET (maintenance), not a problem. Only suggest changing this if cheat days are causing an unhealthy surplus that\'s hurting the overall weight trend.\n'+
     'Use my actual surplus/deficit numbers and weight trend. 4 short answers, one per number, specific values to change to if needed. Do not penalize cheat days for being near maintenance — that is intentional.';
 
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.3,maxOutputTokens:500}})
   })
@@ -8657,7 +8657,7 @@ function cholAIFeedback(){
     '4. **Top 3 changes** — highest-impact changes to improve HDL and LDL further\n'+
     '5. **Next test targets** — specific HDL, LDL and ratio to aim for';
 
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.3,maxOutputTokens:800}})
   })
@@ -8684,7 +8684,7 @@ function nutAddInlineGemini(){
   if(!geminiKey){nutCloseAdd();nutApiKeyShow(null,null,null);return;}
   nutAddInlineStatus('Asking Gemini...','var(--muted)');
   var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
   })
@@ -9022,7 +9022,7 @@ function nutMealScanCallVision(b64,mime){
     '\n[{"name":"specific food name","qty":number,"weight_g":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number,"confidence":"high|medium|low"}]'+
     '\nqty=countable units if applicable (e.g. 2 eggs), otherwise 1. All values must be numbers, never null. Sodium in mg.';
 
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mime,data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:8192}})
   })
@@ -9190,7 +9190,7 @@ function nutMealScanRefetch(id){
   if(row)row.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--muted);font-size:0.78rem;"><div style="width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>Looking up <em style="color:var(--text);">'+newName+'</em>\u2026</div>';
   var key=localStorage.getItem('wt_gemini_key')||'';
   if(!key){setTimeout(nutMealScanRender,300);return;}
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:'Macros for one typical serving of "'+newName+'". Return ONLY JSON, no markdown: {"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All numbers. Sodium in mg.'}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
   }).then(function(r){return r.json();}).then(function(data){
