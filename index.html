@@ -9032,7 +9032,7 @@ function nutMealScanCallVision(b64,mime){
     '\nqty=countable units if applicable (e.g. 2 eggs). All values must be numbers, never null. Sodium in mg.';
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mime,data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:900}})
+    body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mime,data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2000}})
   })
   .then(function(r){return r.json();})
   .then(function(data){
