@@ -9006,19 +9006,41 @@ function nutMealScanRenderMemory(){
 function nutMealScanToggleMemory(){_msiMemory=!_msiMemory;nutMealScanRenderMemory();}
 
 // ── Vision call ───────────────────────────────────────────────────────────────
-function nutMealScanCallVision(b64,mime,_retryRestaurant){
+function nutMealScanCallVision(b64,mime,_overrideRestaurant){
+  // _overrideRestaurant: undefined = read from DOM
+  //                      string    = use this (may be shorter retry or '')
+  //                      null      = final visual-only attempt, no more retries
   var key=localStorage.getItem('wt_gemini_key')||'';
-  if(!key){nutMealScanSetStatus('No Gemini key — add it first','var(--orange)');return;}
-  var _ctxR=typeof _retryRestaurant==='string'?_retryRestaurant:((document.getElementById('nutMsiCtxRestaurant')||{}).value||'');
+  if(!key){nutMealScanSetStatus('No Gemini key \u2014 add it first','var(--orange)');return;}
+  var _finalAttempt=(_overrideRestaurant===null);
+  var _ctxR=_finalAttempt?'':typeof _overrideRestaurant==='string'?_overrideRestaurant:((document.getElementById('nutMsiCtxRestaurant')||{}).value||'');
   var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
+
+  function _retry(text){
+    if(_finalAttempt||!_ctxR){
+      // Already on visual-only pass — genuine failure
+      nutMealScanSetStatus('No result \u2014 retake or upload a clearer photo','var(--orange)');
+      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.8rem;">Try again with better lighting</div>';
+      return;
+    }
+    var words=_ctxR.trim().split(/\s+/);
+    if(words.length>1){
+      var shorter=words.slice(0,words.length-1).join(' ');
+      nutMealScanSetStatus('Trying "'+shorter+'"\u2026','var(--muted)');
+      setTimeout(function(){nutMealScanCallVision(b64,mime,shorter);},800);
+    } else {
+      nutMealScanSetStatus('Restaurant not found \u2014 using visual estimate\u2026','var(--muted)');
+      setTimeout(function(){nutMealScanCallVision(b64,mime,null);},800);
+    }
+  }
+
   var restaurantBlock='';
   if(_ctxR){
     restaurantBlock='\n\nRESTAURANT CONTEXT: "'+_ctxR+'".'+
       ' If you recognise this restaurant and know their published nutrition figures, use those as your primary source and set source to "official".'+
-      ' If you do not recognise it or are unsure, IGNORE the restaurant name and fall back to visual estimation as normal — do NOT fail or return an error just because the restaurant is unfamiliar.'+
+      ' If you do not recognise it or are unsure, IGNORE the restaurant name and fall back to visual estimation as normal \u2014 do NOT fail or return an error just because the restaurant is unfamiliar.'+
       ' Always return a valid JSON array regardless.';
   }
-
   var hintBlock=_ctxH?'\nADDITIONAL NOTES: '+_ctxH:'';
   var prompt='Look at this food photo. Identify EVERY separate food and drink item visible.'+
     restaurantBlock+hintBlock+
@@ -9026,11 +9048,12 @@ function nutMealScanCallVision(b64,mime,_retryRestaurant){
     '\n\nFor each item provide accurate macros. Prioritise in this order:'+
     '\n1. Official published nutrition from the restaurant if you recognise it'+
     '\n2. Widely-known database values for named dishes'+
-    '\n3. Visual portion estimation — always fall back to this if unsure'+
+    '\n3. Visual portion estimation \u2014 always fall back to this if unsure'+
     '\n\nYou MUST always return a JSON array even if the restaurant is unknown. Never return an empty response.'+
     '\n\nReturn ONLY a JSON array, no markdown:'+
     '\n[{"name":"specific food name","qty":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number,"source":"official|database|estimated"}]'+
     '\nqty=countable units if applicable (e.g. 2 eggs). All values must be numbers, never null. Sodium in mg.';
+
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mime,data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:8192}})
@@ -9040,24 +9063,7 @@ function nutMealScanCallVision(b64,mime,_retryRestaurant){
     var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='block';
     var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&
              data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
-    if(!text){
-      // No text response — treat same as parse failure and retry with shorter restaurant name
-      if(_ctxR){
-        var words=_ctxR.trim().split(/\s+/);
-        if(words.length>1){
-          var shorter=words.slice(0,words.length-1).join(' ');
-          nutMealScanSetStatus('Trying "'+shorter+'"…','var(--muted)');
-          setTimeout(function(){nutMealScanCallVision(b64,mime,shorter);},800);
-        } else {
-          nutMealScanSetStatus('Restaurant not found — using visual estimate…','var(--muted)');
-          setTimeout(function(){nutMealScanCallVision(b64,mime,'');},800);
-        }
-      } else {
-        nutMealScanSetStatus('No result — retake or upload a clearer photo','var(--orange)');
-        document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.8rem;">Try again with better lighting</div>';
-      }
-      return;
-    }
+    if(!text){_retry();return;}
     text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
     var s=text.indexOf('['),e=text.lastIndexOf(']');
     if(s>=0&&e>s)text=text.slice(s,e+1);
@@ -9071,24 +9077,7 @@ function nutMealScanCallVision(b64,mime,_retryRestaurant){
         source:String(it.source||'estimated')};});
       nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
       nutMealScanRender();
-    }catch(e2){
-      console.warn('nutMealScan parse fail. Raw text:', text.slice(0,500));
-      // Progressive retry: strip last word, then drop restaurant entirely
-      if(_ctxR){
-        var words=_ctxR.trim().split(/\s+/);
-        if(words.length>1){
-          var shorter=words.slice(0,words.length-1).join(' ');
-          nutMealScanSetStatus('Trying "'+shorter+'"…','var(--muted)');
-          setTimeout(function(){nutMealScanCallVision(b64,mime,shorter);},800);
-        } else {
-          nutMealScanSetStatus('Restaurant not found — using visual estimate…','var(--muted)');
-          setTimeout(function(){nutMealScanCallVision(b64,mime,'');},800);
-        }
-      } else {
-        nutMealScanSetStatus('Could not parse — try again','var(--orange)');
-        document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.8rem;">Tap Retake or add manually</div>';
-      }
-    }
+    }catch(e2){_retry();}
   })
   .catch(function(){
     var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='block';
