@@ -1346,10 +1346,16 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutAddOverlayTitle">ADD TO BREAKFAST</div>
       <button onclick="nutCloseAdd()" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+    <div style="display:flex;gap:6px;margin-bottom:12px;align-items:center;">
       <input id="nutAddSearch" type="text" placeholder="Search foods..." oninput="nutFilterAddList()" class="log-input" style="flex:1;margin:0;">
-      <button onclick="nutAddInlineScan()" title="Scan or photograph food" style="width:42px;height:42px;flex-shrink:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">📷</button>
-      <input type="file" id="nutAddMealUpload" accept="image/*" style="display:none;" onchange="nutMsiFromAddOverlay(this)">
+      <!-- 📷 single item via camera -->
+      <button onclick="nutAddInlineScan()" title="Scan single item" style="width:40px;height:40px;flex-shrink:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">📷</button>
+      <!-- 🍽 meal scan via camera -->
+      <button onclick="nutMealScanLive()" title="Meal scan (live)" style="width:40px;height:40px;flex-shrink:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">🍽</button>
+      <!-- 📁 upload — shows choice sheet -->
+      <button onclick="nutShowUploadChoice()" title="Upload photo" style="width:40px;height:40px;flex-shrink:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">📁</button>
+      <input type="file" id="nutUploadSingleFile" accept="image/*" style="display:none;" onchange="nutUploadSingleHandler(this)">
+      <input type="file" id="nutUploadMealFile" accept="image/*" style="display:none;" onchange="nutUploadMealHandler(this)">
     </div>
     <div id="nutAddList"></div>
   </div>
@@ -8844,7 +8850,7 @@ function loadGoals(){
 // ══════════════════════════════════════════════════════════════════════════════
 // MEAL SCAN
 // ══════════════════════════════════════════════════════════════════════════════
-var _msi=[],_msiMeal='Breakfast',_msiMemory=false,_msiShowTotal=true,_msiCombine=true;
+var _msi=[],_msiMeal='Breakfast',_msiMemory=false,_msiShowTotal=true;
 var _msiLastB64=null,_msiLastMime=null;
 
 // ── Upload handlers ───────────────────────────────────────────────────────────
@@ -8942,7 +8948,7 @@ function nutMsiContextConfirm(){
   nutMealScanOpenDirect(_msiLastB64,_msiLastMime);
 }
 function nutMealScanOpenDirect(b64,mime){
-  _msi=[];_msiMemory=false;_msiShowTotal=true;_msiCombine=true;
+  _msi=[];_msiMemory=false;_msiShowTotal=true;
   var h=new Date().getHours();
   _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
   if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
@@ -8957,10 +8963,6 @@ function nutMealScanOpenDirect(b64,mime){
   var nm=document.getElementById('nutMsiMealName');if(nm&&rest&&!nm.value)nm.value=rest;
   nutMealScanRenderMealBtns();nutMealScanRenderMemory();
   if(b64)nutMealScanCallVision(b64,mime);
-}
-function nutMealScanClose(){
-  var ov=document.getElementById('nutMealScanOverlay');if(ov)ov.style.display='none';
-  nutMsiEditClose();_msi=[];
 }
 function nutMsiSpinner(){
   return '<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:40px 0;color:var(--muted);font-size:0.8rem;"><div style="width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>Scanning\u2026</div>';
@@ -9002,13 +9004,6 @@ function nutMealScanRenderMemory(){
   if(k)k.style.transform=_msiMemory?'translateX(18px)':'translateX(0)';
 }
 function nutMealScanToggleMemory(){_msiMemory=!_msiMemory;nutMealScanRenderMemory();}
-function nutMealScanToggleCombine(){
-  _msiCombine=!_msiCombine;
-  var t=document.getElementById('nutMsiCombineTrack');
-  var k=document.getElementById('nutMsiCombineKnob');
-  if(t)t.style.background=_msiCombine?'var(--green)':'var(--border2)';
-  if(k){k.style.left=_msiCombine?'auto':'2px';k.style.right=_msiCombine?'2px':'auto';}
-}
 
 // ── Vision call ───────────────────────────────────────────────────────────────
 function nutMealScanCallVision(b64,mime){
@@ -9214,12 +9209,12 @@ function nutMealScanSave(){
   var mealLabel=((document.getElementById('nutMsiMealName')||{}).value||'').trim();
   var entries;
   if(_msiCombine){
-    var tC=0,tP=0,tCb=0,tF=0,tFb=0,tS=0,tSod=0;
-    _msi.forEach(function(it){var q=it.qty;tC+=it.cal*q;tP+=it.prot*q;tCb+=it.carb*q;tF+=it.fat*q;tFb+=it.fib*q;tS+=it.sat*q;tSod+=it.sod*q;});
+    var tC=0,tP=0,tCb=0,tF=0,tFb=0,tSt=0,tSod=0;
+    _msi.forEach(function(it){var q=it.qty;tC+=it.cal*q;tP+=it.prot*q;tCb+=it.carb*q;tF+=it.fat*q;tFb+=it.fib*q;tSt+=it.sat*q;tSod+=it.sod*q;});
     var foodName=mealLabel||_msi.map(function(it){return it.name;}).join(', ');
     entries=[{date:_nutDate,meal:_msiMeal,food:foodName,
       calories:Math.round(tC),protein:Math.round(tP*10)/10,carbs:Math.round(tCb*10)/10,
-      fat:Math.round(tF*10)/10,fibre:Math.round(tFb*10)/10,satFat:Math.round(tS*10)/10,
+      fat:Math.round(tF*10)/10,fibre:Math.round(tFb*10)/10,satFat:Math.round(tSt*10)/10,
       sodium:Math.round(tSod),servings:1,id:now,updatedAt:now}];
   } else {
     entries=_msi.map(function(it,i){var q=it.qty;return{
@@ -9250,6 +9245,135 @@ function nutMealScanSave(){
   setTimeout(function(){nutMsg('');},2800);
   nutSyncAction({type:'logNutrition',entries:entries},null,function(){});
 }
+
+// ── Upload choice sheet ───────────────────────────────────────────────────────
+function nutShowUploadChoice(){
+  var s=document.getElementById('nutUploadChoiceSheet');if(s)s.style.display='flex';
+}
+function nutHideUploadChoice(){
+  var s=document.getElementById('nutUploadChoiceSheet');if(s)s.style.display='none';
+}
+
+// ── Upload handlers ───────────────────────────────────────────────────────────
+function nutUploadSingleHandler(inp){
+  // Single item: process and send to nutCallVision (fills food form)
+  var file=inp.files&&inp.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var img=new Image();
+    img.onload=function(){
+      var maxW=900,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var c=document.createElement('canvas');
+      c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
+      // Route through existing single-item flow
+      var status=document.getElementById('nutScanStatus');
+      if(status){status.style.display='block';status.style.color='var(--muted)';status.textContent='Reading…';}
+      nutCallVision(b64,'image/jpeg',status);
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);inp.value='';
+}
+
+function nutUploadMealHandler(inp){
+  // Meal: process then go through context sheet → meal scan page
+  var file=inp.files&&inp.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var img=new Image();
+    img.onload=function(){
+      var maxW=900,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var c=document.createElement('canvas');
+      c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
+      _msiLastB64=b64;_msiLastMime='image/jpeg';
+      nutMealScanOpen(b64,'image/jpeg');
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);inp.value='';
+}
+
+// ── Meal scan live (from search bar 🍽 button) ────────────────────────────────
+function nutMealScanLive(){
+  // Close add overlay, open camera in meal scan mode
+  nutCloseAdd();
+  nutCamOpen();
+  // After camera opens, tapping 🍽 will trigger nutMealScanCapture
+  // Set a flag so camera knows to go to meal scan on capture
+  _nutCamMealMode=true;
+}
+var _nutCamMealMode=false;
+
+// ── Page upload handler (rescan from meal scan page) ──────────────────────────
+function nutMsiPageUploadHandler(inp){
+  var file=inp.files&&inp.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var img=new Image();
+    img.onload=function(){
+      var maxW=900,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var c=document.createElement('canvas');
+      c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
+      _msiLastB64=b64;_msiLastMime='image/jpeg';
+      var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='none';
+      nutMealScanSetStatus('Scanning new photo…','var(--muted)');
+      var items=document.getElementById('nutMealScanItems');if(items)items.innerHTML=nutMsiSpinner();
+      var totals=document.getElementById('nutMealScanTotals');if(totals)totals.style.display='none';
+      nutMealScanCallVision(b64,'image/jpeg');
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);inp.value='';
+}
+
+// ── Meal scan page navigation ─────────────────────────────────────────────────
+function nutMealScanOpenDirect(b64,mime){
+  _msi=[];_msiMemory=false;_msiShowTotal=true;_msiCombine=true;_nutCamMealMode=false;
+  var h=new Date().getHours();
+  _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
+  if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
+  var pg=document.getElementById('page-mealscan');if(pg){pg.classList.remove('hidden');pg.classList.add('active');}
+  var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='none';
+  nutMealScanSetStatus('Identifying items…','var(--muted)');
+  var items=document.getElementById('nutMealScanItems');if(items)items.innerHTML=nutMsiSpinner();
+  var totals=document.getElementById('nutMealScanTotals');if(totals)totals.style.display='none';
+  var vt=document.getElementById('nutMealScanViewToggle');if(vt)vt.style.display='none';
+  var nm=document.getElementById('nutMsiMealName');if(nm)nm.value='';
+  var rest=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
+  if(nm&&rest)nm.value=rest;
+  nutMealScanRenderMealBtns();nutMealScanRenderMemory();nutMealScanRenderCombine();
+  if(b64)nutMealScanCallVision(b64,mime);
+}
+
+function nutMealScanClose(){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  var pg=document.getElementById('page-nutrition');if(pg){pg.classList.remove('hidden');pg.classList.add('active');}
+  document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
+  var nb=document.getElementById('nav-nutrition');if(nb)nb.classList.add('active');
+  nutMsiEditClose();_msi=[];
+}
+
+function nutMealScanRetake(){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
+  nutCamOpen();
+}
+
+// ── Combine toggle ────────────────────────────────────────────────────────────
+var _msiCombine=true;
+function nutMealScanRenderCombine(){
+  var t=document.getElementById('nutMsiCombineTrack'),k=document.getElementById('nutMsiCombineKnob');
+  if(t)t.style.background=_msiCombine?'var(--green)':'var(--border2)';
+  if(k){k.style.right=_msiCombine?'3px':'auto';k.style.left=_msiCombine?'auto':'3px';}
+}
+function nutMealScanToggleCombine(){_msiCombine=!_msiCombine;nutMealScanRenderCombine();}
+
 // ══════════════════════════════════════════════════════════════════════════════
 
 </script>
@@ -9296,73 +9420,6 @@ function nutMealScanSave(){
   </div>
 </div>
 
-<!-- MEAL SCAN OVERLAY -->
-<div id="nutMealScanOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:700;background:rgba(0,0,0,0.92);" class="overlay-anim">
-  <!-- Scrollable content area — sits between safe-t top and pinned footer -->
-  <div style="position:absolute;top:calc(var(--safe-t)+8px);left:0;right:0;bottom:calc(var(--nav-h)+var(--safe-b)+130px);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 12px;">
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;">
-      <!-- Header -->
-      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;">
-        <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;">MEAL SCAN</div>
-          <div id="nutMealScanStatus" style="font-size:0.68rem;color:var(--muted);margin-top:1px;min-height:16px;transition:color 0.25s;"></div>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <button onclick="nutMealScanRetake()" id="nutMealScanRetakeBtn" style="display:none;padding:6px 12px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:20px;font-size:0.68rem;font-weight:700;cursor:pointer;">↩ Retake</button>
-          <button onclick="nutMealScanClose()" style="background:var(--card2);border:1px solid var(--border);color:var(--text2);width:30px;height:30px;border-radius:50%;font-size:0.9rem;cursor:pointer;">&#215;</button>
-        </div>
-      </div>
-      <!-- Meal pills + view toggle -->
-      <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-        <div id="nutMealScanMealBtns" style="display:flex;gap:4px;flex:1;flex-wrap:wrap;"></div>
-        <div id="nutMealScanViewToggle" style="display:none;flex-shrink:0;align-items:center;gap:5px;">
-          <span style="font-size:0.58rem;color:var(--muted);font-weight:700;">UNIT</span>
-          <div onclick="nutMealScanToggleView()" id="nutMealScanViewTrack" style="width:36px;height:20px;border-radius:10px;background:var(--border2);position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0;">
-            <div id="nutMealScanViewKnob" style="position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
-          </div>
-          <span style="font-size:0.58rem;color:var(--muted);font-weight:700;">TOTAL</span>
-        </div>
-      </div>
-      <!-- Items -->
-      <div id="nutMealScanItems"></div>
-      <!-- Add item -->
-      <div style="padding:6px 14px 10px;">
-        <button onclick="nutMealScanAddItem()" style="width:100%;padding:9px;background:transparent;border:1px dashed var(--border2);border-radius:var(--r-sm);color:var(--muted);font-size:0.72rem;cursor:pointer;">+ Add item</button>
-      </div>
-      <!-- Totals -->
-      <div id="nutMealScanTotals" style="display:none;margin:0 14px 14px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:13px 16px;"></div>
-    </div>
-  </div>
-  <!-- Pinned footer — always visible above nav -->
-  <div style="position:absolute;bottom:calc(var(--nav-h)+var(--safe-b));left:0;right:0;background:var(--card);border-top:1px solid var(--border);padding:12px 14px;">
-    <!-- Meal name -->
-    <input id="nutMsiMealName" type="text" placeholder="Meal name (e.g. Wagamama katsu)" style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.85rem;padding:9px 12px;outline:none;box-sizing:border-box;margin-bottom:8px;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
-    <!-- Toggle row -->
-    <div style="display:flex;gap:8px;margin-bottom:8px;">
-      <!-- Save as one meal (default ON) -->
-      <div onclick="nutMealScanToggleCombine()" style="flex:1;display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;">
-        <div style="flex:1;">
-          <div style="font-size:0.72rem;font-weight:600;color:var(--text);">One entry</div>
-          <div style="font-size:0.58rem;color:var(--muted);">Combine items</div>
-        </div>
-        <div id="nutMsiCombineTrack" style="width:36px;height:20px;border-radius:10px;background:var(--green);position:relative;flex-shrink:0;transition:background 0.2s;">
-          <div id="nutMsiCombineKnob" style="position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:all 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
-        </div>
-      </div>
-      <!-- Save to food memory (default OFF) -->
-      <div onclick="nutMealScanToggleMemory()" style="flex:1;display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;">
-        <div style="flex:1;">
-          <div style="font-size:0.72rem;font-weight:600;color:var(--text);">Remember</div>
-          <div style="font-size:0.58rem;color:var(--muted);">Save to food list</div>
-        </div>
-        <div id="nutMealScanMemTrack" style="width:36px;height:20px;border-radius:10px;background:var(--border2);position:relative;flex-shrink:0;transition:background 0.2s;">
-          <div id="nutMealScanMemKnob" style="position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
-        </div>
-      </div>
-    </div>
-    <button onclick="nutMealScanSave()" style="width:100%;padding:14px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;font-weight:900;cursor:pointer;" ontouchstart="this.style.opacity='0.85'" ontouchend="this.style.opacity='1'">LOG MEAL</button>
-  </div>
-</div>
 <!-- Macro edit sheet -->
 <div id="nutMsiEditSheet" style="display:none;position:fixed;inset:0;z-index:800;align-items:flex-end;" onclick="if(event.target===this)nutMsiEditClose()">
   <div style="width:100%;background:var(--card);border-radius:22px 22px 0 0;padding:20px 20px calc(20px + var(--safe-b));border-top:1px solid var(--border);animation:slideUp 0.2s cubic-bezier(0.32,0.72,0,1) both;">
@@ -9402,6 +9459,81 @@ function nutMealScanSave(){
       <button onclick="nutMsiContextSkip()" style="flex:1;padding:13px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.88rem;font-weight:600;cursor:pointer;">Skip</button>
       <button onclick="nutMsiContextConfirm()" style="flex:2;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;font-weight:900;cursor:pointer;">SCAN ›</button>
     </div>
+  </div>
+</div>
+
+
+<!-- Upload choice sheet -->
+<div id="nutUploadChoiceSheet" style="display:none;position:fixed;inset:0;z-index:950;background:rgba(0,0,0,0.7);align-items:flex-end;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);" onclick="if(event.target===this)nutHideUploadChoice()">
+  <div style="width:100%;background:var(--card);border-radius:22px 22px 0 0;padding:20px 20px calc(var(--nav-h)+var(--safe-b)+16px);border-top:1px solid var(--border);animation:slideUp 0.2s cubic-bezier(0.32,0.72,0,1) both;">
+    <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 18px;"></div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;margin-bottom:14px;color:var(--muted);">UPLOAD PHOTO</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button onclick="document.getElementById('nutUploadSingleFile').click();nutHideUploadChoice();"
+        style="width:100%;padding:16px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px;">
+        <span style="font-size:1.5rem;">📷</span>
+        <div><div style="font-weight:700;font-size:0.92rem;color:var(--text);">Single item</div><div style="font-size:0.72rem;color:var(--muted);margin-top:2px;">Barcode, label, or one food — fills the food form</div></div>
+      </button>
+      <button onclick="document.getElementById('nutUploadMealFile').click();nutHideUploadChoice();"
+        style="width:100%;padding:16px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px;">
+        <span style="font-size:1.5rem;">🍽</span>
+        <div><div style="font-weight:700;font-size:0.92rem;color:var(--text);">Full meal</div><div style="font-size:0.72rem;color:var(--muted);margin-top:2px;">Photo of your plate — identifies each item separately</div></div>
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MEAL SCAN PAGE -->
+<div class="page hidden" id="page-mealscan">
+  <div style="background:var(--bg);padding:calc(var(--safe-t)+12px) 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+    <div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;">MEAL SCAN</div>
+      <div id="nutMealScanStatus" style="font-size:0.7rem;color:var(--muted);margin-top:1px;min-height:16px;transition:color 0.2s;"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button onclick="nutMealScanRetake()" id="nutMealScanRetakeBtn" style="display:none;padding:7px 14px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:20px;font-size:0.72rem;font-weight:700;cursor:pointer;">↩ Retake</button>
+      <button onclick="nutMealScanClose()" style="background:var(--card2);border:1px solid var(--border);color:var(--text2);width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
+    </div>
+  </div>
+  <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex-shrink:0;">
+    <div id="nutMealScanMealBtns" style="display:flex;gap:4px;flex:1;flex-wrap:wrap;"></div>
+    <div id="nutMealScanViewToggle" style="display:none;align-items:center;gap:5px;flex-shrink:0;">
+      <span style="font-size:0.6rem;color:var(--muted);font-weight:700;">UNIT</span>
+      <div onclick="nutMealScanToggleView()" id="nutMealScanViewTrack" style="width:38px;height:22px;border-radius:11px;background:var(--border2);position:relative;cursor:pointer;transition:background 0.2s;">
+        <div id="nutMealScanViewKnob" style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+      </div>
+      <span style="font-size:0.6rem;color:var(--muted);font-weight:700;">TOTAL</span>
+    </div>
+  </div>
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div id="nutMealScanItems" style="padding-bottom:8px;"></div>
+    <div style="padding:6px 16px 8px;">
+      <button onclick="nutMealScanAddItem()" style="width:100%;padding:10px;background:transparent;border:1px dashed var(--border2);border-radius:var(--r-sm);color:var(--muted);font-size:0.75rem;cursor:pointer;">+ Add item</button>
+    </div>
+    <div id="nutMealScanTotals" style="display:none;margin:0 16px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;"></div>
+  </div>
+  <div style="flex-shrink:0;border-top:1px solid var(--border);padding:12px 16px;background:var(--bg);display:flex;flex-direction:column;gap:8px;">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input id="nutMsiPageUpload" type="file" accept="image/*" style="display:none;" onchange="nutMsiPageUploadHandler(this)">
+      <button onclick="document.getElementById('nutMsiPageUpload').click()" style="padding:9px 14px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-size:0.75rem;font-weight:600;cursor:pointer;white-space:nowrap;">📁 New photo</button>
+      <input id="nutMsiMealName" type="text" placeholder="Meal name (optional)" style="flex:1;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.85rem;padding:9px 12px;outline:none;box-sizing:border-box;min-width:0;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
+    </div>
+    <div style="display:flex;gap:8px;">
+      <div onclick="nutMealScanToggleCombine()" style="flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;">
+        <div style="flex:1;"><div style="font-size:0.75rem;font-weight:600;color:var(--text);">One entry</div><div style="font-size:0.6rem;color:var(--muted);">Combine items</div></div>
+        <div id="nutMsiCombineTrack" style="width:38px;height:22px;border-radius:11px;background:var(--green);position:relative;flex-shrink:0;transition:background 0.2s;">
+          <div id="nutMsiCombineKnob" style="position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:all 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+        </div>
+      </div>
+      <div onclick="nutMealScanToggleMemory()" style="flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;">
+        <div style="flex:1;"><div style="font-size:0.75rem;font-weight:600;color:var(--text);">Remember</div><div style="font-size:0.6rem;color:var(--muted);">Save to food list</div></div>
+        <div id="nutMealScanMemTrack" style="width:38px;height:22px;border-radius:11px;background:var(--border2);position:relative;flex-shrink:0;transition:background 0.2s;">
+          <div id="nutMealScanMemKnob" style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+        </div>
+      </div>
+    </div>
+    <button onclick="nutMealScanSave()" style="width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">LOG MEAL</button>
   </div>
 </div>
 
