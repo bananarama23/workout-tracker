@@ -1379,8 +1379,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </button>
     </div>
     <div style="margin-top:14px;display:flex;flex-direction:column;align-items:center;gap:10px;">
-      <button onclick="nutMealScanCapture()" style="width:100%;max-width:220px;padding:11px 0;background:rgba(200,255,0,0.12);border:1px solid rgba(200,255,0,0.5);color:var(--accent);border-radius:30px;font-family:'Bebas Neue',sans-serif;font-size:0.9rem;letter-spacing:2px;cursor:pointer;">🍽 SCAN AS MEAL</button>
-      <div style="font-size:0.58rem;color:rgba(255,255,255,0.3);letter-spacing:0.5px;">Circle = single item &nbsp;·&nbsp; Button above = full meal</div>
+      <button onclick="nutMealScanCapture()" style="width:100%;max-width:230px;padding:11px 0;background:rgba(200,255,0,0.12);border:1px solid rgba(200,255,0,0.45);color:var(--accent);border-radius:30px;font-family:'Bebas Neue',sans-serif;font-size:0.9rem;letter-spacing:2px;cursor:pointer;">🍽 SCAN AS MEAL</button>
+      <div style="font-size:0.58rem;color:rgba(255,255,255,0.28);letter-spacing:0.5px;">Circle = single item &nbsp;·&nbsp; Button = full meal</div>
     </div>
   </div>
 </div>
@@ -8806,11 +8806,13 @@ function loadGoals(){
 // ══════════════════════════════════════════════════════════════════════════════
 // MEAL SCAN
 // ══════════════════════════════════════════════════════════════════════════════
-var _msi = [];          // meal scan items [{id,name,qty,cal,prot,carb,fat,fib,sat,sod}]
-var _msiMeal = 'Breakfast';
-var _msiMemory = false; // save to food list — default off
+var _msi=[];           // [{id,name,qty,cal,prot,carb,fat,fib,sat,sod}]
+var _msiMeal='Breakfast';
+var _msiMemory=false;  // save to food list — default off
+var _msiShowTotal=true; // show totals (qty×macro) vs per-unit
+var _msiLastB64=null,_msiLastMime=null; // for retake
 
-// ── Open / Close ─────────────────────────────────────────────────────────────
+// ── Open / Close ──────────────────────────────────────────────────────────────
 function nutMealScanCapture(){
   if(!_camStream)return;
   var vid=document.getElementById('nutCamVideo'),canvas=document.getElementById('nutCamCanvas');
@@ -8821,30 +8823,44 @@ function nutMealScanCapture(){
   var c2=document.createElement('canvas');
   c2.width=Math.round(canvas.width*scale);c2.height=Math.round(canvas.height*scale);
   c2.getContext('2d').drawImage(canvas,0,0,c2.width,c2.height);
-  var b64=c2.toDataURL('image/jpeg',0.8).split(',')[1];
+  var b64=c2.toDataURL('image/jpeg',0.82).split(',')[1];
   nutCamClose();
+  _msiLastB64=b64;_msiLastMime='image/jpeg';
   nutMealScanOpen(b64,'image/jpeg');
 }
 
+function nutMealScanRetake(){
+  nutCamOpen();
+  // Override the capture button temporarily to route back here
+  var ov=document.getElementById('nutMealScanOverlay');if(ov)ov.style.display='none';
+}
+
 function nutMealScanOpen(b64,mime){
-  _msi=[];_msiMemory=false;
-  // Detect likely current meal from time
+  _msi=[];_msiMemory=false;_msiShowTotal=true;
   var h=new Date().getHours();
   _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
-  if(_nutAddMeal)_msiMeal=_nutAddMeal;
+  if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
   var ov=document.getElementById('nutMealScanOverlay');if(ov)ov.style.display='block';
+  // Retake visible after initial scan
+  var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='none';
   nutMealScanSetStatus('Identifying items\u2026','var(--muted)');
   var items=document.getElementById('nutMealScanItems');
-  if(items)items.innerHTML='<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:36px 0;color:var(--muted);font-size:0.8rem;"><div style="width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;"></div>Scanning\u2026</div>';
-  document.getElementById('nutMealScanTotals').innerHTML='';
+  if(items)items.innerHTML=nutMsiSpinner();
+  document.getElementById('nutMealScanTotals').style.display='none';
+  document.getElementById('nutMealScanViewToggle').style.display='none';
   nutMealScanRenderMealBtns();
-  nutMealScanRenderMemoryToggle();
+  nutMealScanRenderMemory();
   if(b64)nutMealScanCallVision(b64,mime);
 }
 
 function nutMealScanClose(){
   var ov=document.getElementById('nutMealScanOverlay');if(ov)ov.style.display='none';
+  nutMsiEditClose();
   _msi=[];
+}
+
+function nutMsiSpinner(){
+  return '<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:40px 0;color:var(--muted);font-size:0.8rem;"><div style="width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>Scanning\u2026</div>';
 }
 
 function nutMealScanSetStatus(txt,col){
@@ -8852,44 +8868,62 @@ function nutMealScanSetStatus(txt,col){
   if(el){el.textContent=txt;el.style.color=col||'var(--muted)';}
 }
 
-// ── Meal selector pills ───────────────────────────────────────────────────────
+// ── Meal pills ────────────────────────────────────────────────────────────────
 function nutMealScanRenderMealBtns(){
   var c=document.getElementById('nutMealScanMealBtns');if(!c)return;
-  var meals=['Breakfast','Lunch','Dinner','Snack'];
-  c.innerHTML=meals.map(function(m){
+  c.innerHTML=['Breakfast','Lunch','Dinner','Snack'].map(function(m){
     var on=m===_msiMeal;
-    return '<button onclick="nutMealScanSetMeal(\''+m+'\')" style="padding:5px 12px;border-radius:20px;font-size:0.68rem;font-weight:700;letter-spacing:0.3px;cursor:pointer;transition:all 0.15s;border:1px solid '+(on?'rgba(200,255,0,0.5)':'var(--border)')+';background:'+(on?'var(--accent-dim)':'var(--card2)')+';color:'+(on?'var(--accent)':'var(--muted)')+';">'+m+'</button>';
+    return '<button onclick="nutMealScanSetMeal(\''+m+'\')" style="padding:5px 11px;border-radius:20px;font-size:0.67rem;font-weight:700;letter-spacing:0.3px;cursor:pointer;transition:all 0.15s;border:1px solid '+(on?'rgba(200,255,0,0.5)':'var(--border)')+';background:'+(on?'var(--accent-dim)':'var(--card2)')+';color:'+(on?'var(--accent)':'var(--muted)')+';">'+m+'</button>';
   }).join('');
 }
 function nutMealScanSetMeal(m){_msiMeal=m;nutMealScanRenderMealBtns();}
 
+// ── Per-unit / Total toggle ───────────────────────────────────────────────────
+function nutMealScanToggleView(){
+  _msiShowTotal=!_msiShowTotal;
+  var track=document.getElementById('nutMealScanViewTrack');
+  var knob=document.getElementById('nutMealScanViewKnob');
+  if(track)track.style.background=_msiShowTotal?'var(--green)':'var(--border2)';
+  if(knob)knob.style.transform=_msiShowTotal?'translateX(16px)':'translateX(0)';
+  nutMealScanRenderItems();
+}
+function nutMsiUpdateViewToggle(){
+  var toggle=document.getElementById('nutMealScanViewToggle');
+  if(toggle)toggle.style.display=_msi.length?'flex':'none';
+  var track=document.getElementById('nutMealScanViewTrack');
+  var knob=document.getElementById('nutMealScanViewKnob');
+  if(track)track.style.background=_msiShowTotal?'var(--green)':'var(--border2)';
+  if(knob)knob.style.transform=_msiShowTotal?'translateX(16px)':'translateX(0)';
+}
+
 // ── Memory toggle ─────────────────────────────────────────────────────────────
-function nutMealScanRenderMemoryToggle(){
-  var t=document.getElementById('nutMealScanMemoryToggle');
-  var k=document.getElementById('nutMealScanMemoryKnob');
-  if(t)t.style.background=_msiMemory?'var(--green)':'var(--border2)';
-  if(k)k.style.transform=_msiMemory?'translateX(18px)':'translateX(0)';
+function nutMealScanRenderMemory(){
+  var track=document.getElementById('nutMealScanMemTrack');
+  var knob=document.getElementById('nutMealScanMemKnob');
+  if(track)track.style.background=_msiMemory?'var(--green)':'var(--border2)';
+  if(knob)knob.style.transform=_msiMemory?'translateX(18px)':'translateX(0)';
 }
-function nutMealScanToggleMemory(e){
-  e.preventDefault();e.stopPropagation();
-  _msiMemory=!_msiMemory;nutMealScanRenderMemoryToggle();
-}
+function nutMealScanToggleMemory(){_msiMemory=!_msiMemory;nutMealScanRenderMemory();}
 
 // ── Vision call ───────────────────────────────────────────────────────────────
 function nutMealScanCallVision(b64,mime){
   var key=localStorage.getItem('wt_gemini_key')||'';
-  if(!key){nutMealScanSetStatus('No Gemini key','var(--orange)');return;}
-  var prompt='Look at this food photo. List EVERY separate food or drink item visible. For each give realistic estimated macros for the portion shown.\nReturn ONLY a JSON array — no markdown, no explanation:\n[{"name":"food name","qty":1,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}]\nqty = number of units if countable (e.g. 2 sausages, 3 rashers). All numbers. Sodium in mg. Never return null.';
+  if(!key){nutMealScanSetStatus('No Gemini key — add it first','var(--orange)');return;}
+  var prompt='Look at this food photo. Identify EVERY separate food and drink item. For each give realistic estimated macros for the portion visible.\nReturn ONLY a JSON array, no markdown:\n[{"name":"specific food name","qty":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}]\nqty = countable units if applicable (e.g. 2 for 2 eggs). All values must be numbers, never null. Sodium in mg. Estimate confidently.';
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mime,data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:800}})
+    body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mime,data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:900}})
   })
   .then(function(r){return r.json();})
   .then(function(data){
+    var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='block';
     var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&
              data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
-    if(!text){nutMealScanSetStatus('No result — try a clearer photo','var(--orange)');
-      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.8rem;">Try again with better lighting</div>';return;}
+    if(!text){
+      nutMealScanSetStatus('No result — retake with better lighting','var(--orange)');
+      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.8rem;">Tap Retake to try again</div>';
+      return;
+    }
     text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
     var s=text.indexOf('['),e=text.lastIndexOf(']');
     if(s>=0&&e>s)text=text.slice(s,e+1);
@@ -8908,93 +8942,138 @@ function nutMealScanCallVision(b64,mime){
         sat:Math.round((parseFloat(it.satFat)||0)*10)/10,
         sod:Math.round(parseFloat(it.sodium)||0)
       };});
-      nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
+      nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' found \u2014 tap name or values to edit','var(--green)');
       nutMealScanRender();
     }catch(e2){
-      nutMealScanSetStatus('Could not parse — try again','var(--orange)');
-      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.8rem;">Try again with a clearer photo</div>';
+      nutMealScanSetStatus('Could not parse — retake or add manually','var(--orange)');
+      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.8rem;">Tap Retake or add items manually below</div>';
     }
   })
-  .catch(function(){nutMealScanSetStatus('Network error','var(--orange)');});
+  .catch(function(){
+    var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='block';
+    nutMealScanSetStatus('Network error','var(--orange)');
+  });
 }
 
-// ── Render items ──────────────────────────────────────────────────────────────
+// ── Render ────────────────────────────────────────────────────────────────────
 function nutMealScanRender(){
-  var c=document.getElementById('nutMealScanItems');if(!c)return;
-  if(!_msi.length){c.innerHTML='';nutMealScanRenderTotals();return;}
-  c.innerHTML=_msi.map(function(it){
-    return '<div id="msrow-'+it.id+'" style="padding:12px 18px;border-bottom:1px solid var(--border);transition:background 0.15s;">'+nutMealScanRowHTML(it)+'</div>';
-  }).join('');
+  nutMealScanRenderItems();
   nutMealScanRenderTotals();
+  nutMsiUpdateViewToggle();
 }
 
-function nutMealScanRowHTML(it){
-  var totalCal=Math.round(it.cal*it.qty);
+function nutMealScanRenderItems(){
+  var c=document.getElementById('nutMealScanItems');if(!c)return;
+  if(!_msi.length){c.innerHTML='';return;}
+  c.innerHTML=_msi.map(function(it){
+    return '<div id="msrow-'+it.id+'" style="padding:11px 16px;border-bottom:1px solid var(--border);">'+nutMsiRowHTML(it)+'</div>';
+  }).join('');
+}
+
+function nutMsiRowHTML(it){
+  var show=_msiShowTotal;
+  var dCal=show?Math.round(it.cal*it.qty):it.cal;
+  var dProt=show?Math.round(it.prot*it.qty*10)/10:it.prot;
+  var dCarb=show?Math.round(it.carb*it.qty*10)/10:it.carb;
+  var dFat=show?Math.round(it.fat*it.qty*10)/10:it.fat;
   var h='';
-  // Name row
-  h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
-  h+='<div onclick="nutMealScanEditName('+it.id+')" style="flex:1;font-weight:600;font-size:0.88rem;color:var(--text);cursor:pointer;padding:2px 0;" title="Tap to rename">'+it.name+'</div>';
+  // Name + qty stepper + delete
+  h+='<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;">';
+  h+='<div onclick="nutMealScanEditName('+it.id+')" style="flex:1;font-weight:600;font-size:0.87rem;color:var(--text);cursor:pointer;line-height:1.3;" title="Tap to rename or re-fetch">'+it.name+'<span style="font-size:0.6rem;color:var(--muted);font-weight:400;margin-left:4px;">↩</span></div>';
   // Qty stepper
   h+='<div style="display:flex;align-items:center;border:1px solid var(--border2);border-radius:20px;overflow:hidden;flex-shrink:0;">';
-  h+='<button onclick="nutMealScanAdjQty('+it.id+',-1)" style="background:var(--card2);border:none;color:var(--text2);width:26px;height:26px;font-size:0.85rem;cursor:pointer;font-weight:bold;">−</button>';
-  h+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:0.9rem;padding:0 8px;min-width:28px;text-align:center;color:var(--text);">'+nutFmtQty(it.qty)+'</div>';
-  h+='<button onclick="nutMealScanAdjQty('+it.id+',1)" style="background:var(--card2);border:none;color:var(--text2);width:26px;height:26px;font-size:0.85rem;cursor:pointer;font-weight:bold;">+</button>';
+  h+='<button onclick="nutMealScanAdjQty('+it.id+',-1)" style="background:var(--card2);border:none;color:var(--text2);width:26px;height:26px;font-size:1rem;cursor:pointer;line-height:1;">−</button>';
+  h+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:0.9rem;padding:0 7px;min-width:26px;text-align:center;color:var(--text);">'+nutFmtQty(it.qty)+'</div>';
+  h+='<button onclick="nutMealScanAdjQty('+it.id+',1)" style="background:var(--card2);border:none;color:var(--text2);width:26px;height:26px;font-size:1rem;cursor:pointer;line-height:1;">+</button>';
   h+='</div>';
   // Delete
-  h+='<button onclick="nutMealScanRemove('+it.id+')" style="background:none;border:none;color:var(--muted);font-size:0.85rem;cursor:pointer;padding:4px 2px;transition:color 0.15s;" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--muted)\'">&#10005;</button>';
+  h+='<button onclick="nutMealScanRemove('+it.id+')" style="background:none;border:none;color:var(--muted);font-size:0.9rem;cursor:pointer;padding:3px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.15s,color 0.15s;" onmouseover="this.style.background=\'var(--red-dim)\';this.style.color=\'var(--red)\'" onmouseout="this.style.background=\'none\';this.style.color=\'var(--muted)\'">&#10005;</button>';
   h+='</div>';
-  // Macro pills
-  h+='<div style="display:flex;gap:5px;flex-wrap:wrap;">';
-  h+=nutMsiPill(totalCal,'','cal','var(--accent)',true,it.id,'cal');
-  h+=nutMsiPill(Math.round(it.prot*it.qty*10)/10,'g','P','var(--green)',false,it.id,'prot');
-  h+=nutMsiPill(Math.round(it.carb*it.qty*10)/10,'g','C','var(--blue)',false,it.id,'carb');
-  h+=nutMsiPill(Math.round(it.fat*it.qty*10)/10,'g','F','var(--orange)',false,it.id,'fat');
+  // Macro pills — tap to edit inline sheet
+  h+='<div style="display:flex;gap:4px;">';
+  h+=nutMsiPill(dCal,'','Cal','var(--accent)',true,it.id,'cal');
+  h+=nutMsiPill(dProt,'g','P','var(--green)',false,it.id,'prot');
+  h+=nutMsiPill(dCarb,'g','C','var(--blue)',false,it.id,'carb');
+  h+=nutMsiPill(dFat,'g','F','var(--orange)',false,it.id,'fat');
   h+='</div>';
   return h;
 }
 
 function nutFmtQty(q){
-  if(q===0.25)return '¼';
-  if(q===0.5)return '½';
-  if(q===0.75)return '¾';
-  return String(Math.round(q*10)/10);
+  if(q===0.25)return '¼';if(q===0.5)return '½';if(q===0.75)return '¾';
+  return q%1===0?String(q):String(Math.round(q*10)/10);
 }
 
 function nutMsiPill(val,unit,label,color,big,id,field){
-  return '<div onclick="nutMealScanEditMacro('+id+',\''+field+'\')" title="Tap to edit" style="display:flex;flex-direction:column;align-items:center;background:var(--card2);border-radius:8px;padding:'+(big?'5px 10px':'4px 8px')+';cursor:pointer;min-width:'+(big?'50px':'38px')+';transition:background 0.15s;" onmouseover="this.style.background=\'var(--card3)\'" onmouseout="this.style.background=\'var(--card2)\'">'
+  return '<div onclick="nutMsiEditOpen('+id+',\''+field+'\')" title="Tap to edit" style="display:flex;flex-direction:column;align-items:center;background:var(--card2);border-radius:8px;padding:'+(big?'5px 10px':'4px 7px')+';cursor:pointer;min-width:'+(big?'48px':'36px')+';transition:background 0.12s;" onmouseover="this.style.background=\'var(--card3)\'" onmouseout="this.style.background=\'var(--card2)\'">'
     +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:'+(big?'1.05rem':'0.88rem')+';color:'+color+';">'+val+unit+'</div>'
-    +'<div style="font-size:0.5rem;color:var(--muted);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;">'+label+'</div>'
+    +'<div style="font-size:0.48rem;color:var(--muted);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-top:1px;">'+label+'</div>'
     +'</div>';
 }
 
 // ── Totals ────────────────────────────────────────────────────────────────────
 function nutMealScanRenderTotals(){
   var el=document.getElementById('nutMealScanTotals');if(!el)return;
-  if(!_msi.length){el.innerHTML='';return;}
+  if(!_msi.length){el.style.display='none';return;}
+  el.style.display='block';
   var cal=0,prot=0,carb=0,fat=0;
   _msi.forEach(function(it){cal+=it.cal*it.qty;prot+=it.prot*it.qty;carb+=it.carb*it.qty;fat+=it.fat*it.qty;});
-  el.innerHTML='<div style="font-size:0.58rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:10px;">TOTAL</div>'
+  el.innerHTML='<div style="font-size:0.57rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:9px;">TOTAL · '+_msi.length+' item'+(_msi.length!==1?'s':'')+'</div>'
     +'<div style="display:flex;gap:0;">'
-    +['#c8ff00:'+Math.round(cal)+':Cal','#00D48A:'+Math.round(prot*10)/10+'g:Protein','#3B83F6:'+Math.round(carb*10)/10+'g:Carbs','#FF6830:'+Math.round(fat*10)/10+'g:Fat'].map(function(s){
-      var p=s.split(':');
-      return '<div style="flex:1;text-align:center;"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;color:'+p[0]+';line-height:1;">'+p[1]+'</div><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px;">'+p[2]+'</div></div>';
-    }).join('')
-    +'</div>';
+    +[['#c8ff00',Math.round(cal),'','Cal'],['#00D48A',Math.round(prot*10)/10,'g','Prot'],['#3B83F6',Math.round(carb*10)/10,'g','Carbs'],['#FF6830',Math.round(fat*10)/10,'g','Fat']].map(function(p){
+      return '<div style="flex:1;text-align:center;"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.45rem;color:'+p[0]+';line-height:1;">'+p[1]+p[2]+'</div><div style="font-size:0.56rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px;">'+p[3]+'</div></div>';
+    }).join('')+'</div>';
 }
 
-// ── Edit name (inline) ────────────────────────────────────────────────────────
+// ── Inline macro edit sheet ───────────────────────────────────────────────────
+var _msiEditId=null,_msiEditField=null;
+var _msiFieldLabels={cal:'Calories',prot:'Protein (g)',carb:'Carbs (g)',fat:'Fat (g)',fib:'Fibre (g)',sat:'Sat Fat (g)',sod:'Sodium (mg)'};
+
+function nutMsiEditOpen(id,field){
+  var it=_msi.find(function(x){return x.id===id;});if(!it)return;
+  _msiEditId=id;_msiEditField=field;
+  var sheet=document.getElementById('nutMsiEditSheet');if(!sheet)return;
+  sheet.style.display='flex';
+  document.getElementById('nutMsiEditTitle').textContent=(_msiFieldLabels[field]||field).toUpperCase();
+  document.getElementById('nutMsiEditSub').textContent=it.name+(_msiShowTotal&&it.qty!==1?' (per unit — will scale by ×'+nutFmtQty(it.qty)+')':'');
+  var inp=document.getElementById('nutMsiEditInp');
+  if(inp){inp.value=it[field];inp.focus();inp.select();}
+}
+
+function nutMsiEditAdj(d){
+  var inp=document.getElementById('nutMsiEditInp');if(!inp)return;
+  var v=parseFloat(inp.value)||0;
+  inp.value=Math.max(0,Math.round((v+d)*10)/10);
+}
+
+function nutMsiEditSave(){
+  var inp=document.getElementById('nutMsiEditInp');
+  var it=_msi.find(function(x){return x.id===_msiEditId;});
+  if(it&&inp){
+    var v=parseFloat(inp.value);
+    if(!isNaN(v))it[_msiEditField]=Math.max(0,Math.round(v*10)/10);
+  }
+  nutMsiEditClose();
+  nutMealScanRender();
+}
+
+function nutMsiEditClose(){
+  var sheet=document.getElementById('nutMsiEditSheet');if(sheet)sheet.style.display='none';
+  _msiEditId=null;_msiEditField=null;
+}
+
+// ── Edit name ─────────────────────────────────────────────────────────────────
 function nutMealScanEditName(id){
   var it=_msi.find(function(x){return x.id===id;});if(!it)return;
   var row=document.getElementById('msrow-'+id);if(!row)return;
+  var nameEl=row.querySelector('[onclick="nutMealScanEditName('+id+')"]');if(!nameEl)return;
   var old=it.name;
-  // Replace name text with input + buttons
-  var nameEl=row.querySelector('[onclick="nutMealScanEditName('+id+')"]');
-  if(!nameEl)return;
-  nameEl.outerHTML='<div style="flex:1;display:flex;gap:5px;align-items:center;">'
-    +'<input id="msinp-'+id+'" type="text" value="'+old.replace(/"/g,'&quot;')+'" style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:8px;color:var(--text);font-size:0.85rem;padding:5px 9px;outline:none;font-weight:600;min-width:0;">'
-    +'<button onclick="nutMealScanRefetch('+id+')" style="padding:5px 10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:\'Bebas Neue\',sans-serif;font-size:0.72rem;letter-spacing:1px;cursor:pointer;white-space:nowrap;flex-shrink:0;">RE-FETCH</button>'
-    +'<button onclick="nutMealScanApplyName('+id+')" style="padding:5px 9px;background:var(--green-dim);border:1px solid var(--green);color:var(--green);border-radius:8px;font-size:0.72rem;cursor:pointer;flex-shrink:0;">✓</button>'
-    +'<button onclick="nutMealScanCancelName('+id+',\''+old.replace(/'/g,"\\'")+'\')" style="padding:5px 7px;background:var(--card2);border:1px solid var(--border);color:var(--muted);border-radius:8px;font-size:0.72rem;cursor:pointer;flex-shrink:0;">✕</button>'
+  nameEl.outerHTML='<div style="flex:1;display:flex;gap:4px;align-items:center;">'
+    +'<input id="msinp-'+id+'" type="text" value="'+old.replace(/"/g,'&quot;')+'" placeholder="Food name" '
+    +'style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:8px;color:var(--text);font-size:0.85rem;padding:5px 9px;outline:none;font-weight:600;min-width:0;">'
+    +'<button onclick="nutMealScanRefetch('+id+')" style="padding:5px 9px;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:\'Bebas Neue\',sans-serif;font-size:0.7rem;letter-spacing:1px;cursor:pointer;flex-shrink:0;white-space:nowrap;">RE-FETCH</button>'
+    +'<button onclick="nutMealScanApplyName('+id+')" style="padding:5px 8px;background:var(--green-dim);border:1px solid var(--green);color:var(--green);border-radius:8px;font-size:0.8rem;cursor:pointer;flex-shrink:0;">✓</button>'
+    +'<button onclick="nutMealScanCancelName('+id+',\''+old.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\') " style="padding:5px 7px;background:var(--card2);border:1px solid var(--border);color:var(--muted);border-radius:8px;font-size:0.8rem;cursor:pointer;flex-shrink:0;">✕</button>'
     +'</div>';
   var inp=document.getElementById('msinp-'+id);
   if(inp){inp.focus();inp.select();}
@@ -9003,7 +9082,7 @@ function nutMealScanEditName(id){
 function nutMealScanApplyName(id){
   var inp=document.getElementById('msinp-'+id);
   var it=_msi.find(function(x){return x.id===id;});
-  if(it&&inp)it.name=inp.value.trim()||it.name;
+  if(it&&inp&&inp.value.trim())it.name=inp.value.trim();
   nutMealScanRender();
 }
 
@@ -9013,20 +9092,19 @@ function nutMealScanCancelName(id,old){
   nutMealScanRender();
 }
 
-// ── Re-fetch macros for renamed item ─────────────────────────────────────────
+// ── Re-fetch macros ───────────────────────────────────────────────────────────
 function nutMealScanRefetch(id){
   var inp=document.getElementById('msinp-'+id);
   var it=_msi.find(function(x){return x.id===id;});if(!it)return;
   var newName=(inp?inp.value.trim():'')||it.name;
   it.name=newName;
-  // Show loading in row
   var row=document.getElementById('msrow-'+id);
-  if(row)row.innerHTML='<div style="padding:6px 0;display:flex;align-items:center;gap:8px;color:var(--muted);font-size:0.8rem;"><div style="width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>Looking up <em>'+newName+'</em>\u2026</div>';
+  if(row)row.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--muted);font-size:0.78rem;"><div style="width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>Looking up <em style="color:var(--text);">'+newName+'</em>\u2026</div>';
   var key=localStorage.getItem('wt_gemini_key')||'';
-  if(!key){nutMealScanRender();return;}
+  if(!key){setTimeout(function(){nutMealScanRender();},400);return;}
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:'Give macros for one typical serving of: "'+newName+'". Return ONLY JSON, no markdown: {"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All numbers. Sodium in mg.'}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
+    body:JSON.stringify({contents:[{parts:[{text:'Macros for one typical serving of "'+newName+'". Return ONLY JSON, no markdown: {"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All numbers. Sodium in mg.'}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
   })
   .then(function(r){return r.json();})
   .then(function(data){
@@ -9050,49 +9128,37 @@ function nutMealScanRefetch(id){
   .catch(function(){nutMealScanRender();});
 }
 
-// ── Qty adjust ────────────────────────────────────────────────────────────────
+// ── Qty stepper ───────────────────────────────────────────────────────────────
+var _msiQtySteps=[0.25,0.5,0.75,1,1.5,2,2.5,3,4,5,6,8,10,12];
 function nutMealScanAdjQty(id,delta){
   var it=_msi.find(function(x){return x.id===id;});if(!it)return;
-  var steps=[0.25,0.5,0.75,1,1.5,2,3,4,5,6,8,10,12];
-  var cur=it.qty,idx=steps.indexOf(cur);
-  if(idx<0){idx=steps.findIndex(function(s){return s>=cur;});if(idx<0)idx=steps.length-1;}
-  idx=Math.max(0,Math.min(steps.length-1,idx+delta));
-  it.qty=steps[idx];
-  // Re-render just this row + totals (avoid full re-render to keep DOM stable)
+  var idx=_msiQtySteps.indexOf(it.qty);
+  if(idx<0){idx=_msiQtySteps.findIndex(function(s){return s>=it.qty;});if(idx<0)idx=_msiQtySteps.length-1;}
+  idx=Math.max(0,Math.min(_msiQtySteps.length-1,idx+delta));
+  it.qty=_msiQtySteps[idx];
+  // Patch just this row + totals for snappy feel
   var row=document.getElementById('msrow-'+id);
-  if(row){row.innerHTML=nutMealScanRowHTML(it);}
+  if(row)row.innerHTML=nutMsiRowHTML(it);
   nutMealScanRenderTotals();
 }
 
-// ── Edit macro inline ─────────────────────────────────────────────────────────
-function nutMealScanEditMacro(id,field){
-  var it=_msi.find(function(x){return x.id===id;});if(!it)return;
-  var label={cal:'calories',prot:'protein',carb:'carbs',fat:'fat'}[field]||field;
-  var cur=it[field];
-  var v=parseFloat(window.prompt('Edit '+label+' for '+it.name+'\n(per unit, current: '+cur+'):',cur));
-  if(!isNaN(v)){it[field]=Math.round(v*10)/10;nutMealScanRender();}
-}
-
-// ── Remove item ───────────────────────────────────────────────────────────────
+// ── Remove / Add ──────────────────────────────────────────────────────────────
 function nutMealScanRemove(id){
   _msi=_msi.filter(function(x){return x.id!==id;});
   nutMealScanRender();
-  nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' · tap to edit','var(--muted)');
+  nutMealScanSetStatus(_msi.length?(_msi.length+' items'):'All items removed','var(--muted)');
 }
 
-// ── Add item manually ─────────────────────────────────────────────────────────
 function nutMealScanAddItem(){
-  var name=window.prompt('Food name:');
-  if(!name||!name.trim())return;
   var newId=Date.now();
-  _msi.push({id:newId,name:name.trim(),qty:1,cal:0,prot:0,carb:0,fat:0,fib:0,sat:0,sod:0});
+  _msi.push({id:newId,name:'New item',qty:1,cal:0,prot:0,carb:0,fat:0,fib:0,sat:0,sod:0});
   nutMealScanRender();
   setTimeout(function(){nutMealScanEditName(newId);},60);
 }
 
-// ── Save meal ─────────────────────────────────────────────────────────────────
+// ── Save ──────────────────────────────────────────────────────────────────────
 function nutMealScanSave(){
-  if(!_msi.length){return;}
+  if(!_msi.length)return;
   var now=Date.now();
   var entries=_msi.map(function(it,i){
     var q=it.qty;
@@ -9100,21 +9166,15 @@ function nutMealScanSave(){
       calories:Math.round(it.cal*q),protein:Math.round(it.prot*q*10)/10,
       carbs:Math.round(it.carb*q*10)/10,fat:Math.round(it.fat*q*10)/10,
       fibre:Math.round(it.fib*q*10)/10,satFat:Math.round(it.sat*q*10)/10,
-      sodium:Math.round(it.sod*q),servings:q,
-      id:now+i,updatedAt:now+i};
+      sodium:Math.round(it.sod*q),servings:q,id:now+i,updatedAt:now+i};
   });
-  // Push to local entries
   entries.forEach(function(e){_nutEntries.push(e);});
   wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));
   try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
-  // Optionally save each item to food memory
   if(_msiMemory){
     _msi.forEach(function(it){
-      var exists=_nutFoods.some(function(f){return f.name.toLowerCase()===it.name.toLowerCase();});
-      if(!exists){
-        var food={name:it.name,calories:it.cal,protein:it.prot,carbs:it.carb,
-          fat:it.fat,fibre:it.fib,satFat:it.sat,sodium:it.sod,serving:1,unit:'serving'};
-        _nutFoods.push(food);
+      if(!_nutFoods.some(function(f){return f.name.toLowerCase()===it.name.toLowerCase();})){
+        _nutFoods.push({name:it.name,calories:it.cal,protein:it.prot,carbs:it.carb,fat:it.fat,fibre:it.fib,satFat:it.sat,sodium:it.sod,serving:1,unit:'serving'});
       }
     });
     _nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});
@@ -9127,8 +9187,8 @@ function nutMealScanSave(){
   nutMealScanClose();
   nutRenderDay();
   nutBadge('live','Live');
-  nutMsg('\u2713 '+_msi.length+' item'+(_msi.length!==1?'s':'')+' logged','var(--green)');
-  setTimeout(function(){nutMsg('');},2500);
+  nutMsg('\u2713 '+entries.length+' item'+( entries.length!==1?'s':'')+' logged to '+_msiMeal,'var(--green)');
+  setTimeout(function(){nutMsg('');},2800);
   nutSyncAction({type:'logNutrition',entries:entries},null,function(){});
 }
 // ══════════════════════════════════════════════════════════════════════════════
@@ -9177,50 +9237,82 @@ function nutMealScanSave(){
   </div>
 </div>
 
-<!-- NUTRITION: Meal Scan overlay -->
-<div id="nutMealScanOverlay" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.88);overflow-y:auto;-webkit-overflow-scrolling:touch;" class="overlay-anim">
-  <div style="min-height:100%;display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top,20px) + 10px) 0 calc(var(--nav-h) + var(--safe-b) + 20px);">
-    <div style="margin:0 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;flex:1;">
+<!-- MEAL SCAN OVERLAY -->
+<div id="nutMealScanOverlay" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.9);overflow-y:auto;-webkit-overflow-scrolling:touch;" class="overlay-anim">
+  <div style="min-height:100%;display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top,20px)+8px) 0 calc(var(--nav-h)+var(--safe-b)+20px);">
+    <div style="margin:0 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;">
 
       <!-- Header -->
-      <div style="padding:16px 18px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:10;">
+      <div style="padding:15px 16px 13px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:10;">
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;color:var(--text);">MEAL SCAN</div>
-          <div id="nutMealScanStatus" style="font-size:0.68rem;color:var(--muted);margin-top:1px;min-height:16px;transition:color 0.2s;"></div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;">MEAL SCAN</div>
+          <div id="nutMealScanStatus" style="font-size:0.68rem;color:var(--muted);margin-top:1px;min-height:16px;transition:color 0.25s;"></div>
         </div>
-        <button onclick="nutMealScanClose()" style="background:var(--card2);border:1px solid var(--border);color:var(--text2);width:30px;height:30px;border-radius:50%;font-size:0.9rem;cursor:pointer;flex-shrink:0;margin-top:2px;">&#215;</button>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button onclick="nutMealScanRetake()" id="nutMealScanRetakeBtn" style="display:none;padding:6px 12px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:20px;font-size:0.68rem;font-weight:700;letter-spacing:0.5px;cursor:pointer;">↩ Retake</button>
+          <button onclick="nutMealScanClose()" style="background:var(--card2);border:1px solid var(--border);color:var(--text2);width:30px;height:30px;border-radius:50%;font-size:0.9rem;cursor:pointer;">&#215;</button>
+        </div>
       </div>
 
-      <!-- Meal selector row -->
-      <div style="padding:12px 18px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;">
-        <div style="display:flex;gap:4px;flex:1;flex-wrap:wrap;" id="nutMealScanMealBtns"></div>
+      <!-- Meal pills -->
+      <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <div id="nutMealScanMealBtns" style="display:flex;gap:4px;flex:1;flex-wrap:wrap;"></div>
+        <!-- Per-unit / Total toggle -->
+        <div id="nutMealScanViewToggle" style="display:none;display:flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0;">
+          <span style="font-size:0.6rem;color:var(--muted);font-weight:700;letter-spacing:0.5px;">PER UNIT</span>
+          <div onclick="nutMealScanToggleView()" style="width:36px;height:20px;border-radius:10px;background:var(--border2);position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0;" id="nutMealScanViewTrack">
+            <div id="nutMealScanViewKnob" style="position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+          </div>
+          <span style="font-size:0.6rem;color:var(--muted);font-weight:700;letter-spacing:0.5px;">TOTAL</span>
+        </div>
       </div>
 
       <!-- Items -->
-      <div id="nutMealScanItems" style="padding:0 0 4px;"></div>
+      <div id="nutMealScanItems" style="padding:0;"></div>
 
-      <!-- Add item row -->
-      <div style="padding:4px 14px 10px;">
-        <button onclick="nutMealScanAddItem()" style="width:100%;padding:9px;background:transparent;border:1px dashed var(--border2);border-radius:var(--r-sm);color:var(--muted);font-size:0.72rem;letter-spacing:0.5px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted)'">+ Add item</button>
+      <!-- Add item -->
+      <div style="padding:6px 14px 10px;">
+        <button onclick="nutMealScanAddItem()" style="width:100%;padding:9px;background:transparent;border:1px dashed var(--border2);border-radius:var(--r-sm);color:var(--muted);font-size:0.72rem;letter-spacing:0.3px;cursor:pointer;transition:all 0.15s;">+ Add item</button>
       </div>
 
       <!-- Totals -->
-      <div id="nutMealScanTotals" style="margin:0 14px 14px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;"></div>
+      <div id="nutMealScanTotals" style="margin:0 14px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:13px 16px;display:none;"></div>
 
       <!-- Save options -->
       <div style="padding:0 14px 18px;display:flex;flex-direction:column;gap:8px;">
-        <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;transition:border-color 0.2s;" id="nutMealScanMemoryRow">
+        <!-- Memory toggle -->
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);">
           <div style="flex:1;">
             <div style="font-size:0.82rem;font-weight:600;color:var(--text);">Save to food memory</div>
-            <div style="font-size:0.65rem;color:var(--muted);margin-top:1px;">Each item added to your food list for quick re-use</div>
+            <div style="font-size:0.63rem;color:var(--muted);margin-top:2px;">Items added to your food list for quick re-use</div>
           </div>
-          <div id="nutMealScanMemoryToggle" onclick="nutMealScanToggleMemory(event)" style="width:42px;height:24px;border-radius:12px;background:var(--border2);position:relative;flex-shrink:0;cursor:pointer;transition:background 0.2s;">
-            <div id="nutMealScanMemoryKnob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+          <div onclick="nutMealScanToggleMemory()" style="width:42px;height:24px;border-radius:12px;position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0;" id="nutMealScanMemTrack">
+            <div id="nutMealScanMemKnob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:0 1px 4px rgba(0,0,0,0.35);"></div>
           </div>
-        </label>
-        <button onclick="nutMealScanSave()" style="width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;font-weight:900;cursor:pointer;transition:transform 0.1s;" onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform=''" ontouchstart="this.style.transform='scale(0.98)'" ontouchend="this.style.transform=''">LOG MEAL</button>
+        </div>
+        <button onclick="nutMealScanSave()" style="width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;font-weight:900;cursor:pointer;transition:transform 0.1s,opacity 0.1s;" onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform=''" ontouchstart="this.style.transform='scale(0.98)'" ontouchend="this.style.transform=''">LOG MEAL</button>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Macro edit sheet (slides up over meal scan) -->
+<div id="nutMsiEditSheet" style="display:none;position:fixed;inset:0;z-index:800;align-items:flex-end;" onclick="if(event.target===this)nutMsiEditClose()">
+  <div style="width:100%;background:var(--card);border-radius:22px 22px 0 0;padding:20px 20px calc(20px + var(--safe-b));border-top:1px solid var(--border);animation:slideUp 0.2s cubic-bezier(0.32,0.72,0,1) both;">
+    <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 18px;"></div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--text);margin-bottom:4px;" id="nutMsiEditTitle">EDIT</div>
+    <div style="font-size:0.7rem;color:var(--muted);margin-bottom:14px;" id="nutMsiEditSub"></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;">
+      <button onclick="nutMsiEditAdj(-10)" style="width:44px;height:44px;border-radius:50%;background:var(--card2);border:1px solid var(--border2);color:var(--text);font-size:1rem;font-weight:bold;cursor:pointer;flex-shrink:0;">−10</button>
+      <button onclick="nutMsiEditAdj(-1)"  style="width:44px;height:44px;border-radius:50%;background:var(--card2);border:1px solid var(--border2);color:var(--text);font-size:1rem;font-weight:bold;cursor:pointer;flex-shrink:0;">−1</button>
+      <input id="nutMsiEditInp" type="number" inputmode="decimal" style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:var(--r-sm);color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:2rem;text-align:center;padding:10px 8px;outline:none;">
+      <button onclick="nutMsiEditAdj(1)"   style="width:44px;height:44px;border-radius:50%;background:var(--card2);border:1px solid var(--border2);color:var(--text);font-size:1rem;font-weight:bold;cursor:pointer;flex-shrink:0;">+1</button>
+      <button onclick="nutMsiEditAdj(10)"  style="width:44px;height:44px;border-radius:50%;background:var(--card2);border:1px solid var(--border2);color:var(--text);font-size:1rem;font-weight:bold;cursor:pointer;flex-shrink:0;">+10</button>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="nutMsiEditClose()" style="flex:1;padding:13px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.88rem;font-weight:600;cursor:pointer;">Cancel</button>
+      <button onclick="nutMsiEditSave()" style="flex:2;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;font-weight:900;cursor:pointer;">SAVE</button>
     </div>
   </div>
 </div>
