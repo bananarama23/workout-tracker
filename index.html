@@ -9011,8 +9011,25 @@ function nutMealScanCallVision(b64,mime){
   if(!key){nutMealScanSetStatus('No Gemini key — add it first','var(--orange)');return;}
   var _ctxR=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
   var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
-  var _ctx=(_ctxR||_ctxH)?'\nContext: '+[_ctxR?'Restaurant/place: '+_ctxR:'',_ctxH?'Notes: '+_ctxH:''].filter(Boolean).join('. '):'';
-  var prompt='Look at this food photo. Identify EVERY separate food and drink item. For each give realistic estimated macros for the portion visible.'+_ctx+'\nReturn ONLY a JSON array, no markdown:\n[{"name":"specific food name","qty":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}]\nqty=countable units if applicable (e.g. 2 eggs). All values must be numbers, never null. Sodium in mg. Estimate confidently. Use the context to improve accuracy if provided.';
+  var restaurantBlock='';
+  if(_ctxR){
+    restaurantBlock='\n\nRESTAURANT: "'+_ctxR+'"'+
+      '\nIMPORTANT: If you know this restaurant\'s published menu nutrition data (official website, nutrition PDF, or widely reported figures), USE THOSE EXACT NUMBERS as your primary source — do NOT estimate visually if you have official data. '+
+      'For chain restaurants (fast food, casual dining, coffee chains) you almost certainly have this data — use it. '+
+      'If it is a small independent or you are unsure, use visual estimation but note it is an estimate.';
+  }
+
+  var hintBlock=_ctxH?'\nADDITIONAL NOTES: '+_ctxH:'';
+  var prompt='Look at this food photo. Identify EVERY separate food and drink item visible.'+
+    restaurantBlock+hintBlock+
+    '\n\nIf a fork, spoon, knife, hand, coin, or other common object is visible in the frame, use it as a size reference to calibrate portion sizes before estimating.'+
+    '\n\nFor each item provide accurate macros. Prioritise in this order:'+
+    '\n1. Official published nutrition from the restaurant/brand (most accurate)'+
+    '\n2. Widely-known database values for named dishes'+
+    '\n3. Visual portion estimation as a last resort'+
+    '\n\nReturn ONLY a JSON array, no markdown:'+
+    '\n[{"name":"specific food name","qty":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number,"source":"official|database|estimated"}]'+
+    '\nqty=countable units if applicable (e.g. 2 eggs). All values must be numbers, never null. Sodium in mg.';
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mime,data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:900}})
@@ -9033,7 +9050,8 @@ function nutMealScanCallVision(b64,mime){
         qty:Math.max(0.25,parseFloat(it.qty)||1),cal:Math.round(parseFloat(it.calories)||0),
         prot:Math.round((parseFloat(it.protein)||0)*10)/10,carb:Math.round((parseFloat(it.carbs)||0)*10)/10,
         fat:Math.round((parseFloat(it.fat)||0)*10)/10,fib:Math.round((parseFloat(it.fibre)||0)*10)/10,
-        sat:Math.round((parseFloat(it.satFat)||0)*10)/10,sod:Math.round(parseFloat(it.sodium)||0)};});
+        sat:Math.round((parseFloat(it.satFat)||0)*10)/10,sod:Math.round(parseFloat(it.sodium)||0),
+        source:String(it.source||'estimated')};});
       nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
       nutMealScanRender();
     }catch(e2){
@@ -9072,11 +9090,16 @@ function nutMsiRowHTML(it){
   h+='</div>';
   h+='<button onclick="nutMealScanRemove('+it.id+')" style="background:none;border:none;color:var(--muted);font-size:0.9rem;cursor:pointer;padding:3px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.15s,color 0.15s;" onmouseover="this.style.background=\'var(--red-dim)\';this.style.color=\'var(--red)\'" onmouseout="this.style.background=\'none\';this.style.color=\'var(--muted)\'">&#10005;</button>';
   h+='</div>';
-  h+='<div style="display:flex;gap:4px;">';
+  h+='<div style="display:flex;gap:4px;align-items:center;">';
   h+=nutMsiPill(dCal,'','Cal','var(--accent)',true,it.id,'cal');
   h+=nutMsiPill(dProt,'g','P','var(--green)',false,it.id,'prot');
   h+=nutMsiPill(dCarb,'g','C','var(--blue)',false,it.id,'carb');
   h+=nutMsiPill(dFat,'g','F','var(--orange)',false,it.id,'fat');
+  if(it.source){
+    var srcColor=it.source==='official'?'var(--green)':it.source==='database'?'var(--blue)':'var(--muted)';
+    var srcLabel=it.source==='official'?'✓ official':it.source==='database'?'◎ database':'~ estimated';
+    h+='<div style="margin-left:auto;font-size:0.55rem;color:'+srcColor+';font-weight:700;letter-spacing:0.3px;white-space:nowrap;">'+srcLabel+'</div>';
+  }
   h+='</div>';
   return h;
 }
