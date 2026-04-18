@@ -9006,10 +9006,10 @@ function nutMealScanRenderMemory(){
 function nutMealScanToggleMemory(){_msiMemory=!_msiMemory;nutMealScanRenderMemory();}
 
 // ── Vision call ───────────────────────────────────────────────────────────────
-function nutMealScanCallVision(b64,mime){
+function nutMealScanCallVision(b64,mime,_retryRestaurant){
   var key=localStorage.getItem('wt_gemini_key')||'';
   if(!key){nutMealScanSetStatus('No Gemini key — add it first','var(--orange)');return;}
-  var _ctxR=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
+  var _ctxR=typeof _retryRestaurant==='string'?_retryRestaurant:((document.getElementById('nutMsiCtxRestaurant')||{}).value||'');
   var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
   var restaurantBlock='';
   if(_ctxR){
@@ -9056,32 +9056,16 @@ function nutMealScanCallVision(b64,mime){
       nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
       nutMealScanRender();
     }catch(e2){
-      // Progressive retry: strip last word from restaurant name, then drop it entirely
+      // Progressive retry: strip last word, then drop restaurant entirely
       if(_ctxR){
         var words=_ctxR.trim().split(/\s+/);
         if(words.length>1){
-          // Try with one fewer word (e.g. "Marugame Udon Waikiki" -> "Marugame Udon")
           var shorter=words.slice(0,words.length-1).join(' ');
           nutMealScanSetStatus('Trying "'+shorter+'"…','var(--muted)');
-          var ctxEl=document.getElementById('nutMsiCtxRestaurant');
-          var _savedCtxR=_ctxR;
-          if(ctxEl)ctxEl.value=shorter;
-          _ctxR=shorter;
-          setTimeout(function(){
-            nutMealScanCallVision(b64,mime);
-            if(ctxEl)ctxEl.value=_savedCtxR;
-          },800);
+          setTimeout(function(){nutMealScanCallVision(b64,mime,shorter);},800);
         } else {
-          // Single word didn't work — drop restaurant entirely and go visual
-          nutMealScanSetStatus('Restaurant not recognised — using visual estimate…','var(--muted)');
-          var ctxEl2=document.getElementById('nutMsiCtxRestaurant');
-          var _savedCtxR2=_ctxR;
-          if(ctxEl2)ctxEl2.value='';
-          _ctxR='';
-          setTimeout(function(){
-            nutMealScanCallVision(b64,mime);
-            if(ctxEl2)ctxEl2.value=_savedCtxR2;
-          },800);
+          nutMealScanSetStatus('Restaurant not found — using visual estimate…','var(--muted)');
+          setTimeout(function(){nutMealScanCallVision(b64,mime,'');},800);
         }
       } else {
         nutMealScanSetStatus('Could not parse — try again','var(--orange)');
