@@ -8857,7 +8857,35 @@ function nutMealScanCapture(){
   c2.getContext('2d').drawImage(canvas,0,0,c2.width,c2.height);
   var b64=c2.toDataURL('image/jpeg',0.82).split(',')[1];
   _msiLastB64=b64;_msiLastMime='image/jpeg';
-  nutCamClose();nutMealScanOpen(b64,'image/jpeg');
+  nutCamClose();
+  // Kick off reverse geocode in background — result pre-fills restaurant field if found
+  nutMsiGeoLookup();
+  nutMealScanOpen(b64,'image/jpeg');
+}
+
+function nutMsiGeoLookup(){
+  if(!navigator.geolocation)return;
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var lat=pos.coords.latitude,lon=pos.coords.longitude;
+    fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+lat+'&lon='+lon+'&zoom=18&addressdetails=1',{
+      headers:{'Accept-Language':'en','User-Agent':'WorkoutTracker/1.0'}
+    })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      // Try to get a food-place name — amenity, shop, building, then suburb
+      var name=d.name||'';
+      var addr=d.address||{};
+      var place=name||(addr.amenity||addr.restaurant||addr.cafe||addr.fast_food||addr.food||'');
+      if(!place)return; // nothing useful — don't pre-fill with a street name
+      var ri=document.getElementById('nutMsiCtxRestaurant');
+      if(ri&&!ri.value){
+        ri.value=place;
+        ri.style.borderColor='var(--accent)';
+        setTimeout(function(){ri.style.borderColor='var(--border2)';},1500);
+      }
+    })
+    .catch(function(){});
+  },function(){},{timeout:6000,maximumAge:30000});
 }
 
 function nutMealScanRetake(){
@@ -8867,17 +8895,39 @@ function nutMealScanRetake(){
 
 // ── Open / close ──────────────────────────────────────────────────────────────
 function nutMealScanOpen(b64,mime){
+  _msiLastB64=b64;_msiLastMime=mime;
+  var cs=document.getElementById('nutMsiContextSheet');
+  if(cs){
+    cs.style.display='flex';
+    var ri=document.getElementById('nutMsiCtxRestaurant');if(ri)ri.value='';
+    var hi=document.getElementById('nutMsiCtxHint');if(hi)hi.value='';
+    setTimeout(function(){var r2=document.getElementById('nutMsiCtxRestaurant');if(r2)r2.focus();},350);
+  } else {
+    nutMealScanOpenDirect(b64,mime);
+  }
+}
+function nutMsiContextSkip(){
+  var cs=document.getElementById('nutMsiContextSheet');if(cs)cs.style.display='none';
+  nutMealScanOpenDirect(_msiLastB64,_msiLastMime);
+}
+function nutMsiContextConfirm(){
+  var cs=document.getElementById('nutMsiContextSheet');if(cs)cs.style.display='none';
+  nutMealScanOpenDirect(_msiLastB64,_msiLastMime);
+}
+function nutMealScanOpenDirect(b64,mime){
   _msi=[];_msiMemory=false;_msiShowTotal=true;
   var h=new Date().getHours();
   _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
   if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
   var ov=document.getElementById('nutMealScanOverlay');if(ov)ov.style.display='block';
   var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='none';
-  nutMealScanSetStatus('Identifying items\u2026','var(--muted)');
+  nutMealScanSetStatus('Identifying items…','var(--muted)');
   var items=document.getElementById('nutMealScanItems');
   if(items)items.innerHTML=nutMsiSpinner();
   document.getElementById('nutMealScanTotals').style.display='none';
   document.getElementById('nutMealScanViewToggle').style.display='none';
+  var rest=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
+  var nm=document.getElementById('nutMsiMealName');if(nm&&rest&&!nm.value)nm.value=rest;
   nutMealScanRenderMealBtns();nutMealScanRenderMemory();
   if(b64)nutMealScanCallVision(b64,mime);
 }
@@ -8930,7 +8980,10 @@ function nutMealScanToggleMemory(){_msiMemory=!_msiMemory;nutMealScanRenderMemor
 function nutMealScanCallVision(b64,mime){
   var key=localStorage.getItem('wt_gemini_key')||'';
   if(!key){nutMealScanSetStatus('No Gemini key — add it first','var(--orange)');return;}
-  var prompt='Look at this food photo. Identify EVERY separate food and drink item. For each give realistic estimated macros for the portion visible.\nReturn ONLY a JSON array, no markdown:\n[{"name":"specific food name","qty":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}]\nqty=countable units if applicable (e.g. 2 eggs). All values must be numbers, never null. Sodium in mg. Estimate confidently.';
+  var _ctxR=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
+  var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
+  var _ctx=(_ctxR||_ctxH)?'\nContext: '+[_ctxR?'Restaurant/place: '+_ctxR:'',_ctxH?'Notes: '+_ctxH:''].filter(Boolean).join('. '):'';
+  var prompt='Look at this food photo. Identify EVERY separate food and drink item. For each give realistic estimated macros for the portion visible.'+_ctx+'\nReturn ONLY a JSON array, no markdown:\n[{"name":"specific food name","qty":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}]\nqty=countable units if applicable (e.g. 2 eggs). All values must be numbers, never null. Sodium in mg. Estimate confidently. Use the context to improve accuracy if provided.';
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mime,data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:900}})
@@ -9199,7 +9252,7 @@ function nutMealScanSave(){
 
 <!-- MEAL SCAN OVERLAY -->
 <div id="nutMealScanOverlay" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.9);overflow-y:auto;-webkit-overflow-scrolling:touch;" class="overlay-anim">
-  <div style="min-height:100%;display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top,20px)+8px) 0 calc(var(--nav-h)+var(--safe-b)+20px);">
+  <div style="min-height:100%;display:flex;flex-direction:column;padding:calc(var(--safe-t) + 8px) 0 calc(var(--nav-h)+var(--safe-b)+20px);">
     <div style="margin:0 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;">
       <!-- Header -->
       <div style="padding:15px 16px 13px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:10;">
@@ -9231,6 +9284,11 @@ function nutMealScanSave(){
       <div id="nutMealScanTotals" style="display:none;margin:0 14px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:13px 16px;"></div>
       <!-- Save options -->
       <div style="padding:0 14px 18px;display:flex;flex-direction:column;gap:8px;">
+        <!-- Meal name -->
+        <div>
+          <label style="font-size:0.58rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;display:block;margin-bottom:5px;">Meal name (optional)</label>
+          <input id="nutMsiMealName" type="text" placeholder="e.g. Wagamama chicken katsu" style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.88rem;padding:9px 12px;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
+        </div>
         <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);">
           <div style="flex:1;"><div style="font-size:0.82rem;font-weight:600;color:var(--text);">Save to food memory</div>
           <div style="font-size:0.63rem;color:var(--muted);margin-top:2px;">Each item added to your food list for quick re-use</div></div>
@@ -9259,6 +9317,28 @@ function nutMealScanSave(){
     <div style="display:flex;gap:8px;">
       <button onclick="nutMsiEditClose()" style="flex:1;padding:13px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.88rem;font-weight:600;cursor:pointer;">Cancel</button>
       <button onclick="nutMsiEditSave()" style="flex:2;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;font-weight:900;cursor:pointer;">SAVE</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Meal scan context sheet -->
+<div id="nutMsiContextSheet" style="display:none;position:fixed;inset:0;z-index:750;background:rgba(0,0,0,0.75);align-items:flex-end;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
+  <div style="width:100%;background:var(--card);border-radius:22px 22px 0 0;padding:20px 20px calc(20px + var(--safe-b));border-top:1px solid var(--border);animation:slideUp 0.22s cubic-bezier(0.32,0.72,0,1) both;">
+    <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 16px;"></div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:4px;">ADD CONTEXT</div>
+    <div style="font-size:0.7rem;color:var(--muted);margin-bottom:14px;">Help Gemini identify portions more accurately</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+      <input id="nutMsiCtxRestaurant" type="text" placeholder="Restaurant or place (e.g. Wagamama, homemade)" 
+        style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.88rem;padding:10px 12px;outline:none;box-sizing:border-box;"
+        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
+      <input id="nutMsiCtxHint" type="text" placeholder="Any clues (e.g. large portion, added extra rice)"
+        style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.88rem;padding:10px 12px;outline:none;box-sizing:border-box;"
+        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="nutMsiContextSkip()" style="flex:1;padding:13px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.88rem;font-weight:600;cursor:pointer;">Skip</button>
+      <button onclick="nutMsiContextConfirm()" style="flex:2;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;font-weight:900;cursor:pointer;">SCAN ›</button>
     </div>
   </div>
 </div>
