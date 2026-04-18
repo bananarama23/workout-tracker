@@ -9040,8 +9040,24 @@ function nutMealScanCallVision(b64,mime,_retryRestaurant){
     var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='block';
     var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&
              data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
-    if(!text){nutMealScanSetStatus('No result — retake or upload a clearer photo','var(--orange)');
-      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.8rem;">Try again with better lighting</div>';return;}
+    if(!text){
+      // No text response — treat same as parse failure and retry with shorter restaurant name
+      if(_ctxR){
+        var words=_ctxR.trim().split(/\s+/);
+        if(words.length>1){
+          var shorter=words.slice(0,words.length-1).join(' ');
+          nutMealScanSetStatus('Trying "'+shorter+'"…','var(--muted)');
+          setTimeout(function(){nutMealScanCallVision(b64,mime,shorter);},800);
+        } else {
+          nutMealScanSetStatus('Restaurant not found — using visual estimate…','var(--muted)');
+          setTimeout(function(){nutMealScanCallVision(b64,mime,'');},800);
+        }
+      } else {
+        nutMealScanSetStatus('No result — retake or upload a clearer photo','var(--orange)');
+        document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.8rem;">Try again with better lighting</div>';
+      }
+      return;
+    }
     text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
     var s=text.indexOf('['),e=text.lastIndexOf(']');
     if(s>=0&&e>s)text=text.slice(s,e+1);
@@ -9056,6 +9072,7 @@ function nutMealScanCallVision(b64,mime,_retryRestaurant){
       nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
       nutMealScanRender();
     }catch(e2){
+      console.warn('nutMealScan parse fail. Raw text:', text.slice(0,500));
       // Progressive retry: strip last word, then drop restaurant entirely
       if(_ctxR){
         var words=_ctxR.trim().split(/\s+/);
