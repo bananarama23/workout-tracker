@@ -1346,7 +1346,12 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutAddOverlayTitle">ADD TO BREAKFAST</div>
       <button onclick="nutCloseAdd()" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
     </div>
-    <input id="nutAddSearch" type="text" placeholder="Search foods..." oninput="nutFilterAddList()" class="log-input" style="margin-bottom:12px;">
+    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+      <input id="nutAddSearch" type="text" placeholder="Search foods..." oninput="nutFilterAddList()" class="log-input" style="flex:1;margin:0;">
+      <button onclick="nutAddInlineScan()" title="Scan food" style="width:42px;height:42px;flex-shrink:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">📷</button>
+      <button onclick="nutMsiOpenUpload()" title="Upload meal photo" style="width:42px;height:42px;flex-shrink:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">🍽</button>
+      <input type="file" id="nutAddMealUpload" accept="image/*" style="display:none;" onchange="nutMsiFromAddOverlay(this)">
+    </div>
     <div id="nutAddList"></div>
   </div>
 </div>
@@ -1362,35 +1367,31 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   </div>
   <video id="nutCamVideo" playsinline autoplay muted style="width:100%;height:100%;object-fit:cover;"></video>
   <canvas id="nutCamCanvas" style="display:none;"></canvas>
-  <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
-    <div id="camFrame" style="width:72vw;height:42vw;max-width:320px;max-height:180px;border:2px solid rgba(200,255,0,0.8);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);position:relative;">
-      <div style="position:absolute;top:-2px;left:-2px;width:20px;height:20px;border-top:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:2px 0 0 0;"></div>
-      <div style="position:absolute;top:-2px;right:-2px;width:20px;height:20px;border-top:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 2px 0 0;"></div>
-      <div style="position:absolute;bottom:-2px;left:-2px;width:20px;height:20px;border-bottom:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:0 0 0 2px;"></div>
-      <div style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-bottom:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 0 2px 0;"></div>
-      <div id="camScanLine" style="position:absolute;left:4px;right:4px;height:2px;background:linear-gradient(to right,transparent,var(--accent),transparent);top:50%;animation:scanline 2s ease-in-out infinite;"></div>
-    </div>
-  </div>
-  <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 16px calc(var(--nav-h) + var(--safe-b) + 20px);background:linear-gradient(to top,rgba(0,0,0,0.9) 60%,transparent);">
-    <div id="camStatus" style="text-align:center;color:rgba(255,255,255,0.8);font-size:0.78rem;margin-bottom:14px;min-height:20px;"></div>
-    <!-- Hidden file inputs -->
+  <!-- No scan frame — food photos don't need a target box -->
+  <div id="camFrame" style="display:none;"></div>
+  <div id="camScanLine" style="display:none;"></div>
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:12px 20px calc(var(--nav-h) + var(--safe-b) + 16px);background:linear-gradient(to top,rgba(0,0,0,0.92) 50%,transparent);">
+    <div id="camStatus" style="text-align:center;color:rgba(255,255,255,0.75);font-size:0.75rem;margin-bottom:16px;min-height:18px;"></div>
     <input type="file" id="camUploadSingle" accept="image/*" style="display:none;" onchange="nutCamUploadSingle(this)">
     <input type="file" id="camUploadMeal" accept="image/*" style="display:none;" onchange="nutCamUploadMeal(this)">
-    <!-- Controls: upload | shutter | meal scan -->
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-      <div style="flex:1;display:flex;flex-direction:column;gap:8px;align-items:center;">
-        <button onclick="document.getElementById('camUploadSingle').click()" style="width:100%;padding:9px 6px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.8);border-radius:20px;font-size:0.65rem;font-weight:700;letter-spacing:0.5px;cursor:pointer;">📁 Upload</button>
-        <button onclick="document.getElementById('camUploadMeal').click()" style="width:100%;padding:9px 6px;background:rgba(200,255,0,0.08);border:1px solid rgba(200,255,0,0.3);color:var(--accent);border-radius:20px;font-size:0.65rem;font-weight:700;letter-spacing:0.5px;cursor:pointer;">📁 Meal</button>
+    <!-- Three clean buttons in a row -->
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;">
+      <!-- Left: single item upload -->
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
+        <button onclick="document.getElementById('camUploadSingle').click()" style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">📁</button>
+        <div style="font-size:0.58rem;color:rgba(255,255,255,0.45);text-align:center;">Upload</div>
       </div>
-      <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:5px;">
-        <button onclick="nutCamCapture()" style="width:68px;height:68px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,0.4);cursor:pointer;display:flex;align-items:center;justify-content:center;">
-          <div style="width:52px;height:52px;border-radius:50%;background:var(--accent);"></div>
+      <!-- Centre: shutter -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+        <button onclick="nutCamCapture()" style="width:72px;height:72px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,0.35);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+          <div style="width:56px;height:56px;border-radius:50%;background:var(--accent);"></div>
         </button>
-        <div style="font-size:0.54rem;color:rgba(255,255,255,0.28);">Capture</div>
+        <div style="font-size:0.58rem;color:rgba(255,255,255,0.45);">Single item</div>
       </div>
-      <div style="flex:1;display:flex;flex-direction:column;gap:8px;align-items:center;">
-        <button onclick="nutMealScanCapture()" style="width:100%;padding:9px 6px;background:rgba(200,255,0,0.08);border:1px solid rgba(200,255,0,0.3);color:var(--accent);border-radius:20px;font-size:0.65rem;font-weight:700;letter-spacing:0.5px;cursor:pointer;">🍽 Meal</button>
-        <div style="font-size:0.54rem;color:rgba(255,255,255,0.28);text-align:center;">Live scan</div>
+      <!-- Right: meal scan -->
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
+        <button onclick="nutMealScanCapture()" style="width:52px;height:52px;border-radius:50%;background:rgba(200,255,0,0.12);border:1px solid rgba(200,255,0,0.35);color:var(--accent);font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">🍽</button>
+        <div style="font-size:0.58rem;color:rgba(255,255,255,0.45);text-align:center;">Meal scan</div>
       </div>
     </div>
   </div>
@@ -7533,6 +7534,33 @@ function nutFillFromScan(d,statusEl){
     statusEl.style.color='var(--green)';
     setTimeout(function(){if(statusEl){statusEl.style.display='none';statusEl.style.color='';}},4000);
   }
+}
+// Helper: open camera from add-food search (single item mode)
+// nutAddInlineScan already exists — it sets _nutAddInlineMode=true then opens camera
+// Helper: upload meal photo directly from add-food search overlay
+function nutMsiOpenUpload(){
+  var inp=document.getElementById('nutAddMealUpload');if(inp)inp.click();
+}
+function nutMsiFromAddOverlay(inp){
+  var file=inp.files&&inp.files[0];if(!file)return;
+  // Close the add overlay first
+  nutCloseAdd();
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var img=new Image();
+    img.onload=function(){
+      var maxW=900,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var c=document.createElement('canvas');
+      c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
+      _msiLastB64=b64;_msiLastMime='image/jpeg';
+      nutMealScanOpen(b64,'image/jpeg');
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+  inp.value='';
 }
 // ── End photo scan ─────────────────────────────────────────────────
 function nutSaveFood(){
