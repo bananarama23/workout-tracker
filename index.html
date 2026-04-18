@@ -9006,41 +9006,25 @@ function nutMealScanRenderMemory(){
 function nutMealScanToggleMemory(){_msiMemory=!_msiMemory;nutMealScanRenderMemory();}
 
 // ── Vision call ───────────────────────────────────────────────────────────────
-function nutMealScanCallVision(b64,mime,_overrideRestaurant){
-  // _overrideRestaurant: undefined = read from DOM
-  //                      string    = use this (may be shorter retry or '')
-  //                      null      = final visual-only attempt, no more retries
+function nutMealScanCallVision(b64,mime){
   var key=localStorage.getItem('wt_gemini_key')||'';
   if(!key){nutMealScanSetStatus('No Gemini key \u2014 add it first','var(--orange)');return;}
-  var _finalAttempt=(_overrideRestaurant===null);
-  var _ctxR=_finalAttempt?'':typeof _overrideRestaurant==='string'?_overrideRestaurant:((document.getElementById('nutMsiCtxRestaurant')||{}).value||'');
+  var _ctxR=((document.getElementById('nutMsiCtxRestaurant')||{}).value||'').trim();
   var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
-
-  function _retry(text){
-    if(_finalAttempt||!_ctxR){
-      // Already on visual-only pass — genuine failure
-      nutMealScanSetStatus('No result \u2014 retake or upload a clearer photo','var(--orange)');
-      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.8rem;">Try again with better lighting</div>';
-      return;
-    }
-    var words=_ctxR.trim().split(/\s+/);
-    if(words.length>1){
-      var shorter=words.slice(0,words.length-1).join(' ');
-      nutMealScanSetStatus('Trying "'+shorter+'"\u2026','var(--muted)');
-      setTimeout(function(){nutMealScanCallVision(b64,mime,shorter);},800);
-    } else {
-      nutMealScanSetStatus('Restaurant not found \u2014 using visual estimate\u2026','var(--muted)');
-      setTimeout(function(){nutMealScanCallVision(b64,mime,null);},800);
-    }
-  }
 
   var restaurantBlock='';
   if(_ctxR){
-    restaurantBlock='\n\nRESTAURANT CONTEXT: "'+_ctxR+'".'+
-      ' If you recognise this restaurant and know their published nutrition figures, use those as your primary source and set source to "official".'+
-      ' If you do not recognise it or are unsure, IGNORE the restaurant name and fall back to visual estimation as normal \u2014 do NOT fail or return an error just because the restaurant is unfamiliar.'+
-      ' Always return a valid JSON array regardless.';
+    // Build a list of progressively shorter name variants to try
+    var words=_ctxR.split(/\s+/);
+    var variants=[_ctxR];
+    for(var i=words.length-1;i>0;i--)variants.push(words.slice(0,i).join(' '));
+    restaurantBlock='\n\nRESTAURANT CONTEXT: The user says they ate at "'+_ctxR+'".'+
+      ' Try matching against these name variants in order: '+variants.map(function(v){return'"'+v+'"';}).join(', ')+'.'+
+      ' If you recognise ANY of these variants and have their published nutrition data, use it and set source to "official".'+
+      ' If you do not recognise any variant, IGNORE the restaurant entirely and estimate visually \u2014 do NOT let an unrecognised restaurant prevent you from returning results.'+
+      ' Always return a valid JSON array no matter what.';
   }
+
   var hintBlock=_ctxH?'\nADDITIONAL NOTES: '+_ctxH:'';
   var prompt='Look at this food photo. Identify EVERY separate food and drink item visible.'+
     restaurantBlock+hintBlock+
@@ -9049,7 +9033,7 @@ function nutMealScanCallVision(b64,mime,_overrideRestaurant){
     '\n1. Official published nutrition from the restaurant if you recognise it'+
     '\n2. Widely-known database values for named dishes'+
     '\n3. Visual portion estimation \u2014 always fall back to this if unsure'+
-    '\n\nYou MUST always return a JSON array even if the restaurant is unknown. Never return an empty response.'+
+    '\n\nYou MUST always return a JSON array. Never refuse or return empty.'+
     '\n\nReturn ONLY a JSON array, no markdown:'+
     '\n[{"name":"specific food name","qty":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number,"source":"official|database|estimated"}]'+
     '\nqty=countable units if applicable (e.g. 2 eggs). All values must be numbers, never null. Sodium in mg.';
@@ -9064,17 +9048,12 @@ function nutMealScanCallVision(b64,mime,_overrideRestaurant){
     var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&
              data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
     if(!text){
-      // Surface the real Gemini error so we know what's happening
       var _errMsg='';
       if(data.error)_errMsg=data.error.message||JSON.stringify(data.error);
       else if(data.candidates&&data.candidates[0]&&data.candidates[0].finishReason)_errMsg='finishReason: '+data.candidates[0].finishReason;
-      else _errMsg=JSON.stringify(data).slice(0,120);
-      if(_finalAttempt||!_ctxR){
-        nutMealScanSetStatus('Error: '+_errMsg,'var(--orange)');
-        document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.75rem;word-break:break-all;">'+_errMsg+'</div>';
-      } else {
-        _retry();
-      }
+      else _errMsg=JSON.stringify(data).slice(0,200);
+      nutMealScanSetStatus('Error: '+_errMsg,'var(--orange)');
+      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.72rem;word-break:break-all;padding:16px;">'+_errMsg+'</div>';
       return;
     }
     text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
@@ -9091,17 +9070,13 @@ function nutMealScanCallVision(b64,mime,_overrideRestaurant){
       nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
       nutMealScanRender();
     }catch(e2){
-      if(_finalAttempt||!_ctxR){
-        nutMealScanSetStatus('Parse error — raw: '+text.slice(0,80),'var(--orange)');
-        document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.75rem;word-break:break-all;">'+text.slice(0,200)+'</div>';
-      } else {
-        _retry();
-      }
+      nutMealScanSetStatus('Parse error \u2014 '+text.slice(0,80),'var(--orange)');
+      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:16px;color:var(--muted);font-size:0.72rem;word-break:break-all;">'+text.slice(0,300)+'</div>';
     }
   })
-  .catch(function(){
+  .catch(function(err){
     var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='block';
-    nutMealScanSetStatus('Network error','var(--orange)');
+    nutMealScanSetStatus('Network error \u2014 '+(err&&err.message||'check connection'),'var(--orange)');
   });
 }
 
