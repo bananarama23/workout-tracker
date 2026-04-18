@@ -9010,13 +9010,17 @@ function nutMealScanCallVision(b64,mime){
   var key=localStorage.getItem('wt_gemini_key')||'';
   if(!key){nutMealScanSetStatus('No Gemini key \u2014 add it first','var(--orange)');return;}
   var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
-  var hintBlock=_ctxH?'\nADDITIONAL NOTES: '+_ctxH:'';
-  var prompt='Look at this food photo. Identify EVERY separate food and drink item visible.'+
+  var hintBlock=_ctxH?'\nADDITIONAL NOTES FROM USER: '+_ctxH:'';
+  var prompt='Look at this food photo taken from above. Identify EVERY separate food and drink item visible.'+
     hintBlock+
-    '\n\nIf a fork, spoon, knife, hand, coin, or other common object is visible in the frame, use it as a size reference to calibrate portion sizes before estimating.'+
+    '\n\nIf a fork, spoon, knife, hand, coin, or other common object is visible, use it as a size reference to estimate weight and portion size more accurately.'+
+    '\n\nFor each item:'+
+    '\n1. Estimate its weight in grams based on visual size and any reference objects'+
+    '\n2. Use that weight to calculate accurate macros'+
+    '\n3. Rate your confidence: "high" (familiar dish with clear portion), "medium" (estimated), "low" (unclear or obscured)'+
     '\n\nReturn ONLY a JSON array, no markdown:'+
-    '\n[{"name":"specific food name","qty":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}]'+
-    '\nqty=countable units if applicable (e.g. 2 eggs). All values must be numbers, never null. Sodium in mg. Estimate confidently.';
+    '\n[{"name":"specific food name","qty":number,"weight_g":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number,"confidence":"high|medium|low"}]'+
+    '\nqty=countable units if applicable (e.g. 2 eggs), otherwise 1. All values must be numbers, never null. Sodium in mg.';
 
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
@@ -9051,7 +9055,8 @@ function nutMealScanCallVision(b64,mime){
         prot:Math.round((parseFloat(it.protein)||0)*10)/10,carb:Math.round((parseFloat(it.carbs)||0)*10)/10,
         fat:Math.round((parseFloat(it.fat)||0)*10)/10,fib:Math.round((parseFloat(it.fibre)||0)*10)/10,
         sat:Math.round((parseFloat(it.satFat)||0)*10)/10,sod:Math.round(parseFloat(it.sodium)||0),
-        source:'estimated'};});
+        weight_g:Math.round(parseFloat(it.weight_g)||0),
+        confidence:String(it.confidence||'medium')};});
       nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
       nutMealScanRender();
     }catch(e2){
@@ -9095,11 +9100,12 @@ function nutMsiRowHTML(it){
   h+=nutMsiPill(dProt,'g','P','var(--green)',false,it.id,'prot');
   h+=nutMsiPill(dCarb,'g','C','var(--blue)',false,it.id,'carb');
   h+=nutMsiPill(dFat,'g','F','var(--orange)',false,it.id,'fat');
-  if(it.source){
-    var srcColor=it.source==='official'?'var(--green)':it.source==='database'?'var(--blue)':'var(--muted)';
-    var srcLabel=it.source==='official'?'✓ official':it.source==='database'?'◎ database':'~ estimated';
-    h+='<div style="margin-left:auto;font-size:0.55rem;color:'+srcColor+';font-weight:700;letter-spacing:0.3px;white-space:nowrap;">'+srcLabel+'</div>';
-  }
+  // Confidence + weight badge
+  var _confColor=it.confidence==='high'?'var(--green)':it.confidence==='low'?'var(--orange)':'var(--muted)';
+  var _confIcon=it.confidence==='high'?'✓ ':it.confidence==='low'?'⚠ ':'∼ ';
+  var _badge=_confIcon+(it.confidence||'medium');
+  if(it.weight_g)_badge+=' · '+it.weight_g+'g';
+  h+='<div style="margin-left:auto;font-size:0.55rem;color:'+_confColor+';font-weight:700;letter-spacing:0.3px;white-space:nowrap;">'+_badge+'</div>';
   h+='</div>';
   return h;
 }
@@ -9474,9 +9480,7 @@ function nutMealScanToggleCombine(){_msiCombine=!_msiCombine;nutMealScanRenderCo
     <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:4px;">ADD CONTEXT</div>
     <div style="font-size:0.7rem;color:var(--muted);margin-bottom:14px;">Help Gemini identify portions more accurately</div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
-      <input id="nutMsiCtxRestaurant" type="text" placeholder="Restaurant or place (e.g. Wagamama, homemade)" 
-        style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.88rem;padding:10px 12px;outline:none;box-sizing:border-box;"
-        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
+
       <input id="nutMsiCtxHint" type="text" placeholder="Any clues (e.g. large portion, added extra rice)"
         style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.88rem;padding:10px 12px;outline:none;box-sizing:border-box;"
         onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
