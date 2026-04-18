@@ -9009,34 +9009,14 @@ function nutMealScanToggleMemory(){_msiMemory=!_msiMemory;nutMealScanRenderMemor
 function nutMealScanCallVision(b64,mime){
   var key=localStorage.getItem('wt_gemini_key')||'';
   if(!key){nutMealScanSetStatus('No Gemini key \u2014 add it first','var(--orange)');return;}
-  var _ctxR=((document.getElementById('nutMsiCtxRestaurant')||{}).value||'').trim();
   var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
-
-  var restaurantBlock='';
-  if(_ctxR){
-    // Build a list of progressively shorter name variants to try
-    var words=_ctxR.split(/\s+/);
-    var variants=[_ctxR];
-    for(var i=words.length-1;i>0;i--)variants.push(words.slice(0,i).join(' '));
-    restaurantBlock='\n\nRESTAURANT CONTEXT: The user says they ate at "'+_ctxR+'".'+
-      ' Try matching against these name variants in order: '+variants.map(function(v){return'"'+v+'"';}).join(', ')+'.'+
-      ' If you recognise ANY of these variants and have their published nutrition data, use it and set source to "official".'+
-      ' If you do not recognise any variant, IGNORE the restaurant entirely and estimate visually \u2014 do NOT let an unrecognised restaurant prevent you from returning results.'+
-      ' Always return a valid JSON array no matter what.';
-  }
-
   var hintBlock=_ctxH?'\nADDITIONAL NOTES: '+_ctxH:'';
   var prompt='Look at this food photo. Identify EVERY separate food and drink item visible.'+
-    restaurantBlock+hintBlock+
+    hintBlock+
     '\n\nIf a fork, spoon, knife, hand, coin, or other common object is visible in the frame, use it as a size reference to calibrate portion sizes before estimating.'+
-    '\n\nFor each item provide accurate macros. Prioritise in this order:'+
-    '\n1. Official published nutrition from the restaurant if you recognise it'+
-    '\n2. Widely-known database values for named dishes'+
-    '\n3. Visual portion estimation \u2014 always fall back to this if unsure'+
-    '\n\nYou MUST always return a JSON array. Never refuse or return empty.'+
     '\n\nReturn ONLY a JSON array, no markdown:'+
-    '\n[{"name":"specific food name","qty":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number,"source":"official|database|estimated"}]'+
-    '\nqty=countable units if applicable (e.g. 2 eggs). All values must be numbers, never null. Sodium in mg.';
+    '\n[{"name":"specific food name","qty":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}]'+
+    '\nqty=countable units if applicable (e.g. 2 eggs). All values must be numbers, never null. Sodium in mg. Estimate confidently.';
 
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
@@ -9053,13 +9033,12 @@ function nutMealScanCallVision(b64,mime){
       if(data.error)_errMsg=data.error.message||JSON.stringify(data.error);
       else if(data.candidates&&data.candidates[0]&&data.candidates[0].finishReason)_errMsg='finishReason: '+data.candidates[0].finishReason;
       else _errMsg=JSON.stringify(data).slice(0,200);
-      // Parse retry delay from message if rate limited
       var _retryMatch=_errMsg.match(/retry in ([0-9.]+)s/i);
       var _retryMsg=_retryMatch?(' Wait '+Math.ceil(parseFloat(_retryMatch[1]))+' seconds and try again.'):'';
       var _isRateLimit=_errCode===429||_errMsg.indexOf('quota')>=0||_errMsg.indexOf('RESOURCE_EXHAUSTED')>=0;
-      var _displayMsg=_isRateLimit?('⚠️ Rate limit hit.'+_retryMsg):('Error: '+_errMsg);
+      var _displayMsg=_isRateLimit?('\u26a0\ufe0f Rate limit hit.'+_retryMsg):('Error: '+_errMsg);
       nutMealScanSetStatus(_displayMsg,'var(--orange)');
-      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:24px 16px;color:var(--muted);font-size:0.78rem;">'+(_isRateLimit?('Rate limited by Gemini API. '+_retryMsg+'<br><br>This happens when scanning too frequently. Just wait a moment.'):_errMsg)+'</div>';
+      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:24px 16px;color:var(--muted);font-size:0.78rem;">'+(_isRateLimit?('Rate limited. '+_retryMsg):_errMsg)+'</div>';
       return;
     }
     text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
@@ -9072,12 +9051,12 @@ function nutMealScanCallVision(b64,mime){
         prot:Math.round((parseFloat(it.protein)||0)*10)/10,carb:Math.round((parseFloat(it.carbs)||0)*10)/10,
         fat:Math.round((parseFloat(it.fat)||0)*10)/10,fib:Math.round((parseFloat(it.fibre)||0)*10)/10,
         sat:Math.round((parseFloat(it.satFat)||0)*10)/10,sod:Math.round(parseFloat(it.sodium)||0),
-        source:String(it.source||'estimated')};});
+        source:'estimated'};});
       nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
       nutMealScanRender();
     }catch(e2){
-      nutMealScanSetStatus('Parse error \u2014 '+text.slice(0,80),'var(--orange)');
-      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:16px;color:var(--muted);font-size:0.72rem;word-break:break-all;">'+text.slice(0,300)+'</div>';
+      nutMealScanSetStatus('Could not parse \u2014 try again','var(--orange)');
+      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.8rem;">Tap Retake or add manually</div>';
     }
   })
   .catch(function(err){
