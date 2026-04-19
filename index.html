@@ -9013,32 +9013,32 @@ function nutMealScanCallVision(b64,mime){
   var _ctxR=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
   var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
   var ctxBlock='';
-  if(_ctxR)ctxBlock+='\nRESTAURANT/PLACE: '+_ctxR+' \u2014 if this is a known chain, use their exact menu macros, not pixel estimates.';
+  if(_ctxR)ctxBlock+='\nRESTAURANT/PLACE: '+_ctxR+' \u2014 if known chain, use their exact menu macros.';
   if(_ctxH)ctxBlock+='\nUSER NOTES: '+_ctxH;
 
   var sysInstr=
     'You are a highly accurate Nutritional Vision API. Estimate macros from images with under 10% error.\n\n'+
     'PROTOCOL:\n'+
-    '1. IDENTIFY: Look for restaurant logos, branded packaging, or menu text. If a known chain is detected, use their exact menu database \u2014 not pixel estimates.\n'+
-    '2. VOLUME ESTIMATION: Estimate the mass (grams) or volume (pieces/cups) of each item before calculating calories.\n'+
-    '3. REASONABLENESS CHECK: Audit every item before output:\n'+
-    '   - Appetizers (gyoza, spring rolls, dumplings, edamame): assume ~25g per piece, max 60 kcal each unless a size reference (hand, spoon, coin) clearly shows otherwise.\n'+
-    '   - A bowl of rice is typically 150\u2013250g, not 500g.\n'+
-    '   - Sauces and dressings: small ramekin = ~30g, large = ~60g.\n'+
-    '   If any item exceeds common sense, re-evaluate before outputting.\n'+
-    '4. DENSITY BIAS: Add 10\u201320% for hidden fats \u2014 cooking oil, butter, cream in sauces.\n'+
-    '5. OUTPUT: Raw JSON array only. No markdown, no backticks, no explanation text. Just the array.';
+    '1. IDENTIFY: Look for restaurant logos, branded packaging, menu text. If a known chain, use their menu database.\n'+
+    '2. VOLUME: Estimate mass (grams) or piece count before calculating calories.\n'+
+    '3. REASONABLENESS CHECK:\n'+
+    '   - Appetizers (gyoza, spring rolls, dumplings): ~25g each, max 60 kcal per piece unless size reference visible.\n'+
+    '   - Rice bowl: 150-250g typical, not 500g.\n'+
+    '   - Small sauce ramekin: ~30g.\n'+
+    '   Re-evaluate any item that seems too high before outputting.\n'+
+    '4. DENSITY BIAS: Add 10-20% for hidden fats (oil, butter, cream in sauces).\n'+
+    '5. OUTPUT: ONLY a raw JSON array. No markdown. No backticks. No explanation. Start with [ and end with ].';
 
   var userPrompt=
     'Analyze this food image.'+ctxBlock+'\n\n'+
-    '1. Identify every food and drink item.\n'+
-    '2. If any brand or restaurant is visible, use their menu data.\n'+
-    '3. Estimate each item\'s weight in grams.\n'+
-    '4. For appetizer-type items (gyoza, spring rolls, etc.) apply the 25g/60kcal-max scale check.\n'+
-    '5. Rate confidence: high=known dish or brand, medium=estimated, low=obscured.\n\n'+
-    'Return ONLY a raw JSON array \u2014 no markdown, no fences, no text before or after:\n'+
-    '[{"name":"item name","qty":1,"weight_g":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number,"confidence":"high|medium|low"}]\n'+
-    'All values must be numbers. qty=piece count if countable, else 1. Sodium in mg.';
+    'Identify every food and drink item. For each:\n'+
+    '- Reference brand/restaurant if visible\n'+
+    '- Estimate weight in grams\n'+
+    '- Apply appetizer scale check if applicable\n'+
+    '- Rate confidence: high/medium/low\n\n'+
+    'Output ONLY this JSON array, nothing else before or after it:\n'+
+    '[{"name":"string","qty":1,"weight_g":0,"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0,"satFat":0,"sodium":0,"confidence":"medium"}]\n'+
+    'qty=piece count if countable, else 1. All numeric fields must be numbers. Sodium in mg.';
 
   var safety=[
     {category:'HARM_CATEGORY_HARASSMENT',threshold:'BLOCK_ONLY_HIGH'},
@@ -9053,7 +9053,7 @@ function nutMealScanCallVision(b64,mime){
       system_instruction:{parts:[{text:sysInstr}]},
       contents:[{parts:[{inline_data:{mime_type:mime,data:b64}},{text:userPrompt}]}],
       safetySettings:safety,
-      generationConfig:{temperature:0,maxOutputTokens:512}
+      generationConfig:{temperature:0,maxOutputTokens:2048}
     })
   })
   .then(function(r){return r.json();})
@@ -9066,8 +9066,8 @@ function nutMealScanCallVision(b64,mime){
       var _errCode=data.error&&data.error.code;
       var _errMsg=data.error?data.error.message||JSON.stringify(data.error)
         :data.candidates&&data.candidates[0]&&data.candidates[0].finishReason
-          ?'Blocked: '+data.candidates[0].finishReason
-          :JSON.stringify(data).slice(0,200);
+          ?'Blocked ('+data.candidates[0].finishReason+')'
+          :JSON.stringify(data).slice(0,300);
       var _isRate=_errCode===429||(_errMsg.indexOf('quota')>=0)||(_errMsg.indexOf('RESOURCE_EXHAUSTED')>=0);
       var _retryMatch=_errMsg.match(/retry in ([0-9.]+)s/i);
       var _retryMsg=_retryMatch?' Wait '+Math.ceil(parseFloat(_retryMatch[1]))+'s.':'';
@@ -9081,10 +9081,10 @@ function nutMealScanCallVision(b64,mime){
       nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
       nutMealScanRender();
     } else {
-      nutMealScanSetStatus('Could not parse response \u2014 see below','var(--orange)');
+      nutMealScanSetStatus('Could not parse \u2014 see raw response below','var(--orange)');
       document.getElementById('nutMealScanItems').innerHTML=
-        '<div style="padding:14px 16px;color:var(--muted);font-size:0.72rem;white-space:pre-wrap;word-break:break-word;">'+
-        text.slice(0,800)+'</div>';
+        '<div style="padding:14px 16px;color:var(--muted);font-size:0.72rem;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;">'+
+        text+'</div>';
     }
   })
   .catch(function(err){
@@ -9093,63 +9093,98 @@ function nutMealScanCallVision(b64,mime){
   });
 }
 
-// ── Gemini response parser \u2014 5 fallback strategies ────────────────────────────
+// ── Gemini response parser \u2014 handles truncation + multiple formats ──────────
 function nutMsiParseGeminiResponse(raw){
   if(!raw)return null;
+
+  // Strip markdown fences
   var text=raw.replace(/```[a-z]*\n?/gi,'').replace(/```/g,'').trim();
 
-  // 1. JSON array
+  // Strategy 1: clean JSON array
   var s=text.indexOf('['),e=text.lastIndexOf(']');
   if(s>=0&&e>s){
-    try{var a=JSON.parse(text.slice(s,e+1));if(Array.isArray(a)&&a.length)return nutMsiNorm(a);}catch(e1){}
+    try{var a=JSON.parse(text.slice(s,e+1));if(Array.isArray(a)&&a.length)return nutMsiNorm(a);}
+    catch(e1){}
   }
-  // 2. Single object
+
+  // Strategy 2: truncation recovery — JSON cut off mid-stream
+  // Try to salvage complete objects out of a truncated array
+  if(s>=0){
+    try{
+      var partial=text.slice(s);
+      // Find all complete {...} objects
+      var objs=[];
+      var depth=0,start2=-1,inStr=false,esc=false;
+      for(var i=0;i<partial.length;i++){
+        var ch=partial[i];
+        if(esc){esc=false;continue;}
+        if(ch==='\\'){esc=true;continue;}
+        if(ch==='"'){inStr=!inStr;continue;}
+        if(inStr)continue;
+        if(ch==='{'){if(depth===0)start2=i;depth++;}
+        else if(ch==='}'){depth--;if(depth===0&&start2>=0){
+          try{objs.push(JSON.parse(partial.slice(start2,i+1)));}catch(ep){}
+          start2=-1;
+        }}
+      }
+      if(objs.length)return nutMsiNorm(objs);
+    }catch(e2){}
+  }
+
+  // Strategy 3: single JSON object
   var so=text.indexOf('{'),eo=text.lastIndexOf('}');
   if(so>=0&&eo>so){
-    try{var o=JSON.parse(text.slice(so,eo+1));if(o&&(o.name||o.item||o.food))return nutMsiNorm([o]);}catch(e2){}
+    try{var o=JSON.parse(text.slice(so,eo+1));if(o&&(o.name||o.item||o.food))return nutMsiNorm([o]);}
+    catch(e3){}
   }
-  // 3. JSON repair (trailing commas, unquoted keys)
+
+  // Strategy 4: JSON repair (trailing commas, unquoted keys)
   if(s>=0&&e>s){
     try{
-      var r=text.slice(s,e+1).replace(/,\s*([}\]])/g,'$1').replace(/([{,]\s*)(\w+)\s*:/g,'$1"$2":');
+      var r=text.slice(s,e+1)
+        .replace(/,\s*([}\]])/g,'$1')
+        .replace(/([{,]\s*)([a-zA-Z_]\w*)\s*:/g,'$1"$2":');
       var a2=JSON.parse(r);if(Array.isArray(a2)&&a2.length)return nutMsiNorm(a2);
-    }catch(e3){}
+    }catch(e4){}
   }
-  // 4. TSV/pipe table
+
+  // Strategy 5: TSV/pipe table
   var lines=text.split('\n').map(function(l){return l.trim();}).filter(Boolean);
   var dataLines=lines.filter(function(l){
-    return (l.indexOf('\t')>=0||l.indexOf('|')>=0)&&!/^[-|]+$/.test(l)&&!/^(item|food|name)/i.test(l);
+    return (l.indexOf('\t')>=0||l.indexOf('|')>=0)&&!/^[-|:]+$/.test(l)&&!/^(item|food|name)/i.test(l);
   });
   if(dataLines.length){
     var items=[];
     dataLines.forEach(function(line){
       var cols=line.split(/\t|\|/).map(function(c){return c.trim().replace(/^\||\|$/g,'');}).filter(Boolean);
       if(cols.length>=2){
-        var nums=cols.slice(1).map(function(c){return parseFloat(c.replace(/[^0-9.]/g,''));}).filter(function(n){return !isNaN(n);});
+        var nums=cols.slice(1).map(function(c){return parseFloat(c.replace(/[^0-9.]/g,''));}).filter(function(n){return !isNaN(n)&&n>=0;});
         if(cols[0]&&nums.length>=1)items.push({name:cols[0],calories:nums[0]||0,protein:nums[1]||0,carbs:nums[2]||0,fat:nums[3]||0});
       }
     });
     if(items.length)return nutMsiNorm(items);
   }
+
   return null;
 }
+
 function nutMsiNorm(arr){
   return arr.map(function(it,i){
     return {
       id:Date.now()+i+(Math.random()*1000|0),
-      name:String(it.name||it.item||it.food||it.description||'Unknown').replace(/^\d+\.\s*/,'').trim(),
+      name:String(it.name||it.item||it.food||it.description||'Item '+(i+1)).replace(/^\d+[\.\)]\s*/,'').trim(),
       qty:Math.max(0.25,parseFloat(it.qty||it.quantity||1)||1),
       cal:Math.round(parseFloat(it.calories||it.kcal||it.cal||0)),
-      prot:Math.round((parseFloat(it.protein||it.proteins||0))*10)/10,
-      carb:Math.round((parseFloat(it.carbs||it.carbohydrates||it.carb||0))*10)/10,
-      fat:Math.round((parseFloat(it.fat||it.fats||0))*10)/10,
-      fib:Math.round((parseFloat(it.fibre||it.fiber||0))*10)/10,
-      sat:Math.round((parseFloat(it.satFat||it.saturated_fat||it.sat||0))*10)/10,
+      prot:Math.round(parseFloat(it.protein||it.proteins||0)*10)/10,
+      carb:Math.round(parseFloat(it.carbs||it.carbohydrates||it.carb||0)*10)/10,
+      fat:Math.round(parseFloat(it.fat||it.fats||0)*10)/10,
+      fib:Math.round(parseFloat(it.fibre||it.fiber||0)*10)/10,
+      sat:Math.round(parseFloat(it.satFat||it.saturated_fat||it.sat||0)*10)/10,
       sod:Math.round(parseFloat(it.sodium||it.sod||0)),
       weight_g:Math.round(parseFloat(it.weight_g||it.weight||it.grams||0)),
       confidence:String(it.confidence||'medium')
     };
-  }).filter(function(it){return it.name&&it.name!=='Unknown'||it.cal>0;});
+  }).filter(function(it){return it.cal>0||it.name!==('Item '+(0+1));});
 }
 
 
