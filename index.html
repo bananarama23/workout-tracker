@@ -8717,6 +8717,27 @@ function nutAddInlineStatus(txt,col){var el=document.getElementById('nutAddInlin
 function nutAddInlineGemini(){
   var q=(document.getElementById('nutAddSearch')||{}).value||'';
   if(!q.trim()){nutAddInlineStatus('Type a food name first','var(--orange)');return;}
+
+  // ── Try TSV/table parse first ─────────────────────────────────
+  if(/\t/.test(q)||(/\n/.test(q)&&/\d/.test(q))){
+
+    var tsvParsed=nutMsiParseGeminiResponse(q);
+    if(tsvParsed&&tsvParsed.length){
+      nutCloseAdd();
+      _msi=tsvParsed;_msiMemory=false;_msiShowTotal=true;_msiCombine=false;
+      var h=new Date().getHours();
+      _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
+      if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
+      document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
+      var pg=document.getElementById('page-mealscan');if(pg){pg.classList.remove('hidden');pg.classList.add('active');}
+      nutMealScanRenderMealBtns();nutMealScanRenderMemory();nutMealScanRenderCombine();
+      var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='none';
+      nutMealScanSetStatus(tsvParsed.length+' item'+(tsvParsed.length!==1?'s':'')+' found — review then log','var(--green)');
+      nutMealScanRender();
+      return;
+    }
+  }
+
   var geminiKey=localStorage.getItem('wt_gemini_key')||'';
   if(!geminiKey){nutCloseAdd();nutApiKeyShow(null,null,null);return;}
   nutAddInlineStatus('Asking Gemini...','var(--muted)');
