@@ -7554,7 +7554,7 @@ function nutMsiFromAddOverlay(inp){
   reader.onload=function(e){
     var img=new Image();
     img.onload=function(){
-      var maxW=900,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
       var c=document.createElement('canvas');
       c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
@@ -8860,7 +8860,7 @@ function nutCamProcessImage(file,isMeal){
   reader.onload=function(e){
     var img=new Image();
     img.onload=function(){
-      var maxW=900,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
       var c=document.createElement('canvas');
       c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
@@ -8884,7 +8884,7 @@ function nutMealScanCapture(){
   if(!vid||!canvas)return;
   canvas.width=vid.videoWidth||1280;canvas.height=vid.videoHeight||720;
   canvas.getContext('2d').drawImage(vid,0,0,canvas.width,canvas.height);
-  var maxW=900,scale=Math.min(1,maxW/canvas.width);
+  var maxW=1024,scale=Math.min(1,maxW/canvas.width);
   var c2=document.createElement('canvas');
   c2.width=Math.round(canvas.width*scale);c2.height=Math.round(canvas.height*scale);
   c2.getContext('2d').drawImage(canvas,0,0,c2.width,c2.height);
@@ -9013,32 +9013,35 @@ function nutMealScanCallVision(b64,mime){
   var _ctxR=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
   var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
   var ctxBlock='';
-  if(_ctxR)ctxBlock+='\nRESTAURANT/PLACE: '+_ctxR+' \u2014 if known chain, use their exact menu macros.';
+  if(_ctxR)ctxBlock+='\nRESTAURANT/PLACE: '+_ctxR+' \u2014 if a known chain, use their exact published menu macros.';
   if(_ctxH)ctxBlock+='\nUSER NOTES: '+_ctxH;
 
   var sysInstr=
-    'You are a highly accurate Nutritional Vision API. Estimate macros from images with under 10% error.\n\n'+
-    'PROTOCOL:\n'+
-    '1. IDENTIFY: Look for restaurant logos, branded packaging, menu text. If a known chain, use their menu database.\n'+
-    '2. VOLUME: Estimate mass (grams) or piece count before calculating calories.\n'+
-    '3. REASONABLENESS CHECK:\n'+
-    '   - Appetizers (gyoza, spring rolls, dumplings): ~25g each, max 60 kcal per piece unless size reference visible.\n'+
-    '   - Rice bowl: 150-250g typical, not 500g.\n'+
-    '   - Small sauce ramekin: ~30g.\n'+
-    '   Re-evaluate any item that seems too high before outputting.\n'+
-    '4. DENSITY BIAS: Add 10-20% for hidden fats (oil, butter, cream in sauces).\n'+
-    '5. OUTPUT: ONLY a raw JSON array. No markdown. No backticks. No explanation. Start with [ and end with ].';
+    'You are a Nutrition Data Extractor. Convert food images into accurate macro data.\n\n'+
+    'RULES:\n'+
+    '1. BRAND FIRST: Identify any logos, packaging, or restaurant name. If found, use that brand\'s official menu data.\n'+
+    '   Examples: CoCo Ichibanya beef curry standard = 762 kcal, 21g protein. Wagamama chicken katsu = 782 kcal.\n'+
+    '2. COUNT PIECES: For appetizers, count each piece individually before calculating.\n'+
+    '3. SANITY GUARDRAILS (apply before outputting):\n'+
+    '   - Gyoza/dumpling: ~25g each, 50-60 kcal each. Hard cap 80 kcal per piece.\n'+
+    '   - Spring roll (small): ~30g, 60-80 kcal each.\n'+
+    '   - Rice bowl: 200-300g, 260-390 kcal total.\n'+
+    '   - Restaurant curry sauce: 150-200g, 100-200 kcal.\n'+
+    '   If any item exceeds these guardrails, force-correct it.\n'+
+    '4. HIDDEN FATS: Add 10-15% to fried or sauced items for cooking oil.\n'+
+    '5. OUTPUT: Tab-separated values (TSV) only. One item per line. No header row. No markdown. No JSON. No extra text.';
 
   var userPrompt=
     'Analyze this food image.'+ctxBlock+'\n\n'+
-    'Identify every food and drink item. For each:\n'+
-    '- Reference brand/restaurant if visible\n'+
-    '- Estimate weight in grams\n'+
-    '- Apply appetizer scale check if applicable\n'+
-    '- Rate confidence: high/medium/low\n\n'+
-    'Output ONLY this JSON array, nothing else before or after it:\n'+
-    '[{"name":"string","qty":1,"weight_g":0,"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0,"satFat":0,"sodium":0,"confidence":"medium"}]\n'+
-    'qty=piece count if countable, else 1. All numeric fields must be numbers. Sodium in mg.';
+    'For each food/drink item visible:\n'+
+    '1. Identify it (use brand data if logo/restaurant visible)\n'+
+    '2. Count pieces if countable\n'+
+    '3. Estimate weight in grams\n'+
+    '4. Apply the sanity guardrails from your instructions\n'+
+    '5. Rate confidence: high=brand data used, medium=estimated, low=unclear\n\n'+
+    'Return ONLY tab-separated values, one item per line, nothing else before or after:\n'+
+    'Name<TAB>Qty<TAB>WeightG<TAB>Calories<TAB>Protein<TAB>Carbs<TAB>Fat<TAB>Fibre<TAB>SatFat<TAB>Sodium<TAB>Confidence\n'+
+    'No header. No markdown. Start immediately with the first food item.';
 
   var safety=[
     {category:'HARM_CATEGORY_HARASSMENT',threshold:'BLOCK_ONLY_HIGH'},
@@ -9068,23 +9071,27 @@ function nutMealScanCallVision(b64,mime){
         :data.candidates&&data.candidates[0]&&data.candidates[0].finishReason
           ?'Blocked ('+data.candidates[0].finishReason+')'
           :JSON.stringify(data).slice(0,300);
-      var _isRate=_errCode===429||(_errMsg.indexOf('quota')>=0)||(_errMsg.indexOf('RESOURCE_EXHAUSTED')>=0);
-      var _retryMatch=_errMsg.match(/retry in ([0-9.]+)s/i);
-      var _retryMsg=_retryMatch?' Wait '+Math.ceil(parseFloat(_retryMatch[1]))+'s.':'';
-      nutMealScanSetStatus((_isRate?'\u26a0\ufe0f Rate limited.'+_retryMsg:'Error: '+_errMsg),'var(--orange)');
+      var _isRate=_errCode===429||_errMsg.indexOf('quota')>=0||_errMsg.indexOf('RESOURCE_EXHAUSTED')>=0;
+      var _retry=(_errMsg.match(/retry in ([0-9.]+)s/i)||[])[1];
+      nutMealScanSetStatus((_isRate?'\u26a0\ufe0f Rate limited.'+(_retry?' Wait '+Math.ceil(_retry)+'s.':''):'Error: '+_errMsg),'var(--orange)');
       document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:24px 16px;color:var(--muted);font-size:0.78rem;">'+_errMsg+'</div>';
       return;
     }
     var parsed=nutMsiParseGeminiResponse(text);
     if(parsed&&parsed.length){
       _msi=parsed;
-      nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
+      var _totC=parsed.reduce(function(acc,it){return acc+it.cal*it.qty;},0);
+      if(_totC>1500){
+        nutMealScanSetStatus('\u26a0\ufe0f '+parsed.length+' items \u00b7 '+Math.round(_totC)+' kcal \u2014 does this look right?','var(--yellow)');
+      } else {
+        nutMealScanSetStatus(parsed.length+' item'+(parsed.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
+      }
       nutMealScanRender();
+      nutMsiCheckHighCalorie();
     } else {
-      nutMealScanSetStatus('Could not parse \u2014 see raw response below','var(--orange)');
+      nutMealScanSetStatus('Could not parse \u2014 raw response below','var(--orange)');
       document.getElementById('nutMealScanItems').innerHTML=
-        '<div style="padding:14px 16px;color:var(--muted);font-size:0.72rem;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;">'+
-        text+'</div>';
+        '<div style="padding:14px 16px;color:var(--muted);font-size:0.72rem;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;">'+text+'</div>';
     }
   })
   .catch(function(err){
@@ -9093,80 +9100,84 @@ function nutMealScanCallVision(b64,mime){
   });
 }
 
-// ── Gemini response parser \u2014 handles truncation + multiple formats ──────────
+// ── High-calorie warning banner ───────────────────────────────────────────────
+function nutMsiCheckHighCalorie(){
+  var total=_msi.reduce(function(s,it){return s+it.cal*it.qty;},0);
+  var warn=document.getElementById('nutMsiHighCalWarn');
+  if(total>1500){
+    if(!warn){
+      warn=document.createElement('div');
+      warn.id='nutMsiHighCalWarn';
+      warn.style.cssText='margin:8px 16px 0;padding:10px 14px;background:rgba(255,120,0,0.12);border:1px solid var(--orange);border-radius:var(--r-sm);font-size:0.75rem;color:var(--orange);display:flex;align-items:center;gap:10px;';
+      warn.innerHTML='<span style="font-size:1.2rem;flex-shrink:0;">\u26a0\ufe0f</span><div><strong>'+Math.round(total)+' kcal</strong> \u2014 looks high. Double portion?<br><span style="opacity:0.75;font-size:0.68rem;">Adjust quantities with \u2212/+ if needed before logging.</span></div>';
+      var itemsEl=document.getElementById('nutMealScanItems');
+      if(itemsEl)itemsEl.insertAdjacentElement('beforebegin',warn);
+    } else {
+      warn.querySelector('strong').textContent=Math.round(total)+' kcal';
+    }
+  } else {
+    if(warn)warn.remove();
+  }
+}
+
+// ── Gemini response parser \u2014 5 strategies including truncation recovery ──────
 function nutMsiParseGeminiResponse(raw){
   if(!raw)return null;
-
-  // Strip markdown fences
   var text=raw.replace(/```[a-z]*\n?/gi,'').replace(/```/g,'').trim();
 
-  // Strategy 1: clean JSON array
-  var s=text.indexOf('['),e=text.lastIndexOf(']');
-  if(s>=0&&e>s){
-    try{var a=JSON.parse(text.slice(s,e+1));if(Array.isArray(a)&&a.length)return nutMsiNorm(a);}
-    catch(e1){}
-  }
+  // 1. TSV (primary expected format)
+  var tv=nutMsiParseTSV(text);if(tv&&tv.length)return tv;
 
-  // Strategy 2: truncation recovery — JSON cut off mid-stream
-  // Try to salvage complete objects out of a truncated array
+  // 2. JSON array
+  var s=text.indexOf('['),e=text.lastIndexOf(']');
+  if(s>=0&&e>s){try{var a=JSON.parse(text.slice(s,e+1));if(Array.isArray(a)&&a.length)return nutMsiNorm(a);}catch(e1){}}
+
+  // 3. Truncation recovery — extract complete objects from broken JSON
   if(s>=0){
     try{
-      var partial=text.slice(s);
-      // Find all complete {...} objects
-      var objs=[];
-      var depth=0,start2=-1,inStr=false,esc=false;
-      for(var i=0;i<partial.length;i++){
-        var ch=partial[i];
-        if(esc){esc=false;continue;}
-        if(ch==='\\'){esc=true;continue;}
-        if(ch==='"'){inStr=!inStr;continue;}
-        if(inStr)continue;
-        if(ch==='{'){if(depth===0)start2=i;depth++;}
-        else if(ch==='}'){depth--;if(depth===0&&start2>=0){
-          try{objs.push(JSON.parse(partial.slice(start2,i+1)));}catch(ep){}
-          start2=-1;
-        }}
+      var objs=[],depth=0,st=-1,inStr=false,esc=false,par=text.slice(s);
+      for(var i=0;i<par.length;i++){
+        var ch=par[i];
+        if(esc){esc=false;continue;}if(ch==='\\'){esc=true;continue;}
+        if(ch==='"'){inStr=!inStr;continue;}if(inStr)continue;
+        if(ch==='{'){if(!depth)st=i;depth++;}
+        else if(ch==='}'){depth--;if(!depth&&st>=0){try{objs.push(JSON.parse(par.slice(st,i+1)));}catch(ep){}st=-1;}}
       }
       if(objs.length)return nutMsiNorm(objs);
     }catch(e2){}
   }
 
-  // Strategy 3: single JSON object
+  // 4. Single JSON object
   var so=text.indexOf('{'),eo=text.lastIndexOf('}');
-  if(so>=0&&eo>so){
-    try{var o=JSON.parse(text.slice(so,eo+1));if(o&&(o.name||o.item||o.food))return nutMsiNorm([o]);}
-    catch(e3){}
-  }
-
-  // Strategy 4: JSON repair (trailing commas, unquoted keys)
-  if(s>=0&&e>s){
-    try{
-      var r=text.slice(s,e+1)
-        .replace(/,\s*([}\]])/g,'$1')
-        .replace(/([{,]\s*)([a-zA-Z_]\w*)\s*:/g,'$1"$2":');
-      var a2=JSON.parse(r);if(Array.isArray(a2)&&a2.length)return nutMsiNorm(a2);
-    }catch(e4){}
-  }
-
-  // Strategy 5: TSV/pipe table
-  var lines=text.split('\n').map(function(l){return l.trim();}).filter(Boolean);
-  var dataLines=lines.filter(function(l){
-    return (l.indexOf('\t')>=0||l.indexOf('|')>=0)&&!/^[-|:]+$/.test(l)&&!/^(item|food|name)/i.test(l);
-  });
-  if(dataLines.length){
-    var items=[];
-    dataLines.forEach(function(line){
-      var cols=line.split(/\t|\|/).map(function(c){return c.trim().replace(/^\||\|$/g,'');}).filter(Boolean);
-      if(cols.length>=2){
-        var nums=cols.slice(1).map(function(c){return parseFloat(c.replace(/[^0-9.]/g,''));}).filter(function(n){return !isNaN(n)&&n>=0;});
-        if(cols[0]&&nums.length>=1)items.push({name:cols[0],calories:nums[0]||0,protein:nums[1]||0,carbs:nums[2]||0,fat:nums[3]||0});
-      }
-    });
-    if(items.length)return nutMsiNorm(items);
-  }
+  if(so>=0&&eo>so){try{var o=JSON.parse(text.slice(so,eo+1));if(o&&(o.name||o.item))return nutMsiNorm([o]);}catch(e3){}}
 
   return null;
 }
+
+function nutMsiParseTSV(text){
+  var lines=text.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  var data=lines.filter(function(l){
+    return /\t/.test(l)&&!/^(name|item|food|#|time)/i.test(l)&&!/^[-\t|:]+$/.test(l);
+  });
+  if(!data.length)return null;
+  var items=[];
+  data.forEach(function(line,i){
+    var c=line.split('\t').map(function(x){return x.trim();});
+    if(c.length<4||!c[0])return;
+    var n=c.slice(1).map(function(x){return parseFloat(x)||0;});
+    items.push({
+      id:Date.now()+i+(Math.random()*999|0),
+      name:c[0].replace(/^\d+[\.)\s]+/,'').trim(),
+      qty:Math.max(0.25,n[0]||1),weight_g:Math.round(n[1]||0),
+      cal:Math.round(n[2]||0),prot:Math.round((n[3]||0)*10)/10,
+      carb:Math.round((n[4]||0)*10)/10,fat:Math.round((n[5]||0)*10)/10,
+      fib:Math.round((n[6]||0)*10)/10,sat:Math.round((n[7]||0)*10)/10,
+      sod:Math.round(n[8]||0),confidence:c[10]||c[9]||'medium'
+    });
+  });
+  return items.filter(function(it){return it.cal>0;});
+}
+
 
 function nutMsiNorm(arr){
   return arr.map(function(it,i){
@@ -9184,13 +9195,13 @@ function nutMsiNorm(arr){
       weight_g:Math.round(parseFloat(it.weight_g||it.weight||it.grams||0)),
       confidence:String(it.confidence||'medium')
     };
-  }).filter(function(it){return it.cal>0||it.name!==('Item '+(0+1));});
+  }).filter(function(it){return it.cal>0||it.name.indexOf('Item ')!==0;});
 }
 
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function nutMealScanRender(){
-  nutMealScanRenderItems();nutMealScanRenderTotals();nutMsiSyncViewToggle();
+  nutMealScanRenderItems();nutMealScanRenderTotals();nutMsiSyncViewToggle();nutMsiCheckHighCalorie();
 }
 function nutMealScanRenderItems(){
   var c=document.getElementById('nutMealScanItems');if(!c)return;
@@ -9352,6 +9363,10 @@ function nutMealScanAddItem(){
 // ── Save ──────────────────────────────────────────────────────────────────────
 function nutMealScanSave(){
   if(!_msi.length)return;
+  var _tot=_msi.reduce(function(s,it){return s+it.cal*it.qty;},0);
+  if(_tot>1500&&!confirm(Math.round(_tot)+' kcal — this looks high. Correct?
+
+OK to log, Cancel to adjust.'))return;
   var now=Date.now();
   var mealLabel=((document.getElementById('nutMsiMealName')||{}).value||'').trim();
   var entries;
@@ -9409,7 +9424,7 @@ function nutUploadSingleHandler(inp){
   reader.onload=function(e){
     var img=new Image();
     img.onload=function(){
-      var maxW=900,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
       var c=document.createElement('canvas');
       c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
@@ -9431,7 +9446,7 @@ function nutUploadMealHandler(inp){
   reader.onload=function(e){
     var img=new Image();
     img.onload=function(){
-      var maxW=900,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
       var c=document.createElement('canvas');
       c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
@@ -9462,7 +9477,7 @@ function nutMsiPageUploadHandler(inp){
   reader.onload=function(e){
     var img=new Image();
     img.onload=function(){
-      var maxW=900,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
       var c=document.createElement('canvas');
       c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
