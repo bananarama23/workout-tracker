@@ -1710,19 +1710,6 @@ function localDateStr(){
 // ─── CACHE ────────────────────────────────────────────────────────
 function saveCache(s){var v=JSON.stringify({sessions:s,ts:Date.now()});try{localStorage.setItem(CACHE_KEY,v);}catch(e){}wtDB.set(CACHE_KEY,v);}
 function loadCache(){try{var r=localStorage.getItem(CACHE_KEY);if(!r)return null;var o=JSON.parse(r);return(o&&o.sessions)?o:null;}catch(e){return null;}}
-// Restore cache from IDB into localStorage if iOS evicted it, then re-render
-function restoreCacheFromIDB(cb){
-  wtDB.get(CACHE_KEY).then(function(raw){
-    if(!raw)return;
-    try{
-      var o=JSON.parse(raw);
-      if(o&&o.sessions){
-        try{localStorage.setItem(CACHE_KEY,raw);}catch(e){}
-        if(cb)cb(o);
-      }
-    }catch(e){}
-  }).catch(function(){});
-}
 function cacheAgeStr(ts){var s=Math.round((Date.now()-ts)/1000);if(s<60)return 'just now';if(s<3600)return Math.floor(s/60)+'m ago';return Math.floor(s/3600)+'h ago';}
 
 function setSyncBadges(state,detail){
@@ -1960,14 +1947,6 @@ function loadHomeData(){
   _cachedSessions=cached?cached.sessions:[];
   renderHomeData(_cachedSessions);
   setSyncBadges(cached?'cached':'loading', cached?cacheAgeStr(cached.ts):null);
-  // If localStorage was evicted (iOS), restore from IDB immediately for instant render
-  if(!cached){
-    restoreCacheFromIDB(function(o){
-      _cachedSessions=o.sessions||[];
-      renderHomeData(_cachedSessions);
-      setSyncBadges('cached',cacheAgeStr(o.ts));
-    });
-  }
   // Always fetch fresh in background — cache render above gives instant display
   fetchHistory(function(sessions){
     _cachedSessions=sessions||[];
@@ -6107,8 +6086,6 @@ initDates();
 setHIITPreset(17,6);
 var _ic=loadCache();
 setSyncBadge(_ic?'cached':'loading',_ic?cacheAgeStr(_ic.ts):null);
-// If localStorage was evicted, promote IDB cache badge as soon as possible
-if(!_ic){restoreCacheFromIDB(function(o){setSyncBadges('cached',cacheAgeStr(o.ts));});}
 
 // Check for share mode (?share in URL)
 if(window.location.search.indexOf('share')>=0){
@@ -9387,9 +9364,7 @@ function nutMealScanAddItem(){
 function nutMealScanSave(){
   if(!_msi.length)return;
   var _tot=_msi.reduce(function(s,it){return s+it.cal*it.qty;},0);
-  if(_tot>1500&&!confirm(Math.round(_tot)+' kcal — this looks high. Correct?
-
-OK to log, Cancel to adjust.'))return;
+  if(_tot>1500&&!confirm(Math.round(_tot)+' kcal — this looks high. Correct?\n\nOK to log, Cancel to adjust.'))return;
   var now=Date.now();
   var mealLabel=((document.getElementById('nutMsiMealName')||{}).value||'').trim();
   var entries;
