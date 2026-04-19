@@ -9010,14 +9010,12 @@ function nutMealScanCallVision(b64,mime){
   var key=localStorage.getItem('wt_gemini_key')||'';
   if(!key){nutMealScanSetStatus('No Gemini key \u2014 add it first','var(--orange)');return;}
 
-  // Context from user
   var _ctxR=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
   var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
   var ctxBlock='';
   if(_ctxR)ctxBlock+='\nRESTAURANT/PLACE: '+_ctxR+' \u2014 if this is a known chain, use their exact menu macros.';
   if(_ctxH)ctxBlock+='\nUSER NOTES: '+_ctxH;
 
-  // System instruction \u2014 nutrition expert protocol
   var sysInstr='You are a highly accurate Nutritional Vision API. Estimate macros from images with under 10% error.\n\n'+
     'PROTOCOL:\n'+
     '1. IDENTIFY: Look for restaurant logos, branded packaging, menu text. If a known chain is detected, use their menu database \u2014 not pixel estimates.\n'+
@@ -9026,18 +9024,16 @@ function nutMealScanCallVision(b64,mime){
     '4. DENSITY BIAS: Adjust upward for hidden fats \u2014 cooking oil, butter, sauces. Do not underestimate.\n'+
     '5. OUTPUT: Raw JSON array only. No explanations, no markdown, no filler text.';
 
-  // User prompt
   var userPrompt='Analyze this food image.'+ctxBlock+'\n\n'+
     '1. Identify every food and drink item visible.\n'+
     '2. Reference any visible brand or restaurant \u2014 use their exact menu data if known.\n'+
     '3. Estimate weight in grams of each item.\n'+
     '4. Calculate macros per item.\n'+
-    '5. Rate confidence: high (known dish/brand with clear portion), medium (estimated), low (obscured).\n\n'+
+    '5. Rate confidence: high (known dish/brand), medium (estimated), low (obscured).\n\n'+
     'Return ONLY a JSON array, no markdown:\n'+
     '[{"name":"item name","qty":1,"weight_g":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number,"confidence":"high|medium|low"}]\n'+
     'qty=countable units if applicable (e.g. 3 dumplings), otherwise 1. All values numbers. Sodium in mg.';
 
-  // Safety settings \u2014 prevent refusals on fat/unhealthy content
   var safety=[
     {category:'HARM_CATEGORY_HARASSMENT',threshold:'BLOCK_ONLY_HIGH'},
     {category:'HARM_CATEGORY_HATE_SPEECH',threshold:'BLOCK_ONLY_HIGH'},
@@ -9045,7 +9041,7 @@ function nutMealScanCallVision(b64,mime){
     {category:'HARM_CATEGORY_DANGEROUS_CONTENT',threshold:'BLOCK_ONLY_HIGH'}
   ];
 
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key='+key,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
       system_instruction:{parts:[{text:sysInstr}]},
@@ -9066,11 +9062,10 @@ function nutMealScanCallVision(b64,mime){
       else if(data.candidates&&data.candidates[0]&&data.candidates[0].finishReason)_errMsg='finishReason: '+data.candidates[0].finishReason;
       else _errMsg=JSON.stringify(data).slice(0,200);
       var _retryMatch=_errMsg.match(/retry in ([0-9.]+)s/i);
-      var _retryMsg=_retryMatch?(' Wait '+Math.ceil(parseFloat(_retryMatch[1]))+' seconds and try again.'):'';
-      var _isRateLimit=_errCode===429||_errMsg.indexOf('quota')>=0||_errMsg.indexOf('RESOURCE_EXHAUSTED')>=0;
-      var _displayMsg=_isRateLimit?('\u26a0\ufe0f Rate limit hit.'+_retryMsg):('Error: '+_errMsg);
-      nutMealScanSetStatus(_displayMsg,'var(--orange)');
-      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:24px 16px;color:var(--muted);font-size:0.78rem;">'+(_isRateLimit?('Rate limited. '+_retryMsg):_errMsg)+'</div>';
+      var _retryMsg=_retryMatch?(' Wait '+Math.ceil(parseFloat(_retryMatch[1]))+' seconds.'):'';
+      var _isRate=_errCode===429||_errMsg.indexOf('quota')>=0||_errMsg.indexOf('RESOURCE_EXHAUSTED')>=0;
+      nutMealScanSetStatus((_isRate?'\u26a0\ufe0f Rate limited.'+_retryMsg:'Error: '+_errMsg),'var(--orange)');
+      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:24px 16px;color:var(--muted);font-size:0.78rem;">'+(_isRate?'Rate limited. '+_retryMsg:_errMsg)+'</div>';
       return;
     }
     text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
@@ -9219,7 +9214,7 @@ function nutMealScanRefetch(id){
   if(row)row.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--muted);font-size:0.78rem;"><div style="width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>Looking up <em style="color:var(--text);">'+newName+'</em>\u2026</div>';
   var key=localStorage.getItem('wt_gemini_key')||'';
   if(!key){setTimeout(nutMealScanRender,300);return;}
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key='+key,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:'Macros for one typical serving of "'+newName+'". Return ONLY JSON, no markdown: {"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All numbers. Sodium in mg.'}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
   }).then(function(r){return r.json();}).then(function(data){
