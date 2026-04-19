@@ -9006,49 +9006,117 @@ function nutMealScanRenderMemory(){
 function nutMealScanToggleMemory(){_msiMemory=!_msiMemory;nutMealScanRenderMemory();}
 
 // ── Vision call ───────────────────────────────────────────────────────────────
+
+// ── Gemini response parser — handles all output formats ──────────────────────
+function nutMsiParseGeminiResponse(raw){
+  if(!raw)return null;
+
+  // Step 1: strip all markdown fences (```json, ```tsv, ```, etc.)
+  var text=raw.replace(/```[a-z]*\n?/gi,'').replace(/```/g,'').trim();
+
+  // Step 2: try JSON array directly
+  var s=text.indexOf('['),e=text.lastIndexOf(']');
+  if(s>=0&&e>s){
+    try{
+      var arr=JSON.parse(text.slice(s,e+1));
+      if(Array.isArray(arr)&&arr.length)return nutMsiNormaliseItems(arr);
+    }catch(e1){}
+  }
+
+  // Step 3: try single JSON object (Gemini sometimes returns {} instead of [{}])
+  var so=text.indexOf('{'),eo=text.lastIndexOf('}');
+  if(so>=0&&eo>so){
+    try{
+      var obj=JSON.parse(text.slice(so,eo+1));
+      if(obj&&(obj.name||obj.item||obj.food))return nutMsiNormaliseItems([obj]);
+    }catch(e2){}
+  }
+
+  // Step 4: try JSON repair — strip trailing commas, fix common issues
+  if(s>=0&&e>s){
+    try{
+      var repaired=text.slice(s,e+1)
+        .replace(/,\s*([}\]])/g,'$1')   // trailing commas
+        .replace(/([{,]\s*)(\w+)\s*:/g,'$1"$2":') // unquoted keys
+        .replace(/:\s*'([^']*)'/g,':"$1"'); // single-quoted values
+      var arr2=JSON.parse(repaired);
+      if(Array.isArray(arr2)&&arr2.length)return nutMsiNormaliseItems(arr2);
+    }catch(e3){}
+  }
+
+  // Step 5: try TSV/CSV — Gemini sometimes returns a table despite instructions
+  var lines=text.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  var dataLines=lines.filter(function(l){
+    // Skip header lines and lines without a tab or pipe
+    return (l.indexOf('\t')>=0||l.indexOf('|')>=0)&&!/^(item|food|name|#)/i.test(l);
+  });
+  if(dataLines.length>0){
+    var items=[];
+    dataLines.forEach(function(line){
+      var cols=line.split(/\t|\|/).map(function(c){return c.trim().replace(/^\||\|$/g,'');}).filter(Boolean);
+      if(cols.length>=3){
+        var name=cols[0];
+        // Find numbers in remaining cols
+        var nums=cols.slice(1).map(function(c){return parseFloat(c.replace(/[^0-9.]/g,''));}).filter(function(n){return !isNaN(n);});
+        if(name&&nums.length>=1){
+          items.push({name:name,calories:nums[0]||0,protein:nums[1]||0,carbs:nums[2]||0,fat:nums[3]||0});
+        }
+      }
+    });
+    if(items.length)return nutMsiNormaliseItems(items);
+  }
+
+  return null;
+}
+
+function nutMsiNormaliseItems(arr){
+  return arr.map(function(it,i){
+    // Handle varied key names Gemini uses
+    var cal=parseFloat(it.calories||it.kcal||it.cal||it.energy||0);
+    var prot=parseFloat(it.protein||it.proteins||it.prot||0);
+    var carb=parseFloat(it.carbs||it.carbohydrates||it.carb||it.cho||0);
+    var fat=parseFloat(it.fat||it.fats||it.total_fat||0);
+    var fib=parseFloat(it.fibre||it.fiber||it.fib||0);
+    var sat=parseFloat(it.satFat||it.saturated_fat||it.sat||it.saturated||0);
+    var sod=parseFloat(it.sodium||it.sod||0);
+    var name=String(it.name||it.item||it.food||it.description||'Unknown item').replace(/^\d+\.\s*/,'').trim();
+    return {
+      id:Date.now()+i+(Math.random()*100|0),
+      name:name,
+      qty:Math.max(0.25,parseFloat(it.qty||it.quantity||it.servings||1)||1),
+      cal:Math.round(cal),
+      prot:Math.round(prot*10)/10,
+      carb:Math.round(carb*10)/10,
+      fat:Math.round(fat*10)/10,
+      fib:Math.round(fib*10)/10,
+      sat:Math.round(sat*10)/10,
+      sod:Math.round(sod),
+      weight_g:Math.round(parseFloat(it.weight_g||it.weight||it.grams||it.mass||0)),
+      confidence:String(it.confidence||'medium')
+    };
+  }).filter(function(it){return it.name&&it.name!=='Unknown item'||it.cal>0;});
+}
+// ── End parser ────────────────────────────────────────────────────────────────
+
 function nutMealScanCallVision(b64,mime){
   var key=localStorage.getItem('wt_gemini_key')||'';
   if(!key){nutMealScanSetStatus('No Gemini key \u2014 add it first','var(--orange)');return;}
-
-  var _ctxR=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
   var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
-  var ctxBlock='';
-  if(_ctxR)ctxBlock+='\nRESTAURANT/PLACE: '+_ctxR+' \u2014 if this is a known chain, use their exact menu macros.';
-  if(_ctxH)ctxBlock+='\nUSER NOTES: '+_ctxH;
-
-  var sysInstr='You are a highly accurate Nutritional Vision API. Estimate macros from images with under 10% error.\n\n'+
-    'PROTOCOL:\n'+
-    '1. IDENTIFY: Look for restaurant logos, branded packaging, menu text. If a known chain is detected, use their menu database \u2014 not pixel estimates.\n'+
-    '2. VOLUME ESTIMATION: Before calculating, estimate the mass (grams) or volume (pieces/cups) of each item.\n'+
-    '3. REASONABLENESS CHECK: Audit your output. Example: 6 small gyoza cannot be 1,600 kcal \u2014 standard gyoza = 40\u201360 kcal each. Re-evaluate if math seems wrong.\n'+
-    '4. DENSITY BIAS: Adjust upward for hidden fats \u2014 cooking oil, butter, sauces. Do not underestimate.\n'+
-    '5. OUTPUT: Raw JSON array only. No explanations, no markdown, no filler text.';
-
-  var userPrompt='Analyze this food image.'+ctxBlock+'\n\n'+
-    '1. Identify every food and drink item visible.\n'+
-    '2. Reference any visible brand or restaurant \u2014 use their exact menu data if known.\n'+
-    '3. Estimate weight in grams of each item.\n'+
-    '4. Calculate macros per item.\n'+
-    '5. Rate confidence: high (known dish/brand), medium (estimated), low (obscured).\n\n'+
-    'Return ONLY a JSON array, no markdown:\n'+
-    '[{"name":"item name","qty":1,"weight_g":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number,"confidence":"high|medium|low"}]\n'+
-    'qty=countable units if applicable (e.g. 3 dumplings), otherwise 1. All values numbers. Sodium in mg.';
-
-  var safety=[
-    {category:'HARM_CATEGORY_HARASSMENT',threshold:'BLOCK_ONLY_HIGH'},
-    {category:'HARM_CATEGORY_HATE_SPEECH',threshold:'BLOCK_ONLY_HIGH'},
-    {category:'HARM_CATEGORY_SEXUALLY_EXPLICIT',threshold:'BLOCK_ONLY_HIGH'},
-    {category:'HARM_CATEGORY_DANGEROUS_CONTENT',threshold:'BLOCK_ONLY_HIGH'}
-  ];
+  var hintBlock=_ctxH?'\nADDITIONAL NOTES FROM USER: '+_ctxH:'';
+  var prompt='Look at this food photo taken from above. Identify EVERY separate food and drink item visible.'+
+    hintBlock+
+    '\n\nIf a fork, spoon, knife, hand, coin, or other common object is visible, use it as a size reference to estimate weight and portion size more accurately.'+
+    '\n\nFor each item:'+
+    '\n1. Estimate its weight in grams based on visual size and any reference objects'+
+    '\n2. Use that weight to calculate accurate macros'+
+    '\n3. Rate your confidence: "high" (familiar dish with clear portion), "medium" (estimated), "low" (unclear or obscured)'+
+    '\n\nReturn ONLY a JSON array, no markdown:'+
+    '\n[{"name":"specific food name","qty":number,"weight_g":number,"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number,"confidence":"high|medium|low"}]'+
+    '\nqty=countable units if applicable (e.g. 2 eggs), otherwise 1. All values must be numbers, never null. Sodium in mg.';
 
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      system_instruction:{parts:[{text:sysInstr}]},
-      contents:[{parts:[{inline_data:{mime_type:mime,data:b64}},{text:userPrompt}]}],
-      safetySettings:safety,
-      generationConfig:{temperature:0.1,maxOutputTokens:1024}
-    })
+    body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mime,data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:8192}})
   })
   .then(function(r){return r.json();})
   .then(function(data){
@@ -9062,29 +9130,23 @@ function nutMealScanCallVision(b64,mime){
       else if(data.candidates&&data.candidates[0]&&data.candidates[0].finishReason)_errMsg='finishReason: '+data.candidates[0].finishReason;
       else _errMsg=JSON.stringify(data).slice(0,200);
       var _retryMatch=_errMsg.match(/retry in ([0-9.]+)s/i);
-      var _retryMsg=_retryMatch?(' Wait '+Math.ceil(parseFloat(_retryMatch[1]))+' seconds.'):'';
-      var _isRate=_errCode===429||_errMsg.indexOf('quota')>=0||_errMsg.indexOf('RESOURCE_EXHAUSTED')>=0;
-      nutMealScanSetStatus((_isRate?'\u26a0\ufe0f Rate limited.'+_retryMsg:'Error: '+_errMsg),'var(--orange)');
-      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:24px 16px;color:var(--muted);font-size:0.78rem;">'+(_isRate?'Rate limited. '+_retryMsg:_errMsg)+'</div>';
+      var _retryMsg=_retryMatch?(' Wait '+Math.ceil(parseFloat(_retryMatch[1]))+' seconds and try again.'):'';
+      var _isRateLimit=_errCode===429||_errMsg.indexOf('quota')>=0||_errMsg.indexOf('RESOURCE_EXHAUSTED')>=0;
+      var _displayMsg=_isRateLimit?('\u26a0\ufe0f Rate limit hit.'+_retryMsg):('Error: '+_errMsg);
+      nutMealScanSetStatus(_displayMsg,'var(--orange)');
+      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:24px 16px;color:var(--muted);font-size:0.78rem;">'+(_isRateLimit?('Rate limited. '+_retryMsg):_errMsg)+'</div>';
       return;
     }
-    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    var s=text.indexOf('['),e=text.lastIndexOf(']');
-    if(s>=0&&e>s)text=text.slice(s,e+1);
-    try{
-      var arr=JSON.parse(text);if(!Array.isArray(arr)||!arr.length)throw new Error();
-      _msi=arr.map(function(it,i){return{id:Date.now()+i,name:String(it.name||'Unknown'),
-        qty:Math.max(0.25,parseFloat(it.qty)||1),cal:Math.round(parseFloat(it.calories)||0),
-        prot:Math.round((parseFloat(it.protein)||0)*10)/10,carb:Math.round((parseFloat(it.carbs)||0)*10)/10,
-        fat:Math.round((parseFloat(it.fat)||0)*10)/10,fib:Math.round((parseFloat(it.fibre)||0)*10)/10,
-        sat:Math.round((parseFloat(it.satFat)||0)*10)/10,sod:Math.round(parseFloat(it.sodium)||0),
-        weight_g:Math.round(parseFloat(it.weight_g)||0),
-        confidence:String(it.confidence||'medium')};});
+    // Robust parse — handles markdown fences, prose wrappers, single objects, TSV
+    var parsed=nutMsiParseGeminiResponse(text);
+    if(parsed&&parsed.length){
+      _msi=parsed;
       nutMealScanSetStatus(_msi.length+' item'+(_msi.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
       nutMealScanRender();
-    }catch(e2){
-      nutMealScanSetStatus('Could not parse \u2014 try again','var(--orange)');
-      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:28px 0;color:var(--muted);font-size:0.8rem;">Tap Retake or add manually</div>';
+    } else {
+      // Last resort: show raw text so user can see what Gemini actually said
+      nutMealScanSetStatus('Could not parse \u2014 check items below','var(--orange)');
+      document.getElementById('nutMealScanItems').innerHTML='<div style="padding:16px;color:var(--muted);font-size:0.75rem;white-space:pre-wrap;word-break:break-word;">'+text.slice(0,600)+'</div>';
     }
   })
   .catch(function(err){
@@ -9092,7 +9154,6 @@ function nutMealScanCallVision(b64,mime){
     nutMealScanSetStatus('Network error \u2014 '+(err&&err.message||'check connection'),'var(--orange)');
   });
 }
-
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function nutMealScanRender(){
