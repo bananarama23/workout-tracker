@@ -8236,12 +8236,13 @@ function nutOpenTypeFood(){
     status.style.display='block';
     status.style.color='var(--text)';
     status.innerHTML=
-      '<div style="margin-bottom:8px;font-size:0.72rem;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;">Search food — Gemini looks up nutrition</div>'+
+      '<div style="margin-bottom:8px;font-size:0.72rem;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;">Search or paste nutrition data</div>'+
       '<div style="display:flex;gap:6px;align-items:center;">'+
-        '<input id="nutTypeSearchInp" type="text" placeholder="e.g. 100g chicken breast, 1 banana..." '+
-          'style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:var(--r-sm);color:var(--text);font-size:0.9rem;padding:10px 12px;outline:none;box-sizing:border-box;" '+
-          'onkeydown="if(event.key===\'Enter\'){event.preventDefault();nutTypeGeminiSearch();}">'+
-        '<button onclick="nutTypeGeminiSearch()" style="background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);padding:10px 14px;font-family:\'Bebas Neue\',sans-serif;font-size:0.88rem;letter-spacing:1px;cursor:pointer;white-space:nowrap;">SEARCH</button>'+
+        '<textarea id="nutTypeSearchInp" rows="2" placeholder="Search: 100g chicken breast&#10;— or paste TSV/table data directly —" '+
+          'style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:var(--r-sm);color:var(--text);font-size:0.85rem;padding:10px 12px;outline:none;box-sizing:border-box;resize:none;font-family:inherit;line-height:1.4;" '+
+          'onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();nutTypeGeminiSearch();}">'+
+        '</textarea>'+
+        '<button onclick="nutTypeGeminiSearch()" style="background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);padding:10px 14px;font-family:\'Bebas Neue\',sans-serif;font-size:0.88rem;letter-spacing:1px;cursor:pointer;white-space:nowrap;align-self:stretch;">GO</button>'+
       '</div>'+
       '<div id="nutTypeSearchStatus" style="font-size:0.72rem;color:var(--muted);margin-top:6px;min-height:16px;"></div>';
     setTimeout(function(){var inp=document.getElementById('nutTypeSearchInp');if(inp)inp.focus();},100);
@@ -8251,6 +8252,42 @@ function nutTypeGeminiSearch(){
   var q=(document.getElementById('nutTypeSearchInp')||{}).value||'';
   if(!q.trim())return;
   var statusEl=document.getElementById('nutTypeSearchStatus');
+
+  // ── Step 1: Try TSV/table parse first ──────────────────────────
+  if(/\t/.test(q)||(/\n/.test(q)&&/\d/.test(q))){
+    var parsed=nutMsiParseGeminiResponse(q);
+    if(parsed&&parsed.length){
+      // Multiple items → go to meal scan page
+      if(parsed.length>1){
+        var outer=document.getElementById('nutScanStatus');if(outer){outer.style.display='none';outer.innerHTML='';}
+        nutCloseAdd();
+        _msi=parsed;_msiMemory=false;_msiShowTotal=true;_msiCombine=false;
+        var h=new Date().getHours();
+        _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
+        if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
+        document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
+        var pg=document.getElementById('page-mealscan');if(pg){pg.classList.remove('hidden');pg.classList.add('active');}
+        nutMealScanRenderMealBtns();nutMealScanRenderMemory();nutMealScanRenderCombine();
+        document.getElementById('nutMealScanRetakeBtn').style.display='none';
+        nutMealScanSetStatus(parsed.length+' items found — review then log','var(--green)');
+        nutMealScanRender();
+        return;
+      }
+      // Single item → fill the food form directly
+      var it=parsed[0];
+      var outer=document.getElementById('nutScanStatus');if(outer){outer.style.display='none';outer.innerHTML='';}
+      nutFillFromScan({
+        name:it.name,serving:it.qty||1,unit:'serving',
+        calories:it.cal,protein:it.prot,carbs:it.carb,
+        fat:it.fat,fibre:it.fib,satFat:it.sat,sodium:it.sod
+      },null);
+      var msg=document.getElementById('nutFoodFormMsg');
+      if(msg){msg.textContent='\u2713 '+it.name+' — check values then save';msg.style.color='var(--green)';}
+      return;
+    }
+  }
+
+  // ── Step 2: Fall back to Gemini search ─────────────────────────
   if(statusEl){statusEl.textContent='Asking Gemini...';statusEl.style.color='var(--muted)';}
   var geminiKey=localStorage.getItem('wt_gemini_key')||'';
   if(!geminiKey){nutApiKeyShow(null,null,null);if(statusEl){statusEl.textContent='Enter your Gemini key then search again';statusEl.style.color='var(--orange)';}return;}
@@ -9156,29 +9193,76 @@ function nutMsiParseGeminiResponse(raw){
 
 function nutMsiParseTSV(text){
   var lines=text.split('\n').map(function(l){return l.trim();}).filter(Boolean);
-  var data=lines.filter(function(l){
-    return /\t/.test(l)&&!/^(name|item|food|#|time)/i.test(l)&&!/^[-\t|:]+$/.test(l);
+  if(!lines.length)return null;
+  // Detect header row by scanning for known column name keywords
+  var headerIdx=-1,colMap=null;
+  lines.forEach(function(l,i){
+    if(!/\t/.test(l))return;
+    var cols=l.split('\t').map(function(x){return x.trim().toLowerCase();});
+    var hasCal=cols.some(function(c){return /^(cal|kcal|energy)/.test(c);});
+    var hasFood=cols.some(function(c){return /^(name|food|item)/.test(c);});
+    if((hasCal||hasFood)&&headerIdx<0){
+      headerIdx=i;colMap={};
+      cols.forEach(function(c,j){
+        if(/^date/.test(c))colMap.date=j;
+        else if(/^time/.test(c))colMap.time=j;
+        else if(/^(name|food|item)/.test(c))colMap.name=j;
+        else if(/^(qty|quant|serv)/.test(c))colMap.qty=j;
+        else if(/^weight/.test(c))colMap.weight=j;
+        else if(/^(cal|kcal|energy)/.test(c))colMap.cal=j;
+        else if(/^prot/.test(c))colMap.prot=j;
+        else if(/^(carb|cho)/.test(c))colMap.carb=j;
+        else if(/^fat$/.test(c))colMap.fat=j;
+        else if(/^(fib|fibre|fiber)/.test(c))colMap.fib=j;
+        else if(/^sat/.test(c))colMap.sat=j;
+        else if(/^(sod|sodium)/.test(c))colMap.sod=j;
+        else if(/^conf/.test(c))colMap.conf=j;
+      });
+    }
+  });
+  var data=lines.filter(function(l,i){
+    return i!==headerIdx&&/\t/.test(l)&&!/^[-\t|:]+$/.test(l);
   });
   if(!data.length)return null;
   var items=[];
   data.forEach(function(line,i){
     var c=line.split('\t').map(function(x){return x.trim();});
-    if(c.length<4||!c[0])return;
-    var n=c.slice(1).map(function(x){return parseFloat(x)||0;});
-    items.push({
-      id:Date.now()+i+(Math.random()*999|0),
-      name:c[0].replace(/^\d+[\.)\s]+/,'').trim(),
-      qty:Math.max(0.25,n[0]||1),weight_g:Math.round(n[1]||0),
-      cal:Math.round(n[2]||0),prot:Math.round((n[3]||0)*10)/10,
-      carb:Math.round((n[4]||0)*10)/10,fat:Math.round((n[5]||0)*10)/10,
-      fib:Math.round((n[6]||0)*10)/10,sat:Math.round((n[7]||0)*10)/10,
-      sod:Math.round(n[8]||0),confidence:c[10]||c[9]||'medium'
-    });
+    if(c.length<3)return;
+    var item;
+    if(colMap){
+      function g(k){return colMap[k]!==undefined&&c[colMap[k]]?c[colMap[k]]:'0';}
+      var nameVal=(colMap.name!==undefined?c[colMap.name]:'')||(colMap.date!==undefined?c[colMap.date]:'')||c[0];
+      item={
+        id:Date.now()+i+(Math.random()*999|0),
+        name:nameVal.replace(/^\d+[\.)\s]+/,'').trim(),
+        qty:Math.max(0.25,parseFloat(g('qty'))||1),
+        weight_g:Math.round(parseFloat(g('weight'))||0),
+        cal:Math.round(parseFloat(g('cal'))||0),
+        prot:Math.round((parseFloat(g('prot'))||0)*10)/10,
+        carb:Math.round((parseFloat(g('carb'))||0)*10)/10,
+        fat:Math.round((parseFloat(g('fat'))||0)*10)/10,
+        fib:Math.round((parseFloat(g('fib'))||0)*10)/10,
+        sat:Math.round((parseFloat(g('sat'))||0)*10)/10,
+        sod:Math.round(parseFloat(g('sod'))||0),
+        confidence:colMap.conf!==undefined?c[colMap.conf]||'medium':'medium'
+      };
+    } else {
+      // No header — Gemini default order: Name,Qty,WeightG,Cal,Prot,Carb,Fat,Fib,Sat,Sod,Conf
+      var n=c.slice(1).map(function(x){return parseFloat(x)||0;});
+      item={
+        id:Date.now()+i+(Math.random()*999|0),
+        name:c[0].replace(/^\d+[\.)\s]+/,'').trim(),
+        qty:Math.max(0.25,n[0]||1),weight_g:Math.round(n[1]||0),
+        cal:Math.round(n[2]||0),prot:Math.round((n[3]||0)*10)/10,
+        carb:Math.round((n[4]||0)*10)/10,fat:Math.round((n[5]||0)*10)/10,
+        fib:Math.round((n[6]||0)*10)/10,sat:Math.round((n[7]||0)*10)/10,
+        sod:Math.round(n[8]||0),confidence:c[10]||c[9]||'medium'
+      };
+    }
+    if(item.name)items.push(item);
   });
   return items.filter(function(it){return it.cal>0;});
 }
-
-
 function nutMsiNorm(arr){
   return arr.map(function(it,i){
     return {
