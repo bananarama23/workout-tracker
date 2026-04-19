@@ -1346,17 +1346,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutAddOverlayTitle">ADD TO BREAKFAST</div>
       <button onclick="nutCloseAdd()" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
     </div>
-    <div style="display:flex;gap:6px;margin-bottom:12px;align-items:center;">
-      <input id="nutAddSearch" type="text" placeholder="Search foods..." oninput="nutFilterAddList()" class="log-input" style="flex:1;margin:0;">
-      <!-- 📷 single item via camera -->
-      <button onclick="nutAddInlineScan()" title="Scan single item" style="width:40px;height:40px;flex-shrink:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">📷</button>
-      <!-- 🍽 meal scan via camera -->
-      <button onclick="nutMealScanLive()" title="Meal scan (live)" style="width:40px;height:40px;flex-shrink:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">🍽</button>
-      <!-- 📁 upload — shows choice sheet -->
-      <button onclick="nutShowUploadChoice()" title="Upload photo" style="width:40px;height:40px;flex-shrink:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">📁</button>
-      <input type="file" id="nutUploadSingleFile" accept="image/*" style="display:none;" onchange="nutUploadSingleHandler(this)">
-      <input type="file" id="nutUploadMealFile" accept="image/*" style="display:none;" onchange="nutUploadMealHandler(this)">
-    </div>
+    <input id="nutAddSearch" type="text" placeholder="Search foods..." oninput="nutFilterAddList()" class="log-input" style="margin-bottom:12px;">
     <div id="nutAddList"></div>
   </div>
 </div>
@@ -1372,37 +1362,26 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   </div>
   <video id="nutCamVideo" playsinline autoplay muted style="width:100%;height:100%;object-fit:cover;"></video>
   <canvas id="nutCamCanvas" style="display:none;"></canvas>
-  <!-- No scan frame — food photos don't need a target box -->
-  <div id="camFrame" style="display:none;"></div>
-  <div id="camScanLine" style="display:none;"></div>
-  <div style="position:absolute;bottom:0;left:0;right:0;padding:12px 20px calc(var(--nav-h) + var(--safe-b) + 16px);background:linear-gradient(to top,rgba(0,0,0,0.92) 50%,transparent);">
-    <div id="camStatus" style="text-align:center;color:rgba(255,255,255,0.75);font-size:0.75rem;margin-bottom:16px;min-height:18px;"></div>
-    <input type="file" id="camUploadSingle" accept="image/*" style="display:none;" onchange="nutCamUploadSingle(this)">
-    <input type="file" id="camUploadMeal" accept="image/*" style="display:none;" onchange="nutCamUploadMeal(this)">
-    <!-- Three clean buttons in a row -->
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;">
-      <!-- Left: single item upload -->
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
-        <button onclick="document.getElementById('camUploadSingle').click()" style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">📁</button>
-        <div style="font-size:0.58rem;color:rgba(255,255,255,0.45);text-align:center;">Upload</div>
-      </div>
-      <!-- Centre: shutter -->
-      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-        <button onclick="nutCamCapture()" style="width:72px;height:72px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,0.35);cursor:pointer;display:flex;align-items:center;justify-content:center;">
-          <div style="width:56px;height:56px;border-radius:50%;background:var(--accent);"></div>
-        </button>
-        <div style="font-size:0.58rem;color:rgba(255,255,255,0.45);">Single item</div>
-      </div>
-      <!-- Right: meal scan -->
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
-        <button onclick="nutMealScanCapture()" style="width:52px;height:52px;border-radius:50%;background:rgba(200,255,0,0.12);border:1px solid rgba(200,255,0,0.35);color:var(--accent);font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">🍽</button>
-        <div style="font-size:0.58rem;color:rgba(255,255,255,0.45);text-align:center;">Meal scan</div>
-      </div>
+  <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+    <div id="camFrame" style="width:72vw;height:42vw;max-width:320px;max-height:180px;border:2px solid rgba(200,255,0,0.8);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);position:relative;">
+      <div style="position:absolute;top:-2px;left:-2px;width:20px;height:20px;border-top:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:2px 0 0 0;"></div>
+      <div style="position:absolute;top:-2px;right:-2px;width:20px;height:20px;border-top:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 2px 0 0;"></div>
+      <div style="position:absolute;bottom:-2px;left:-2px;width:20px;height:20px;border-bottom:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:0 0 0 2px;"></div>
+      <div style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-bottom:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 0 2px 0;"></div>
+      <div id="camScanLine" style="position:absolute;left:4px;right:4px;height:2px;background:linear-gradient(to right,transparent,var(--accent),transparent);top:50%;animation:scanline 2s ease-in-out infinite;"></div>
     </div>
+  </div>
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 16px calc(var(--nav-h) + var(--safe-b) + 20px);background:linear-gradient(to top,rgba(0,0,0,0.9) 60%,transparent);">
+    <div id="camStatus" style="text-align:center;color:rgba(255,255,255,0.8);font-size:0.78rem;margin-bottom:14px;min-height:20px;"></div>
+    <div style="display:flex;gap:10px;align-items:center;justify-content:center;">
+      <button onclick="nutCamCapture()" style="width:68px;height:68px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,0.4);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+        <div style="width:52px;height:52px;border-radius:50%;background:var(--accent);"></div>
+      </button>
+    </div>
+    <div style="text-align:center;margin-top:10px;font-size:0.62rem;color:rgba(255,255,255,0.4);">Tap to capture · Auto-detects barcodes</div>
   </div>
 </div>
 <style>
-@keyframes spin{to{transform:rotate(360deg);}}
 @keyframes scanline{0%,100%{top:10%;}50%{top:85%;}}
 @keyframes barcodeFound{0%{border-color:rgba(200,255,0,0.8);}50%{border-color:#00ff88;box-shadow:0 0 0 9999px rgba(0,0,0,0.45),0 0 20px rgba(0,255,136,0.5);}100%{border-color:rgba(200,255,0,0.8);}}
 .cam-barcode-flash{animation:barcodeFound 0.4s ease;}
@@ -2290,6 +2269,65 @@ function previewParsePaste(){
   var text=(inp?inp.value:'').trim();
   if(!text){if(msg){msg.textContent='Paste something first';msg.style.color='var(--orange)';}return;}
 
+  // ── Structured format fast-path ───────────────────────────────────
+  // Matches lines like: EX: Pull-Up Ladder | SETS: 4/4/3/3 | REST: 85 | GOAL: No rep drop
+  (function(){
+    var EX_RE=/^EX:\s*(.+?)\s*\|\s*SETS:\s*([\d\/]+)\s*\|\s*REST:\s*(\d+)(?:\s*\|\s*GOAL:\s*(.+))?/i;
+    var structLines=text.split('\n').map(function(l){return l.trim();}).filter(function(l){return l&&!/^(HOME|HOTEL|HIIT|SESSION|DAY|REST|---)/i.test(l);});
+    var exLines=structLines.filter(function(l){return EX_RE.test(l);});
+    if(exLines.length>=2){
+      // All exercise lines parsed — use structured path, skip legacy parser
+      var NAME_RULES2=[
+        ['SUPINATED PULL-UPS',       ['supinated pull','supinated pullup']],
+        ['PULL-UPS',                 ['pull-up ladder','pull up ladder','pull-ups','pull-up','pullups','pullup']],
+        ['CLOSE-GRIP PUSH-UPS',      ['close-grip push','close grip push','close grip pu']],
+        ['DIAMOND PUSH-UPS',         ['diamond push']],
+        ['PIKE PUSH-UPS',            ['pike push']],
+        ['ARCHER PUSH-UPS',          ['archer push']],
+        ['PUSH-UPS',                 ['push-up','push-ups','pushup','pushups']],
+        ['DIPS',                     ['tricep dip','triceps dip','dip']],
+        ['SINGLE-LEG GLUTE BRIDGES', ['single-leg glute','single leg glute','sl glute','glute bridge']],
+        ['LEG RAISES',               ['leg raise','hanging knee','hanging leg']],
+        ['HOLLOW BODY HOLD',         ['hollow body','hollow hold']],
+        ['SIDE PLANKS',              ['side plank']],
+        ['AUSTRALIAN PULL-UPS',      ['australian pull','aussie pull']],
+      ];
+      function normS(raw){
+        var lower=raw.toLowerCase().replace(/\s+/g,' ').trim();
+        for(var ri=0;ri<NAME_RULES2.length;ri++){var toks=NAME_RULES2[ri][1];for(var ti=0;ti<toks.length;ti++){if(lower.indexOf(toks[ti])>=0)return NAME_RULES2[ri][0];}}
+        return raw.toUpperCase().trim();
+      }
+      var parsed2=[];
+      exLines.forEach(function(line){
+        var m=line.match(EX_RE);if(!m)return;
+        var internalName=normS(m[1]);
+        var isPlank=internalName.indexOf('PLANK')>=0;
+        var rc=m[2].split('/').map(function(p){return parseInt(p);}).filter(function(n){return !isNaN(n)&&n>0&&n<500;});
+        if(!rc.length)rc=[10,10];
+        var rest=parseInt(m[3])||60;
+        var goal=m[4]?m[4].trim():null;
+        var defaults=wType==='home'?homeEx:hotelEx;
+        var existing=null;
+        for(var i=0;i<defaults.length;i++){if(defaults[i].name===internalName){existing=defaults[i];break;}}
+        var ex=existing?JSON.parse(JSON.stringify(existing)):{name:internalName,sets:rc.length,reps:rc.join('/'),rc:rc,rest:rest,form:'',tweak:null,watch:null,isPlank:isPlank,seq:null};
+        ex.rc=rc;ex.sets=rc.length;
+        ex.reps=isPlank?(rc[0]||60)+' sec/side':rc.join('/');
+        ex.rest=rest;
+        if(goal)ex.goal=goal;
+        parsed2.push(ex);
+      });
+      if(parsed2.length){
+        exs=parsed2;
+        _previewSkipped=exs.map(function(){return false;});
+        renderPreview();
+        var msg2=document.getElementById('previewPasteMsg');
+        if(msg2){msg2.textContent='\u2713 '+parsed2.length+' exercise'+(parsed2.length>1?'s':'')+' loaded (structured format)';msg2.style.color='var(--green)';}
+        return;
+      }
+    }
+  })();
+  if(exs&&exs.length&&document.getElementById('previewPasteMsg')&&document.getElementById('previewPasteMsg').textContent.indexOf('structured')>=0)return;
+
   // ── Name normalisation: token list, first match wins ─────────────
   var NAME_RULES=[
     ['SUPINATED PULL-UPS',       ['supinated pull','supinated pullup']],
@@ -2331,10 +2369,17 @@ function previewParsePaste(){
   // ── Detect exercise header lines ──────────────────────────────────
   function isHeader(line){
     var l=line.trim(); if(!l)return false;
-    var lc=l.replace(/^[^\d\u2460-\u2468\*]+/,'');
+    var lc=l.replace(/^[\u{1F000}-\u{1FAFF}\uFE0F\u20E3\u200D\u26A0\u2600-\u27BF\s]+/gu,'');
     if(/^\d\uFE0F\u20E3/.test(lc))return true;
     if(/^[\u2460-\u2468]/.test(lc))return true;
-    if(/^\d{1,2}[\.)] /.test(lc))return true;
+    // Numbered list: only match if line looks like "N. Exercise Name" not "N. sentence with verb"
+    if(/^\d{1,2}[\.)] /.test(lc)){
+      var rest=lc.replace(/^\d{1,2}[\.)] /,'');
+      // Must contain a dash/reps pattern OR start with capital and have no lowercase verb words
+      if(/[\u2013\u2014\-]\s*\d/.test(rest)||/^\d/.test(rest))return false; // "1. Dips progression" starts lowercase after number — skip
+      if(/^[A-Z][a-z\-\s]+[A-Z]/.test(rest)||/[–\-]\s*\d/.test(rest))return true;
+      return false;
+    }
     if(/^\*\*[A-Z]/.test(l)&&l.length<80)return true;
     return false;
   }
@@ -2380,7 +2425,7 @@ function previewParsePaste(){
     for(var i=0;i<blines.length;i++){
       var l=blines[i].replace(/^[\s\*\-•]+/,'').trim();
       var m=l.match(/[Ff]orm[:\s]+(.+)/);
-      if(m)return m[1].trim();
+      if(m)return m[1].replace(/^[\s\u2022\u2023\u25E6\u2219\u2027\u00B7]+/,'').trim();
     }
     return null;
   }
@@ -2400,12 +2445,16 @@ function previewParsePaste(){
                .replace(/^[\u{2300}-\u{27BF}\u{1F000}-\u{1FAFF}\uFE0F\u20E3\u200D]+/gu,'')
                .replace(/^[\s\*\-•]+/,'').trim();
     }
-    function isDash(s){return /^[\u2014\u2013\-]+$/.test(s.trim());}
-    function isNextExercise(raw){
-      var s=stripNoise(raw);
-      if(/^\d[\uFE0F\u20E3]/.test(s))return true;
-      if(/^\d{1,2}[.)]\s/.test(s))return true;
-      if(/^[\u2460-\u2468]/.test(s))return true;
+    function isDash(s){return /^[\u2014\u2013\u2E3B\u2015\-]+$/.test(s.trim());}
+    function isNextHeader(raw){
+      // Detect next exercise header lines (e.g. "🔥 2️⃣ Dips..." or "3. Push-Ups")
+      var l=raw.trim();
+      if(!l)return false;
+      var lc=l.replace(/^[^\d\u2460-\u2468\*]+/,'');
+      if(/^\d\uFE0F\u20E3/.test(lc))return true;
+      if(/^[\u2460-\u2468]/.test(lc))return true;
+      if(/^\d{1,2}[.)]\s/.test(lc))return true;
+      if(/^\*\*[A-Z]/.test(l)&&l.length<80)return true;
       return false;
     }
     var goalStart=-1;
@@ -2419,29 +2468,36 @@ function previewParsePaste(){
     var parts=[];
     var sameLine=stripNoise(blines[goalStart]).replace(/^([Gg]oal|[Ss]trict\s+[Rr]ule|[Rr]ule)\s*:?\s*/i,'').trim();
     if(sameLine&&!isDash(sameLine))parts.push(sameLine);
+    var inExpectBlock=false;
     for(var j=goalStart+1;j<blines.length;j++){
       var raw=blines[j];
+      if(isNextHeader(raw))break;
       if(/^\s*```/.test(raw))continue;
-      if(isNextExercise(raw))break;
+      if(/^\s*[\u00B7\u2022\u25E6]\s/.test(raw))continue;
       var stripped=stripNoise(raw);
+      if(/^(Expect|If needed|See below)\s*:?\s*$/i.test(stripped)){inExpectBlock=2;continue;}
+      if(inExpectBlock){
+        // Mode 2 = Expect: block (skip * bullets); Mode 1 = If...: continuation (skip next line unconditionally)
+        if(inExpectBlock===2){if(!stripped||/^\s*[\*\-]/.test(raw))continue;inExpectBlock=0;}
+        else{inExpectBlock=0;continue;} // mode 1: skip this one line then stop
+      }
+      // Skip any 👉 line after goal is captured (all variants: conditional, confirmation, etc.)
+      if(parts.length>0&&/^\u{1F449}/u.test(raw.trim())){inExpectBlock=/:\s*$/.test(raw.trim())?1:0;continue;}
+      if(parts.length>0&&/^(If |\u2192|Drop to|But form|We )/i.test(stripped)){inExpectBlock=/:\s*$/.test(stripped)?1:0;continue;}
       if(!stripped)continue;
       if(isDash(stripped))break;
       if(/^Time\s*[:\~]/i.test(stripped))break;
       if(/^\d+[-\u2013]\d+\s*min/i.test(stripped))break;
       if(/^(Strict\s+Focus|Edge\s+Day\s+Focus|Focus\s+Today)/i.test(stripped))break;
       if(/^(Bottom|Why this matters|What I.m watching|Send results)/i.test(stripped))break;
-      if(/^(Red|Green|Success)\s*(flags?|signs?)/i.test(stripped))break;
+      if(/^(Red|Green|Success)\s+(flags?|signs?)/i.test(stripped))break;
       if(/^[Ff]orm\s*:/i.test(stripped))break;
       if(/^[Rr]est\s*:/i.test(stripped))break;
       if(/^[Ff]eel\s*[:\[]/i.test(stripped))break;
       if(/^[Ss]et\s*\d+\s*[:\s]/i.test(stripped))break;
       if(/^[Tt]weak\s*:/i.test(stripped))break;
-      var text=stripped.replace(/^(Expect|If needed|See below)\s*:?\s*/i,'').trim();
-      if(!text||isDash(text))continue;
-      var isWarning=/^([Ss]trict\s+)?[Nn]ote\s*:/i.test(text)||/^[Ww]arning\s*:/i.test(text);
-      var prefix=isWarning?'\u26A0 ':'';
-      text=text.replace(/^([Ss]trict\s+)?[Nn]ote\s*:\s*/i,'').replace(/^[Ww]arning\s*:\s*/i,'').trim();
-      if(text)parts.push(prefix+text);
+      if(/^([Ss]trict\s+)?[Nn]ote\s*:/i.test(stripped)||/^[Ww]arning\s*:/i.test(stripped))continue;
+      if(stripped)parts.push(stripped);
     }
     parts=parts.map(function(p){return p.replace(/\s*[\u2014\u2013\-]+\s*$/,'').trim();}).filter(Boolean);
     var result=parts.join(' \u00b7 ').replace(/\s*[\u00b7\u2014\u2013\-\s]+$/,'').trim();
@@ -2466,6 +2522,10 @@ function previewParsePaste(){
     if(repsPart.match(/\d+\s*\/\s*$/)&&block.lines.length){
       var nextNums=block.lines[0].replace(/[^0-9\/\s]/g,'').trim();
       if(nextNums)repsPart=repsPart+' '+nextNums;
+    }
+    // Handle reps on own line: header ends with just "–" and next line is "10 / 6"
+    if(!repsPart&&block.lines.length&&/^\d[\d\/\s]*$/.test(block.lines[0].trim())){
+      repsPart=block.lines[0].trim();
     }
 
     var internalName=normaliseName(namePart);
@@ -7416,7 +7476,7 @@ function nutApiKeyTest(){
   if(!key){if(msg)msg.textContent='Enter a key first';return;}
   if(btn){btn.textContent='Testing...';btn.disabled=true;}
   if(msg){msg.textContent='';msg.style.color='var(--muted)';}
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:'Say OK'}]}],generationConfig:{maxOutputTokens:5}})
   }).then(function(r){return r.json();}).then(function(d){
@@ -7452,7 +7512,7 @@ function nutCallVision(base64,mediaType,statusEl){
     return;
   }
   var promptText='This is a nutrition label or food packaging. Extract and return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","servingDesc":"if label shows a count like \'About 13 Chips\' or \'2 biscuits\' put ONLY that e.g. \'13 chips\' or \'2 biscuits\' — blank string if no count on label","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. IMPORTANT: if label shows both oz and grams (e.g. \'1 oz (28g)\'), use grams for serving and unit. All values per serving. Sodium in mg. Use null for unknown fields.';
-  var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey;
+  var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
   fetch(url,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -7539,33 +7599,6 @@ function nutFillFromScan(d,statusEl){
     statusEl.style.color='var(--green)';
     setTimeout(function(){if(statusEl){statusEl.style.display='none';statusEl.style.color='';}},4000);
   }
-}
-// Helper: open camera from add-food search (single item mode)
-// nutAddInlineScan already exists — it sets _nutAddInlineMode=true then opens camera
-// Helper: upload meal photo directly from add-food search overlay
-function nutMsiOpenUpload(){
-  var inp=document.getElementById('nutAddMealUpload');if(inp)inp.click();
-}
-function nutMsiFromAddOverlay(inp){
-  var file=inp.files&&inp.files[0];if(!file)return;
-  // Close the add overlay first
-  nutCloseAdd();
-  var reader=new FileReader();
-  reader.onload=function(e){
-    var img=new Image();
-    img.onload=function(){
-      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
-      var c=document.createElement('canvas');
-      c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
-      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
-      _msiLastB64=b64;_msiLastMime='image/jpeg';
-      nutMealScanOpen(b64,'image/jpeg');
-    };
-    img.src=e.target.result;
-  };
-  reader.readAsDataURL(file);
-  inp.value='';
 }
 // ── End photo scan ─────────────────────────────────────────────────
 function nutSaveFood(){
@@ -8236,13 +8269,12 @@ function nutOpenTypeFood(){
     status.style.display='block';
     status.style.color='var(--text)';
     status.innerHTML=
-      '<div style="margin-bottom:8px;font-size:0.72rem;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;">Search or paste nutrition data</div>'+
+      '<div style="margin-bottom:8px;font-size:0.72rem;color:var(--muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;">Search food — Gemini looks up nutrition</div>'+
       '<div style="display:flex;gap:6px;align-items:center;">'+
-        '<textarea id="nutTypeSearchInp" rows="2" placeholder="Search: 100g chicken breast&#10;— or paste TSV/table data directly —" '+
-          'style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:var(--r-sm);color:var(--text);font-size:0.85rem;padding:10px 12px;outline:none;box-sizing:border-box;resize:none;font-family:inherit;line-height:1.4;" '+
-          'onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();nutTypeGeminiSearch();}">'+
-        '</textarea>'+
-        '<button onclick="nutTypeGeminiSearch()" style="background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);padding:10px 14px;font-family:\'Bebas Neue\',sans-serif;font-size:0.88rem;letter-spacing:1px;cursor:pointer;white-space:nowrap;align-self:stretch;">GO</button>'+
+        '<input id="nutTypeSearchInp" type="text" placeholder="e.g. 100g chicken breast, 1 banana..." '+
+          'style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:var(--r-sm);color:var(--text);font-size:0.9rem;padding:10px 12px;outline:none;box-sizing:border-box;" '+
+          'onkeydown="if(event.key===\'Enter\'){event.preventDefault();nutTypeGeminiSearch();}">'+
+        '<button onclick="nutTypeGeminiSearch()" style="background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);padding:10px 14px;font-family:\'Bebas Neue\',sans-serif;font-size:0.88rem;letter-spacing:1px;cursor:pointer;white-space:nowrap;">SEARCH</button>'+
       '</div>'+
       '<div id="nutTypeSearchStatus" style="font-size:0.72rem;color:var(--muted);margin-top:6px;min-height:16px;"></div>';
     setTimeout(function(){var inp=document.getElementById('nutTypeSearchInp');if(inp)inp.focus();},100);
@@ -8252,47 +8284,11 @@ function nutTypeGeminiSearch(){
   var q=(document.getElementById('nutTypeSearchInp')||{}).value||'';
   if(!q.trim())return;
   var statusEl=document.getElementById('nutTypeSearchStatus');
-
-  // ── Step 1: Try TSV/table parse first ──────────────────────────
-  if(/\t/.test(q)||(/\n/.test(q)&&/\d/.test(q))){
-    var parsed=nutMsiParseGeminiResponse(q);
-    if(parsed&&parsed.length){
-      // Multiple items → go to meal scan page
-      if(parsed.length>1){
-        var outer=document.getElementById('nutScanStatus');if(outer){outer.style.display='none';outer.innerHTML='';}
-        nutCloseAdd();
-        _msi=parsed;_msiMemory=false;_msiShowTotal=true;_msiCombine=false;
-        var h=new Date().getHours();
-        _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
-        if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
-        document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
-        var pg=document.getElementById('page-mealscan');if(pg){pg.classList.remove('hidden');pg.classList.add('active');}
-        nutMealScanRenderMealBtns();nutMealScanRenderMemory();nutMealScanRenderCombine();
-        document.getElementById('nutMealScanRetakeBtn').style.display='none';
-        nutMealScanSetStatus(parsed.length+' items found — review then log','var(--green)');
-        nutMealScanRender();
-        return;
-      }
-      // Single item → fill the food form directly
-      var it=parsed[0];
-      var outer=document.getElementById('nutScanStatus');if(outer){outer.style.display='none';outer.innerHTML='';}
-      nutFillFromScan({
-        name:it.name,serving:it.qty||1,unit:'serving',
-        calories:it.cal,protein:it.prot,carbs:it.carb,
-        fat:it.fat,fibre:it.fib,satFat:it.sat,sodium:it.sod
-      },null);
-      var msg=document.getElementById('nutFoodFormMsg');
-      if(msg){msg.textContent='\u2713 '+it.name+' — check values then save';msg.style.color='var(--green)';}
-      return;
-    }
-  }
-
-  // ── Step 2: Fall back to Gemini search ─────────────────────────
   if(statusEl){statusEl.textContent='Asking Gemini...';statusEl.style.color='var(--muted)';}
   var geminiKey=localStorage.getItem('wt_gemini_key')||'';
   if(!geminiKey){nutApiKeyShow(null,null,null);if(statusEl){statusEl.textContent='Enter your Gemini key then search again';statusEl.style.color='var(--orange)';}return;}
   var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
   })
@@ -8462,7 +8458,7 @@ function progAIRunFeedback(geminiKey,btn,card,result){
     '4. Cheat ratio (currently '+cheatRatio+') — am I earning back the right amount on travel/cheat days? Remember: on cheat days a near-zero surplus or small surplus is the TARGET (maintenance), not a problem. Only suggest changing this if cheat days are causing an unhealthy surplus that\'s hurting the overall weight trend.\n'+
     'Use my actual surplus/deficit numbers and weight trend. 4 short answers, one per number, specific values to change to if needed. Do not penalize cheat days for being near maintenance — that is intentional.';
 
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.3,maxOutputTokens:500}})
   })
@@ -8694,7 +8690,7 @@ function cholAIFeedback(){
     '4. **Top 3 changes** — highest-impact changes to improve HDL and LDL further\n'+
     '5. **Next test targets** — specific HDL, LDL and ratio to aim for';
 
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.3,maxOutputTokens:800}})
   })
@@ -8717,32 +8713,11 @@ function nutAddInlineStatus(txt,col){var el=document.getElementById('nutAddInlin
 function nutAddInlineGemini(){
   var q=(document.getElementById('nutAddSearch')||{}).value||'';
   if(!q.trim()){nutAddInlineStatus('Type a food name first','var(--orange)');return;}
-
-  // ── Try TSV/table parse first ─────────────────────────────────
-  if(/\t/.test(q)||(/\n/.test(q)&&/\d/.test(q))){
-
-    var tsvParsed=nutMsiParseGeminiResponse(q);
-    if(tsvParsed&&tsvParsed.length){
-      nutCloseAdd();
-      _msi=tsvParsed;_msiMemory=false;_msiShowTotal=true;_msiCombine=false;
-      var h=new Date().getHours();
-      _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
-      if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
-      document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
-      var pg=document.getElementById('page-mealscan');if(pg){pg.classList.remove('hidden');pg.classList.add('active');}
-      nutMealScanRenderMealBtns();nutMealScanRenderMemory();nutMealScanRenderCombine();
-      var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='none';
-      nutMealScanSetStatus(tsvParsed.length+' item'+(tsvParsed.length!==1?'s':'')+' found — review then log','var(--green)');
-      nutMealScanRender();
-      return;
-    }
-  }
-
   var geminiKey=localStorage.getItem('wt_gemini_key')||'';
   if(!geminiKey){nutCloseAdd();nutApiKeyShow(null,null,null);return;}
   nutAddInlineStatus('Asking Gemini...','var(--muted)');
   var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
   })
@@ -8904,746 +8879,6 @@ function loadGoals(){
   document.head.appendChild(script);
   setTimeout(function(){if(window[cbP]){window[cbP]=null;}},5000);
 }
-
-// ══════════════════════════════════════════════════════════════════════════════
-// MEAL SCAN
-// ══════════════════════════════════════════════════════════════════════════════
-var _msi=[],_msiMeal='Breakfast',_msiMemory=false,_msiShowTotal=true;
-var _msiLastB64=null,_msiLastMime=null;
-
-// ── Upload handlers ───────────────────────────────────────────────────────────
-function nutCamProcessImage(file,isMeal){
-  if(!file)return;
-  var reader=new FileReader();
-  reader.onload=function(e){
-    var img=new Image();
-    img.onload=function(){
-      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
-      var c=document.createElement('canvas');
-      c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
-      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
-      nutCamClose();
-      if(isMeal){_msiLastB64=b64;_msiLastMime='image/jpeg';nutMealScanOpen(b64,'image/jpeg');}
-      else{var st=document.getElementById('nutScanStatus');if(st){st.style.display='block';st.style.color='var(--muted)';st.textContent='Reading\u2026';}nutCallVision(b64,'image/jpeg',st);}
-    };
-    img.src=e.target.result;
-  };
-  reader.readAsDataURL(file);
-  file=null; // clear ref so same file can be re-selected
-}
-function nutCamUploadSingle(inp){nutCamProcessImage(inp.files&&inp.files[0],false);inp.value='';}
-function nutCamUploadMeal(inp){nutCamProcessImage(inp.files&&inp.files[0],true);inp.value='';}
-
-// ── Capture from live camera ──────────────────────────────────────────────────
-function nutMealScanCapture(){
-  if(!_camStream)return;
-  var vid=document.getElementById('nutCamVideo'),canvas=document.getElementById('nutCamCanvas');
-  if(!vid||!canvas)return;
-  canvas.width=vid.videoWidth||1280;canvas.height=vid.videoHeight||720;
-  canvas.getContext('2d').drawImage(vid,0,0,canvas.width,canvas.height);
-  var maxW=1024,scale=Math.min(1,maxW/canvas.width);
-  var c2=document.createElement('canvas');
-  c2.width=Math.round(canvas.width*scale);c2.height=Math.round(canvas.height*scale);
-  c2.getContext('2d').drawImage(canvas,0,0,c2.width,c2.height);
-  var b64=c2.toDataURL('image/jpeg',0.82).split(',')[1];
-  _msiLastB64=b64;_msiLastMime='image/jpeg';
-  nutCamClose();
-  // Kick off reverse geocode in background — result pre-fills restaurant field if found
-  nutMsiGeoLookup();
-  nutMealScanOpen(b64,'image/jpeg');
-}
-
-function nutMsiGeoLookup(){
-  if(!navigator.geolocation)return;
-  navigator.geolocation.getCurrentPosition(function(pos){
-    var lat=pos.coords.latitude,lon=pos.coords.longitude;
-    fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+lat+'&lon='+lon+'&zoom=18&addressdetails=1',{
-      headers:{'Accept-Language':'en','User-Agent':'WorkoutTracker/1.0'}
-    })
-    .then(function(r){return r.json();})
-    .then(function(d){
-      // Try to get a food-place name — amenity, shop, building, then suburb
-      var name=d.name||'';
-      var addr=d.address||{};
-      var place=name||(addr.amenity||addr.restaurant||addr.cafe||addr.fast_food||addr.food||'');
-      if(!place)return; // nothing useful — don't pre-fill with a street name
-      var ri=document.getElementById('nutMsiCtxRestaurant');
-      if(ri&&!ri.value){
-        ri.value=place;
-        ri.style.borderColor='var(--accent)';
-        setTimeout(function(){ri.style.borderColor='var(--border2)';},1500);
-      }
-    })
-    .catch(function(){});
-  },function(){},{timeout:6000,maximumAge:30000});
-}
-
-function nutMealScanRetake(){
-  var ov=document.getElementById('nutMealScanOverlay');if(ov)ov.style.display='none';
-  nutCamOpen();
-}
-
-// ── Open / close ──────────────────────────────────────────────────────────────
-function nutMealScanOpen(b64,mime){
-  _msiLastB64=b64;_msiLastMime=mime;
-  var cs=document.getElementById('nutMsiContextSheet');
-  if(cs){
-    cs.style.display='flex';
-    var ri=document.getElementById('nutMsiCtxRestaurant');if(ri)ri.value='';
-    var hi=document.getElementById('nutMsiCtxHint');if(hi)hi.value='';
-    setTimeout(function(){var r2=document.getElementById('nutMsiCtxRestaurant');if(r2)r2.focus();},350);
-  } else {
-    nutMealScanOpenDirect(b64,mime);
-  }
-}
-function nutMsiContextSkip(){
-  var cs=document.getElementById('nutMsiContextSheet');if(cs)cs.style.display='none';
-  nutMealScanOpenDirect(_msiLastB64,_msiLastMime);
-}
-function nutMsiContextConfirm(){
-  var cs=document.getElementById('nutMsiContextSheet');if(cs)cs.style.display='none';
-  nutMealScanOpenDirect(_msiLastB64,_msiLastMime);
-}
-function nutMealScanOpenDirect(b64,mime){
-  _msi=[];_msiMemory=false;_msiShowTotal=true;
-  var h=new Date().getHours();
-  _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
-  if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
-  var ov=document.getElementById('nutMealScanOverlay');if(ov)ov.style.display='block';
-  var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='none';
-  nutMealScanSetStatus('Identifying items…','var(--muted)');
-  var items=document.getElementById('nutMealScanItems');
-  if(items)items.innerHTML=nutMsiSpinner();
-  document.getElementById('nutMealScanTotals').style.display='none';
-  document.getElementById('nutMealScanViewToggle').style.display='none';
-  var rest=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
-  var nm=document.getElementById('nutMsiMealName');if(nm&&rest&&!nm.value)nm.value=rest;
-  nutMealScanRenderMealBtns();nutMealScanRenderMemory();
-  if(b64)nutMealScanCallVision(b64,mime);
-}
-function nutMsiSpinner(){
-  return '<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:40px 0;color:var(--muted);font-size:0.8rem;"><div style="width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>Scanning\u2026</div>';
-}
-function nutMealScanSetStatus(txt,col){
-  var el=document.getElementById('nutMealScanStatus');
-  if(el){el.textContent=txt;el.style.color=col||'var(--muted)';}
-}
-
-// ── Meal pills ────────────────────────────────────────────────────────────────
-function nutMealScanRenderMealBtns(){
-  var c=document.getElementById('nutMealScanMealBtns');if(!c)return;
-  c.innerHTML=['Breakfast','Lunch','Dinner','Snack'].map(function(m){
-    var on=m===_msiMeal;
-    return '<button onclick="nutMealScanSetMeal(\''+m+'\')" style="padding:5px 11px;border-radius:20px;font-size:0.67rem;font-weight:700;letter-spacing:0.3px;cursor:pointer;transition:all 0.15s;border:1px solid '+(on?'rgba(200,255,0,0.5)':'var(--border)')+';background:'+(on?'var(--accent-dim)':'var(--card2)')+';color:'+(on?'var(--accent)':'var(--muted)')+';">'+m+'</button>';
-  }).join('');
-}
-function nutMealScanSetMeal(m){_msiMeal=m;nutMealScanRenderMealBtns();}
-
-// ── Per-unit / Total toggle ───────────────────────────────────────────────────
-function nutMealScanToggleView(){
-  _msiShowTotal=!_msiShowTotal;
-  nutMsiSyncViewToggle();
-  nutMealScanRenderItems();
-}
-function nutMsiSyncViewToggle(){
-  var toggle=document.getElementById('nutMealScanViewToggle');
-  if(toggle)toggle.style.display=_msi.length?'flex':'none';
-  var track=document.getElementById('nutMealScanViewTrack');
-  var knob=document.getElementById('nutMealScanViewKnob');
-  if(track)track.style.background=_msiShowTotal?'var(--green)':'var(--border2)';
-  if(knob)knob.style.transform=_msiShowTotal?'translateX(16px)':'translateX(0)';
-}
-
-// ── Memory toggle ─────────────────────────────────────────────────────────────
-function nutMealScanRenderMemory(){
-  var t=document.getElementById('nutMealScanMemTrack'),k=document.getElementById('nutMealScanMemKnob');
-  if(t)t.style.background=_msiMemory?'var(--green)':'var(--border2)';
-  if(k)k.style.transform=_msiMemory?'translateX(18px)':'translateX(0)';
-}
-function nutMealScanToggleMemory(){_msiMemory=!_msiMemory;nutMealScanRenderMemory();}
-
-// ── Vision call ───────────────────────────────────────────────────────────────
-function nutMealScanCallVision(b64,mime){
-  var key=localStorage.getItem('wt_gemini_key')||'';
-  if(!key){nutMealScanSetStatus('No Gemini key \u2014 add it first','var(--orange)');return;}
-
-  var _ctxR=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
-  var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
-  var ctxBlock='';
-  if(_ctxR)ctxBlock+='\nRESTAURANT/PLACE: '+_ctxR+' \u2014 if a known chain, use their exact published menu macros.';
-  if(_ctxH)ctxBlock+='\nUSER NOTES: '+_ctxH;
-
-  var sysInstr=
-    'You are a Nutrition Data Extractor. Convert food images into accurate macro data.\n\n'+
-    'RULES:\n'+
-    '1. BRAND FIRST: Identify any logos, packaging, or restaurant name. If found, use that brand\'s official menu data.\n'+
-    '   Examples: CoCo Ichibanya beef curry standard = 762 kcal, 21g protein. Wagamama chicken katsu = 782 kcal.\n'+
-    '2. COUNT PIECES: For appetizers, count each piece individually before calculating.\n'+
-    '3. SANITY GUARDRAILS (apply before outputting):\n'+
-    '   - Gyoza/dumpling: ~25g each, 50-60 kcal each. Hard cap 80 kcal per piece.\n'+
-    '   - Spring roll (small): ~30g, 60-80 kcal each.\n'+
-    '   - Rice bowl: 200-300g, 260-390 kcal total.\n'+
-    '   - Restaurant curry sauce: 150-200g, 100-200 kcal.\n'+
-    '   If any item exceeds these guardrails, force-correct it.\n'+
-    '4. HIDDEN FATS: Add 10-15% to fried or sauced items for cooking oil.\n'+
-    '5. OUTPUT: Tab-separated values (TSV) only. One item per line. No header row. No markdown. No JSON. No extra text.';
-
-  var userPrompt=
-    'Analyze this food image.'+ctxBlock+'\n\n'+
-    'For each food/drink item visible:\n'+
-    '1. Identify it (use brand data if logo/restaurant visible)\n'+
-    '2. Count pieces if countable\n'+
-    '3. Estimate weight in grams\n'+
-    '4. Apply the sanity guardrails from your instructions\n'+
-    '5. Rate confidence: high=brand data used, medium=estimated, low=unclear\n\n'+
-    'Return ONLY tab-separated values, one item per line, nothing else before or after:\n'+
-    'Name<TAB>Qty<TAB>WeightG<TAB>Calories<TAB>Protein<TAB>Carbs<TAB>Fat<TAB>Fibre<TAB>SatFat<TAB>Sodium<TAB>Confidence\n'+
-    'No header. No markdown. Start immediately with the first food item.';
-
-  var safety=[
-    {category:'HARM_CATEGORY_HARASSMENT',threshold:'BLOCK_ONLY_HIGH'},
-    {category:'HARM_CATEGORY_HATE_SPEECH',threshold:'BLOCK_ONLY_HIGH'},
-    {category:'HARM_CATEGORY_SEXUALLY_EXPLICIT',threshold:'BLOCK_ONLY_HIGH'},
-    {category:'HARM_CATEGORY_DANGEROUS_CONTENT',threshold:'BLOCK_ONLY_HIGH'}
-  ];
-
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      system_instruction:{parts:[{text:sysInstr}]},
-      contents:[{parts:[{inline_data:{mime_type:mime,data:b64}},{text:userPrompt}]}],
-      safetySettings:safety,
-      generationConfig:{temperature:0,maxOutputTokens:2048}
-    })
-  })
-  .then(function(r){return r.json();})
-  .then(function(data){
-    var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='block';
-    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&
-             data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&
-             data.candidates[0].content.parts[0].text;
-    if(!text){
-      var _errCode=data.error&&data.error.code;
-      var _errMsg=data.error?data.error.message||JSON.stringify(data.error)
-        :data.candidates&&data.candidates[0]&&data.candidates[0].finishReason
-          ?'Blocked ('+data.candidates[0].finishReason+')'
-          :JSON.stringify(data).slice(0,300);
-      var _isRate=_errCode===429||_errMsg.indexOf('quota')>=0||_errMsg.indexOf('RESOURCE_EXHAUSTED')>=0;
-      var _retry=(_errMsg.match(/retry in ([0-9.]+)s/i)||[])[1];
-      nutMealScanSetStatus((_isRate?'\u26a0\ufe0f Rate limited.'+(_retry?' Wait '+Math.ceil(_retry)+'s.':''):'Error: '+_errMsg),'var(--orange)');
-      document.getElementById('nutMealScanItems').innerHTML='<div style="text-align:center;padding:24px 16px;color:var(--muted);font-size:0.78rem;">'+_errMsg+'</div>';
-      return;
-    }
-    var parsed=nutMsiParseGeminiResponse(text);
-    if(parsed&&parsed.length){
-      _msi=parsed;
-      var _totC=parsed.reduce(function(acc,it){return acc+it.cal*it.qty;},0);
-      if(_totC>1500){
-        nutMealScanSetStatus('\u26a0\ufe0f '+parsed.length+' items \u00b7 '+Math.round(_totC)+' kcal \u2014 does this look right?','var(--yellow)');
-      } else {
-        nutMealScanSetStatus(parsed.length+' item'+(parsed.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
-      }
-      nutMealScanRender();
-      nutMsiCheckHighCalorie();
-    } else {
-      nutMealScanSetStatus('Could not parse \u2014 raw response below','var(--orange)');
-      document.getElementById('nutMealScanItems').innerHTML=
-        '<div style="padding:14px 16px;color:var(--muted);font-size:0.72rem;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;">'+text+'</div>';
-    }
-  })
-  .catch(function(err){
-    var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='block';
-    nutMealScanSetStatus('Network error \u2014 '+(err&&err.message||'check connection'),'var(--orange)');
-  });
-}
-
-// ── High-calorie warning banner ───────────────────────────────────────────────
-function nutMsiCheckHighCalorie(){
-  var total=_msi.reduce(function(s,it){return s+it.cal*it.qty;},0);
-  var warn=document.getElementById('nutMsiHighCalWarn');
-  if(total>1500){
-    if(!warn){
-      warn=document.createElement('div');
-      warn.id='nutMsiHighCalWarn';
-      warn.style.cssText='margin:8px 16px 0;padding:10px 14px;background:rgba(255,120,0,0.12);border:1px solid var(--orange);border-radius:var(--r-sm);font-size:0.75rem;color:var(--orange);display:flex;align-items:center;gap:10px;';
-      warn.innerHTML='<span style="font-size:1.2rem;flex-shrink:0;">\u26a0\ufe0f</span><div><strong>'+Math.round(total)+' kcal</strong> \u2014 looks high. Double portion?<br><span style="opacity:0.75;font-size:0.68rem;">Adjust quantities with \u2212/+ if needed before logging.</span></div>';
-      var itemsEl=document.getElementById('nutMealScanItems');
-      if(itemsEl)itemsEl.insertAdjacentElement('beforebegin',warn);
-    } else {
-      warn.querySelector('strong').textContent=Math.round(total)+' kcal';
-    }
-  } else {
-    if(warn)warn.remove();
-  }
-}
-
-// ── Gemini response parser \u2014 5 strategies including truncation recovery ──────
-function nutMsiParseGeminiResponse(raw){
-  if(!raw)return null;
-  var text=raw.replace(/```[a-z]*\n?/gi,'').replace(/```/g,'').trim();
-
-  // 1. TSV (primary expected format)
-  var tv=nutMsiParseTSV(text);if(tv&&tv.length)return tv;
-
-  // 2. JSON array
-  var s=text.indexOf('['),e=text.lastIndexOf(']');
-  if(s>=0&&e>s){try{var a=JSON.parse(text.slice(s,e+1));if(Array.isArray(a)&&a.length)return nutMsiNorm(a);}catch(e1){}}
-
-  // 3. Truncation recovery — extract complete objects from broken JSON
-  if(s>=0){
-    try{
-      var objs=[],depth=0,st=-1,inStr=false,esc=false,par=text.slice(s);
-      for(var i=0;i<par.length;i++){
-        var ch=par[i];
-        if(esc){esc=false;continue;}if(ch==='\\'){esc=true;continue;}
-        if(ch==='"'){inStr=!inStr;continue;}if(inStr)continue;
-        if(ch==='{'){if(!depth)st=i;depth++;}
-        else if(ch==='}'){depth--;if(!depth&&st>=0){try{objs.push(JSON.parse(par.slice(st,i+1)));}catch(ep){}st=-1;}}
-      }
-      if(objs.length)return nutMsiNorm(objs);
-    }catch(e2){}
-  }
-
-  // 4. Single JSON object
-  var so=text.indexOf('{'),eo=text.lastIndexOf('}');
-  if(so>=0&&eo>so){try{var o=JSON.parse(text.slice(so,eo+1));if(o&&(o.name||o.item))return nutMsiNorm([o]);}catch(e3){}}
-
-  return null;
-}
-
-function nutMsiParseTSV(text){
-  var lines=text.split('\n').map(function(l){return l.trim();}).filter(Boolean);
-  if(!lines.length)return null;
-  // Detect header row by scanning for known column name keywords
-  var headerIdx=-1,colMap=null;
-  lines.forEach(function(l,i){
-    if(!/\t/.test(l))return;
-    var cols=l.split('\t').map(function(x){return x.trim().toLowerCase();});
-    var hasCal=cols.some(function(c){return /^(cal|kcal|energy)/.test(c);});
-    var hasFood=cols.some(function(c){return /^(name|food|item)/.test(c);});
-    if((hasCal||hasFood)&&headerIdx<0){
-      headerIdx=i;colMap={};
-      cols.forEach(function(c,j){
-        if(/^date/.test(c))colMap.date=j;
-        else if(/^time/.test(c))colMap.time=j;
-        else if(/^(name|food|item)/.test(c))colMap.name=j;
-        else if(/^(qty|quant|serv)/.test(c))colMap.qty=j;
-        else if(/^weight/.test(c))colMap.weight=j;
-        else if(/^(cal|kcal|energy)/.test(c))colMap.cal=j;
-        else if(/^prot/.test(c))colMap.prot=j;
-        else if(/^(carb|cho)/.test(c))colMap.carb=j;
-        else if(/^fat$/.test(c))colMap.fat=j;
-        else if(/^(fib|fibre|fiber)/.test(c))colMap.fib=j;
-        else if(/^sat/.test(c))colMap.sat=j;
-        else if(/^(sod|sodium)/.test(c))colMap.sod=j;
-        else if(/^conf/.test(c))colMap.conf=j;
-      });
-    }
-  });
-  var data=lines.filter(function(l,i){
-    return i!==headerIdx&&/\t/.test(l)&&!/^[-\t|:]+$/.test(l);
-  });
-  if(!data.length)return null;
-  var items=[];
-  data.forEach(function(line,i){
-    var c=line.split('\t').map(function(x){return x.trim();});
-    if(c.length<3)return;
-    var item;
-    if(colMap){
-      function g(k){return colMap[k]!==undefined&&c[colMap[k]]?c[colMap[k]]:'0';}
-      var nameVal=(colMap.name!==undefined?c[colMap.name]:'')||(colMap.date!==undefined?c[colMap.date]:'')||c[0];
-      item={
-        id:Date.now()+i+(Math.random()*999|0),
-        name:nameVal.replace(/^\d+[\.)\s]+/,'').trim(),
-        qty:Math.max(0.25,parseFloat(g('qty'))||1),
-        weight_g:Math.round(parseFloat(g('weight'))||0),
-        cal:Math.round(parseFloat(g('cal'))||0),
-        prot:Math.round((parseFloat(g('prot'))||0)*10)/10,
-        carb:Math.round((parseFloat(g('carb'))||0)*10)/10,
-        fat:Math.round((parseFloat(g('fat'))||0)*10)/10,
-        fib:Math.round((parseFloat(g('fib'))||0)*10)/10,
-        sat:Math.round((parseFloat(g('sat'))||0)*10)/10,
-        sod:Math.round(parseFloat(g('sod'))||0),
-        confidence:colMap.conf!==undefined?c[colMap.conf]||'medium':'medium'
-      };
-    } else {
-      // No header — Gemini default order: Name,Qty,WeightG,Cal,Prot,Carb,Fat,Fib,Sat,Sod,Conf
-      var n=c.slice(1).map(function(x){return parseFloat(x)||0;});
-      item={
-        id:Date.now()+i+(Math.random()*999|0),
-        name:c[0].replace(/^\d+[\.)\s]+/,'').trim(),
-        qty:Math.max(0.25,n[0]||1),weight_g:Math.round(n[1]||0),
-        cal:Math.round(n[2]||0),prot:Math.round((n[3]||0)*10)/10,
-        carb:Math.round((n[4]||0)*10)/10,fat:Math.round((n[5]||0)*10)/10,
-        fib:Math.round((n[6]||0)*10)/10,sat:Math.round((n[7]||0)*10)/10,
-        sod:Math.round(n[8]||0),confidence:c[10]||c[9]||'medium'
-      };
-    }
-    if(item.name)items.push(item);
-  });
-  return items.filter(function(it){return it.cal>0;});
-}
-function nutMsiNorm(arr){
-  return arr.map(function(it,i){
-    return {
-      id:Date.now()+i+(Math.random()*1000|0),
-      name:String(it.name||it.item||it.food||it.description||'Item '+(i+1)).replace(/^\d+[\.\)]\s*/,'').trim(),
-      qty:Math.max(0.25,parseFloat(it.qty||it.quantity||1)||1),
-      cal:Math.round(parseFloat(it.calories||it.kcal||it.cal||0)),
-      prot:Math.round(parseFloat(it.protein||it.proteins||0)*10)/10,
-      carb:Math.round(parseFloat(it.carbs||it.carbohydrates||it.carb||0)*10)/10,
-      fat:Math.round(parseFloat(it.fat||it.fats||0)*10)/10,
-      fib:Math.round(parseFloat(it.fibre||it.fiber||0)*10)/10,
-      sat:Math.round(parseFloat(it.satFat||it.saturated_fat||it.sat||0)*10)/10,
-      sod:Math.round(parseFloat(it.sodium||it.sod||0)),
-      weight_g:Math.round(parseFloat(it.weight_g||it.weight||it.grams||0)),
-      confidence:String(it.confidence||'medium')
-    };
-  }).filter(function(it){return it.cal>0||it.name.indexOf('Item ')!==0;});
-}
-
-
-// ── Render ────────────────────────────────────────────────────────────────────
-function nutMealScanRender(){
-  nutMealScanRenderItems();nutMealScanRenderTotals();nutMsiSyncViewToggle();nutMsiCheckHighCalorie();
-}
-function nutMealScanRenderItems(){
-  var c=document.getElementById('nutMealScanItems');if(!c)return;
-  if(!_msi.length){c.innerHTML='';return;}
-  c.innerHTML=_msi.map(function(it){
-    return '<div id="msrow-'+it.id+'" style="padding:11px 16px;border-bottom:1px solid var(--border);">'+nutMsiRowHTML(it)+'</div>';
-  }).join('');
-}
-function nutMsiRowHTML(it){
-  var dCal=_msiShowTotal?Math.round(it.cal*it.qty):it.cal;
-  var dProt=_msiShowTotal?Math.round(it.prot*it.qty*10)/10:it.prot;
-  var dCarb=_msiShowTotal?Math.round(it.carb*it.qty*10)/10:it.carb;
-  var dFat=_msiShowTotal?Math.round(it.fat*it.qty*10)/10:it.fat;
-  var h='<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;">';
-  h+='<div onclick="nutMealScanEditName('+it.id+')" style="flex:1;font-weight:600;font-size:0.87rem;color:var(--text);cursor:pointer;line-height:1.3;">'+it.name+'<span style="font-size:0.58rem;color:var(--muted);font-weight:400;margin-left:4px;">↩</span></div>';
-  h+='<div style="display:flex;align-items:center;border:1px solid var(--border2);border-radius:20px;overflow:hidden;flex-shrink:0;">';
-  h+='<button onclick="nutMealScanAdjQty('+it.id+',-1)" style="background:var(--card2);border:none;color:var(--text2);width:26px;height:26px;font-size:1rem;cursor:pointer;line-height:1;">−</button>';
-  h+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:0.9rem;padding:0 7px;min-width:36px;text-align:center;color:var(--text);line-height:1.1;">'+nutFmtQty(it.qty)+(it.qty===1?'<div style="font-size:0.42rem;color:var(--muted);letter-spacing:0px;margin-top:1px;">¼ ½ ¾</div>':'')+'</div>';
-  h+='<button onclick="nutMealScanAdjQty('+it.id+',1)" style="background:var(--card2);border:none;color:var(--text2);width:26px;height:26px;font-size:1rem;cursor:pointer;line-height:1;">+</button>';
-  h+='</div>';
-  h+='<button onclick="nutMealScanRemove('+it.id+')" style="background:none;border:none;color:var(--muted);font-size:0.9rem;cursor:pointer;padding:3px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.15s,color 0.15s;" onmouseover="this.style.background=\'var(--red-dim)\';this.style.color=\'var(--red)\'" onmouseout="this.style.background=\'none\';this.style.color=\'var(--muted)\'">&#10005;</button>';
-  h+='</div>';
-  h+='<div style="display:flex;gap:4px;align-items:center;">';
-  h+=nutMsiPill(dCal,'','Cal','var(--accent)',true,it.id,'cal');
-  h+=nutMsiPill(dProt,'g','P','var(--green)',false,it.id,'prot');
-  h+=nutMsiPill(dCarb,'g','C','var(--blue)',false,it.id,'carb');
-  h+=nutMsiPill(dFat,'g','F','var(--orange)',false,it.id,'fat');
-  // Confidence + weight badge
-  var _confColor=it.confidence==='high'?'var(--green)':it.confidence==='low'?'var(--orange)':'var(--muted)';
-  var _confIcon=it.confidence==='high'?'✓ ':it.confidence==='low'?'⚠ ':'∼ ';
-  var _badge=_confIcon+(it.confidence||'medium');
-  if(it.weight_g)_badge+=' · '+it.weight_g+'g';
-  h+='<div style="margin-left:auto;font-size:0.55rem;color:'+_confColor+';font-weight:700;letter-spacing:0.3px;white-space:nowrap;">'+_badge+'</div>';
-  h+='</div>';
-  return h;
-}
-function nutFmtQty(q){
-  if(q===0.25)return'¼';if(q===0.5)return'½';if(q===0.75)return'¾';
-  return q%1===0?String(q):String(Math.round(q*10)/10);
-}
-function nutMsiPill(val,unit,label,color,big,id,field){
-  return '<div onclick="nutMsiEditOpen('+id+',\''+field+'\')" style="display:flex;flex-direction:column;align-items:center;background:var(--card2);border-radius:8px;padding:'+(big?'5px 10px':'4px 7px')+';cursor:pointer;min-width:'+(big?'48px':'36px')+';transition:background 0.12s;" onmouseover="this.style.background=\'var(--card3)\'" onmouseout="this.style.background=\'var(--card2)\'">'
-    +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:'+(big?'1.05rem':'0.88rem')+';color:'+color+';">'+val+unit+'</div>'
-    +'<div style="font-size:0.48rem;color:var(--muted);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-top:1px;">'+label+'</div></div>';
-}
-
-// ── Totals ────────────────────────────────────────────────────────────────────
-function nutMealScanRenderTotals(){
-  var el=document.getElementById('nutMealScanTotals');if(!el)return;
-  if(!_msi.length){el.style.display='none';return;}
-  el.style.display='block';
-  var cal=0,prot=0,carb=0,fat=0;
-  _msi.forEach(function(it){cal+=it.cal*it.qty;prot+=it.prot*it.qty;carb+=it.carb*it.qty;fat+=it.fat*it.qty;});
-  el.innerHTML='<div style="font-size:0.57rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:9px;">TOTAL \u00b7 '+_msi.length+' item'+(_msi.length!==1?'s':'')+'</div>'
-    +'<div style="display:flex;">'
-    +[['#c8ff00',Math.round(cal),'','Cal'],['#00D48A',Math.round(prot*10)/10,'g','Prot'],['#3B83F6',Math.round(carb*10)/10,'g','Carbs'],['#FF6830',Math.round(fat*10)/10,'g','Fat']].map(function(p){
-      return '<div style="flex:1;text-align:center;"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.45rem;color:'+p[0]+';line-height:1;">'+p[1]+p[2]+'</div><div style="font-size:0.56rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px;">'+p[3]+'</div></div>';
-    }).join('')+'</div>';
-}
-
-// ── Macro edit sheet ──────────────────────────────────────────────────────────
-var _msiEditId=null,_msiEditField=null;
-var _msiFieldLabels={cal:'Calories',prot:'Protein (g)',carb:'Carbs (g)',fat:'Fat (g)',fib:'Fibre (g)',sat:'Sat Fat (g)',sod:'Sodium (mg)'};
-function nutMsiEditOpen(id,field){
-  var it=_msi.find(function(x){return x.id===id;});if(!it)return;
-  _msiEditId=id;_msiEditField=field;
-  var sheet=document.getElementById('nutMsiEditSheet');if(!sheet)return;
-  sheet.style.display='flex';
-  document.getElementById('nutMsiEditTitle').textContent=(_msiFieldLabels[field]||field).toUpperCase();
-  document.getElementById('nutMsiEditSub').textContent=it.name+(_msiShowTotal&&it.qty!==1?' (per unit \u00b7 will scale \u00d7'+nutFmtQty(it.qty)+')':'');
-  var inp=document.getElementById('nutMsiEditInp');if(inp){inp.value=it[field];inp.focus();inp.select();}
-}
-function nutMsiEditAdj(d){var inp=document.getElementById('nutMsiEditInp');if(inp)inp.value=Math.max(0,Math.round((parseFloat(inp.value)||0+d)*10)/10);}
-function nutMsiEditSave(){
-  var inp=document.getElementById('nutMsiEditInp');
-  var it=_msi.find(function(x){return x.id===_msiEditId;});
-  if(it&&inp){var v=parseFloat(inp.value);if(!isNaN(v))it[_msiEditField]=Math.max(0,Math.round(v*10)/10);}
-  nutMsiEditClose();nutMealScanRender();
-}
-function nutMsiEditClose(){var s=document.getElementById('nutMsiEditSheet');if(s)s.style.display='none';_msiEditId=null;_msiEditField=null;}
-
-// ── Edit name ─────────────────────────────────────────────────────────────────
-function nutMealScanEditName(id){
-  var it=_msi.find(function(x){return x.id===id;});if(!it)return;
-  var row=document.getElementById('msrow-'+id);if(!row)return;
-  var nameEl=row.querySelector('[onclick="nutMealScanEditName('+id+')"]');if(!nameEl)return;
-  var old=it.name;
-  nameEl.outerHTML='<div style="flex:1;display:flex;gap:4px;align-items:center;">'
-    +'<input id="msinp-'+id+'" type="text" value="'+old.replace(/"/g,'&quot;')+'" style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:8px;color:var(--text);font-size:0.85rem;padding:5px 9px;outline:none;font-weight:600;min-width:0;">'
-    +'<button onclick="nutMealScanRefetch('+id+')" style="padding:5px 9px;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:\'Bebas Neue\',sans-serif;font-size:0.7rem;letter-spacing:1px;cursor:pointer;flex-shrink:0;white-space:nowrap;">RE-FETCH</button>'
-    +'<button onclick="nutMealScanApplyName('+id+')" style="padding:5px 8px;background:var(--green-dim);border:1px solid var(--green);color:var(--green);border-radius:8px;font-size:0.8rem;cursor:pointer;flex-shrink:0;">✓</button>'
-    +'<button onclick="nutMealScanCancelName('+id+')" style="padding:5px 7px;background:var(--card2);border:1px solid var(--border);color:var(--muted);border-radius:8px;font-size:0.8rem;cursor:pointer;flex-shrink:0;">✕</button>'
-    +'</div>';
-  var inp=document.getElementById('msinp-'+id);if(inp){inp.focus();inp.select();}
-  // Store old name for cancel
-  if(it)it._editOld=old;
-}
-function nutMealScanApplyName(id){
-  var inp=document.getElementById('msinp-'+id);
-  var it=_msi.find(function(x){return x.id===id;});
-  if(it&&inp&&inp.value.trim())it.name=inp.value.trim();
-  nutMealScanRender();
-}
-function nutMealScanCancelName(id){
-  var it=_msi.find(function(x){return x.id===id;});
-  if(it&&it._editOld)it.name=it._editOld;
-  nutMealScanRender();
-}
-function nutMealScanRefetch(id){
-  var inp=document.getElementById('msinp-'+id);
-  var it=_msi.find(function(x){return x.id===id;});if(!it)return;
-  var newName=(inp?inp.value.trim():'')||it.name;
-  it.name=newName;
-  var row=document.getElementById('msrow-'+id);
-  if(row)row.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--muted);font-size:0.78rem;"><div style="width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>Looking up <em style="color:var(--text);">'+newName+'</em>\u2026</div>';
-  var key=localStorage.getItem('wt_gemini_key')||'';
-  if(!key){setTimeout(nutMealScanRender,300);return;}
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:'Macros for one typical serving of "'+newName+'". Return ONLY JSON, no markdown: {"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All numbers. Sodium in mg.'}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
-  }).then(function(r){return r.json();}).then(function(data){
-    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
-    if(text){text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-      var s=text.indexOf('{'),e=text.lastIndexOf('}');
-      if(s>=0&&e>s){try{var d=JSON.parse(text.slice(s,e+1));
-        it.cal=Math.round(parseFloat(d.calories)||0);it.prot=Math.round((parseFloat(d.protein)||0)*10)/10;
-        it.carb=Math.round((parseFloat(d.carbs)||0)*10)/10;it.fat=Math.round((parseFloat(d.fat)||0)*10)/10;
-        it.fib=Math.round((parseFloat(d.fibre)||0)*10)/10;it.sat=Math.round((parseFloat(d.satFat)||0)*10)/10;
-        it.sod=Math.round(parseFloat(d.sodium)||0);}catch(e2){}}}
-    nutMealScanRender();
-  }).catch(function(){nutMealScanRender();});
-}
-
-// ── Qty ───────────────────────────────────────────────────────────────────────
-var _msiSteps=[0.25,0.5,0.75,1,1.5,2,2.5,3,4,5,6,8,10,12];
-function nutMealScanAdjQty(id,d){
-  var it=_msi.find(function(x){return x.id===id;});if(!it)return;
-  var idx=_msiSteps.indexOf(it.qty);
-  if(idx<0){idx=_msiSteps.findIndex(function(s){return s>=it.qty;});if(idx<0)idx=_msiSteps.length-1;}
-  idx=Math.max(0,Math.min(_msiSteps.length-1,idx+d));
-  it.qty=_msiSteps[idx];
-  var row=document.getElementById('msrow-'+id);if(row)row.innerHTML=nutMsiRowHTML(it);
-  nutMealScanRenderTotals();
-}
-
-// ── Remove / Add ──────────────────────────────────────────────────────────────
-function nutMealScanRemove(id){
-  _msi=_msi.filter(function(x){return x.id!==id;});
-  nutMealScanRender();
-  nutMealScanSetStatus(_msi.length?(_msi.length+' items'):'All items removed — add manually or retake','var(--muted)');
-}
-function nutMealScanAddItem(){
-  var newId=Date.now();
-  _msi.push({id:newId,name:'New item',qty:1,cal:0,prot:0,carb:0,fat:0,fib:0,sat:0,sod:0});
-  nutMealScanRender();
-  setTimeout(function(){nutMealScanEditName(newId);},60);
-}
-
-// ── Save ──────────────────────────────────────────────────────────────────────
-function nutMealScanSave(){
-  if(!_msi.length)return;
-  var _tot=_msi.reduce(function(s,it){return s+it.cal*it.qty;},0);
-  if(_tot>1500&&!confirm(Math.round(_tot)+' kcal — this looks high. Correct?\n\nOK to log, Cancel to adjust.'))return;
-  var now=Date.now();
-  var mealLabel=((document.getElementById('nutMsiMealName')||{}).value||'').trim();
-  var entries;
-  if(_msiCombine){
-    var tC=0,tP=0,tCb=0,tF=0,tFb=0,tSt=0,tSod=0;
-    _msi.forEach(function(it){var q=it.qty;tC+=it.cal*q;tP+=it.prot*q;tCb+=it.carb*q;tF+=it.fat*q;tFb+=it.fib*q;tSt+=it.sat*q;tSod+=it.sod*q;});
-    var foodName=mealLabel||_msi.map(function(it){return it.name;}).join(', ');
-    entries=[{date:_nutDate,meal:_msiMeal,food:foodName,
-      calories:Math.round(tC),protein:Math.round(tP*10)/10,carbs:Math.round(tCb*10)/10,
-      fat:Math.round(tF*10)/10,fibre:Math.round(tFb*10)/10,satFat:Math.round(tSt*10)/10,
-      sodium:Math.round(tSod),servings:1,id:now,updatedAt:now}];
-  } else {
-    entries=_msi.map(function(it,i){var q=it.qty;return{
-      date:_nutDate,meal:_msiMeal,food:it.name,
-      calories:Math.round(it.cal*q),protein:Math.round(it.prot*q*10)/10,
-      carbs:Math.round(it.carb*q*10)/10,fat:Math.round(it.fat*q*10)/10,
-      fibre:Math.round(it.fib*q*10)/10,satFat:Math.round(it.sat*q*10)/10,
-      sodium:Math.round(it.sod*q),servings:q,id:now+i,updatedAt:now+i};});
-  }
-  entries.forEach(function(e){_nutEntries.push(e);});
-  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));
-  try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
-  if(_msiMemory){
-    _msi.forEach(function(it){
-      if(!_nutFoods.some(function(f){return f.name.toLowerCase()===it.name.toLowerCase();})){
-        _nutFoods.push({name:it.name,calories:it.cal,protein:it.prot,carbs:it.carb,fat:it.fat,fibre:it.fib,satFat:it.sat,sodium:it.sod,serving:1,unit:'serving'});
-      }
-    });
-    _nutFoods.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});
-    wtDB.set(NUT_FOODS_KEY,JSON.stringify(_nutFoods));
-    try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
-    fetch(CLOUD_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({type:'addFood',foods:_msi.map(function(it){return{name:it.name,calories:it.cal,protein:it.prot,carbs:it.carb,fat:it.fat,fibre:it.fib,satFat:it.sat,sodium:it.sod,serving:1,unit:'serving'};}),_nonce:now})
-    }).catch(function(){});
-  }
-  nutMealScanClose();nutRenderDay();nutBadge('live','Live');
-  nutMsg('\u2713 '+entries.length+' item'+(entries.length!==1?'s':'')+' logged to '+_msiMeal,'var(--green)');
-  setTimeout(function(){nutMsg('');},2800);
-  nutSyncAction({type:'logNutrition',entries:entries},null,function(){});
-}
-
-// ── Upload choice sheet ───────────────────────────────────────────────────────
-function nutShowUploadChoice(){
-  var s=document.getElementById('nutUploadChoiceSheet');if(s)s.style.display='flex';
-}
-function nutHideUploadChoice(){
-  var s=document.getElementById('nutUploadChoiceSheet');if(s)s.style.display='none';
-}
-
-// ── Upload handlers ───────────────────────────────────────────────────────────
-function nutUploadSingleHandler(inp){
-  // Single item: process and send to nutCallVision (fills food form)
-  var file=inp.files&&inp.files[0];if(!file)return;
-  var reader=new FileReader();
-  reader.onload=function(e){
-    var img=new Image();
-    img.onload=function(){
-      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
-      var c=document.createElement('canvas');
-      c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
-      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
-      // Route through existing single-item flow
-      var status=document.getElementById('nutScanStatus');
-      if(status){status.style.display='block';status.style.color='var(--muted)';status.textContent='Reading…';}
-      nutCallVision(b64,'image/jpeg',status);
-    };
-    img.src=e.target.result;
-  };
-  reader.readAsDataURL(file);inp.value='';
-}
-
-function nutUploadMealHandler(inp){
-  // Meal: process then go through context sheet → meal scan page
-  var file=inp.files&&inp.files[0];if(!file)return;
-  var reader=new FileReader();
-  reader.onload=function(e){
-    var img=new Image();
-    img.onload=function(){
-      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
-      var c=document.createElement('canvas');
-      c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
-      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
-      _msiLastB64=b64;_msiLastMime='image/jpeg';
-      nutMealScanOpen(b64,'image/jpeg');
-    };
-    img.src=e.target.result;
-  };
-  reader.readAsDataURL(file);inp.value='';
-}
-
-// ── Meal scan live (from search bar 🍽 button) ────────────────────────────────
-function nutMealScanLive(){
-  // Close add overlay, open camera in meal scan mode
-  nutCloseAdd();
-  nutCamOpen();
-  // After camera opens, tapping 🍽 will trigger nutMealScanCapture
-  // Set a flag so camera knows to go to meal scan on capture
-  _nutCamMealMode=true;
-}
-var _nutCamMealMode=false;
-
-// ── Page upload handler (rescan from meal scan page) ──────────────────────────
-function nutMsiPageUploadHandler(inp){
-  var file=inp.files&&inp.files[0];if(!file)return;
-  var reader=new FileReader();
-  reader.onload=function(e){
-    var img=new Image();
-    img.onload=function(){
-      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
-      var c=document.createElement('canvas');
-      c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
-      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
-      _msiLastB64=b64;_msiLastMime='image/jpeg';
-      var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='none';
-      nutMealScanSetStatus('Scanning new photo…','var(--muted)');
-      var items=document.getElementById('nutMealScanItems');if(items)items.innerHTML=nutMsiSpinner();
-      var totals=document.getElementById('nutMealScanTotals');if(totals)totals.style.display='none';
-      nutMealScanCallVision(b64,'image/jpeg');
-    };
-    img.src=e.target.result;
-  };
-  reader.readAsDataURL(file);inp.value='';
-}
-
-// ── Meal scan page navigation ─────────────────────────────────────────────────
-function nutMealScanOpenDirect(b64,mime){
-  _msi=[];_msiMemory=false;_msiShowTotal=true;_msiCombine=true;_nutCamMealMode=false;
-  var h=new Date().getHours();
-  _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
-  if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
-  // Close any open overlays before navigating to the meal scan page
-  var addOv=document.getElementById('nutAddOverlay');if(addOv)addOv.style.display='none';
-  var foodFormOv=document.getElementById('nutFoodFormOverlay');if(foodFormOv)foodFormOv.style.display='none';
-  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
-  var pg=document.getElementById('page-mealscan');if(pg){pg.classList.remove('hidden');pg.classList.add('active');}
-  var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='none';
-  nutMealScanSetStatus('Identifying items…','var(--muted)');
-  var items=document.getElementById('nutMealScanItems');if(items)items.innerHTML=nutMsiSpinner();
-  var totals=document.getElementById('nutMealScanTotals');if(totals)totals.style.display='none';
-  var vt=document.getElementById('nutMealScanViewToggle');if(vt)vt.style.display='none';
-  var nm=document.getElementById('nutMsiMealName');if(nm)nm.value='';
-  var rest=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
-  if(nm&&rest)nm.value=rest;
-  nutMealScanRenderMealBtns();nutMealScanRenderMemory();nutMealScanRenderCombine();
-  if(b64)nutMealScanCallVision(b64,mime);
-}
-
-function nutMealScanClose(){
-  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
-  var pg=document.getElementById('page-nutrition');if(pg){pg.classList.remove('hidden');pg.classList.add('active');}
-  document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
-  var nb=document.getElementById('nav-nutrition');if(nb)nb.classList.add('active');
-  nutMsiEditClose();_msi=[];
-}
-
-function nutMealScanRetake(){
-  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
-  nutCamOpen();
-}
-
-// ── Combine toggle ────────────────────────────────────────────────────────────
-var _msiCombine=true;
-function nutMealScanRenderCombine(){
-  var t=document.getElementById('nutMsiCombineTrack'),k=document.getElementById('nutMsiCombineKnob');
-  if(t)t.style.background=_msiCombine?'var(--green)':'var(--border2)';
-  if(k){k.style.right=_msiCombine?'3px':'auto';k.style.left=_msiCombine?'auto':'3px';}
-}
-function nutMealScanToggleCombine(){_msiCombine=!_msiCombine;nutMealScanRenderCombine();}
-
-// ══════════════════════════════════════════════════════════════════════════════
-
 </script>
 
 <!-- GOALS SETTINGS OVERLAY -->
@@ -9687,121 +8922,5 @@ function nutMealScanToggleCombine(){_msiCombine=!_msiCombine;nutMealScanRenderCo
     <button onclick="goalsSave()" style="margin-top:16px;width:100%;padding:16px;background:var(--accent);border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:#000;cursor:pointer;">SAVE GOALS</button>
   </div>
 </div>
-
-<!-- Macro edit sheet -->
-<div id="nutMsiEditSheet" style="display:none;position:fixed;inset:0;z-index:800;align-items:flex-end;" onclick="if(event.target===this)nutMsiEditClose()">
-  <div style="width:100%;background:var(--card);border-radius:22px 22px 0 0;padding:20px 20px calc(20px + var(--safe-b));border-top:1px solid var(--border);animation:slideUp 0.2s cubic-bezier(0.32,0.72,0,1) both;">
-    <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 18px;"></div>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:4px;" id="nutMsiEditTitle">EDIT</div>
-    <div style="font-size:0.7rem;color:var(--muted);margin-bottom:14px;" id="nutMsiEditSub"></div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">
-      <button onclick="nutMsiEditAdj(-10)" style="width:44px;height:44px;border-radius:50%;background:var(--card2);border:1px solid var(--border2);color:var(--text);font-size:0.75rem;font-weight:bold;cursor:pointer;flex-shrink:0;">−10</button>
-      <button onclick="nutMsiEditAdj(-1)"  style="width:44px;height:44px;border-radius:50%;background:var(--card2);border:1px solid var(--border2);color:var(--text);font-size:1rem;font-weight:bold;cursor:pointer;flex-shrink:0;">−1</button>
-      <input id="nutMsiEditInp" type="number" inputmode="decimal" style="flex:1;background:var(--card2);border:1px solid var(--accent);border-radius:var(--r-sm);color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:2rem;text-align:center;padding:10px 8px;outline:none;">
-      <button onclick="nutMsiEditAdj(1)"   style="width:44px;height:44px;border-radius:50%;background:var(--card2);border:1px solid var(--border2);color:var(--text);font-size:1rem;font-weight:bold;cursor:pointer;flex-shrink:0;">+1</button>
-      <button onclick="nutMsiEditAdj(10)"  style="width:44px;height:44px;border-radius:50%;background:var(--card2);border:1px solid var(--border2);color:var(--text);font-size:0.75rem;font-weight:bold;cursor:pointer;flex-shrink:0;">+10</button>
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button onclick="nutMsiEditClose()" style="flex:1;padding:13px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.88rem;font-weight:600;cursor:pointer;">Cancel</button>
-      <button onclick="nutMsiEditSave()" style="flex:2;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;font-weight:900;cursor:pointer;">SAVE</button>
-    </div>
-  </div>
-</div>
-
-
-<!-- Meal scan context sheet -->
-<div id="nutMsiContextSheet" style="display:none;position:fixed;inset:0;z-index:950;background:rgba(0,0,0,0.75);align-items:flex-end;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
-  <div style="width:100%;background:var(--card);border-radius:22px 22px 0 0;padding:20px 20px calc(var(--nav-h) + var(--safe-b) + 20px);border-top:1px solid var(--border);animation:slideUp 0.22s cubic-bezier(0.32,0.72,0,1) both;">
-    <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 16px;"></div>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:4px;">ADD CONTEXT</div>
-    <div style="font-size:0.7rem;color:var(--muted);margin-bottom:14px;">Help Gemini identify portions more accurately</div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
-
-      <input id="nutMsiCtxHint" type="text" placeholder="Any clues (e.g. large portion, added extra rice)"
-        style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.88rem;padding:10px 12px;outline:none;box-sizing:border-box;"
-        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button onclick="nutMsiContextSkip()" style="flex:1;padding:13px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.88rem;font-weight:600;cursor:pointer;">Skip</button>
-      <button onclick="nutMsiContextConfirm()" style="flex:2;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;font-weight:900;cursor:pointer;">SCAN ›</button>
-    </div>
-  </div>
-</div>
-
-
-<!-- Upload choice sheet -->
-<div id="nutUploadChoiceSheet" style="display:none;position:fixed;inset:0;z-index:950;background:rgba(0,0,0,0.7);align-items:flex-end;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);" onclick="if(event.target===this)nutHideUploadChoice()">
-  <div style="width:100%;background:var(--card);border-radius:22px 22px 0 0;padding:20px 20px calc(var(--nav-h)+var(--safe-b)+16px);border-top:1px solid var(--border);animation:slideUp 0.2s cubic-bezier(0.32,0.72,0,1) both;">
-    <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 18px;"></div>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;margin-bottom:14px;color:var(--muted);">UPLOAD PHOTO</div>
-    <div style="display:flex;flex-direction:column;gap:8px;">
-      <button onclick="document.getElementById('nutUploadSingleFile').click();nutHideUploadChoice();"
-        style="width:100%;padding:16px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px;">
-        <span style="font-size:1.5rem;">📷</span>
-        <div><div style="font-weight:700;font-size:0.92rem;color:var(--text);">Single item</div><div style="font-size:0.72rem;color:var(--muted);margin-top:2px;">Barcode, label, or one food — fills the food form</div></div>
-      </button>
-      <button onclick="document.getElementById('nutUploadMealFile').click();nutHideUploadChoice();"
-        style="width:100%;padding:16px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px;">
-        <span style="font-size:1.5rem;">🍽</span>
-        <div><div style="font-weight:700;font-size:0.92rem;color:var(--text);">Full meal</div><div style="font-size:0.72rem;color:var(--muted);margin-top:2px;">Photo of your plate — identifies each item separately</div></div>
-      </button>
-    </div>
-  </div>
-</div>
-
-
-<!-- MEAL SCAN PAGE -->
-<div class="page hidden" id="page-mealscan">
-  <div style="background:var(--bg);padding:calc(var(--safe-t)+20px) 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-    <div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;">MEAL SCAN</div>
-      <div id="nutMealScanStatus" style="font-size:0.7rem;color:var(--muted);margin-top:1px;min-height:16px;transition:color 0.2s;"></div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <button onclick="nutMealScanRetake()" id="nutMealScanRetakeBtn" style="display:none;padding:7px 14px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:20px;font-size:0.72rem;font-weight:700;cursor:pointer;">↩ Retake</button>
-      <button onclick="nutMealScanClose()" style="background:var(--card2);border:1px solid var(--border);color:var(--text2);width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
-    </div>
-  </div>
-  <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex-shrink:0;">
-    <div id="nutMealScanMealBtns" style="display:flex;gap:4px;flex:1;flex-wrap:wrap;"></div>
-    <div id="nutMealScanViewToggle" style="display:none;align-items:center;gap:5px;flex-shrink:0;">
-      <span style="font-size:0.6rem;color:var(--muted);font-weight:700;">UNIT</span>
-      <div onclick="nutMealScanToggleView()" id="nutMealScanViewTrack" style="width:38px;height:22px;border-radius:11px;background:var(--border2);position:relative;cursor:pointer;transition:background 0.2s;">
-        <div id="nutMealScanViewKnob" style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
-      </div>
-      <span style="font-size:0.6rem;color:var(--muted);font-weight:700;">TOTAL</span>
-    </div>
-  </div>
-  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-    <div id="nutMealScanItems" style="padding-bottom:8px;"></div>
-    <div style="padding:6px 16px 8px;">
-      <button onclick="nutMealScanAddItem()" style="width:100%;padding:10px;background:transparent;border:1px dashed var(--border2);border-radius:var(--r-sm);color:var(--muted);font-size:0.75rem;cursor:pointer;">+ Add item</button>
-    </div>
-    <div id="nutMealScanTotals" style="display:none;margin:0 16px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;"></div>
-  </div>
-  <div style="flex-shrink:0;border-top:1px solid var(--border);padding:12px 16px;background:var(--bg);display:flex;flex-direction:column;gap:8px;">
-    <div style="display:flex;gap:8px;align-items:center;">
-      <input id="nutMsiPageUpload" type="file" accept="image/*" style="display:none;" onchange="nutMsiPageUploadHandler(this)">
-      <button onclick="document.getElementById('nutMsiPageUpload').click()" style="padding:9px 14px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-size:0.75rem;font-weight:600;cursor:pointer;white-space:nowrap;">📁 New photo</button>
-      <input id="nutMsiMealName" type="text" placeholder="Meal name (optional)" style="flex:1;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.85rem;padding:9px 12px;outline:none;box-sizing:border-box;min-width:0;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
-    </div>
-    <div style="display:flex;gap:8px;">
-      <div onclick="nutMealScanToggleCombine()" style="flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;">
-        <div style="flex:1;"><div style="font-size:0.75rem;font-weight:600;color:var(--text);">One entry</div><div style="font-size:0.6rem;color:var(--muted);">Combine items</div></div>
-        <div id="nutMsiCombineTrack" style="width:38px;height:22px;border-radius:11px;background:var(--green);position:relative;flex-shrink:0;transition:background 0.2s;">
-          <div id="nutMsiCombineKnob" style="position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:all 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
-        </div>
-      </div>
-      <div onclick="nutMealScanToggleMemory()" style="flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;">
-        <div style="flex:1;"><div style="font-size:0.75rem;font-weight:600;color:var(--text);">Remember</div><div style="font-size:0.6rem;color:var(--muted);">Save to food list</div></div>
-        <div id="nutMealScanMemTrack" style="width:38px;height:22px;border-radius:11px;background:var(--border2);position:relative;flex-shrink:0;transition:background 0.2s;">
-          <div id="nutMealScanMemKnob" style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
-        </div>
-      </div>
-    </div>
-    <button onclick="nutMealScanSave()" style="width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">LOG MEAL</button>
-  </div>
-</div>
-
 </body>
 </html>
