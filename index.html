@@ -1433,7 +1433,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <div style="padding:16px 20px calc(var(--nav-h) + var(--safe-b) + 40px);">
     <!-- Scan status -->
     <div id="nutScanStatus" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;font-size:0.82rem;color:var(--muted);text-align:center;"></div>
-    <div style="text-align:right;margin:0 0 10px;"><button onclick="nutApiKeyShow(null,null,null)" style="background:none;border:none;color:var(--muted);font-size:0.62rem;cursor:pointer;padding:0;">⚙ Gemini key</button></div>
+    <div style="text-align:right;margin:0 0 10px;"><button onclick="nutSettingsOpen()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);padding:5px 12px;font-size:0.72rem;font-weight:700;letter-spacing:0.5px;cursor:pointer;">⚙ API Keys</button></div>
     <input type="file" id="nutPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="nutHandlePhoto(this)">
     <div class="log-field"><label>Food Name</label><input id="nff_name" type="text" class="log-input" placeholder="e.g. Chicken Breast"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -1540,6 +1540,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   <div class="page-body">
     <div style="display:flex;gap:0;margin:12px 16px 0;background:var(--card);border-radius:var(--r-sm);padding:3px;border:1px solid var(--border);">
       <button class="log-tab active" id="planTabThis" onclick="switchPlanWeek(0)">This Week</button>
+      <button class="log-tab" id="planTabLast" onclick="switchPlanWeek(-1)" style="display:none;">Last Week</button>
       <button class="log-tab" id="planTabNext" onclick="switchPlanWeek(1)">Next Week</button>
     </div>
     <!-- Week goal tracker -->
@@ -4210,9 +4211,16 @@ function switchPlanWeek(offset){
   _planWeekOffset=offset;
   document.getElementById('planTabThis').classList.toggle('active',offset===0);
   document.getElementById('planTabNext').classList.toggle('active',offset===1);
+  var lastTab=document.getElementById('planTabLast');
+  if(lastTab)lastTab.classList.toggle('active',offset===-1);
   var days=getWeekDates(offset),today=fmtDate(new Date());
   var mon=days[0],sun=days[6];
-  document.getElementById('planWeekLabel').textContent=(offset===0?'This week: ':'')+mon.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' \u2013 '+sun.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  var label=(offset===0?'This week: ':offset===-1?'Last week: ':'')+mon.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+sun.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  document.getElementById('planWeekLabel').textContent=label;
+  // Copy button: show on Sat/Sun for this week, always show for last week
+  var dow=new Date().getDay();
+  var wrap=document.getElementById('copyWeekWrap');
+  if(wrap)wrap.style.display=(offset===-1||(offset===0&&(dow===0||dow===6)))?'block':'none';
   renderPlanGrid(days,today);
 }
 
@@ -4231,13 +4239,16 @@ function initPlanPage(){
   _planWeekOffset=0;
   document.getElementById('planTabThis').classList.add('active');
   document.getElementById('planTabNext').classList.remove('active');
-  // Show copy week button on Sat/Sun
+  var lastTab=document.getElementById('planTabLast');
+  // Show Last Week tab only on Sat/Sun; copy button follows same rule
   var dow=new Date().getDay();
+  var isWeekend=(dow===0||dow===6);
+  if(lastTab)lastTab.style.display=isWeekend?'':'none';
   var wrap=document.getElementById('copyWeekWrap');
-  if(wrap)wrap.style.display=(dow===0||dow===6)?'block':'none';
+  if(wrap)wrap.style.display='none'; // switchPlanWeek handles this
   var days=getWeekDates(0),today=fmtDate(new Date());
   var mon=days[0],sun=days[6];
-  document.getElementById('planWeekLabel').textContent=mon.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' \u2013 '+sun.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  document.getElementById('planWeekLabel').textContent=mon.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+sun.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
   if(_cachedSessions&&_cachedSessions.length){
     var pd=overlayCompletedWorkouts(_cachedPlan?JSON.parse(JSON.stringify(_cachedPlan)):{},_cachedSessions);
     _weekPlan=pd;renderPlanGrid(days,today);updateTodayCard(today);
@@ -4463,10 +4474,7 @@ function saveWeekPlan(){
   script.onerror=function(){if(msg){msg.textContent='Failed to save';msg.style.color='var(--red)';}};
   document.head.appendChild(script);
   setTimeout(function(){if(window[cbName]){window[cbName]=null;}},5000);
-  // Show copy button on Sat/Sun
-  var dow=new Date().getDay();
-  var wrap=document.getElementById('copyWeekWrap');
-  if(wrap)wrap.style.display=(dow===0||dow===6)?'block':'none';
+  // Copy button visibility handled by switchPlanWeek
 }
 
 function copyWeekSummary(){
@@ -7226,8 +7234,8 @@ function nutOpenFoodForm(idx){
   document.getElementById('nff_fib').value=f?f.fibre:'';
   document.getElementById('nff_satfat').value=f?f.satFat:'';
   document.getElementById('nff_sodium').value=f?(f.sodium||''):'';
-  // Set _nffBase so serving field scales macros when editing
   if(f){_nffBase={serving:parseFloat(f.serving)||0,calories:parseFloat(f.calories)||0,protein:parseFloat(f.protein)||0,carbs:parseFloat(f.carbs)||0,fat:parseFloat(f.fat)||0,fibre:parseFloat(f.fibre)||0,satFat:parseFloat(f.satFat)||0,sodium:parseFloat(f.sodium)||0};}else{_nffBase=null;}
+  _nutFieldsTouched=false;
   var msg=document.getElementById('nutFoodFormMsg');if(msg)msg.textContent='';
   // Clear scan/type status from previous use
   var ss=document.getElementById('nutScanStatus');if(ss){ss.style.display='none';ss.innerHTML='';}
@@ -7463,89 +7471,60 @@ function nutCallVision(base64,mediaType,statusEl){
   if(statusEl){statusEl.style.display='block';statusEl.style.color='var(--muted)';statusEl.textContent='Scanning with AI...';}
   nutProcessingHide();
   var geminiKey=localStorage.getItem('wt_gemini_key')||'';
-  if(!geminiKey){
-    nutProcessingHide();
-    nutApiKeyShow(base64,mediaType,statusEl);
-    return;
-  }
-
-  var promptText=
-    'Look at this image. Return ONLY a valid JSON object, no markdown.\n'+
-    'If this shows a nutrition label or packaged food with a visible nutrition facts panel, extract values from the label and return:\n'+
+  if(!geminiKey){nutProcessingHide();nutApiKeyShow(base64,mediaType,statusEl);return;}
+  var promptText='Look at this image. Return ONLY a valid JSON object, no markdown.\n'+
+    'If this shows a nutrition label or packaged food with a visible nutrition facts panel, extract values from the label:\n'+
     '{"name":"product name","serving":100,"unit":"g","servingDesc":"","calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0,"satFat":0,"sodium":0}\n'+
-    'If this shows actual plated or restaurant food (no label), identify it, estimate a real-world serving (e.g. 6 gyoza, 1 burger, 300g pasta), and return the same JSON shape with accurate nutrition based on USDA/standard restaurant values.\n'+
-    'Rules: if label shows oz AND grams, use grams. All macros in grams. Sodium in mg. Use null only if truly unknown. No extra keys. No markdown.';
-
+    'If this shows actual plated or restaurant food (no label visible), identify it, estimate a real-world serving (e.g. 6 gyoza, 1 burger, 300g pasta), and note any visible brand/restaurant logos:\n'+
+    '{"name":"specific food name","serving":6,"unit":"pieces","servingDesc":"6 pieces","calories":210,"protein":9,"carbs":26,"fat":7,"fibre":1,"satFat":2,"sodium":480,"brand":"Burger King or empty string"}\n'+
+    'Rules: if label shows oz AND grams use grams. All macros in grams. Sodium in mg. Use null only if truly unknown. No markdown.';
   var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
-  fetch(url,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[
-      {inline_data:{mime_type:mediaType,data:base64}},
-      {text:promptText}
-    ]}],generationConfig:{temperature:0,maxOutputTokens:350}})
-  })
+  fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mediaType,data:base64}},{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:350}})})
   .then(function(r){
-    if(!r.ok){
-      return r.json().then(function(err){
-        var msg=err&&err.error&&err.error.message||('HTTP '+r.status);
-        if(r.status===400||r.status===401||r.status===403){
-          localStorage.removeItem('wt_gemini_key');wtDB.del('wt_gemini_key');
-          throw new Error('BAD_KEY:'+msg);
-        }
-        throw new Error(msg);
-      });
-    }
+    if(!r.ok){return r.json().then(function(err){
+      var msg=err&&err.error&&err.error.message||('HTTP '+r.status);
+      if(r.status===400||r.status===401||r.status===403){localStorage.removeItem('wt_gemini_key');wtDB.del('wt_gemini_key');throw new Error('BAD_KEY:'+msg);}
+      throw new Error(msg);
+    });}
     return r.json();
   })
   .then(function(data){
-    if(data.error){
-      if(statusEl){statusEl.textContent='API error: '+data.error.message;statusEl.style.color='var(--orange)';}
-      return;
-    }
-    var text=data.candidates&&data.candidates[0]&&
-             data.candidates[0].content&&data.candidates[0].content.parts&&
-             data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
-    if(!text){
-      var reason=data.candidates&&data.candidates[0]&&data.candidates[0].finishReason;
-      if(statusEl){statusEl.textContent='No result from Gemini'+(reason?' ('+reason+')':'')+' \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}
-      return;
-    }
+    if(data.error){if(statusEl){statusEl.textContent='API error: '+data.error.message;statusEl.style.color='var(--orange)';}return;}
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
+    if(!text){var reason=data.candidates&&data.candidates[0]&&data.candidates[0].finishReason;if(statusEl){statusEl.textContent='No result'+(reason?' ('+reason+')':'')+' \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}return;}
     text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    var jsonStart=text.indexOf('{'),jsonEnd=text.lastIndexOf('}');
-    if(jsonStart>=0&&jsonEnd>jsonStart)text=text.slice(jsonStart,jsonEnd+1);
-    try{
-      var parsed=JSON.parse(text);
-      nutFillFromScan(parsed,statusEl);
-    }catch(e){
-      if(statusEl){statusEl.textContent='Parse error \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}
-    }
+    var js=text.indexOf('{'),je=text.lastIndexOf('}');
+    if(js>=0&&je>js)text=text.slice(js,je+1);
+    try{var parsed=JSON.parse(text);nutFillFromScan(parsed,statusEl);}
+    catch(e){if(statusEl){statusEl.textContent='Parse error \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}}
   })
   .catch(function(err){
     var msg=err&&err.message||'';
-    if(msg.indexOf('BAD_KEY')>=0){
-      localStorage.removeItem('wt_gemini_key');wtDB.del('wt_gemini_key');
-      nutApiKeyShow(base64,mediaType,statusEl);
-      var kmsg=document.getElementById('nutApiKeyMsg');
-      if(kmsg)kmsg.textContent='Key was rejected \u2014 paste a fresh one from AI Studio';
-    } else if(msg.indexOf('Failed to fetch')>=0||msg.indexOf('NetworkError')>=0||msg===''){
-      if(statusEl){statusEl.textContent='Network error \u2014 check connection and try again';statusEl.style.color='var(--orange)';}
-    } else {
-      if(statusEl){statusEl.textContent='Error: '+(msg||'unknown')+' \u2014 fill in manually';statusEl.style.color='var(--orange)';}
-    }
+    if(msg.indexOf('BAD_KEY')>=0){localStorage.removeItem('wt_gemini_key');wtDB.del('wt_gemini_key');nutApiKeyShow(base64,mediaType,statusEl);var kmsg=document.getElementById('nutApiKeyMsg');if(kmsg)kmsg.textContent='Key rejected \u2014 paste a fresh one from AI Studio';}
+    else if(msg.indexOf('Failed to fetch')>=0||msg.indexOf('NetworkError')>=0||msg===''){if(statusEl){statusEl.textContent='Network error \u2014 check connection';statusEl.style.color='var(--orange)';}}
+    else{if(statusEl){statusEl.textContent='Error: '+(msg||'unknown')+' \u2014 fill in manually';statusEl.style.color='var(--orange)';}}
   });
 }
+
+// ── State for scaling and background verification ─────────────────
+var _nffBase=null;
+var _nutFieldsTouched=false;
+var _nutCtxState=null;
+var _nutCtxTimer=null;
+var _nutSrcData=null;
+
 function nutFillFromScan(d,statusEl){
   if(!d){if(statusEl){statusEl.textContent='Could not parse \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}return;}
-  // If we came from the Add overlay camera, skip the food form and go straight to serving
-  if(_nutAddInlineMode){
-    _nutAddInlineMode=false;
-    nutAddInlineFinish(d);
-    return;
-  }
+  if(_nutAddInlineMode){_nutAddInlineMode=false;nutAddInlineFinish(d);return;}
   function setVal(id,val){var el=document.getElementById(id);if(el&&val!==null&&val!==undefined)el.value=val;}
-  // Store base so serving field can scale macros proportionally
+  // Store base values for serving-based scaling
   _nffBase={serving:parseFloat(d.serving)||0,calories:parseFloat(d.calories)||0,protein:parseFloat(d.protein)||0,carbs:parseFloat(d.carbs)||0,fat:parseFloat(d.fat)||0,fibre:parseFloat(d.fibre)||0,satFat:parseFloat(d.satFat)||0,sodium:parseFloat(d.sodium)||0};
+  // Track user edits so background update won't overwrite them
+  _nutFieldsTouched=false;
+  ['nff_serving','nff_cal','nff_prot','nff_carb','nff_fat','nff_fib','nff_satfat','nff_sodium'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.addEventListener('input',function(){_nutFieldsTouched=true;},{once:true});
+  });
   if(d.name)setVal('nff_name',d.name);
   if(d.serving)setVal('nff_serving',d.serving);
   if(d.unit){var unitEl=document.getElementById('nff_unit');if(unitEl)unitEl.value=d.unit;}
@@ -7557,12 +7536,255 @@ function nutFillFromScan(d,statusEl){
   setVal('nff_fib',d.fibre!==null?Math.round(d.fibre*10)/10:'');
   setVal('nff_satfat',d.satFat!==null?Math.round(d.satFat*10)/10:'');
   setVal('nff_sodium',d.sodium!==null?Math.round(d.sodium):'');
-  if(statusEl){
-    statusEl.textContent='\u2713 '+(d.name||'Food')+' read \u2014 check and save';
-    statusEl.style.color='var(--green)';
-    setTimeout(function(){if(statusEl){statusEl.style.display='none';statusEl.style.color='';}},4000);
-  }
+  if(statusEl){statusEl.textContent='\u2713 '+(d.name||'Food')+' read \u2014 check and save';statusEl.style.color='var(--green)';setTimeout(function(){if(statusEl){statusEl.style.display='none';statusEl.style.color='';}},4000);}
+  // Show context prompt after short delay (not for labels — they have all the data)
+  var isLabel=!d.brand&&d.servingDesc!==undefined&&d.serving>0&&d.calories>0&&!d.type;
+  // Heuristic: if it returned a brand field it came from real food path
+  var isRealFood=(d.brand!==undefined);
+  if(isRealFood){setTimeout(function(){nutCtxShow(d.name||'Food',d.brand||'',d,statusEl);},500);}
+  else{// Still fire background verify silently with no context for non-label
+    setTimeout(function(){nutVerifyInBackground(d.name||'','',[],d,statusEl);},800);}
 }
+
+// ── Serving scale (oninput on nff_serving) ────────────────────────
+function nffServingScale(){
+  if(!_nffBase||!_nffBase.serving)return;
+  var newS=parseFloat(document.getElementById('nff_serving').value);
+  if(!newS||newS<=0)return;
+  var ratio=newS/_nffBase.serving;
+  function sr(id,val,dp){var el=document.getElementById(id);if(el){el.value=dp?Math.round(val*Math.pow(10,dp))/Math.pow(10,dp):Math.round(val);}}
+  sr('nff_cal',_nffBase.calories*ratio,0);
+  sr('nff_prot',_nffBase.protein*ratio,1);
+  sr('nff_carb',_nffBase.carbs*ratio,1);
+  sr('nff_fat',_nffBase.fat*ratio,1);
+  sr('nff_fib',_nffBase.fibre*ratio,1);
+  sr('nff_satfat',_nffBase.satFat*ratio,1);
+  sr('nff_sodium',_nffBase.sodium*ratio,0);
+}
+
+// ════════════════════════════════════════════════════════════
+// CONTEXT PROMPT — shown after scan fills form
+// ════════════════════════════════════════════════════════════
+function nutCtxShow(foodName,detectedBrand,initialData,statusEl){
+  _nutCtxState={foodName:foodName,initialData:initialData,statusEl:statusEl};
+  var ov=document.getElementById('nutCtxOverlay');
+  if(!ov)return;
+  document.getElementById('nutCtxFoodName').textContent=(foodName||'Food').toUpperCase();
+  var inp=document.getElementById('nutCtxInput');
+  if(inp){inp.value=detectedBrand||'';inp.placeholder='e.g. Burger King, homemade, large...';}
+  document.getElementById('nutCtxStatus').textContent='';
+  // Auto-dismiss countdown
+  var countdown=8;
+  var countEl=document.getElementById('nutCtxCountdown');
+  if(countEl)countEl.textContent='Skipping in '+countdown+'s';
+  if(_nutCtxTimer)clearTimeout(_nutCtxTimer);
+  var iv=setInterval(function(){
+    countdown--;
+    if(countEl&&ov.style.display!=='none')countEl.textContent='Skipping in '+countdown+'s';
+    if(countdown<=0)clearInterval(iv);
+  },1000);
+  _nutCtxTimer=setTimeout(function(){clearInterval(iv);nutCtxSkip();},8000);
+  ov.style.display='flex';
+  setTimeout(function(){if(inp)inp.focus();},300);
+}
+function nutCtxSugg(s){
+  var inp=document.getElementById('nutCtxInput');if(inp)inp.value=s;
+  if(_nutCtxTimer){clearTimeout(_nutCtxTimer);_nutCtxTimer=null;}
+  var countEl=document.getElementById('nutCtxCountdown');if(countEl)countEl.textContent='';
+}
+function nutCtxSkip(){
+  if(_nutCtxTimer){clearTimeout(_nutCtxTimer);_nutCtxTimer=null;}
+  var ov=document.getElementById('nutCtxOverlay');if(ov)ov.style.display='none';
+  if(_nutCtxState)nutVerifyInBackground(_nutCtxState.foodName,'',[],_nutCtxState.initialData,_nutCtxState.statusEl);
+  _nutCtxState=null;
+}
+function nutCtxConfirm(){
+  if(_nutCtxTimer){clearTimeout(_nutCtxTimer);_nutCtxTimer=null;}
+  var ov=document.getElementById('nutCtxOverlay');if(ov)ov.style.display='none';
+  var ctx=(document.getElementById('nutCtxInput')||{}).value||'';
+  if(_nutCtxState)nutVerifyInBackground(_nutCtxState.foodName,ctx,[],_nutCtxState.initialData,_nutCtxState.statusEl);
+  _nutCtxState=null;
+}
+
+// ════════════════════════════════════════════════════════════
+// BACKGROUND VERIFICATION — parallel CalorieNinjas + USDA then Gemini reconcile
+// ════════════════════════════════════════════════════════════
+function nutVerifyInBackground(foodName,context,extraSources,initialData,statusEl){
+  var cnKey=localStorage.getItem('wt_cn_key')||'';
+  var usdaKey=localStorage.getItem('wt_usda_key')||'';
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  if(!geminiKey)return;
+  var query=(context?context+' ':'')+foodName;
+  var serving=parseFloat(initialData.serving)||100;
+  var unit=initialData.unit||'g';
+  var promises=[];
+  if(cnKey){
+    promises.push(
+      fetch('https://api.calorieninjas.com/v1/nutrition?query='+encodeURIComponent(query),{headers:{'X-Api-Key':cnKey}})
+      .then(function(r){return r.ok?r.json():null;})
+      .then(function(d){
+        if(!d||!d.items||!d.items.length)return null;
+        var a={cal:0,prot:0,carbs:0,fat:0,fib:0,sf:0,sod:0};
+        d.items.forEach(function(it){a.cal+=it.calories||0;a.prot+=it.protein_g||0;a.carbs+=it.carbohydrates_total_g||0;a.fat+=it.fat_total_g||0;a.fib+=it.fiber_g||0;a.sf+=it.fat_saturated_g||0;a.sod+=it.sodium_mg||0;});
+        return {source:'CalorieNinjas',calories:Math.round(a.cal),protein:Math.round(a.prot*10)/10,carbs:Math.round(a.carbs*10)/10,fat:Math.round(a.fat*10)/10,fibre:Math.round(a.fib*10)/10,satFat:Math.round(a.sf*10)/10,sodium:Math.round(a.sod)};
+      }).catch(function(){return null;})
+    );
+  }
+  if(usdaKey){
+    promises.push(
+      fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query='+encodeURIComponent(query)+'&pageSize=1&api_key='+usdaKey)
+      .then(function(r){return r.ok?r.json():null;})
+      .then(function(d){
+        if(!d||!d.foods||!d.foods.length)return null;
+        var n={};
+        (d.foods[0].foodNutrients||[]).forEach(function(x){
+          var nm=(x.nutrientName||'').toLowerCase();
+          if(nm.indexOf('energy')>=0&&!n.calories)n.calories=x.value;
+          else if(nm==='protein')n.protein=x.value;
+          else if(nm.indexOf('carbohydrate, by diff')>=0)n.carbs=x.value;
+          else if(nm==='total lipid (fat)')n.fat=x.value;
+          else if(nm.indexOf('fiber')>=0)n.fibre=x.value;
+          else if(nm.indexOf('saturated')>=0)n.satFat=x.value;
+          else if(nm.indexOf('sodium')>=0)n.sodium=x.value;
+        });
+        if(!n.calories)return null;
+        var sc=serving/100;
+        return {source:'USDA',calories:Math.round((n.calories||0)*sc),protein:Math.round((n.protein||0)*sc*10)/10,carbs:Math.round((n.carbs||0)*sc*10)/10,fat:Math.round((n.fat||0)*sc*10)/10,fibre:Math.round((n.fibre||0)*sc*10)/10,satFat:Math.round((n.satFat||0)*sc*10)/10,sodium:Math.round((n.sodium||0)*sc)};
+      }).catch(function(){return null;})
+    );
+  }
+  var geminiSrc={source:'Gemini',calories:Math.round(initialData.calories||0),protein:Math.round((initialData.protein||0)*10)/10,carbs:Math.round((initialData.carbs||0)*10)/10,fat:Math.round((initialData.fat||0)*10)/10,fibre:Math.round((initialData.fibre||0)*10)/10,satFat:Math.round((initialData.satFat||0)*10)/10,sodium:Math.round(initialData.sodium||0)};
+  Promise.all(promises).then(function(results){
+    var sources=[geminiSrc].concat(results.filter(function(r){return r!==null;}));
+    _nutSrcData={sources:sources,foodName:foodName,context:context,serving:serving,unit:unit};
+    if(sources.length<2){
+      // Only Gemini — if context was provided do a refined call
+      if(context)nutVerifyGeminiRefine(foodName,context,initialData,sources,statusEl);
+      return;
+    }
+    var cals=sources.map(function(s){return s.calories;}).filter(function(c){return c>0;});
+    var calMin=Math.min.apply(null,cals),calMax=Math.max.apply(null,cals);
+    var spread=calMax-calMin,spreadPct=calMin>0?spread/calMin:0;
+    var highDisagree=spreadPct>0.25||spread>150;
+    nutVerifyReconcile(foodName,context,initialData,sources,highDisagree,statusEl);
+  });
+}
+
+function nutVerifyGeminiRefine(foodName,context,initialData,sources,statusEl){
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';if(!geminiKey)return;
+  var prompt='Give accurate nutrition for: "'+context+' '+foodName+'". Use brand/restaurant data if brand is mentioned. Serving: '+initialData.serving+(initialData.unit||'g')+'. Return ONLY JSON with keys: calories,protein,carbs,fat,fibre,satFat,sodium. Macros in grams, sodium in mg.';
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
+  }).then(function(r){return r.json();}).then(function(data){
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
+    if(!text)return;
+    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    var js=text.indexOf('{'),je=text.lastIndexOf('}');if(js>=0&&je>js)text=text.slice(js,je+1);
+    try{
+      var d=JSON.parse(text);
+      var refined={source:'Gemini+context',calories:Math.round(d.calories||0),protein:Math.round((d.protein||0)*10)/10,carbs:Math.round((d.carbs||0)*10)/10,fat:Math.round((d.fat||0)*10)/10,fibre:Math.round((d.fibre||0)*10)/10,satFat:Math.round((d.satFat||0)*10)/10,sodium:Math.round(d.sodium||0)};
+      _nutSrcData={sources:[refined],foodName:foodName,context:context};
+      if(!_nutFieldsTouched)nutVerifyApply(d);
+      nutConfBannerShow('ok',[refined],false);
+    }catch(e){}
+  }).catch(function(){});
+}
+
+function nutVerifyReconcile(foodName,context,initialData,sources,highDisagree,statusEl){
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';if(!geminiKey)return;
+  var srcLines=sources.map(function(s){return s.source+': '+s.calories+' cal, '+s.protein+'g protein, '+s.carbs+'g carbs, '+s.fat+'g fat';}).join('\n');
+  var prompt='Food: "'+foodName+'"'+(context?' ('+context+')':'')+'. Serving: '+initialData.serving+(initialData.unit||'g')+'.\nSources:\n'+srcLines+'\nReconcile these estimates. Weight toward the majority; ignore outliers. Return ONLY JSON: {"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0,"satFat":0,"sodium":0}. Macros in grams, sodium in mg.';
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
+  }).then(function(r){return r.json();}).then(function(data){
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
+    if(!text)return;
+    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    var js=text.indexOf('{'),je=text.lastIndexOf('}');if(js>=0&&je>js)text=text.slice(js,je+1);
+    try{
+      var d=JSON.parse(text);
+      if(!_nutFieldsTouched)nutVerifyApply(d);
+      nutConfBannerShow(highDisagree?'warn':'ok',sources,highDisagree);
+    }catch(e){}
+  }).catch(function(){});
+}
+
+function nutVerifyApply(d){
+  function upd(id,val,dp){if(val===null||val===undefined)return;var el=document.getElementById(id);if(!el)return;el.value=dp?Math.round(val*Math.pow(10,dp))/Math.pow(10,dp):Math.round(val);}
+  upd('nff_cal',d.calories,0);upd('nff_prot',d.protein,1);upd('nff_carb',d.carbs,1);upd('nff_fat',d.fat,1);
+  if(d.fibre!=null)upd('nff_fib',d.fibre,1);if(d.satFat!=null)upd('nff_satfat',d.satFat,1);if(d.sodium!=null)upd('nff_sodium',d.sodium,0);
+  if(_nffBase){_nffBase.calories=parseFloat(d.calories)||_nffBase.calories;_nffBase.protein=parseFloat(d.protein)||_nffBase.protein;_nffBase.carbs=parseFloat(d.carbs)||_nffBase.carbs;_nffBase.fat=parseFloat(d.fat)||_nffBase.fat;}
+}
+
+function nutConfBannerShow(level,sources,highDisagree){
+  var banner=document.getElementById('nutConfBanner');if(!banner)return;
+  var icon=level==='warn'?'\u26a0\ufe0f':'\u2713';
+  var color=level==='warn'?'var(--orange)':'var(--green)';
+  var srcNames=sources?sources.map(function(s){return s.source;}).join(', '):'';
+  var calVals=sources?sources.map(function(s){return s.source+': '+s.calories+'cal';}).join(' \u00b7 '):'';
+  var msg='';
+  if(highDisagree){
+    var cals=sources.map(function(s){return s.calories;}).filter(function(c){return c>0;});
+    msg=icon+' Sources disagree ('+Math.min.apply(null,cals)+'\u2013'+Math.max.apply(null,cals)+' cal) \u2014 reconciled. <span style="text-decoration:underline;cursor:pointer;" onclick="nutSrcDetailShow()">See breakdown</span>';
+  } else {
+    msg=icon+' Verified via '+srcNames;
+  }
+  banner.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><span style="font-size:0.78rem;color:'+color+';">'+msg+'</span><button onclick="document.getElementById(\'nutConfBanner\').style.display=\'none\'" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;">&#215;</button></div>';
+  banner.style.display='block';
+  if(!highDisagree)setTimeout(function(){if(banner)banner.style.display='none';},5000);
+}
+
+function nutSrcDetailShow(){
+  if(!_nutSrcData||!_nutSrcData.sources)return;
+  var rows=_nutSrcData.sources.map(function(s){
+    return '<tr><td style="padding:6px 10px;color:var(--muted);font-size:0.78rem;">'+s.source+'</td><td style="padding:6px 10px;text-align:right;font-weight:700;color:var(--text1);">'+s.calories+'</td><td style="padding:6px 10px;text-align:right;color:var(--text2);">'+s.protein+'g</td><td style="padding:6px 10px;text-align:right;color:var(--text2);">'+s.carbs+'g</td><td style="padding:6px 10px;text-align:right;color:var(--text2);">'+s.fat+'g</td></tr>';
+  }).join('');
+  var html='<div style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:999;display:flex;align-items:flex-end;justify-content:center;" onclick="if(event.target===this)this.remove()">'+
+    '<div style="background:var(--card);border-radius:var(--r) var(--r) 0 0;padding:20px 16px 32px;width:100%;max-width:480px;box-sizing:border-box;">'+
+    '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:14px;">SOURCE BREAKDOWN</div>'+
+    '<table style="width:100%;border-collapse:collapse;"><tr style="font-size:0.68rem;color:var(--muted);"><th style="text-align:left;padding:4px 10px;">Source</th><th style="text-align:right;padding:4px 10px;">Cal</th><th style="text-align:right;padding:4px 10px;">Pro</th><th style="text-align:right;padding:4px 10px;">Carb</th><th style="text-align:right;padding:4px 10px;">Fat</th></tr>'+rows+'</table>'+
+    '<p style="font-size:0.72rem;color:var(--muted);margin:12px 0 0;">Values above are Gemini\'s reconciled estimate. Tap a row to use that source.</p>'+
+    '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="width:100%;margin-top:16px;padding:14px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text2);font-size:0.88rem;font-weight:600;cursor:pointer;">Close</button>'+
+    '</div></div>';
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+
+// ════════════════════════════════════════════════════════════
+// API KEYS SETTINGS
+// ════════════════════════════════════════════════════════════
+function nutSettingsOpen(){
+  var ov=document.getElementById('nutSettingsOverlay');if(!ov)return;
+  function fill(id,key){var el=document.getElementById(id);if(el)el.value=localStorage.getItem(key)||'';}
+  fill('nsk_gemini','wt_gemini_key');fill('nsk_cn','wt_cn_key');fill('nsk_usda','wt_usda_key');
+  ['nsk_msg_gemini','nsk_msg_cn','nsk_msg_usda'].forEach(function(id){var el=document.getElementById(id);if(el)el.textContent='';});
+  ov.style.display='flex';
+}
+function nutSettingsClose(){var ov=document.getElementById('nutSettingsOverlay');if(ov)ov.style.display='none';}
+function nutSettingsSave(){
+  function sv(id,key){var el=document.getElementById(id);if(el&&el.value.trim()){localStorage.setItem(key,el.value.trim());if(key==='wt_gemini_key'&&window.wtDB)wtDB.set(key,el.value.trim());}}
+  sv('nsk_gemini','wt_gemini_key');sv('nsk_cn','wt_cn_key');sv('nsk_usda','wt_usda_key');
+  nutSettingsClose();
+  var st=document.getElementById('nutScanStatus');if(st){st.style.display='block';st.style.color='var(--green)';st.textContent='\u2713 Keys saved';setTimeout(function(){st.style.display='none';},2500);}
+}
+function nutSettingsTest(which){
+  var keyId='nsk_'+which,msgId='nsk_msg_'+which;
+  var key=(document.getElementById(keyId)||{}).value||'';
+  var msg=document.getElementById(msgId);
+  if(!key){if(msg)msg.textContent='Enter a key first';return;}
+  if(msg){msg.textContent='Testing\u2026';msg.style.color='var(--muted)';}
+  var p;
+  if(which==='gemini'){
+    p=fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key.trim(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:'Say OK'}]}],generationConfig:{maxOutputTokens:5}})}).then(function(r){return r.json();}).then(function(d){return !!(d.candidates&&d.candidates[0]&&d.candidates[0].content);});
+  } else if(which==='cn'){
+    p=fetch('https://api.calorieninjas.com/v1/nutrition?query=apple',{headers:{'X-Api-Key':key.trim()}}).then(function(r){return r.json();}).then(function(d){return !!(d.items&&d.items.length);});
+  } else {
+    p=fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query=apple&pageSize=1&api_key='+key.trim()).then(function(r){return r.json();}).then(function(d){return !!(d.foods&&d.foods.length);});
+  }
+  p.then(function(ok){if(msg){msg.textContent=ok?'\u2713 Key works!':'\u2717 Invalid key';msg.style.color=ok?'var(--green)':'var(--red)';}}).catch(function(){if(msg){msg.textContent='\u2717 Network error';msg.style.color='var(--red)';}});
+}
+
 // Helper: open camera from add-food search (single item mode)
 // nutAddInlineScan already exists — it sets _nutAddInlineMode=true then opens camera
 // Helper: upload meal photo directly from add-food search overlay
@@ -9879,5 +10101,72 @@ function nutMealScanToggleCombine(){_msiCombine=!_msiCombine;nutMealScanRenderCo
   </div>
 </div>
 
+
+<!-- SETTINGS OVERLAY -->
+<div id="nutSettingsOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:700;align-items:flex-end;justify-content:center;" onclick="if(event.target===this)nutSettingsClose()">
+  <div style="background:var(--card);border-radius:var(--r) var(--r) 0 0;padding:24px 20px 36px;width:100%;max-width:480px;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:3px;">API KEYS</div>
+      <button onclick="nutSettingsClose()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0;">&#215;</button>
+    </div>
+    <!-- Gemini -->
+    <div style="margin-bottom:18px;">
+      <div style="font-size:0.72rem;font-weight:700;color:var(--text2);letter-spacing:0.5px;margin-bottom:4px;">GEMINI <span style="font-weight:400;color:var(--muted);">aistudio.google.com/apikey &mdash; free</span></div>
+      <div style="display:flex;gap:8px;">
+        <input id="nsk_gemini" type="password" placeholder="AIza..." autocomplete="off" style="flex:1;padding:11px 12px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.85rem;font-family:monospace;outline:none;">
+        <button onclick="nutSettingsTest('gemini')" style="padding:11px 14px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">Test</button>
+      </div>
+      <div id="nsk_msg_gemini" style="font-size:0.7rem;min-height:16px;margin-top:4px;color:var(--muted);"></div>
+    </div>
+    <!-- CalorieNinjas -->
+    <div style="margin-bottom:18px;">
+      <div style="font-size:0.72rem;font-weight:700;color:var(--text2);letter-spacing:0.5px;margin-bottom:4px;">CALORIENINJAS <span style="font-weight:400;color:var(--muted);">calorieninjas.com &mdash; free tier</span></div>
+      <div style="display:flex;gap:8px;">
+        <input id="nsk_cn" type="password" placeholder="API key..." autocomplete="off" style="flex:1;padding:11px 12px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.85rem;font-family:monospace;outline:none;">
+        <button onclick="nutSettingsTest('cn')" style="padding:11px 14px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">Test</button>
+      </div>
+      <div id="nsk_msg_cn" style="font-size:0.7rem;min-height:16px;margin-top:4px;color:var(--muted);"></div>
+    </div>
+    <!-- USDA -->
+    <div style="margin-bottom:24px;">
+      <div style="font-size:0.72rem;font-weight:700;color:var(--text2);letter-spacing:0.5px;margin-bottom:4px;">USDA FOODDATA <span style="font-weight:400;color:var(--muted);">fdc.nal.usda.gov &mdash; free</span></div>
+      <div style="display:flex;gap:8px;">
+        <input id="nsk_usda" type="password" placeholder="API key..." autocomplete="off" style="flex:1;padding:11px 12px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.85rem;font-family:monospace;outline:none;">
+        <button onclick="nutSettingsTest('usda')" style="padding:11px 14px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">Test</button>
+      </div>
+      <div id="nsk_msg_usda" style="font-size:0.7rem;min-height:16px;margin-top:4px;color:var(--muted);"></div>
+    </div>
+    <button onclick="nutSettingsSave()" style="width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:2px;font-weight:900;cursor:pointer;">SAVE ALL KEYS</button>
+  </div>
+</div>
+
+<!-- CONTEXT PROMPT OVERLAY -->
+<div id="nutCtxOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:650;align-items:flex-end;justify-content:center;" onclick="if(event.target===this)nutCtxSkip()">
+  <div style="background:var(--card);border-radius:var(--r) var(--r) 0 0;padding:20px 18px 32px;width:100%;max-width:480px;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--accent);" id="nutCtxFoodName">FOOD</div>
+      <span id="nutCtxCountdown" style="font-size:0.68rem;color:var(--muted);"></span>
+    </div>
+    <div style="font-size:0.82rem;color:var(--text2);margin-bottom:12px;">Add context to improve accuracy <span style="color:var(--muted);">(optional)</span></div>
+    <input id="nutCtxInput" type="text" placeholder="e.g. Burger King, homemade, large portion..." autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:12px 14px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.9rem;outline:none;margin-bottom:10px;">
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+      <button onclick="nutCtxSugg('Burger King')" style="padding:6px 12px;background:var(--card2);border:1px solid var(--border2);border-radius:20px;color:var(--text2);font-size:0.72rem;cursor:pointer;">Burger King</button>
+      <button onclick="nutCtxSugg('McDonalds')" style="padding:6px 12px;background:var(--card2);border:1px solid var(--border2);border-radius:20px;color:var(--text2);font-size:0.72rem;cursor:pointer;">McDonalds</button>
+      <button onclick="nutCtxSugg('Chipotle')" style="padding:6px 12px;background:var(--card2);border:1px solid var(--border2);border-radius:20px;color:var(--text2);font-size:0.72rem;cursor:pointer;">Chipotle</button>
+      <button onclick="nutCtxSugg('Homemade')" style="padding:6px 12px;background:var(--card2);border:1px solid var(--border2);border-radius:20px;color:var(--text2);font-size:0.72rem;cursor:pointer;">Homemade</button>
+      <button onclick="nutCtxSugg('Large portion')" style="padding:6px 12px;background:var(--card2);border:1px solid var(--border2);border-radius:20px;color:var(--text2);font-size:0.72rem;cursor:pointer;">Large</button>
+      <button onclick="nutCtxSugg('Small portion')" style="padding:6px 12px;background:var(--card2);border:1px solid var(--border2);border-radius:20px;color:var(--text2);font-size:0.72rem;cursor:pointer;">Small</button>
+    </div>
+    <div id="nutCtxStatus" style="font-size:0.72rem;color:var(--orange);min-height:16px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="nutCtxSkip()" style="flex:1;padding:13px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.88rem;font-weight:600;cursor:pointer;">Skip</button>
+      <button onclick="nutCtxConfirm()" style="flex:2;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">REFINE</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIDENCE BANNER -->
+<div id="nutConfBanner" style="display:none;position:fixed;bottom:calc(var(--nav-h,64px) + var(--safe-b,0px) + 10px);left:12px;right:12px;z-index:500;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 14px;max-width:480px;margin:0 auto;box-shadow:0 4px 20px rgba(0,0,0,0.4);"></div>
 </body>
 </html>
