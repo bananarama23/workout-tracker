@@ -7610,7 +7610,7 @@ function nutCtxConfirm(){
 }
 
 // ════════════════════════════════════════════════════════════
-// BACKGROUND VERIFICATION — parallel CalorieNinjas + USDA then Gemini reconcile
+// BACKGROUND VERIFICATION — parallel API Ninjas + USDA then Gemini reconcile
 // ════════════════════════════════════════════════════════════
 function nutVerifyInBackground(foodName,context,extraSources,initialData,statusEl){
   var cnKey=localStorage.getItem('wt_cn_key')||'';
@@ -7623,13 +7623,13 @@ function nutVerifyInBackground(foodName,context,extraSources,initialData,statusE
   var promises=[];
   if(cnKey){
     promises.push(
-      fetch('https://api.calorieninjas.com/v1/nutrition?query='+encodeURIComponent(query),{headers:{'X-Api-Key':cnKey}})
+      fetch('https://api.api-ninjas.com/v1/nutrition?query='+encodeURIComponent(query),{headers:{'X-Api-Key':cnKey}})
       .then(function(r){return r.ok?r.json():null;})
       .then(function(d){
         if(!d||!d.items||!d.items.length)return null;
         var a={cal:0,prot:0,carbs:0,fat:0,fib:0,sf:0,sod:0};
         d.items.forEach(function(it){a.cal+=it.calories||0;a.prot+=it.protein_g||0;a.carbs+=it.carbohydrates_total_g||0;a.fat+=it.fat_total_g||0;a.fib+=it.fiber_g||0;a.sf+=it.fat_saturated_g||0;a.sod+=it.sodium_mg||0;});
-        return {source:'CalorieNinjas',calories:Math.round(a.cal),protein:Math.round(a.prot*10)/10,carbs:Math.round(a.carbs*10)/10,fat:Math.round(a.fat*10)/10,fibre:Math.round(a.fib*10)/10,satFat:Math.round(a.sf*10)/10,sodium:Math.round(a.sod)};
+        return {source:'API Ninjas',calories:Math.round(a.cal),protein:Math.round(a.prot*10)/10,carbs:Math.round(a.carbs*10)/10,fat:Math.round(a.fat*10)/10,fibre:Math.round(a.fib*10)/10,satFat:Math.round(a.sf*10)/10,sodium:Math.round(a.sod)};
       }).catch(function(){return null;})
     );
   }
@@ -7781,7 +7781,7 @@ function nutSettingsTest(which){
   if(which==='gemini'){
     p=fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+key.trim(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:'Say OK'}]}],generationConfig:{maxOutputTokens:5}})}).then(function(r){return r.json();}).then(function(d){return !!(d.candidates&&d.candidates[0]&&d.candidates[0].content);});
   } else if(which==='cn'){
-    p=fetch('https://api.calorieninjas.com/v1/nutrition?query=apple',{headers:{'X-Api-Key':key.trim()}}).then(function(r){return r.json();}).then(function(d){return !!(d.items&&d.items.length);});
+    p=fetch('https://api.api-ninjas.com/v1/nutrition?query=apple',{headers:{'X-Api-Key':key.trim()}}).then(function(r){return r.json();}).then(function(d){return !!(d.items&&d.items.length);});
   } else {
     p=fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query=apple&pageSize=1&api_key='+key.trim()).then(function(r){return r.json();}).then(function(d){return !!(d.foods&&d.foods.length);});
   }
@@ -10123,7 +10123,7 @@ function nutMealScanToggleCombine(){_msiCombine=!_msiCombine;nutMealScanRenderCo
     </div>
     <!-- CalorieNinjas -->
     <div style="margin-bottom:18px;">
-      <div style="font-size:0.72rem;font-weight:700;color:var(--text2);letter-spacing:0.5px;margin-bottom:4px;">CALORIENINJAS <span style="font-weight:400;color:var(--muted);">calorieninjas.com &mdash; free tier</span></div>
+      <div style="font-size:0.72rem;font-weight:700;color:var(--text2);letter-spacing:0.5px;margin-bottom:4px;">API NINJAS <span style="font-weight:400;color:var(--muted);">api-ninjas.com &mdash; free</span></div>
       <div style="display:flex;gap:8px;">
         <input id="nsk_cn" type="password" placeholder="API key..." autocomplete="off" style="flex:1;padding:11px 12px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.85rem;font-family:monospace;outline:none;">
         <button onclick="nutSettingsTest('cn')" style="padding:11px 14px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">Test</button>
