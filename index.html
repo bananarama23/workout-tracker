@@ -1217,7 +1217,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
               </svg>
               <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;line-height:1;" id="nutCalConsumed">0</div>
-                <div style="font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">left</div>
+                <div id="nutCalOverLabel" style="font-size:0.5rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">left</div>
               </div>
             </div>
 
@@ -1236,6 +1236,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
                 <div style="display:flex;align-items:center;gap:6px;">
                   <span style="font-size:0.6rem;color:var(--muted);">Active</span>
                   <input id="nutActiveInp" type="number" inputmode="numeric" placeholder="390" style="width:56px;background:var(--card2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:0.9rem;text-align:center;padding:3px 6px;outline:none;" oninput="nutActiveChanged()" onblur="nutActiveBlur()">
+                  <button onclick="nutActiveBlur()" style="background:var(--card2);border:1px solid var(--border2);border-radius:6px;color:var(--green);font-size:0.75rem;padding:3px 7px;cursor:pointer;line-height:1;" title="Save">✓</button>
                   <span style="font-size:0.58rem;color:var(--muted);">kcal</span>
                   <span id="nutActiveAdj" style="font-size:0.65rem;font-weight:700;"></span>
                 </div>
@@ -1244,7 +1245,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
               <!-- Cheat / Done buttons — full width below macro bars -->
               <div style="display:flex;gap:8px;margin-top:10px;">
                 <button id="nutCheatBtn" onclick="nutToggleCheatDay()" style="flex:1;font-size:0.62rem;font-weight:700;letter-spacing:1px;padding:7px 8px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;">CHEAT DAY</button>
-                <button id="dayDoneBar" onclick="dayDoneToggle()" style="flex:1;font-size:0.62rem;font-weight:700;letter-spacing:1px;padding:7px 8px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;display:none;">DAY DONE ✓</button>
+                <button id="dayDoneBar" onclick="dayDoneToggle()" style="flex:1;font-size:0.62rem;font-weight:700;letter-spacing:1px;padding:7px 8px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;">DAY DONE</button>
               </div>
               <div style="text-align:right;margin-top:8px;">
                 <button onclick="nutSettingsOpen()" style="background:none;border:none;color:var(--muted);font-size:0.68rem;cursor:pointer;padding:0;letter-spacing:0.3px;">⚙ API Keys</button>
@@ -1259,8 +1260,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
       <!-- Copy from previous day -->
       <div style="margin:0 16px 4px;display:flex;gap:8px;">
-        <button onclick="nutCopyFrom(-1)" style="flex:1;background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;color:var(--muted);font-size:0.62rem;letter-spacing:1px;text-transform:uppercase;font-family:'Bebas Neue',sans-serif;cursor:pointer;">↙ Copy Yesterday</button>
-        <button onclick="nutCopyFrom(-7)" style="flex:1;background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;color:var(--muted);font-size:0.62rem;letter-spacing:1px;text-transform:uppercase;font-family:'Bebas Neue',sans-serif;cursor:pointer;">↙ Copy Last Week</button>
+        <button onclick="nutCopyPickMeals(-1)" style="flex:1;background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;color:var(--muted);font-size:0.62rem;letter-spacing:1px;text-transform:uppercase;font-family:'Bebas Neue',sans-serif;cursor:pointer;">↙ Copy Yesterday</button>
+        <button onclick="nutCopyPickMeals(-7)" style="flex:1;background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;color:var(--muted);font-size:0.62rem;letter-spacing:1px;text-transform:uppercase;font-family:'Bebas Neue',sans-serif;cursor:pointer;">↙ Copy Last Week</button>
       </div>
       <div id="nutCopyMsg" style="margin:0 16px 4px;font-size:0.68rem;color:var(--muted);text-align:center;min-height:14px;"></div>
       <!-- Sync: phone is truth button -->
@@ -1312,6 +1313,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <div class="prog-section-hdr"><div class="prog-section-lbl">7-Day Average vs Target</div></div>
         <div id="nutWeekStats"></div>
         <div style="font-size:0.62rem;color:var(--muted);text-align:center;padding:8px 0;" id="nutWeekDaysLogged"></div>
+        <div id="nutStreakRow" style="text-align:center;padding:2px 0 8px;min-height:20px;"></div>
         <div id="nutWeekMonthSummary" style="margin-top:12px;"></div>
         <div id="nutWeekCholSummary" style="margin-top:10px;padding-bottom:8px;"></div>
       </div>
@@ -1332,8 +1334,9 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <div id="nutPanelFoods" style="display:none;">
       <div style="padding:0 16px 12px;">
         <button onclick="nutShowAddFood()" style="width:100%;padding:14px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;margin-bottom:10px;">+ ADD NEW FOOD</button>
-        <div style="position:relative;margin-bottom:10px;">
-          <input id="nutFoodSearch" type="text" placeholder="Search foods..." oninput="nutFilterFoods()" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 14px;color:var(--text);font-size:0.88rem;outline:none;box-sizing:border-box;">
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <input id="nutFoodSearch" type="text" placeholder="Search foods..." oninput="nutFilterFoods()" style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 14px;color:var(--text);font-size:0.88rem;outline:none;box-sizing:border-box;">
+          <button id="nutFoodSortBtn" onclick="nutToggleFoodSort()" style="flex-shrink:0;padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.68rem;font-weight:700;cursor:pointer;white-space:nowrap;">RECENT</button>
         </div>
         <div id="nutFoodList"></div>
       </div>
@@ -6298,6 +6301,8 @@ function nutQueuePush(action){
   try{
     var q=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');
     q.push({action:action,ts:Date.now(),attempts:0});
+    var _badge=document.getElementById('syncBadgeNut'),_txt=document.getElementById('syncTextNut');
+    if(_badge&&_txt){_badge.className='sync-pill sp-warn';_txt.textContent='Unsynced';}
     var _nqv=JSON.stringify(q);try{localStorage.setItem(NUT_SYNC_QUEUE_KEY,_nqv);}catch(e){}wtDB.set(NUT_SYNC_QUEUE_KEY,_nqv);
   }catch(e){}
 }
@@ -6599,10 +6604,11 @@ function nutRenderWeekDots(){
   for(var i=0;i<7;i++){
     var dd=new Date(mon);dd.setDate(mon.getDate()+i);
     var ds2=dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');
-    var hasEntries=_nutEntries&&_nutEntries.some(function(e){return e.date===ds2&&e.meal!=='_active'&&e.meal!=='_cheat';});
+    var _de=_nutEntries?_nutEntries.filter(function(e){return e.date===ds2&&e.meal!=='_active'&&e.meal!=='_cheat';}):[]; var hasEntries=_de.length>0;
     var isSelected=ds2===_nutDate;
     var isFuture=ds2>today;
-    var bg=isSelected?'var(--accent)':hasEntries?'var(--green)':isFuture?'transparent':'var(--border)';
+    var onTarget=false;if(hasEntries){var _dc=_de.reduce(function(a,e){return a+(e.calories||0);},0);var _db=nutEffectiveBudget(ds2);onTarget=_dc>=_db*0.85&&_dc<=_db*1.1;}
+    var bg=isSelected?'var(--accent)':hasEntries?(onTarget?'var(--green)':'var(--yellow)'):isFuture?'transparent':'var(--border)';
     var textCol=isSelected?'#000':hasEntries?'#000':'var(--muted)';
     var border=isFuture&&!isSelected?'1px solid var(--border)':'none';
     html+='<div onclick="nutJumpToDate(\''+ds2+'\')" style="width:22px;height:22px;border-radius:50%;background:'+bg+';border:'+border+';display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.52rem;font-weight:700;color:'+textCol+';flex-shrink:0;">'+days[i]+'</div>';
@@ -6773,7 +6779,8 @@ function nutRenderDay(){
     ring.style.strokeDashoffset=circ-(circ*pct);
     ring.style.stroke=eaten>calBudget?'var(--red)':remain<calBudget*0.2?'var(--yellow)':'var(--green)';
   }
-  var ec=document.getElementById('nutCalConsumed');if(ec)ec.textContent=remain>=0?remain.toLocaleString():('−'+Math.abs(remain).toLocaleString());
+  var ec=document.getElementById('nutCalConsumed'),_ol=document.getElementById('nutCalOverLabel');
+  if(ec){ec.textContent=Math.abs(remain).toLocaleString();if(_ol)_ol.textContent=remain>=0?'left':'over';}
   var cb2=document.getElementById('nutCalBudget');
   if(cb2){
     if(activeCals!==null&&adjustment!==0){
@@ -6834,13 +6841,13 @@ function nutRenderDay(){
     h+='<div class="prog-section-lbl">'+meal+(mc>0?' \u2014 '+mc+' kcal':'')+'</div>';
     h+='<button onclick="nutOpenAdd(\''+meal+'\')" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:4px 12px;font-family:\'Bebas Neue\',sans-serif;font-size:0.72rem;letter-spacing:1px;font-weight:900;cursor:pointer;">+ ADD</button>';
     h+='</div><div class="prog-card">';
-    if(me.length===0){h+='<div style="padding:13px 16px;font-size:0.8rem;color:var(--muted);">Nothing logged yet</div>';}
+    if(me.length===0){h+='<div onclick="nutOpenAdd(\''+meal+'\')\")" style="padding:13px 16px;font-size:0.8rem;color:var(--muted);cursor:pointer;">Nothing logged yet <span style="color:var(--accent);font-size:0.72rem;">→ tap to add</span></div>';}
     me.forEach(function(e){
       var gIdx=_nutEntries.indexOf(e);
       h+='<div class="sum-row" style="padding:10px 16px;cursor:pointer;" onclick="nutEditEntry('+gIdx+')">';
       h+='<div style="flex:1;min-width:0;">';
       h+='<div class="sum-name" style="font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+e.food+'</div>';
-      h+='<div class="sum-result" style="font-size:0.62rem;margin-top:2px;">P\u202f'+Math.round(e.protein||0)+'g \u00b7 C\u202f'+Math.round(e.carbs||0)+'g \u00b7 F\u202f'+Math.round(e.fat||0)+'g'+(e.sodium?(' \u00b7 Sodium\u202f'+Math.round(e.sodium)+'mg'):'')+((e.servings&&e.servings!==1)?' \u00b7 \u00d7'+e.servings:'')+'</div>';
+      h+='<div class="sum-result" style="font-size:0.62rem;margin-top:2px;">P\u202f'+Math.round(e.protein||0)+'g \u00b7 C\u202f'+Math.round(e.carbs||0)+'g \u00b7 F\u202f'+Math.round(e.fat||0)+'g'+(e.fibre&&e.fibre>0?' \u00b7 Fib\u202f'+Math.round(e.fibre*10)/10+'g':'')+(e.sodium?(' \u00b7 Na\u202f'+Math.round(e.sodium)+'mg'):'')+((e.servings&&e.servings!==1)?' \u00b7 \u00d7'+e.servings:'')+'</div>';
       h+='</div>';
       var synced=e.id?_nutSyncedIds[String(e.id)]:true; // entries without id assumed legacy-synced
       var dotCol=_nutLastFetch>0?(synced?'var(--green)':'var(--yellow)'):'transparent';
@@ -6994,6 +7001,7 @@ function nutShowMacroChart(key,label,unit,tKey,col){
 }
 
 function nutRenderWeek(){
+  nutRenderStreak();
   var ws=document.getElementById('nutWeekStats');if(!ws)return;
   var wd=document.getElementById('nutWeekDaysLogged');
   var days=[];for(var i=6;i>=0;i--)days.push(nutShiftDate(localDateStr(),-i));
@@ -7033,7 +7041,8 @@ function nutRenderWeek(){
       '<div style="font-size:0.6rem;color:var(--muted);margin-top:4px;">'+pct+'% of target \u00b7 '+logged.length+' day'+(logged.length!==1?'s':'')+' logged</div>'+
     '</div>';
   }).join('');
-  if(wd)wd.textContent=logged.length+' of last 7 days logged';
+  var streak=nutCalcStreak?nutCalcStreak():0;
+  if(wd)wd.textContent=logged.length+' of last 7 days logged'+(streak>=2?' · ?? '+streak+'-day streak':'');
 
   // ── Helper: build a stats block for an arbitrary set of logged days ──
   function nutStatsBlock(loggedDays, label){
@@ -7154,6 +7163,31 @@ function nutLastEatenDate(foodName){
   }
   return null;
 }
+var _nutFoodSortAlpha=false;
+function nutToggleFoodSort(){
+  _nutFoodSortAlpha=!_nutFoodSortAlpha;
+  var btn=document.getElementById('nutFoodSortBtn');
+  if(btn){btn.textContent=_nutFoodSortAlpha?'A–Z':'RECENT';btn.style.color=_nutFoodSortAlpha?'var(--accent)':'var(--muted)';}
+  nutRenderFoodList();
+}
+function nutCalcStreak(){
+  var today=localDateStr(),streak=0;
+  for(var i=0;i<365;i++){
+    var d=nutShiftDate(today,-i);
+    var de=_nutEntries.filter(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});
+    if(!de.length)break;
+    var dc=de.reduce(function(a,e){return a+(e.calories||0);},0);
+    if(dc>=nutEffectiveBudget(d)*0.85)streak++;else break;
+  }
+  return streak;
+}
+function nutRenderStreak(){
+  var el=document.getElementById('nutStreakRow');if(!el)return;
+  var s=nutCalcStreak();
+  if(s>=2)el.innerHTML='<span style="font-size:0.72rem;color:var(--orange);font-weight:700;">?? '+s+'-day streak on target</span>';
+  else if(s===1)el.innerHTML='<span style="font-size:0.72rem;color:var(--muted);">On target today — keep it going!</span>';
+  else el.innerHTML='';
+}
 function nutFoodsWithRecency(){
   // Return foods sorted: most recently eaten first, then never-eaten alphabetically
   return _nutFoods.slice().sort(function(a,b){
@@ -7176,7 +7210,7 @@ function nutFilterFoods(){nutRenderFoodList();}
 function nutRenderFoodList(){
   var el=document.getElementById('nutFoodList');if(!el)return;
   var q=(document.getElementById('nutFoodSearch')||{}).value||'';
-  var sorted=nutFoodsWithRecency();
+  var sorted=_nutFoodSortAlpha?_nutFoods.slice().sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;}):nutFoodsWithRecency();
   var list=sorted.filter(function(f){return !q||f.name.toLowerCase().indexOf(q.toLowerCase())>=0;});
   if(!list.length){
     el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">'+(q?'No match for "'+q+'"':'No foods yet \u2014 add one above')+'</div>';
@@ -7915,10 +7949,51 @@ function nutOpenAdd(meal){
   var ov=document.getElementById('nutAddOverlay');
   if(ov){ov.style.display='flex';ov.scrollTop=0;}
 }
-function nutCopyFrom(offset){
+function nutCopyPickMeals(offset){
+  var srcDate=nutShiftDate(_nutDate,offset);
+  var srcEntries=_nutEntries.filter(function(e){return e.date===srcDate&&e.meal!=='_active'&&e.meal!=='_cheat';});
+  if(!srcEntries.length){
+    var msg=document.getElementById('nutCopyMsg');
+    if(msg){msg.textContent='Nothing logged on '+(offset===-1?'yesterday':'that day');msg.style.color='var(--orange)';}
+    setTimeout(function(){var m=document.getElementById('nutCopyMsg');if(m)m.textContent='';},2500);
+    return;
+  }
+  var mealsPresent=NUT_MEALS.filter(function(m){return srcEntries.some(function(e){return e.meal===m;});});
+  if(mealsPresent.length<=1){nutCopyFrom(offset,mealsPresent.length?[mealsPresent[0]]:null);return;}
+  // Show meal picker sheet
+  var picker=document.getElementById('nutCopyMealPicker');
+  if(!picker){
+    picker=document.createElement('div');picker.id='nutCopyMealPicker';
+    picker.style.cssText='position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.7);display:flex;align-items:flex-end;justify-content:center;';
+    picker.innerHTML='<div style="width:100%;max-width:480px;background:var(--card);border-radius:22px 22px 0 0;padding:20px 20px calc(var(--nav-h)+var(--safe-b)+16px);border-top:1px solid var(--border);" id="nutCopyMealSheet"></div>';
+    picker.addEventListener('click',function(ev){if(ev.target===picker)picker.style.display='none';});
+    document.body.appendChild(picker);
+  }
+  var allChecked=true;
+  var sheetEl=document.getElementById('nutCopyMealSheet');
+  sheetEl.innerHTML='<div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:14px;">COPY WHICH MEALS?</div>'+
+    mealsPresent.map(function(m){
+      var cnt=srcEntries.filter(function(e){return e.meal===m;}).length;
+      return '<label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.88rem;font-weight:600;">'+
+        '<input type="checkbox" class="nutCopyMealChk" value="'+m+'" checked style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">'+
+        m+' <span style="font-size:0.68rem;color:var(--muted);font-weight:400;">('+cnt+' item'+(cnt!==1?'s':'')+')</span></label>';
+    }).join('')+
+    '<div style="display:flex;gap:8px;margin-top:16px;">'+
+    '<button onclick="document.getElementById('nutCopyMealPicker').style.display='none'" style="flex:1;padding:13px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.88rem;font-weight:600;cursor:pointer;">Cancel</button>'+
+    '<button onclick="nutCopyMealConfirm('+offset+')" style="flex:2;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;font-weight:900;cursor:pointer;">COPY SELECTED</button>'+
+    '</div>';
+  picker.style.display='flex';
+}
+function nutCopyMealConfirm(offset){
+  var picker=document.getElementById('nutCopyMealPicker');if(picker)picker.style.display='none';
+  var selected=Array.from(document.querySelectorAll('.nutCopyMealChk:checked')).map(function(c){return c.value;});
+  if(!selected.length)return;
+  nutCopyFrom(offset,selected);
+}
+function nutCopyFrom(offset,mealFilter){
   var srcDate=nutShiftDate(_nutDate,offset);
   var srcEntries=_nutEntries.filter(function(e){
-    return e.date===srcDate&&e.meal!=='_active'&&e.meal!=='_cheat';
+    return e.date===srcDate&&e.meal!=='_active'&&e.meal!=='_cheat'&&(!mealFilter||mealFilter.indexOf(e.meal)>=0);
   });
   if(!srcEntries.length){
     var msg=document.getElementById('nutCopyMsg');
@@ -7928,7 +8003,12 @@ function nutCopyFrom(offset){
   }
   // Check if today already has entries — warn
   var todayEntries=_nutEntries.filter(function(e){return e.date===_nutDate&&e.meal!=='_active'&&e.meal!=='_cheat';});
-  if(todayEntries.length&&!confirm('Today already has '+ todayEntries.length+' entries. Add copied entries on top?'))return;
+  if(todayEntries.length){
+    var srcFoods=srcEntries.map(function(e){return e.food;}).sort().join('|');
+    var todayFoods=todayEntries.map(function(e){return e.food;}).sort().join('|');
+    if(srcFoods===todayFoods){var msg2=document.getElementById('nutCopyMsg');if(msg2){msg2.textContent='Already copied — not duplicated';msg2.style.color='var(--orange)';}setTimeout(function(){var m=document.getElementById('nutCopyMsg');if(m)m.textContent='';},2500);return;}
+    if(!confirm('Today already has '+todayEntries.length+' entries. Add copied entries on top?'))return;
+  }
   // Clone entries with today's date and new ids
   var now=Date.now();
   var newEntries=srcEntries.map(function(e,i){
@@ -7986,7 +8066,7 @@ function nutFilterAddList(){
     }
   }
 
-  var sortedFoods=nutFoodsWithRecency();
+  var sortedFoods=_nutFoodSortAlpha?_nutFoods.slice().sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;}):nutFoodsWithRecency();
   var list=sortedFoods.filter(function(f){return !q||f.name.toLowerCase().indexOf(q.toLowerCase())>=0;});
   if(!list.length&&!html){
     if(q){
@@ -8481,21 +8561,51 @@ function nutMoveToMeal(idx,newMeal){
   runStep(0);
 }
 
+var _nutDeleteUndo=null;
 function nutDelEntry(idx){
   var e=_nutEntries[idx];if(!e)return;
+  var deleted=JSON.parse(JSON.stringify(e));
   var action={type:'deleteNutritionRow',date:e.date,meal:e.meal,food:e.food};
   _nutEntries.splice(idx,1);
-  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
+  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));
+  try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e2){}
   nutRenderDay();
+  _nutDeleteUndo={entry:deleted,action:action};
+  var undoEl=document.getElementById('nutUndoToast');
+  if(!undoEl){
+    undoEl=document.createElement('div');undoEl.id='nutUndoToast';
+    undoEl.style.cssText='position:fixed;bottom:calc(var(--nav-h)+var(--safe-b)+12px);left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border2);border-radius:20px;padding:10px 16px;display:flex;align-items:center;gap:12px;z-index:600;box-shadow:0 4px 20px rgba(0,0,0,0.5);white-space:nowrap;';
+    document.body.appendChild(undoEl);
+  }
+  var nm=deleted.food.length>24?deleted.food.slice(0,24)+'…':deleted.food;
+  undoEl.innerHTML='<span style="font-size:0.8rem;color:var(--text2);">'+nm+' deleted</span><button onclick="nutDelUndo()" style="background:var(--accent);color:#000;border:none;border-radius:12px;padding:4px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.8rem;letter-spacing:1px;cursor:pointer;">UNDO</button>';
+  undoEl.style.display='flex';
+  clearTimeout(window._nutUndoTimer);
+  window._nutUndoTimer=setTimeout(function(){nutDelCommit();},4000);
+}
+function nutDelUndo(){
+  clearTimeout(window._nutUndoTimer);
+  var u=document.getElementById('nutUndoToast');if(u)u.style.display='none';
+  if(!_nutDeleteUndo)return;
+  _nutEntries.push(_nutDeleteUndo.entry);
+  wtDB.set(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));
+  try{localStorage.setItem(NUT_ENTRIES_KEY,JSON.stringify(_nutEntries));}catch(e){}
+  _nutDeleteUndo=null;nutRenderDay();
+  nutMsg('Restored ✓','var(--green)');setTimeout(function(){nutMsg('');},2000);
+}
+function nutDelCommit(){
+  var u=document.getElementById('nutUndoToast');if(u)u.style.display='none';
+  if(!_nutDeleteUndo)return;
+  var action=_nutDeleteUndo.action;_nutDeleteUndo=null;
   nutBadge('load','Saving');
   nutSyncAction(action,null,function(ok){
-    if(ok){nutBadge('live','Live');nutMsg('Deleted \u2713','var(--green)');setTimeout(function(){nutMsg('');},2000);}
-    else{nutQueuePush(action);nutBadge('cached','Queued');nutMsg('Queued for retry','var(--yellow)');}
+    if(ok){nutBadge('live','Live');}else{nutQueuePush(action);nutBadge('cached','Queued');}
   });
 }
 
 
 // ── Type food (Gemini text search) ────────────────────────────────
+var _nutLastTypeQuery='';
 function nutOpenTypeFood(){
   var status=document.getElementById('nutScanStatus');
   if(status){
@@ -8511,12 +8621,13 @@ function nutOpenTypeFood(){
         '<button onclick="nutTypeGeminiSearch()" style="background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);padding:10px 14px;font-family:\'Bebas Neue\',sans-serif;font-size:0.88rem;letter-spacing:1px;cursor:pointer;white-space:nowrap;align-self:stretch;">GO</button>'+
       '</div>'+
       '<div id="nutTypeSearchStatus" style="font-size:0.72rem;color:var(--muted);margin-top:6px;min-height:16px;"></div>';
-    setTimeout(function(){var inp=document.getElementById('nutTypeSearchInp');if(inp)inp.focus();},100);
+    setTimeout(function(){var inp=document.getElementById('nutTypeSearchInp');if(inp){inp.focus();if(_nutLastTypeQuery)inp.value=_nutLastTypeQuery;}},100);
   }
 }
 function nutTypeGeminiSearch(){
   var q=(document.getElementById('nutTypeSearchInp')||{}).value||'';
   if(!q.trim())return;
+  _nutLastTypeQuery=q;
   var statusEl=document.getElementById('nutTypeSearchStatus');
 
   // ── Step 1: Try TSV/table parse first ──────────────────────────
