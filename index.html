@@ -8306,7 +8306,7 @@ function nutTypeGeminiSearch(){
   if(statusEl){statusEl.textContent='Asking Gemini...';statusEl.style.color='var(--muted)';}
   var geminiKey=localStorage.getItem('wt_gemini_key')||'';
   if(!geminiKey){nutApiKeyShow(null,null,null);if(statusEl){statusEl.textContent='Enter your Gemini key then search again';statusEl.style.color='var(--orange)';}return;}
-  var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
+  var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. If the name includes modifiers like "plain", "no sauce", "no cheese", "no mayo", or lists specific components, calculate accordingly — never default to the fully loaded version. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
@@ -8756,7 +8756,7 @@ function nutAddInlineGemini(){
   var geminiKey=localStorage.getItem('wt_gemini_key')||'';
   if(!geminiKey){nutCloseAdd();nutApiKeyShow(null,null,null);return;}
   nutAddInlineStatus('Asking Gemini...','var(--muted)');
-  var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
+  var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (e.g. 1 chicken wing, 1 medium banana, 1 slice bread) — NOT 100g. If the name includes modifiers like "plain", "no sauce", "no cheese", "no mayo", or lists specific components, calculate accordingly — never default to the fully loaded version. Return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All values per that one natural serving. Sodium in mg. Estimate if needed.';
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{parts:[{text:promptText}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
@@ -9478,6 +9478,7 @@ function nutMealScanRefetch(id){
     'You are a precision Nutrition Data Extractor.\n'+
     'RULES:\n'+
     '- Use the exact item name given. Do not generalise.\n'+
+    '- RESPECT MODIFIERS: if the name includes "plain", "no sauce", "no cheese", "no mayo", "no X", or lists specific components (e.g. "meat and bun only"), subtract those items from the standard build. Never default to the fully loaded version if modifiers are specified.\n'+
     '- Determine the NATIVE UNIT: drinks in ml/oz, food in grams. Never use grams for liquids.\n'+
     '- For complex items (flavoured lattes, topped dishes), break into components and sum.\n'+
     '- Iced vs hot changes milk volume: iced Grande ~120ml milk, hot Grande ~360ml.\n'+
