@@ -1246,6 +1246,9 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
                 <button id="nutCheatBtn" onclick="nutToggleCheatDay()" style="flex:1;font-size:0.62rem;font-weight:700;letter-spacing:1px;padding:7px 8px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;">CHEAT DAY</button>
                 <button id="dayDoneBar" onclick="dayDoneToggle()" style="flex:1;font-size:0.62rem;font-weight:700;letter-spacing:1px;padding:7px 8px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;display:none;">DAY DONE ✓</button>
               </div>
+              <div style="text-align:right;margin-top:8px;">
+                <button onclick="nutSettingsOpen()" style="background:none;border:none;color:var(--muted);font-size:0.68rem;cursor:pointer;padding:0;letter-spacing:0.3px;">⚙ API Keys</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1433,7 +1436,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     <div style="padding:16px 20px calc(var(--nav-h) + var(--safe-b) + 40px);">
     <!-- Scan status -->
     <div id="nutScanStatus" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;font-size:0.82rem;color:var(--muted);text-align:center;"></div>
-    <div style="text-align:right;margin:0 0 10px;"><button onclick="nutSettingsOpen()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);padding:5px 12px;font-size:0.72rem;font-weight:700;letter-spacing:0.5px;cursor:pointer;">⚙ API Keys</button></div>
+
     <input type="file" id="nutPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="nutHandlePhoto(this)">
     <div class="log-field"><label>Food Name</label><input id="nff_name" type="text" class="log-input" placeholder="e.g. Chicken Breast"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -4243,7 +4246,7 @@ function initPlanPage(){
   // Show Last Week tab only on Sat/Sun; copy button follows same rule
   var dow=new Date().getDay();
   var isWeekend=(dow===0||dow===6);
-  if(lastTab)lastTab.style.display=isWeekend?'':'none';
+  if(lastTab)lastTab.style.display='';
   var wrap=document.getElementById('copyWeekWrap');
   if(wrap)wrap.style.display='none'; // switchPlanWeek handles this
   var days=getWeekDates(0),today=fmtDate(new Date());
