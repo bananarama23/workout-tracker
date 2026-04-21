@@ -1415,7 +1415,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 </div>
 
 <!-- NUTRITION: Create / edit food overlay -->
-<div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;" class="overlay-anim">
+<div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:400;" class="overlay-anim">
   <!-- Sticky header - always visible -->
   <div id="nutFoodFormHdr" style="position:absolute;top:0;left:0;right:0;background:var(--bg);border-radius:var(--r-lg) var(--r-lg) 0 0;margin:40px 12px 0;padding:16px 20px 12px;z-index:1;border-bottom:1px solid var(--border);box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -7226,6 +7226,8 @@ function nutOpenFoodForm(idx){
   document.getElementById('nff_fib').value=f?f.fibre:'';
   document.getElementById('nff_satfat').value=f?f.satFat:'';
   document.getElementById('nff_sodium').value=f?(f.sodium||''):'';
+  // Set _nffBase so serving field scales macros when editing
+  if(f){_nffBase={serving:parseFloat(f.serving)||0,calories:parseFloat(f.calories)||0,protein:parseFloat(f.protein)||0,carbs:parseFloat(f.carbs)||0,fat:parseFloat(f.fat)||0,fibre:parseFloat(f.fibre)||0,satFat:parseFloat(f.satFat)||0,sodium:parseFloat(f.sodium)||0};}else{_nffBase=null;}
   var msg=document.getElementById('nutFoodFormMsg');if(msg)msg.textContent='';
   // Clear scan/type status from previous use
   var ss=document.getElementById('nutScanStatus');if(ss){ss.style.display='none';ss.innerHTML='';}
@@ -7466,7 +7468,14 @@ function nutCallVision(base64,mediaType,statusEl){
     nutApiKeyShow(base64,mediaType,statusEl);
     return;
   }
-  var promptText='This is a nutrition label or food packaging. Extract and return ONLY a JSON object, no markdown: {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","servingDesc":"if label shows a count like \'About 13 Chips\' or \'2 biscuits\' put ONLY that e.g. \'13 chips\' or \'2 biscuits\' — blank string if no count on label","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. IMPORTANT: if label shows both oz and grams (e.g. \'1 oz (28g)\'), use grams for serving and unit. All values per serving. Sodium in mg. Use null for unknown fields.';
+
+  var promptText=
+    'Look at this image. Return ONLY a valid JSON object, no markdown.\n'+
+    'If this shows a nutrition label or packaged food with a visible nutrition facts panel, extract values from the label and return:\n'+
+    '{"name":"product name","serving":100,"unit":"g","servingDesc":"","calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0,"satFat":0,"sodium":0}\n'+
+    'If this shows actual plated or restaurant food (no label), identify it, estimate a real-world serving (e.g. 6 gyoza, 1 burger, 300g pasta), and return the same JSON shape with accurate nutrition based on USDA/standard restaurant values.\n'+
+    'Rules: if label shows oz AND grams, use grams. All macros in grams. Sodium in mg. Use null only if truly unknown. No extra keys. No markdown.';
+
   var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey;
   fetch(url,{
     method:'POST',
@@ -7474,7 +7483,7 @@ function nutCallVision(base64,mediaType,statusEl){
     body:JSON.stringify({contents:[{parts:[
       {inline_data:{mime_type:mediaType,data:base64}},
       {text:promptText}
-    ]}],generationConfig:{temperature:0,maxOutputTokens:300}})
+    ]}],generationConfig:{temperature:0,maxOutputTokens:350}})
   })
   .then(function(r){
     if(!r.ok){
@@ -7498,13 +7507,11 @@ function nutCallVision(base64,mediaType,statusEl){
              data.candidates[0].content&&data.candidates[0].content.parts&&
              data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
     if(!text){
-      // Show finish reason if available
       var reason=data.candidates&&data.candidates[0]&&data.candidates[0].finishReason;
       if(statusEl){statusEl.textContent='No result from Gemini'+(reason?' ('+reason+')':'')+' \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}
       return;
     }
     text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    // Find the JSON object in the response
     var jsonStart=text.indexOf('{'),jsonEnd=text.lastIndexOf('}');
     if(jsonStart>=0&&jsonEnd>jsonStart)text=text.slice(jsonStart,jsonEnd+1);
     try{
@@ -7520,7 +7527,7 @@ function nutCallVision(base64,mediaType,statusEl){
       localStorage.removeItem('wt_gemini_key');wtDB.del('wt_gemini_key');
       nutApiKeyShow(base64,mediaType,statusEl);
       var kmsg=document.getElementById('nutApiKeyMsg');
-      if(kmsg)kmsg.textContent='Key was rejected — paste a fresh one from AI Studio';
+      if(kmsg)kmsg.textContent='Key was rejected \u2014 paste a fresh one from AI Studio';
     } else if(msg.indexOf('Failed to fetch')>=0||msg.indexOf('NetworkError')>=0||msg===''){
       if(statusEl){statusEl.textContent='Network error \u2014 check connection and try again';statusEl.style.color='var(--orange)';}
     } else {
@@ -7528,7 +7535,6 @@ function nutCallVision(base64,mediaType,statusEl){
     }
   });
 }
-
 function nutFillFromScan(d,statusEl){
   if(!d){if(statusEl){statusEl.textContent='Could not parse \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}return;}
   // If we came from the Add overlay camera, skip the food form and go straight to serving
@@ -7538,6 +7544,8 @@ function nutFillFromScan(d,statusEl){
     return;
   }
   function setVal(id,val){var el=document.getElementById(id);if(el&&val!==null&&val!==undefined)el.value=val;}
+  // Store base so serving field can scale macros proportionally
+  _nffBase={serving:parseFloat(d.serving)||0,calories:parseFloat(d.calories)||0,protein:parseFloat(d.protein)||0,carbs:parseFloat(d.carbs)||0,fat:parseFloat(d.fat)||0,fibre:parseFloat(d.fibre)||0,satFat:parseFloat(d.satFat)||0,sodium:parseFloat(d.sodium)||0};
   if(d.name)setVal('nff_name',d.name);
   if(d.serving)setVal('nff_serving',d.serving);
   if(d.unit){var unitEl=document.getElementById('nff_unit');if(unitEl)unitEl.value=d.unit;}
