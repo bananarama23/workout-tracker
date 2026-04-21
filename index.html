@@ -1408,6 +1408,12 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 .cam-barcode-flash{animation:barcodeFound 0.4s ease;}
 </style>
 
+<!-- Processing flash overlay — shows instantly on capture, hides when destination loads -->
+<div id="nutProcessingOverlay" style="display:none;position:fixed;inset:0;z-index:980;background:#000;flex-direction:column;align-items:center;justify-content:center;gap:18px;">
+  <div style="width:52px;height:52px;border-radius:50%;border:3px solid rgba(200,255,0,0.15);border-top-color:var(--accent);animation:spin 0.7s linear infinite;"></div>
+  <div id="nutProcessingLabel" style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:3px;color:var(--accent);opacity:0.85;">SCANNING</div>
+</div>
+
 <!-- NUTRITION: Create / edit food overlay -->
 <div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;" class="overlay-anim">
   <!-- Sticky header - always visible -->
@@ -7285,6 +7291,14 @@ function nutCamClose(){
   var ov=document.getElementById('nutCamOverlay');if(ov)ov.style.display='none';
   _camProcessing=false;_camLastBarcode='';
 }
+function nutProcessingShow(label){
+  var ov=document.getElementById('nutProcessingOverlay');if(!ov)return;
+  var lb=document.getElementById('nutProcessingLabel');if(lb)lb.textContent=label||'SCANNING';
+  ov.style.display='flex';
+}
+function nutProcessingHide(){
+  var ov=document.getElementById('nutProcessingOverlay');if(ov)ov.style.display='none';
+}
 
 function nutCamSetStatus(txt,col){
   var el=document.getElementById('camStatus');
@@ -7352,13 +7366,13 @@ function nutCamCapture(){
   // Capture at full res then scale down
   canvas.width=vid.videoWidth||1280;canvas.height=vid.videoHeight||720;
   var ctx=canvas.getContext('2d');ctx.drawImage(vid,0,0,canvas.width,canvas.height);
-  // Scale to max 800px
-  var maxW=800,scale=Math.min(1,maxW/canvas.width);
+  // Scale to max 1024px
+  var maxW=1024,scale=Math.min(1,maxW/canvas.width);
   var cvs2=document.createElement('canvas');
   cvs2.width=Math.round(canvas.width*scale);cvs2.height=Math.round(canvas.height*scale);
   cvs2.getContext('2d').drawImage(canvas,0,0,cvs2.width,cvs2.height);
-  var base64=cvs2.toDataURL('image/jpeg',0.7).split(',')[1];
-  nutCamSetStatus('Scanning with AI...');
+  var base64=cvs2.toDataURL('image/jpeg',0.82).split(',')[1];
+  nutProcessingShow('SCANNING');
   nutCamClose();
   var status=document.getElementById('nutScanStatus');
   if(status){status.style.display='block';status.style.color='var(--muted)';status.textContent='Scanning with AI...';}
@@ -7377,13 +7391,12 @@ function nutHandlePhoto(input){
     var img=new Image();
     img.onload=function(){
       var cvs=document.createElement('canvas');
-      // Max 800px — enough for Gemini to read labels, small enough to send fast
-      var maxW=800,maxH=800;
+      var maxW=1024,maxH=1024;
       var scale=Math.min(1,maxW/img.width,maxH/img.height);
       cvs.width=Math.round(img.width*scale);
       cvs.height=Math.round(img.height*scale);
       cvs.getContext('2d').drawImage(img,0,0,cvs.width,cvs.height);
-      var base64=cvs.toDataURL('image/jpeg',0.7).split(',')[1];
+      var base64=cvs.toDataURL('image/jpeg',0.82).split(',')[1];
       nutCallVision(base64,'image/jpeg',status);
     };
     img.src=e.target.result;
@@ -7446,8 +7459,10 @@ function nutApiKeySave(){
 
 function nutCallVision(base64,mediaType,statusEl){
   if(statusEl){statusEl.style.display='block';statusEl.style.color='var(--muted)';statusEl.textContent='Scanning with AI...';}
+  nutProcessingHide();
   var geminiKey=localStorage.getItem('wt_gemini_key')||'';
   if(!geminiKey){
+    nutProcessingHide();
     nutApiKeyShow(base64,mediaType,statusEl);
     return;
   }
@@ -8923,6 +8938,7 @@ function nutCamProcessImage(file,isMeal){
       c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
       var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
+      nutProcessingShow(isMeal?'SCANNING MEAL':'SCANNING');
       nutCamClose();
       if(isMeal){_msiLastB64=b64;_msiLastMime='image/jpeg';nutMealScanOpen(b64,'image/jpeg');}
       else{var st=document.getElementById('nutScanStatus');if(st){st.style.display='block';st.style.color='var(--muted)';st.textContent='Reading\u2026';}nutCallVision(b64,'image/jpeg',st);}
@@ -8948,13 +8964,15 @@ function nutMealScanCapture(){
   c2.getContext('2d').drawImage(canvas,0,0,c2.width,c2.height);
   var b64=c2.toDataURL('image/jpeg',0.82).split(',')[1];
   _msiLastB64=b64;_msiLastMime='image/jpeg';
+  nutProcessingShow('SCANNING MEAL');
   nutCamClose();
-  // Kick off reverse geocode in background — result pre-fills restaurant field if found
-  nutMsiGeoLookup();
   nutMealScanOpen(b64,'image/jpeg');
 }
 
+var _msiGeoPlace=''; // set by nutMsiGeoLookup, consumed by nutMealScanCallVision
+
 function nutMsiGeoLookup(){
+  _msiGeoPlace='';
   if(!navigator.geolocation)return;
   navigator.geolocation.getCurrentPosition(function(pos){
     var lat=pos.coords.latitude,lon=pos.coords.longitude;
@@ -8963,11 +8981,11 @@ function nutMsiGeoLookup(){
     })
     .then(function(r){return r.json();})
     .then(function(d){
-      // Try to get a food-place name — amenity, shop, building, then suburb
       var name=d.name||'';
       var addr=d.address||{};
       var place=name||(addr.amenity||addr.restaurant||addr.cafe||addr.fast_food||addr.food||'');
-      if(!place)return; // nothing useful — don't pre-fill with a street name
+      if(!place)return;
+      _msiGeoPlace=place;
       var ri=document.getElementById('nutMsiCtxRestaurant');
       if(ri&&!ri.value){
         ri.value=place;
@@ -8987,6 +9005,7 @@ function nutMealScanRetake(){
 // ── Open / close ──────────────────────────────────────────────────────────────
 function nutMealScanOpen(b64,mime){
   _msiLastB64=b64;_msiLastMime=mime;
+  nutMsiGeoLookup(); // fire for all entry points, not just live capture
   var cs=document.getElementById('nutMsiContextSheet');
   if(cs){
     cs.style.display='flex';
@@ -9020,6 +9039,7 @@ function nutMealScanOpenDirect(b64,mime){
   var rest=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
   var nm=document.getElementById('nutMsiMealName');if(nm&&rest&&!nm.value)nm.value=rest;
   nutMealScanRenderMealBtns();nutMealScanRenderMemory();
+  nutProcessingHide();
   if(b64)nutMealScanCallVision(b64,mime);
 }
 function nutMsiSpinner(){
@@ -9068,38 +9088,67 @@ function nutMealScanCallVision(b64,mime){
   var key=localStorage.getItem('wt_gemini_key')||'';
   if(!key){nutMealScanSetStatus('No Gemini key \u2014 add it first','var(--orange)');return;}
 
-  var _ctxR=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
+  var _ctxR=(document.getElementById('nutMsiCtxRestaurant')||{}).value||_msiGeoPlace||'';
   var _ctxH=(document.getElementById('nutMsiCtxHint')||{}).value||'';
   var ctxBlock='';
-  if(_ctxR)ctxBlock+='\nRESTAURANT/PLACE: '+_ctxR+' \u2014 if a known chain, use their exact published menu macros.';
+  if(_ctxR)ctxBlock+='\nLOCATION/BRAND: '+_ctxR+' — treat this as confirmed. Match visible items to this brand\'s exact current menu. Do not guess a generic equivalent.';
   if(_ctxH)ctxBlock+='\nUSER NOTES: '+_ctxH;
 
   var sysInstr=
-    'You are a Nutrition Data Extractor. Convert food images into accurate macro data.\n\n'+
-    'RULES:\n'+
-    '1. BRAND FIRST: Identify any logos, packaging, or restaurant name. If found, use that brand\'s official menu data.\n'+
-    '   Examples: CoCo Ichibanya beef curry standard = 762 kcal, 21g protein. Wagamama chicken katsu = 782 kcal.\n'+
-    '2. COUNT PIECES: For appetizers, count each piece individually before calculating.\n'+
-    '3. SANITY GUARDRAILS (apply before outputting):\n'+
-    '   - Gyoza/dumpling: ~25g each, 50-60 kcal each. Hard cap 80 kcal per piece.\n'+
-    '   - Spring roll (small): ~30g, 60-80 kcal each.\n'+
-    '   - Rice bowl: 200-300g, 260-390 kcal total.\n'+
-    '   - Restaurant curry sauce: 150-200g, 100-200 kcal.\n'+
-    '   If any item exceeds these guardrails, force-correct it.\n'+
-    '4. HIDDEN FATS: Add 10-15% to fried or sauced items for cooking oil.\n'+
-    '5. OUTPUT: Tab-separated values (TSV) only. One item per line. No header row. No markdown. No JSON. No extra text.';
+    'You are a precision Nutrition Data Extractor. Your job is to analyze food images and return accurate macro data.\n\n'+
+    'THINKING PROCESS — work through this mentally before outputting:\n'+
+    '  Step 1: Identify brand/restaurant from logos, packaging, or context. If LOCATION/BRAND is provided, treat it as confirmed truth.\n'+
+    '  Step 2: Name the specific item precisely (e.g. "Iced Lavender Cream Chai Latte Grande", not "drink").\n'+
+    '          Append "(est.)" to the name if you cannot confirm the item with high confidence.\n'+
+    '  Step 3: Use VISUAL SCALE CUES to calibrate portion size — do not default to "standard":\n'+
+    '          - Hands or fingers visible → use as scale reference (adult palm ≈ 85g protein, fist ≈ 240ml).\n'+
+    '          - Utensils visible → spoon/fork size confirms plate scale.\n'+
+    '          - Cup rim diameter → standard takeaway cup is 8-9cm, grande cup is ~12cm at rim.\n'+
+    '          - Plate diameter → standard restaurant plate is 28-30cm.\n'+
+    '          Only fall back to "standard restaurant portion" if NO visual cues are present.\n'+
+    '  Step 4: Identify COOKING METHOD and apply fat adjustment:\n'+
+    '          - Deep fried: +20% fat vs baseline.\n'+
+    '          - Pan fried / sautéed: +10% fat.\n'+
+    '          - Grilled / steamed / poached: baseline, no adjustment.\n'+
+    '          - Sauce-heavy (curry, gravy): add oil/fat from the sauce separately.\n'+
+    '  Step 5: For drinks, identify TEMPERATURE — iced vs hot changes milk volume:\n'+
+    '          - Iced Grande (16oz): ~120ml milk + ice (less milk than hot).\n'+
+    '          - Hot Grande (16oz): ~360ml milk.\n'+
+    '          Use this to calibrate protein and fat from milk content.\n'+
+    '  Step 6: Determine NATIVE UNIT — use the natural serving unit:\n'+
+    '          - Drinks: ml or oz. NEVER grams for a liquid.\n'+
+    '          - Rice/pasta/curry: grams of actual portion visible.\n'+
+    '          - Packaged: use label serving size.\n'+
+    '  Step 7: Break complex items into components and sum (e.g. Lavender Cream Chai = chai base + milk + cold foam).\n'+
+    '  Step 8: Validate macro math: Calories ≈ (Protein×4) + (Carbs×4) + (Fat×9). If off by >10%, re-check fat/carbs.\n'+
+    '  Step 9: Confirm SatFat ≤ Fat always.\n\n'+
+    'ZERO RULES:\n'+
+    '  - NEVER output 0 for Calories, Protein, Carbs, or Fat unless the value is genuinely zero.\n'+
+    '  - If unsure, find the closest culinary match and estimate. A reasonable estimate beats a zero.\n'+
+    '  - Unknown fibre/satfat/sodium → estimate from closest match, not 0.\n\n'+
+    'BRAND DATA:\n'+
+    '  - Starbucks Iced Latte Grande: 130kcal/8P/13C/5F. Hot Grande: 190kcal/13P/15C/7F.\n'+
+    '  - Starbucks Iced Chai Latte Grande: 200kcal/7P/42C/3F. Hot: 240kcal/8P/45C/4F.\n'+
+    '  - Starbucks Lavender Cream Cold Foam (add-on): ~100kcal/1P/8C/8F/5satF.\n'+
+    '  - CoCo Ichibanya beef curry standard = 762kcal/21P/98C/28F.\n'+
+    '  - Wagamama chicken katsu curry = 782kcal/41P/89C/23F.\n\n'+
+    'SANITY GUARDRAILS:\n'+
+    '  - Gyoza/dumpling: ~25g each, 50-60kcal each. Hard cap 80kcal per piece.\n'+
+    '  - Spring roll (small): ~30g, 60-80kcal each.\n'+
+    '  - Rice bowl: 200-300g, 260-390kcal.\n'+
+    '  - Restaurant curry sauce: 150-200g, 100-200kcal.\n\n'+
+    'OUTPUT FORMAT:\n'+
+    '  Tab-separated values only. One item per line. No header. No markdown. No JSON. No extra text.\n'+
+    '  Exactly 11 columns per row, raw tabs, no quotes:\n'+
+    '  Name<TAB>Qty<TAB>WeightG<TAB>Calories<TAB>Protein<TAB>Carbs<TAB>Fat<TAB>Fibre<TAB>SatFat<TAB>Sodium<TAB>Confidence\n'+
+    '  Confidence: high=brand data confirmed, medium=estimated from cues, low=unclear.\n'+
+    '  Append "(est.)" to Name if not high confidence. Fill every column. Start immediately with the first item.';
 
   var userPrompt=
     'Analyze this food image.'+ctxBlock+'\n\n'+
-    'For each food/drink item visible:\n'+
-    '1. Identify it (use brand data if logo/restaurant visible)\n'+
-    '2. Count pieces if countable\n'+
-    '3. Estimate weight in grams\n'+
-    '4. Apply the sanity guardrails from your instructions\n'+
-    '5. Rate confidence: high=brand data used, medium=estimated, low=unclear\n\n'+
-    'Return ONLY tab-separated values, one item per line, nothing else before or after:\n'+
-    'Name<TAB>Qty<TAB>WeightG<TAB>Calories<TAB>Protein<TAB>Carbs<TAB>Fat<TAB>Fibre<TAB>SatFat<TAB>Sodium<TAB>Confidence\n'+
-    'No header. No markdown. Start immediately with the first food item.';
+    'Work through the thinking steps in your instructions, then output ONLY the TSV rows.\n'+
+    'For each item: identify it precisely → determine native serving unit → break complex items into components → validate macro math → output the row.\n'+
+    'No preamble. No explanation. Start with the first food item immediately.';
 
   var safety=[
     {category:'HARM_CATEGORY_HARASSMENT',threshold:'BLOCK_ONLY_HIGH'},
@@ -9424,9 +9473,27 @@ function nutMealScanRefetch(id){
   if(row)row.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--muted);font-size:0.78rem;"><div style="width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>Looking up <em style="color:var(--text);">'+newName+'</em>\u2026</div>';
   var key=localStorage.getItem('wt_gemini_key')||'';
   if(!key){setTimeout(nutMealScanRender,300);return;}
+  var geoCtx=_msiGeoPlace?'\nLOCATION/BRAND: '+_msiGeoPlace+' \u2014 use this brand\'s exact menu data if the item matches.':'';
+  var sysInstr=
+    'You are a precision Nutrition Data Extractor.\n'+
+    'RULES:\n'+
+    '- Use the exact item name given. Do not generalise.\n'+
+    '- Determine the NATIVE UNIT: drinks in ml/oz, food in grams. Never use grams for liquids.\n'+
+    '- For complex items (flavoured lattes, topped dishes), break into components and sum.\n'+
+    '- Iced vs hot changes milk volume: iced Grande ~120ml milk, hot Grande ~360ml.\n'+
+    '- NEVER return 0 for calories, protein, carbs, or fat unless genuinely zero.\n'+
+    '- Validate: Calories \u2248 (P\u00d74)+(C\u00d74)+(F\u00d79). If off >10%, re-check.\n'+
+    '- SatFat must always be \u2264 Fat.\n'+
+    '- Starbucks ref: Iced Chai Grande=200kcal/7P/42C/3F. Lavender Cold Foam=100kcal/1P/8C/8F/5satF.\n'+
+    'Return ONLY a JSON object, no markdown: {"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}\n'+
+    'All numbers. Sodium in mg. No zeros unless truly zero.';
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:'Macros for one typical serving of "'+newName+'". Return ONLY JSON, no markdown: {"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All numbers. Sodium in mg.'}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
+    body:JSON.stringify({
+      system_instruction:{parts:[{text:sysInstr}]},
+      contents:[{parts:[{text:'Macros for one serving of "'+newName+'".'+geoCtx}]}],
+      generationConfig:{temperature:0,maxOutputTokens:200}
+    })
   }).then(function(r){return r.json();}).then(function(data){
     var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
     if(text){text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
@@ -9435,7 +9502,7 @@ function nutMealScanRefetch(id){
         it.cal=Math.round(parseFloat(d.calories)||0);it.prot=Math.round((parseFloat(d.protein)||0)*10)/10;
         it.carb=Math.round((parseFloat(d.carbs)||0)*10)/10;it.fat=Math.round((parseFloat(d.fat)||0)*10)/10;
         it.fib=Math.round((parseFloat(d.fibre)||0)*10)/10;it.sat=Math.round((parseFloat(d.satFat)||0)*10)/10;
-        it.sod=Math.round(parseFloat(d.sodium)||0);}catch(e2){}}}
+        it.sod=Math.round(parseFloat(d.sodium)||0);it.confidence='high';}catch(e2){}}}
     nutMealScanRender();
   }).catch(function(){nutMealScanRender();});
 }
