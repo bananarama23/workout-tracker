@@ -1173,6 +1173,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
   <!-- Header — same pattern as budget hero -->
   <div style="background:linear-gradient(160deg,#070d00 0%,#07090C 100%);padding:calc(var(--safe-t) + 14px) 20px 0;border-bottom:1px solid var(--border);position:relative;">
+    <button onclick="nutSettingsOpen()" style="position:absolute;top:calc(var(--safe-t)+14px);left:16px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);padding:5px 10px;font-size:0.68rem;font-weight:700;letter-spacing:0.5px;cursor:pointer;z-index:2;">⚙ Keys</button>
     <div class="sync-pill sp-load" id="syncBadgeNut" style="position:absolute;top:calc(var(--safe-t)+14px);right:16px;"><div class="sp-dot"></div><span id="syncTextNut">Syncing</span></div>
 
     <!-- Date nav row -->
@@ -1247,9 +1248,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
                 <button id="nutCheatBtn" onclick="nutToggleCheatDay()" style="flex:1;font-size:0.62rem;font-weight:700;letter-spacing:1px;padding:7px 8px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;">CHEAT DAY</button>
                 <button id="dayDoneBar" onclick="dayDoneToggle()" style="flex:1;font-size:0.62rem;font-weight:700;letter-spacing:1px;padding:7px 8px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;text-transform:uppercase;transition:all 0.2s;">DAY DONE</button>
               </div>
-              <div style="text-align:right;margin-top:8px;">
-                <button onclick="nutSettingsOpen()" style="background:none;border:none;color:var(--muted);font-size:0.68rem;cursor:pointer;padding:0;letter-spacing:0.3px;">⚙ API Keys</button>
-              </div>
+
             </div>
           </div>
         </div>
@@ -7553,7 +7552,14 @@ var _nutSrcData=null;
 
 function nutFillFromScan(d,statusEl){
   if(!d){if(statusEl){statusEl.textContent='Could not parse \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}return;}
-  if(_nutAddInlineMode){_nutAddInlineMode=false;nutAddInlineFinish(d);return;}
+  if(_nutAddInlineMode){
+    _nutAddInlineMode=false;
+    // Store data for background verify after serving picker
+    _nutInlineVerifyData=d;
+    // Show context prompt first, then nutAddInlineFinish after
+    nutCtxShowInline(d.name||'Food', d.brand||'', d);
+    return;
+  }
   function setVal(id,val){var el=document.getElementById(id);if(el&&val!==null&&val!==undefined)el.value=val;}
   // Store base values for serving-based scaling
   _nffBase={serving:parseFloat(d.serving)||0,calories:parseFloat(d.calories)||0,protein:parseFloat(d.protein)||0,carbs:parseFloat(d.carbs)||0,fat:parseFloat(d.fat)||0,fibre:parseFloat(d.fibre)||0,satFat:parseFloat(d.satFat)||0,sodium:parseFloat(d.sodium)||0};
@@ -7643,7 +7649,193 @@ function nutCtxConfirm(){
   _nutCtxState=null;
 }
 
-// ════════════════════════════════════════════════════════════
+// ── Inline scan context + verify ─────────────────────────────────
+var _nutInlineVerifyData=null;
+
+function nutCtxShowInline(foodName,detectedBrand,initialData){
+  // Reuse context overlay but wire confirm/skip to inline finish
+  _nutCtxState={foodName:foodName,initialData:initialData,statusEl:null,_inline:true};
+  var ov=document.getElementById('nutCtxOverlay');
+  if(!ov){nutAddInlineFinish(initialData);return;}
+  document.getElementById('nutCtxFoodName').textContent=(foodName||'Food').toUpperCase();
+  var inp=document.getElementById('nutCtxInput');
+  if(inp){inp.value=detectedBrand||'';inp.placeholder='e.g. Burger King, homemade, large...';}
+  document.getElementById('nutCtxStatus').textContent='';
+  var countdown=8;
+  var countEl=document.getElementById('nutCtxCountdown');
+  if(countEl)countEl.textContent='Skipping in '+countdown+'s';
+  if(_nutCtxTimer)clearTimeout(_nutCtxTimer);
+  var iv=setInterval(function(){
+    countdown--;
+    if(countEl&&ov.style.display!=='none')countEl.textContent='Skipping in '+countdown+'s';
+    if(countdown<=0)clearInterval(iv);
+  },1000);
+  _nutCtxTimer=setTimeout(function(){clearInterval(iv);nutCtxSkipInline();},8000);
+  ov.style.display='flex';
+  setTimeout(function(){if(inp)inp.focus();},300);
+}
+function nutCtxSkipInline(){
+  if(_nutCtxTimer){clearTimeout(_nutCtxTimer);_nutCtxTimer=null;}
+  var ov=document.getElementById('nutCtxOverlay');if(ov)ov.style.display='none';
+  var data=_nutCtxState?_nutCtxState.initialData:_nutInlineVerifyData;
+  var foodName=_nutCtxState?_nutCtxState.foodName:'';
+  _nutCtxState=null;
+  nutAddInlineFinish(data);
+  // Fire background verify with no context
+  setTimeout(function(){nutVerifyInlineBackground(foodName,'',data);},300);
+}
+function nutCtxConfirmInline(){
+  if(_nutCtxTimer){clearTimeout(_nutCtxTimer);_nutCtxTimer=null;}
+  var ov=document.getElementById('nutCtxOverlay');if(ov)ov.style.display='none';
+  var ctx=(document.getElementById('nutCtxInput')||{}).value||'';
+  var data=_nutCtxState?_nutCtxState.initialData:_nutInlineVerifyData;
+  var foodName=_nutCtxState?_nutCtxState.foodName:'';
+  _nutCtxState=null;
+  nutAddInlineFinish(data);
+  setTimeout(function(){nutVerifyInlineBackground(foodName,ctx,data);},300);
+}
+
+function nutVerifyInlineBackground(foodName,context,initialData){
+  var cnKey=localStorage.getItem('wt_cn_key')||'';
+  var usdaKey=localStorage.getItem('wt_usda_key')||'';
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  if(!geminiKey)return;
+  var query=(context?context+' ':'')+foodName;
+  var serving=parseFloat(initialData.serving)||100;
+  var promises=[];
+  if(cnKey){
+    promises.push(new Promise(function(resolve){
+      var cbName='_nutNinja_'+Date.now();
+      var timeout=setTimeout(function(){window[cbName]=null;resolve(null);},8000);
+      window[cbName]=function(result){
+        clearTimeout(timeout);window[cbName]=null;
+        if(!result||result.status==='error'||!result.items||!result.items.length){resolve(null);return;}
+        var a={cal:0,prot:0,carbs:0,fat:0,fib:0,sf:0,sod:0};
+        result.items.forEach(function(it){a.cal+=it.calories||0;a.prot+=it.protein_g||0;a.carbs+=it.carbohydrates_total_g||0;a.fat+=it.fat_total_g||0;a.fib+=it.fiber_g||0;a.sf+=it.fat_saturated_g||0;a.sod+=it.sodium_mg||0;});
+        resolve({source:'API Ninjas',calories:Math.round(a.cal),protein:Math.round(a.prot*10)/10,carbs:Math.round(a.carbs*10)/10,fat:Math.round(a.fat*10)/10,fibre:Math.round(a.fib*10)/10,satFat:Math.round(a.sf*10)/10,sodium:Math.round(a.sod)});
+      };
+      var s=document.createElement('script');s.id='s_'+cbName;
+      s.src=CLOUD_URL+'?type=getNutritionData&query='+encodeURIComponent(query)+'&callback='+cbName;
+      document.head.appendChild(s);
+    }));
+  }
+  if(usdaKey){
+    promises.push(
+      fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query='+encodeURIComponent(query)+'&pageSize=1&api_key='+usdaKey)
+      .then(function(r){return r.ok?r.json():null;})
+      .then(function(d){
+        if(!d||!d.foods||!d.foods.length)return null;
+        var n={};
+        (d.foods[0].foodNutrients||[]).forEach(function(x){
+          var nm=(x.nutrientName||'').toLowerCase();
+          if(nm.indexOf('energy')>=0&&!n.calories)n.calories=x.value;
+          else if(nm==='protein')n.protein=x.value;
+          else if(nm.indexOf('carbohydrate, by diff')>=0)n.carbs=x.value;
+          else if(nm==='total lipid (fat)')n.fat=x.value;
+          else if(nm.indexOf('fiber')>=0)n.fibre=x.value;
+          else if(nm.indexOf('saturated')>=0)n.satFat=x.value;
+          else if(nm.indexOf('sodium')>=0)n.sodium=x.value;
+        });
+        if(!n.calories)return null;
+        var sc=serving/100;
+        return {source:'USDA',calories:Math.round((n.calories||0)*sc),protein:Math.round((n.protein||0)*sc*10)/10,carbs:Math.round((n.carbs||0)*sc*10)/10,fat:Math.round((n.fat||0)*sc*10)/10,fibre:Math.round((n.fibre||0)*sc*10)/10,satFat:Math.round((n.satFat||0)*sc*10)/10,sodium:Math.round((n.sodium||0)*sc)};
+      }).catch(function(){return null;})
+    );
+  }
+  var geminiSrc={source:'Gemini',calories:Math.round(initialData.calories||0),protein:parseFloat(initialData.protein)||0,carbs:parseFloat(initialData.carbs)||0,fat:parseFloat(initialData.fat)||0};
+  if(!promises.length){
+    if(context)nutVerifyInlineGemini(foodName,context,initialData,serving);
+    return;
+  }
+  Promise.all(promises).then(function(results){
+    var sources=[geminiSrc].concat(results.filter(function(r){return r!==null;}));
+    if(sources.length<2){if(context)nutVerifyInlineGemini(foodName,context,initialData,serving);return;}
+    var cals=sources.map(function(s){return s.calories;}).filter(function(c){return c>0;});
+    var calMin=Math.min.apply(null,cals),calMax=Math.max.apply(null,cals);
+    var spread=calMax-calMin,spreadPct=calMin>0?spread/calMin:0;
+    var highDisagree=spreadPct>0.25||spread>150;
+    nutVerifyInlineReconcile(foodName,context,initialData,sources,highDisagree,serving);
+  });
+}
+
+function nutVerifyInlineGemini(foodName,context,initialData,serving){
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';if(!geminiKey)return;
+  var prompt='Give accurate nutrition for: "'+context+' '+foodName+'". Use brand/restaurant data if brand mentioned. Serving: '+serving+(initialData.unit||'g')+'. Return ONLY JSON: {"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0,"satFat":0,"sodium":0}. Macros in grams, sodium in mg.';
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
+  }).then(function(r){return r.json();}).then(function(data){
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
+    if(!text)return;
+    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    var js=text.indexOf('{'),je=text.lastIndexOf('}');if(js>=0&&je>js)text=text.slice(js,je+1);
+    try{
+      var d=JSON.parse(text);
+      nutVerifyInlineToast('ok',[{source:'Gemini+context',calories:Math.round(d.calories||0)}],false,foodName,d,initialData,serving);
+    }catch(e){}
+  }).catch(function(){});
+}
+
+function nutVerifyInlineReconcile(foodName,context,initialData,sources,highDisagree,serving){
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';if(!geminiKey)return;
+  var srcLines=sources.map(function(s){return s.source+': '+s.calories+' cal, '+s.protein+'g protein, '+s.carbs+'g carbs, '+s.fat+'g fat';}).join('\n');
+  var prompt='Food: "'+foodName+'"'+(context?' ('+context+')':'')+'. Serving: '+serving+(initialData.unit||'g')+'\nSources:\n'+srcLines+'\nReconcile. Weight toward majority; ignore outliers. Return ONLY JSON: {"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0,"satFat":0,"sodium":0}. Macros in grams, sodium in mg.';
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
+  }).then(function(r){return r.json();}).then(function(data){
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
+    if(!text)return;
+    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    var js=text.indexOf('{'),je=text.lastIndexOf('}');if(js>=0&&je>js)text=text.slice(js,je+1);
+    try{
+      var d=JSON.parse(text);
+      nutVerifyInlineToast(highDisagree?'warn':'ok',sources,highDisagree,foodName,d,initialData,serving);
+    }catch(e){}
+  }).catch(function(){});
+}
+
+function nutVerifyInlineToast(level,sources,highDisagree,foodName,reconciledData,initialData,serving){
+  // Find the most recently added entry for this food and update it
+  var recentIdx=-1;
+  var now=Date.now();
+  for(var i=_nutEntries.length-1;i>=0;i--){
+    if(_nutEntries[i].food&&_nutEntries[i].food.toLowerCase()===foodName.toLowerCase()){
+      // Only update if logged in last 2 minutes
+      if(_nutEntries[i].id&&(now-_nutEntries[i].id)<120000){recentIdx=i;break;}
+    }
+  }
+  var updated=false;
+  if(recentIdx>=0&&reconciledData){
+    var entry=_nutEntries[recentIdx];
+    var ratio=entry.qty?(entry.qty*parseFloat(entry.servingSize||serving)/serving):1;
+    _nutEntries[recentIdx].calories=Math.round((reconciledData.calories||0)*ratio);
+    _nutEntries[recentIdx].protein=Math.round((reconciledData.protein||0)*ratio*10)/10;
+    _nutEntries[recentIdx].carbs=Math.round((reconciledData.carbs||0)*ratio*10)/10;
+    _nutEntries[recentIdx].fat=Math.round((reconciledData.fat||0)*ratio*10)/10;
+    updated=true;
+    nutSaveEntries();nutRenderDay();
+  }
+  // Show toast
+  var cals=sources.map(function(s){return s.calories;}).filter(function(c){return c>0;});
+  var icon=highDisagree?'⚠️':'✓';
+  var color=highDisagree?'var(--orange)':'var(--green)';
+  var msg='';
+  if(highDisagree){
+    msg=icon+' Sources disagree ('+Math.min.apply(null,cals)+'–'+Math.max.apply(null,cals)+' cal)'+(updated?' — entry updated':'')+' — <u style="cursor:pointer" onclick="nutSrcDetailShow()">see breakdown</u>';
+  } else {
+    var srcNames=sources.map(function(s){return s.source;}).join(', ');
+    msg=icon+' Verified via '+srcNames+(updated?' — entry updated':'');
+  }
+  var banner=document.getElementById('nutConfBanner');
+  if(banner){
+    banner.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><span style="font-size:0.78rem;color:'+color+';">'+msg+'</span><button onclick="document.getElementById(\'nutConfBanner\').style.display=\'none\'" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;">&#215;</button></div>';
+    banner.style.display='block';
+    if(!highDisagree)setTimeout(function(){if(banner)banner.style.display='none';},5000);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
 // BACKGROUND VERIFICATION — parallel API Ninjas + USDA then Gemini reconcile
 // ════════════════════════════════════════════════════════════
 function nutVerifyInBackground(foodName,context,extraSources,initialData,statusEl){
@@ -7796,6 +7988,12 @@ function nutSrcDetailShow(){
 // ════════════════════════════════════════════════════════════
 // API KEYS SETTINGS
 // ════════════════════════════════════════════════════════════
+function nutKeyErrorShow(keyName, errorMsg){
+  // Show an error popup and open settings so user can fix the key
+  var msg=keyName+' key error: '+(errorMsg||'failed')+'\n\nOpen API Keys settings?';
+  if(confirm(msg))nutSettingsOpen();
+}
+
 function nutSettingsOpen(){
   var ov=document.getElementById('nutSettingsOverlay');if(!ov)return;
   function fill(id,key){var el=document.getElementById(id);if(el)el.value=localStorage.getItem(key)||'';}
@@ -10347,8 +10545,8 @@ function nutMealScanToggleCombine(){_msiCombine=!_msiCombine;nutMealScanRenderCo
     </div>
     <div id="nutCtxStatus" style="font-size:0.72rem;color:var(--orange);min-height:16px;margin-bottom:8px;"></div>
     <div style="display:flex;gap:10px;">
-      <button onclick="nutCtxSkip()" style="flex:1;padding:13px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.88rem;font-weight:600;cursor:pointer;">Skip</button>
-      <button onclick="nutCtxConfirm()" style="flex:2;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">REFINE</button>
+      <button onclick="(_nutCtxState&&_nutCtxState._inline)?nutCtxSkipInline():nutCtxSkip()" style="flex:1;padding:13px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.88rem;font-weight:600;cursor:pointer;">Skip</button>
+      <button onclick="(_nutCtxState&&_nutCtxState._inline)?nutCtxConfirmInline():nutCtxConfirm()" style="flex:2;padding:13px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">REFINE</button>
     </div>
   </div>
 </div>
