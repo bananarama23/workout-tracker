@@ -7653,6 +7653,7 @@ function nutCallVision(base64,mediaType,statusEl){
     if(!r.ok){return r.json().then(function(err){
       var msg=err&&err.error&&err.error.message||('HTTP '+r.status);
       if(r.status===400||r.status===401||r.status===403){localStorage.removeItem('wt_gemini_key');wtDB.del('wt_gemini_key');throw new Error('BAD_KEY:'+msg);}
+      if(r.status===429||(msg&&(msg.indexOf('quota')>=0||msg.indexOf('billing')>=0||msg.indexOf('credit')>=0))){throw new Error('credits:'+msg);}
       throw new Error(msg);
     });}
     return r.json();
@@ -7670,6 +7671,7 @@ function nutCallVision(base64,mediaType,statusEl){
   .catch(function(err){
     var msg=err&&err.message||'';
     if(msg.indexOf('BAD_KEY')>=0){localStorage.removeItem('wt_gemini_key');wtDB.del('wt_gemini_key');nutApiKeyShow(base64,mediaType,statusEl);var kmsg=document.getElementById('nutApiKeyMsg');if(kmsg)kmsg.textContent='Key rejected \u2014 paste a fresh one from AI Studio';}
+    else if(msg.indexOf('credits:')>=0||msg.indexOf('quota')>=0||msg.indexOf('billing')>=0){if(statusEl){statusEl.textContent='Gemini out of credits \u2014 top up at aistudio.google.com/billing';statusEl.style.color='var(--orange)';}}
     else if(msg.indexOf('Failed to fetch')>=0||msg.indexOf('NetworkError')>=0||msg===''){if(statusEl){statusEl.textContent='Network error \u2014 check connection';statusEl.style.color='var(--orange)';}}
     else{if(statusEl){statusEl.textContent='Error: '+(msg||'unknown')+' \u2014 fill in manually';statusEl.style.color='var(--orange)';}}
   });
@@ -7738,13 +7740,18 @@ function _claudeMsiFetch(query, serving){
     window[cbName]=function(result){
       clearTimeout(timeout);window[cbName]=null;
       var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
-      if(!result||result.status!=='ok'){resolve(result||{source:'Claude',status:'error'});return;}
-      // Remap field names for MSI display
+      if(!result||result.status!=='ok'){
+        if(result&&result.message&&(result.message.indexOf('credit')>=0||result.message.indexOf('billing')>=0))
+          resolve({source:'Claude',status:'credits'});
+        else resolve(result||{source:'Claude',status:'error'});
+        return;
+      }
       resolve({source:'Claude',status:'ok',
         calories:result.calories,
         prot:result.protein,
         carb:result.carbs,
-        fat:result.fat});
+        fat:result.fat,
+        sat:result.satFat});
     };
     var s=document.createElement('script');s.id='s_'+cbName;
     s.src=CLOUD_URL+'?type=callClaude&query='+encodeURIComponent(query)+'&serving='+encodeURIComponent(serving)+'&callback='+cbName;
@@ -8042,7 +8049,9 @@ function _claudeFetch(query, serving){
     window[cbName]=function(result){
       clearTimeout(timeout);window[cbName]=null;
       var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
-      resolve(result||{source:'Claude',status:'error'});
+      if(result&&result.message&&(result.message.indexOf('credit')>=0||result.message.indexOf('billing')>=0))
+        resolve({source:'Claude',status:'credits'});
+      else resolve(result||{source:'Claude',status:'error'});
     };
     var s=document.createElement('script');s.id='s_'+cbName;
     s.src=CLOUD_URL+'?type=callClaude&query='+encodeURIComponent(query)+'&serving='+encodeURIComponent(serving)+'&callback='+cbName;
@@ -10327,97 +10336,91 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   var existing=row.querySelector('.msi-source-row');
   if(existing)existing.remove();
 
-  // Store for later use
+  sources=sources.filter(function(s){return s.status!=='no_key';});
   _msiSourceData[itemId]={geminiSrc:geminiSrc,sources:sources};
 
-  var okSources=[geminiSrc].concat(sources.filter(function(s){return s.status==='ok';}));
+  var okSources=[geminiSrc].concat(sources.filter(function(s){return s.status==='ok'||s.status==='low_confidence';}));
   var allCals=okSources.map(function(s){return s.calories;});
   var calMin=Math.min.apply(null,allCals),calMax=Math.max.apply(null,allCals);
   var spread=calMax-calMin,spreadPct=calMin>0?spread/calMin:0;
   var highDisagree=(spreadPct>0.25||spread>100)&&okSources.length>1;
 
-  // Build avg
-  var avgCal=okSources.length>1?Math.round(allCals.reduce(function(a,b){return a+b;},0)/allCals.length):null;
+  // Avg across ALL macros
+  var avgData=null;
+  if(okSources.length>1){
+    var n=okSources.length;
+    avgData={
+      calories:Math.round(okSources.reduce(function(a,s){return a+(s.calories||0);},0)/n),
+      prot:Math.round(okSources.reduce(function(a,s){return a+(s.prot||0);},0)/n*10)/10,
+      carb:Math.round(okSources.reduce(function(a,s){return a+(s.carb||0);},0)/n*10)/10,
+      fat:Math.round(okSources.reduce(function(a,s){return a+(s.fat||0);},0)/n*10)/10
+    };
+  }
 
-  // ── Pretty source comparison table ───────────────────────────────
-  sources=sources.filter(function(s){return s.status!=='no_key';});
   var allSourcesForDisplay=[geminiSrc].concat(sources);
+  var cols='52px 1fr 1fr 1fr 1fr 1fr 34px';
   var html='<div style="margin-top:8px;background:var(--card2);border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);">';
-
-  // Header
-  html+='<div style="display:grid;grid-template-columns:72px 1fr 1fr 1fr 1fr 44px;padding:4px 10px;background:var(--card);border-bottom:1px solid var(--border);">'+
-    '<span style="font-size:0.48rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;"></span>'+
-    '<span style="font-size:0.48rem;color:var(--accent);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;text-align:right;">CAL</span>'+
-    '<span style="font-size:0.48rem;color:var(--green);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;text-align:right;">PRO</span>'+
-    '<span style="font-size:0.48rem;color:var(--blue);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;text-align:right;">CARB</span>'+
-    '<span style="font-size:0.48rem;color:var(--orange);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;text-align:right;">FAT</span>'+
+  html+='<div style="display:grid;grid-template-columns:'+cols+';padding:3px 8px;background:var(--card);border-bottom:1px solid var(--border);">'+
+    '<span></span>'+
+    '<span style="font-size:0.45rem;color:var(--accent);font-weight:700;text-transform:uppercase;text-align:right;">CAL</span>'+
+    '<span style="font-size:0.45rem;color:var(--green);font-weight:700;text-transform:uppercase;text-align:right;">PRO</span>'+
+    '<span style="font-size:0.45rem;color:var(--blue);font-weight:700;text-transform:uppercase;text-align:right;">CARB</span>'+
+    '<span style="font-size:0.45rem;color:var(--orange);font-weight:700;text-transform:uppercase;text-align:right;">FAT</span>'+
+    '<span style="font-size:0.45rem;color:var(--red);font-weight:700;text-transform:uppercase;text-align:right;">SAT</span>'+
     '<span></span></div>';
 
   allSourcesForDisplay.forEach(function(s,si){
     var border=si<allSourcesForDisplay.length-1?'border-bottom:1px solid var(--border);':'';
     if(s.status==='ok'||s.status==='low_confidence'){
-      var calColor=highDisagree&&okSources.length>1?'var(--orange)':'var(--accent)';
-      var lowWarn=s.status==='low_confidence'?' <span style="color:var(--orange);">⚠</span>':'';
-      var note=s.matchedFood?'<div style="font-size:0.46rem;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:68px;">'+s.matchedFood.substring(0,16)+'</div>':'';
-      var protVal=isNaN(s.prot)||s.prot===undefined?'—':s.prot;
-      var carbVal=isNaN(s.carb)||s.carb===undefined?'—':s.carb;
-      var fatVal=isNaN(s.fat)||s.fat===undefined?'—':s.fat;
-      html+='<div style="display:grid;grid-template-columns:72px 1fr 1fr 1fr 1fr 44px;padding:6px 10px;align-items:center;'+border+'">'+
-        '<div><div style="font-size:0.58rem;color:var(--text2);font-weight:600;">'+s.source+lowWarn+'</div>'+note+'</div>'+
-        '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.82rem;color:'+calColor+';">'+s.calories+'</div>'+
-        '<div style="text-align:right;font-size:0.6rem;color:var(--text2);">'+protVal+'g</div>'+
-        '<div style="text-align:right;font-size:0.6rem;color:var(--text2);">'+carbVal+'g</div>'+
-        '<div style="text-align:right;font-size:0.6rem;color:var(--text2);">'+fatVal+'g</div>'+
-        '<button data-iid="'+itemId+'" data-src="'+s.source+'" class="msi-use-btn" style="background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:0.5rem;padding:2px 6px;cursor:pointer;font-weight:700;">use</button>'+
+      var calColor=highDisagree?'var(--orange)':'var(--accent)';
+      var lowWarn=s.status==='low_confidence'?' ⚠':'';
+      var fv=function(v){return (v===null||v===undefined||isNaN(v))?'—':v;};
+      html+='<div style="display:grid;grid-template-columns:'+cols+';padding:5px 8px;align-items:center;'+border+'">'+
+        '<div style="font-size:0.55rem;color:var(--text2);font-weight:600;white-space:nowrap;overflow:hidden;">'+s.source+lowWarn+'</div>'+
+        '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.78rem;color:'+calColor+';">'+s.calories+'</div>'+
+        '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.prot)+'</div>'+
+        '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.carb)+'</div>'+
+        '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.fat)+'</div>'+
+        '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.sat)+'</div>'+
+        '<button data-iid="'+itemId+'" data-src="'+s.source+'" class="msi-use-btn" style="background:var(--card);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-size:0.46rem;padding:2px 4px;cursor:pointer;font-weight:700;">use</button>'+
         '</div>';
-    } else if(s.status==='not_found'){
-      html+='<div style="padding:5px 10px;'+border+'display:flex;justify-content:space-between;align-items:center;">'+
-        '<span style="font-size:0.58rem;color:var(--muted);">'+s.source+'</span>'+
-        '<span style="font-size:0.52rem;color:var(--muted);font-style:italic;">not found</span></div>';
+    } else if(s.status==='credits'){
+      html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--orange);">'+s.source+' — out of credits</span></div>';
     } else if(s.status==='key_error'){
-      html+='<div style="padding:5px 10px;'+border+'display:flex;justify-content:space-between;align-items:center;">'+
-        '<span style="font-size:0.58rem;color:var(--red);">'+s.source+' — key error</span>'+
-        '<button data-iid="'+itemId+'" data-src="__key__'+s.source+'" class="msi-use-btn" style="background:none;border:1px solid var(--red);border-radius:8px;color:var(--red);font-size:0.5rem;padding:2px 6px;cursor:pointer;">fix key</button>'+
-        '</div>';
+      html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--red);">'+s.source+' — key error</span></div>';
     } else if(s.status==='timeout'){
-      html+='<div style="padding:5px 10px;'+border+'display:flex;justify-content:space-between;">'+
-        '<span style="font-size:0.58rem;color:var(--muted);">'+s.source+'</span>'+
-        '<span style="font-size:0.52rem;color:var(--muted);font-style:italic;">timed out</span></div>';
-    } else {
-      html+='<div style="padding:5px 10px;'+border+'display:flex;justify-content:space-between;">'+
-        '<span style="font-size:0.58rem;color:var(--muted);">'+s.source+'</span>'+
-        '<span style="font-size:0.52rem;color:var(--muted);font-style:italic;">error</span></div>';
+      html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--muted);">'+s.source+' — timed out</span></div>';
+    } else if(s.status!=='no_key'){
+      html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--muted);">'+s.source+' — error</span></div>';
     }
   });
 
-  // Average row
-  if(okSources.length>1){
-    var disagreeLabel=highDisagree?' <span style="color:var(--orange);">⚠ disagree</span>':'';
-    html+='<div style="display:grid;grid-template-columns:72px 1fr 1fr 1fr 1fr 44px;padding:6px 10px;align-items:center;background:var(--card);border-top:1px solid var(--border);">'+
-      '<span style="font-size:0.58rem;color:var(--text2);font-weight:700;">Avg'+disagreeLabel+'</span>'+
-      '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.82rem;color:var(--text1);">'+avgCal+'</div>'+
-      '<div></div><div></div><div></div>'+
-      '<button data-iid="'+itemId+'" data-src="avg" class="msi-use-btn" style="background:var(--accent);border:none;border-radius:8px;color:#000;font-size:0.5rem;padding:2px 6px;cursor:pointer;font-weight:900;">use</button>'+
+  if(avgData){
+    var disagreeLabel=highDisagree?' <span style="color:var(--orange);font-size:0.44rem;">⚠ disagree</span>':'';
+    html+='<div style="display:grid;grid-template-columns:'+cols+';padding:5px 8px;align-items:center;background:var(--card);border-top:1px solid var(--border);">'+
+      '<div style="font-size:0.55rem;color:var(--text2);font-weight:700;">Avg'+disagreeLabel+'</div>'+
+      '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.78rem;color:var(--accent);">'+avgData.calories+'</div>'+
+      '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+avgData.prot+'</div>'+
+      '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+avgData.carb+'</div>'+
+      '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+avgData.fat+'</div>'+
+      '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">—</div>'+
+      '<button data-iid="'+itemId+'" data-src="avg" class="msi-use-btn" style="background:var(--accent);border:none;border-radius:6px;color:#000;font-size:0.46rem;padding:2px 4px;cursor:pointer;font-weight:900;">use</button>'+
       '</div>';
   }
 
   html+='</div>';
-
   var div=document.createElement('div');
   div.className='msi-source-row';
   div.innerHTML=html;
-  // Use event delegation — no inline onclick needed
   div.addEventListener('click',function(ev){
     var btn=ev.target.closest('.msi-use-btn');
     if(!btn)return;
-    var iid=parseInt(btn.dataset.iid);
-    var src=btn.dataset.src;
-    if(src&&src.indexOf('__key__')===0){nutKeyErrorShow(src.replace('__key__',''),'invalid key');}
-    else{nutMsiApplySource(iid,src);}
+    nutMsiApplySource(parseInt(btn.dataset.iid),btn.dataset.src);
   });
   row.appendChild(div);
+  // Auto-apply avg as default when both sources available
+  if(avgData)nutMsiApplySource(itemId,'avg');
 }
-
 function nutMsiApplySource(itemId,sourceName){
   var data=_msiSourceData[itemId];if(!data)return;
   var idx=_msi.findIndex(function(it){return it.id===itemId;});if(idx<0)return;
@@ -10425,20 +10428,22 @@ function nutMsiApplySource(itemId,sourceName){
 
   var chosen=null;
   if(sourceName==='avg'){
-    var okSrcs=[data.geminiSrc].concat(data.sources.filter(function(s){return s.status==='ok';}));
+    var okSrcs=[data.geminiSrc].concat(data.sources.filter(function(s){return s.status==='ok'||s.status==='low_confidence';}));
     if(!okSrcs.length)return;
-    var avgCal=Math.round(okSrcs.reduce(function(a,s){return a+s.calories;},0)/okSrcs.length);
-    var ratio=it.cal>0?avgCal/(it.cal*it.qty):1;
-    chosen={cal:avgCal/it.qty,prot:Math.round(it.prot*ratio*10)/10,carb:Math.round(it.carb*ratio*10)/10,fat:Math.round(it.fat*ratio*10)/10};
+    var n=okSrcs.length;
+    chosen={
+      cal:Math.round(okSrcs.reduce(function(a,s){return a+s.calories;},0)/n)/it.qty,
+      prot:Math.round(okSrcs.reduce(function(a,s){return a+(s.prot||0);},0)/n*10)/10/it.qty,
+      carb:Math.round(okSrcs.reduce(function(a,s){return a+(s.carb||0);},0)/n*10)/10/it.qty,
+      fat:Math.round(okSrcs.reduce(function(a,s){return a+(s.fat||0);},0)/n*10)/10/it.qty
+    };
   } else {
-    var src=sourceName==='Gemini'?data.geminiSrc:data.sources.find(function(s){return s.source===sourceName&&s.status==='ok';});
+    var src=sourceName==='Gemini'?data.geminiSrc:data.sources.find(function(s){return s.source===sourceName&&(s.status==='ok'||s.status==='low_confidence');});
     if(!src)return;
-    var ratio=it.cal>0&&it.qty>0?src.calories/(it.cal*it.qty):1;
-    chosen={cal:src.calories/it.qty,prot:Math.round(it.prot*ratio*10)/10,carb:Math.round(it.carb*ratio*10)/10,fat:Math.round(it.fat*ratio*10)/10};
-    if(src.prot!==undefined){chosen.prot=src.prot/it.qty;chosen.carb=src.carb/it.qty;chosen.fat=src.fat/it.qty;}
+    chosen={cal:src.calories/it.qty,prot:(src.prot||0)/it.qty,carb:(src.carb||0)/it.qty,fat:(src.fat||0)/it.qty};
   }
 
-  _msi[idx]=Object.assign({},it,{cal:Math.round(chosen.cal*10)/10,prot:chosen.prot,carb:chosen.carb,fat:chosen.fat,_edited:true});
+  _msi[idx]=Object.assign({},it,{cal:Math.round(chosen.cal*10)/10,prot:Math.round(chosen.prot*10)/10,carb:Math.round(chosen.carb*10)/10,fat:Math.round(chosen.fat*10)/10,_edited:true});
 
   // Re-render the row content but keep the source panel
   var row=document.getElementById('msrow-'+itemId);if(!row)return;
@@ -10454,7 +10459,7 @@ function nutMsiRefineOpen(itemId){
   var wrap=document.getElementById('refwrap-'+itemId);
   if(!wrap)return;
   // If already open, close it
-  if(wrap.querySelector('.msi-refine-input')){wrap.innerHTML='<button onclick="nutMsiRefineOpen('+itemId+')" style="background:none;border:none;padding:0;cursor:pointer;font-size:0.6rem;color:var(--muted);display:flex;align-items:center;gap:3px;"><span style="font-size:0.75rem;">💬</span> refine with Gemini</button>';return;}
+  if(wrap.querySelector('.msi-refine-input')){wrap.innerHTML='<button onclick="nutMsiRefineOpen('+itemId+')" style="background:none;border:none;padding:0;cursor:pointer;font-size:0.6rem;color:var(--muted);display:flex;align-items:center;gap:3px;"><span style="font-size:0.75rem;">💬</span> refine with AI</button>';return;}
   var it=_msi.find(function(x){return x.id===itemId;});
   if(!it)return;
   wrap.innerHTML=
@@ -10475,59 +10480,48 @@ function nutMsiRefineSubmit(itemId){
   if(!it)return;
   var inp=document.getElementById('refine-inp-'+itemId);
   var note=(inp?inp.value:'').trim();
-  var key=localStorage.getItem('wt_gemini_key')||'';
-  if(!key){nutMealScanSetStatus('No Gemini key','var(--orange)');return;}
-
+  if(!note){return;}
   var wrap=document.getElementById('refwrap-'+itemId);
-  if(wrap)wrap.innerHTML='<span style="font-size:0.6rem;color:var(--muted);">⏳ asking Gemini…</span>';
+  if(wrap)wrap.innerHTML='<span style="font-size:0.6rem;color:var(--muted);">⏳ asking AI…</span>';
 
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
   var b64=_msiLastB64,mime=_msiLastMime||'image/jpeg';
+
   var sysInstr=
-    'You are a nutrition estimator. The user has a photo of food and is correcting one specific item.\n'+
-    'Return ONLY a single TSV row (no header, no extra text) with 11 columns:\n'+
-    'Name<TAB>Qty<TAB>WeightG<TAB>Calories<TAB>Protein<TAB>Carbs<TAB>Fat<TAB>Fibre<TAB>SatFat<TAB>Sodium<TAB>Confidence\n'+
-    'Qty = number of discrete pieces (never grams). Cal/Prot/Carb/Fat/SatFat/Fibre/Sodium are per single unit.\n'+
+    'You are a nutrition estimator. The user has a photo of food and is correcting one specific item. '+
+    'Return ONLY a single TSV row (no header, no extra text) with 11 columns: '+
+    'Name<TAB>Qty<TAB>WeightG<TAB>Calories<TAB>Protein<TAB>Carbs<TAB>Fat<TAB>Fibre<TAB>SatFat<TAB>Sodium<TAB>Confidence. '+
+    'Qty = number of discrete pieces. Cal/Prot/Carb/Fat/SatFat/Fibre/Sodium are per single unit. '+
+    'If the user says "plain" or "no sauce" etc, adjust macros accordingly — never say you cannot parse. '+
     'Confidence: high, medium, or low.';
   var userPrompt=
-    'Original item identified: "'+it.name+'" ('+it.cal+' cal each, qty '+it.qty+').\n'+
-    'User correction: "'+note+'".\n'+
-    'Re-estimate this item based on the correction. Output only the TSV row.';
+    'Original item: "'+it.name+'" ('+it.cal+' cal each, qty '+it.qty+'). '+
+    'User correction: "'+note+'". '+
+    'Re-estimate this item with the correction applied. Output only the TSV row.';
 
-  var contentParts=[];
-  if(b64)contentParts.push({inline_data:{mime_type:mime,data:b64}});
-  contentParts.push({text:userPrompt});
+  var geminiDone=false, claudeDone=false;
+  var geminiResult=null, claudeResult=null;
 
-  var safety=[
-    {category:'HARM_CATEGORY_HARASSMENT',threshold:'BLOCK_ONLY_HIGH'},
-    {category:'HARM_CATEGORY_HATE_SPEECH',threshold:'BLOCK_ONLY_HIGH'},
-    {category:'HARM_CATEGORY_SEXUALLY_EXPLICIT',threshold:'BLOCK_ONLY_HIGH'},
-    {category:'HARM_CATEGORY_DANGEROUS_CONTENT',threshold:'BLOCK_ONLY_HIGH'}
-  ];
-
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      system_instruction:{parts:[{text:sysInstr}]},
-      contents:[{parts:contentParts}],
-      safetySettings:safety,
-      generationConfig:{temperature:0,maxOutputTokens:256}
-    })
-  })
-  .then(function(r){return r.json();})
-  .then(function(data){
-    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&
-             data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&
-             data.candidates[0].content.parts[0].text;
-    if(!text){
-      if(wrap)wrap.innerHTML='<span style="font-size:0.6rem;color:var(--red);">Gemini error — try again</span>';
-      return;
+  function tryApplyResults(){
+    // Use whichever arrives first and succeeds; prefer avg if both succeed
+    var results=[];
+    if(geminiResult)results.push(geminiResult);
+    if(claudeResult)results.push(claudeResult);
+    if(!results.length)return;
+    // If both done and both succeeded, average them
+    if(geminiDone&&claudeDone&&geminiResult&&claudeResult){
+      var avgCal=Math.round((geminiResult.cal+claudeResult.cal)/2);
+      var avgProt=Math.round((geminiResult.prot+claudeResult.prot)/2*10)/10;
+      var avgCarb=Math.round((geminiResult.carb+claudeResult.carb)/2*10)/10;
+      var avgFat=Math.round((geminiResult.fat+claudeResult.fat)/2*10)/10;
+      var best=Object.assign({},geminiResult,{cal:avgCal,prot:avgProt,carb:avgCarb,fat:avgFat});
+      applyRefined(best,'Gemini+Claude avg');
+    } else {
+      applyRefined(results[0], results[0]._src||'AI');
     }
-    var parsed=nutMsiParseGeminiResponse(text.trim());
-    if(!parsed||!parsed.length){
-      if(wrap)wrap.innerHTML='<span style="font-size:0.6rem;color:var(--red);">Could not parse — try rephrasing</span>';
-      return;
-    }
-    var updated=parsed[0];
+  }
+
+  function applyRefined(updated, srcLabel){
     var idx=_msi.findIndex(function(x){return x.id===itemId;});
     if(idx<0)return;
     _msi[idx]=Object.assign({},_msi[idx],{
@@ -10542,12 +10536,96 @@ function nutMsiRefineSubmit(itemId){
     var row=document.getElementById('msrow-'+itemId);
     if(row)row.innerHTML=nutMsiRowHTML(_msi[idx]);
     nutMealScanRenderTotals();
-    nutMealScanSetStatus('Updated "'+(_msi[idx].name)+'" from Gemini','var(--green)');
-  })
-  .catch(function(err){
-    if(wrap)wrap.innerHTML='<span style="font-size:0.6rem;color:var(--red);">Network error</span>';
-  });
+    nutMealScanSetStatus('Updated "'+(_msi[idx].name)+'" via '+srcLabel,'var(--green)');
+    // Re-run comparison
+    nutMsiVerifyItem(_msi[idx]);
+  }
+
+  function showError(msg){
+    if(wrap)wrap.innerHTML='<span style="font-size:0.6rem;color:var(--red);">'+msg+'</span>';
+  }
+
+  // Ask Gemini
+  if(geminiKey){
+    var contentParts=[];
+    if(b64)contentParts.push({inline_data:{mime_type:mime,data:b64}});
+    contentParts.push({text:userPrompt});
+    fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        system_instruction:{parts:[{text:sysInstr}]},
+        contents:[{parts:contentParts}],
+        safetySettings:[
+          {category:'HARM_CATEGORY_HARASSMENT',threshold:'BLOCK_ONLY_HIGH'},
+          {category:'HARM_CATEGORY_HATE_SPEECH',threshold:'BLOCK_ONLY_HIGH'},
+          {category:'HARM_CATEGORY_SEXUALLY_EXPLICIT',threshold:'BLOCK_ONLY_HIGH'},
+          {category:'HARM_CATEGORY_DANGEROUS_CONTENT',threshold:'BLOCK_ONLY_HIGH'}
+        ],
+        generationConfig:{temperature:0,maxOutputTokens:256}
+      })
+    })
+    .then(function(r){
+      if(!r.ok){
+        return r.json().then(function(e){
+          var msg=e&&e.error&&e.error.message||'';
+          if(msg.indexOf('quota')>=0||msg.indexOf('billing')>=0||msg.indexOf('credit')>=0)
+            showError('Gemini: no credits — add billing at aistudio.google.com');
+          geminiDone=true;if(claudeDone&&!claudeResult)showError('Both AI sources failed — try again');
+        });
+      }
+      return r.json();
+    })
+    .then(function(data){
+      if(!data)return;
+      var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&
+               data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&
+               data.candidates[0].content.parts[0].text;
+      geminiDone=true;
+      if(text){
+        var parsed=nutMsiParseGeminiResponse(text.trim());
+        if(parsed&&parsed.length){geminiResult=Object.assign({_src:'Gemini'},parsed[0]);tryApplyResults();}
+      }
+      if(!geminiResult&&claudeDone&&!claudeResult)showError('Could not parse — try rephrasing');
+    })
+    .catch(function(){geminiDone=true;if(claudeDone&&!claudeResult)showError('Network error');});
+  } else {
+    geminiDone=true;
+  }
+
+  // Ask Claude via GAS proxy
+  var cbName='_refine_'+itemId+'_'+Date.now();
+  var timeout=setTimeout(function(){
+    window[cbName]=null;
+    var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    claudeDone=true;
+    if(geminiDone&&!geminiResult)showError('Both AI sources timed out');
+  },20000);
+  window[cbName]=function(result){
+    clearTimeout(timeout);window[cbName]=null;
+    var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    claudeDone=true;
+    if(result&&result.status==='ok'){
+      // Convert Claude JSON response to MSI item format
+      claudeResult={
+        _src:'Claude',
+        name:it.name,qty:it.qty,
+        cal:result.calories||0,
+        prot:result.protein||0,carb:result.carbs||0,fat:result.fat||0,
+        fib:result.fibre||0,sat:result.satFat||0,sod:result.sodium||0,
+        weight_g:it.weight_g,confidence:'medium'
+      };
+      tryApplyResults();
+    } else if(result&&result.status==='error'&&result.message&&result.message.indexOf('credit')>=0){
+      if(geminiDone&&!geminiResult)showError('Claude: no credits — add billing at console.anthropic.com');
+    }
+    if(!claudeResult&&geminiDone&&!geminiResult)showError('Could not refine — try rephrasing');
+  };
+  var s=document.createElement('script');s.id='s_'+cbName;
+  s.src=CLOUD_URL+'?type=callClaude&query='+(encodeURIComponent(note+' '+it.name))+'&serving='+(it.weight_g||Math.round((it.cal*it.qty)/2))+'&callback='+cbName;
+  s.onerror=function(){clearTimeout(timeout);window[cbName]=null;claudeDone=true;if(geminiDone&&!geminiResult)showError('Network error');};
+  document.head.appendChild(s);
 }
+
 
 function nutMealScanRender(){
   nutMealScanRenderItems();nutMealScanRenderTotals();nutMsiSyncViewToggle();nutMsiCheckHighCalorie();
@@ -10605,7 +10683,7 @@ function nutMsiRowHTML(it){
   h+='</div>';
   // Refine bubble
   h+='<div class="msi-refine-wrap" style="margin-top:5px;" id="refwrap-'+it.id+'">';
-  h+='<button onclick="nutMsiRefineOpen('+it.id+')" style="background:none;border:none;padding:0;cursor:pointer;font-size:0.6rem;color:var(--muted);display:flex;align-items:center;gap:3px;"><span style="font-size:0.75rem;">💬</span> refine with Gemini</button>';
+  h+='<button onclick="nutMsiRefineOpen('+it.id+')" style="background:none;border:none;padding:0;cursor:pointer;font-size:0.6rem;color:var(--muted);display:flex;align-items:center;gap:3px;"><span style="font-size:0.75rem;">💬</span> refine with AI</button>';
   h+='</div>';
   return h;
 }
