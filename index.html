@@ -7728,7 +7728,10 @@ function nutCtxConfirmInline(){
 // status: 'ok' | 'not_found' | 'error' | 'timeout' | 'key_error'
 
 // ── Shared fetch helpers ──────────────────────────────────────────
-function _nixFetch(query, serving, cnKey){
+function _nixFetch(query, serving, cnKey, geminiCalForQuery){
+  // Prefix with calories so API Ninjas NLP scales correctly — more reliable than grams
+  // API Ninjas understands natural language like "500 calorie french fries"
+  var quantifiedQuery=(geminiCalForQuery&&geminiCalForQuery>0)?Math.round(geminiCalForQuery)+' calorie '+query:query;
   return new Promise(function(resolve){
     var cbName='_nutNinja_'+Date.now();
     var timeout=setTimeout(function(){
@@ -7756,24 +7759,32 @@ function _nixFetch(query, serving, cnKey){
         fibre:Math.round(a.fib*10)/10,satFat:Math.round(a.sf*10)/10,sodium:Math.round(a.sod)});
     };
     var s=document.createElement('script');s.id='s_'+cbName;
-    s.src=CLOUD_URL+'?type=getNutritionData&query='+encodeURIComponent(query)+'&callback='+cbName;
+    s.src=CLOUD_URL+'?type=getNutritionData&query='+encodeURIComponent(quantifiedQuery)+'&callback='+cbName;
     s.onerror=function(){clearTimeout(timeout);window[cbName]=null;resolve({source:'API Ninjas',status:'error'});};
     document.head.appendChild(s);
   });
 }
 
 function _usdaFetch(query, serving, usdaKey){
-  return fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query='+encodeURIComponent(query)+'&pageSize=1&api_key='+usdaKey,{signal:AbortSignal.timeout?AbortSignal.timeout(10000):undefined})
+  return fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query='+encodeURIComponent(query)+'&dataType=Foundation,SR%20Legacy&pageSize=5&api_key='+usdaKey,{signal:AbortSignal.timeout?AbortSignal.timeout(10000):undefined})
   .then(function(r){
     if(r.status===403||r.status===401)return {source:'USDA',status:'key_error'};
     if(!r.ok)return {source:'USDA',status:'error'};
     return r.json().then(function(d){
       if(!d||!d.foods||!d.foods.length)return {source:'USDA',status:'not_found'};
-      var food=d.foods[0];
-      // Flag if result name doesn't look like the query (generic ingredient vs dish)
-      var foodName=(food.description||'').toLowerCase();
+      // Score each result — prefer ones whose description contains query words
       var q=query.toLowerCase();
-      var isGeneric=q.split(' ').filter(function(w){return w.length>3;}).every(function(w){return foodName.indexOf(w)<0;});
+      var qWords=q.split(' ').filter(function(w){return w.length>2;});
+      var scored=d.foods.map(function(f){
+        var desc=(f.description||'').toLowerCase();
+        var score=qWords.reduce(function(acc,w){return acc+(desc.indexOf(w)>=0?1:0);},0);
+        // Prefer foundation/sr_legacy food types over branded
+        if(f.dataType==='Foundation'||f.dataType==='SR Legacy')score+=2;
+        return {food:f,score:score};
+      }).sort(function(a,b){return b.score-a.score;});
+      var food=scored[0].food;
+      var foodName=(food.description||'').toLowerCase();
+      var isGeneric=qWords.length>0&&qWords.every(function(w){return foodName.indexOf(w)<0;});
       var n={};
       (food.foodNutrients||[]).forEach(function(x){
         var nm=(x.nutrientName||'').toLowerCase();
@@ -7884,9 +7895,9 @@ function _geminiReconcile(foodName, context, initialData, serving, allSources, o
 }
 
 // ── Run all source fetches in parallel ───────────────────────────
-function _fetchAllSources(query, serving, cnKey, usdaKey){
+function _fetchAllSources(query, serving, cnKey, usdaKey, geminiCal){
   var promises=[];
-  if(cnKey)promises.push(_nixFetch(query,serving,cnKey));
+  if(cnKey)promises.push(_nixFetch(query,serving,cnKey,geminiCal));
   if(usdaKey)promises.push(_usdaFetch(query,serving,usdaKey));
   return Promise.all(promises);
 }
@@ -7902,7 +7913,7 @@ function nutVerifyInlineBackground(foodName,context,initialData){
   var query=(context?context+' ':'')+foodName;
   var serving=parseFloat(initialData.serving)||100;
   var initialCalories=Math.round(initialData.calories||0);
-  _fetchAllSources(query,serving,cnKey,usdaKey).then(function(results){
+  _fetchAllSources(query,serving,cnKey,usdaKey,geminiTotalCal).then(function(results){
     var allSources=results;
     _nutSrcData={sources:allSources,foodName:foodName,context:context,serving:serving,unit:initialData.unit||'g',
       geminiCal:Math.round(initialData.calories||0),geminiProt:Math.round((initialData.protein||0)*10)/10,geminiCarbs:Math.round((initialData.carbs||0)*10)/10,geminiFat:Math.round((initialData.fat||0)*10)/10};
@@ -7993,7 +8004,7 @@ function nutVerifyInBackground(foodName,context,extraSources,initialData,statusE
   var query=(context?context+' ':'')+foodName;
   var serving=parseFloat(initialData.serving)||100;
   var initialCalories=Math.round(initialData.calories||0);
-  _fetchAllSources(query,serving,cnKey,usdaKey).then(function(results){
+  _fetchAllSources(query,serving,cnKey,usdaKey,geminiTotalCal).then(function(results){
     var allSources=results;
     _nutSrcData={sources:allSources,foodName:foodName,context:context,serving:serving,unit:initialData.unit||'g',
       geminiCal:Math.round(initialData.calories||0),geminiProt:Math.round((initialData.protein||0)*10)/10,geminiCarbs:Math.round((initialData.carbs||0)*10)/10,geminiFat:Math.round((initialData.fat||0)*10)/10};
@@ -8183,7 +8194,7 @@ function nutSettingsTest(which){
       document.head.appendChild(s);
     });
   } else {
-    p=fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query=apple&pageSize=1&api_key='+key.trim()).then(function(r){return r.json();}).then(function(d){return !!(d.foods&&d.foods.length);});
+    p=fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query=apple&pageSize=5&api_key='+key.trim()).then(function(r){return r.json();}).then(function(d){return !!(d.foods&&d.foods.length);});
   }
   p.then(function(ok){if(msg){msg.textContent=ok?'\u2713 Key works!':'\u2717 Invalid key';msg.style.color=ok?'var(--green)':'var(--red)';}}).catch(function(){if(msg){msg.textContent='\u2717 Network error';msg.style.color='var(--red)';}});
 }
@@ -10118,7 +10129,11 @@ function nutMsiVerifyAll(items){
 
 function nutMsiVerifyItem(it,cnKey,usdaKey){
   var query=it.name.replace(/\s*\(est\.\)/,'').trim();
-  var serving=it.weight_g||(it.qty*100);
+  // Estimate a sensible serving weight — weight_g from parser may be 0 or 1
+  // Fall back to estimating from Gemini calories (avg ~2 cal/g for mixed food)
+  var rawWeight=it.weight_g||0;
+  var geminiTotalCal=Math.round(it.cal*it.qty);
+  var serving=rawWeight>10?rawWeight:(geminiTotalCal>0?Math.round(geminiTotalCal/2):100);
   var geminiTotalCal=Math.round(it.cal*it.qty);
   var geminiSrc={source:'Gemini',status:geminiTotalCal>3000?'low_confidence':'ok',
     calories:geminiTotalCal,
@@ -10155,7 +10170,7 @@ function nutMsiVerifyItem(it,cnKey,usdaKey){
 
   if(usdaKey){
     promises.push(
-      fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query='+encodeURIComponent(query)+'&pageSize=1&api_key='+usdaKey)
+      fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query='+encodeURIComponent(query)+'&dataType=Foundation,SR%20Legacy&pageSize=5&api_key='+usdaKey)
       .then(function(r){
         if(r.status===401||r.status===403)return {source:'USDA',status:'key_error'};
         if(!r.ok)return {source:'USDA',status:'error'};
