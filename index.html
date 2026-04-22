@@ -1314,9 +1314,9 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
 
             <div style="margin-bottom:12px;">
-              <div style="font-size:0.62rem;color:var(--muted);margin-bottom:4px;">ANTHROPIC (CLAUDE) <span style="font-weight:400;">console.anthropic.com/settings/keys</span></div>
+              <div style="font-size:0.62rem;color:var(--muted);margin-bottom:4px;">ANTHROPIC (CLAUDE) <span style="font-weight:400;">Add <strong style="color:var(--text2);">ANTHROPIC_API_KEY</strong> to GAS Script Properties</span></div>
               <div style="display:flex;gap:6px;">
-                <input id="nsk_anthropic" type="password" placeholder="sk-ant-..." autocomplete="off" style="flex:1;padding:9px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;font-family:monospace;outline:none;">
+                <input id="nsk_anthropic" type="password" placeholder="Paste sk-ant-... then save to GAS Script Properties" autocomplete="off" style="flex:1;padding:9px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;font-family:monospace;outline:none;">
                 <button onclick="nutSettingsTest('anthropic')" style="padding:9px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:0.72rem;font-weight:700;cursor:pointer;">Test</button>
               </div>
               <div id="nsk_msg_anthropic" style="font-size:0.68rem;min-height:14px;margin-top:3px;color:var(--muted);"></div>
@@ -7726,6 +7726,33 @@ function nutFillFromScan(d,statusEl){
     setTimeout(function(){nutVerifyInBackground(d.name||'','',[],d,statusEl);},800);}
 }
 
+function _claudeMsiFetch(query, serving){
+  // Same GAS proxy, but maps protein/carbs/fat → prot/carb/fat for MSI table
+  return new Promise(function(resolve){
+    var cbName='_claudeMsiCb_'+Date.now();
+    var timeout=setTimeout(function(){
+      window[cbName]=null;
+      var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+      resolve({source:'Claude',status:'timeout'});
+    },20000);
+    window[cbName]=function(result){
+      clearTimeout(timeout);window[cbName]=null;
+      var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+      if(!result||result.status!=='ok'){resolve(result||{source:'Claude',status:'error'});return;}
+      // Remap field names for MSI display
+      resolve({source:'Claude',status:'ok',
+        calories:result.calories,
+        prot:result.protein,
+        carb:result.carbs,
+        fat:result.fat});
+    };
+    var s=document.createElement('script');s.id='s_'+cbName;
+    s.src=CLOUD_URL+'?type=callClaude&query='+encodeURIComponent(query)+'&serving='+encodeURIComponent(serving)+'&callback='+cbName;
+    s.onerror=function(){clearTimeout(timeout);window[cbName]=null;resolve({source:'Claude',status:'error'});};
+    document.head.appendChild(s);
+  });
+}
+
 // ── Scan vs Saved comparison ──────────────────────────────────────
 function nutShowScanComparison(scanned){
   // Find up to 3 fuzzy-match saved foods by name similarity
@@ -8004,35 +8031,24 @@ function _fetchAllSources(query, serving){
 }
 
 function _claudeFetch(query, serving){
-  var anthropicKey=localStorage.getItem('wt_anthropic_key')||'';
-  if(!anthropicKey)return Promise.resolve({source:'Claude',status:'no_key'});
-  return fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{'Content-Type':'application/json','x-api-key':anthropicKey,'anthropic-version':'2023-06-01'},
-    body:JSON.stringify({
-      model:'claude-haiku-4-5-20251001',
-      max_tokens:200,
-      system:'Return ONLY a JSON object, no markdown.',
-      messages:[{role:'user',content:'Estimate nutrition for: "'+query+'", approximately '+serving+'g serving. Return JSON: {"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0,"satFat":0,"sodium":0}. All values per that serving. Sodium in mg. No other text.'}]
-    })
-  })
-  .then(function(r){return r.json();})
-  .then(function(d){
-    var text=(d.content&&d.content[0]&&d.content[0].text)||'';
-    text=text.trim().replace(/```json|```/g,'').trim();
-    var js=text.indexOf('{'),je=text.lastIndexOf('}');
-    if(js>=0&&je>js)text=text.slice(js,je+1);
-    var p=JSON.parse(text);
-    return {source:'Claude',status:'ok',
-      calories:Math.round(p.calories||0),
-      protein:Math.round((p.protein||0)*10)/10,
-      carbs:Math.round((p.carbs||0)*10)/10,
-      fat:Math.round((p.fat||0)*10)/10,
-      fibre:Math.round((p.fibre||0)*10)/10,
-      satFat:Math.round((p.satFat||0)*10)/10,
-      sodium:Math.round(p.sodium||0)};
-  })
-  .catch(function(){return {source:'Claude',status:'error'};});
+  // Route through GAS proxy to avoid CORS — same JSONP pattern as getNutritionData
+  return new Promise(function(resolve){
+    var cbName='_claudeCb_'+Date.now();
+    var timeout=setTimeout(function(){
+      window[cbName]=null;
+      var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+      resolve({source:'Claude',status:'timeout'});
+    },20000);
+    window[cbName]=function(result){
+      clearTimeout(timeout);window[cbName]=null;
+      var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+      resolve(result||{source:'Claude',status:'error'});
+    };
+    var s=document.createElement('script');s.id='s_'+cbName;
+    s.src=CLOUD_URL+'?type=callClaude&query='+encodeURIComponent(query)+'&serving='+encodeURIComponent(serving)+'&callback='+cbName;
+    s.onerror=function(){clearTimeout(timeout);window[cbName]=null;resolve({source:'Claude',status:'error'});};
+    document.head.appendChild(s);
+  });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -8327,13 +8343,23 @@ function nutSettingsTest(which){
       document.head.appendChild(s);
     });
   } else if(which==='anthropic'){
-    p=fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':key.trim(),'anthropic-version':'2023-06-01'},
-      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:5,messages:[{role:'user',content:'Hi'}]})
-    }).then(function(r){return r.ok||r.status===400;});
+    // Key lives in GAS Script Properties — test by making a real proxy call
+    if(msg){msg.textContent='Testing via GAS…';msg.style.color='var(--muted)';}
+    var cbName='_claudeTest_'+Date.now();
+    var timeout=setTimeout(function(){window[cbName]=null;if(msg){msg.textContent='\u2717 Timeout — check GAS is deployed';msg.style.color='var(--red)';}},15000);
+    window[cbName]=function(result){
+      clearTimeout(timeout);window[cbName]=null;
+      if(result&&result.status==='ok'){if(msg){msg.textContent='\u2713 Claude works!';msg.style.color='var(--green)';}}
+      else if(result&&result.status==='no_key'){if(msg){msg.textContent='\u2717 Add ANTHROPIC_API_KEY to GAS Script Properties';msg.style.color='var(--red)';}}
+      else{if(msg){msg.textContent='\u2717 Error: '+(result&&result.status||'unknown');msg.style.color='var(--red)';}}
+    };
+    var s=document.createElement('script');s.id='s_'+cbName;
+    s.src=CLOUD_URL+'?type=callClaude&query=apple&serving=100&callback='+cbName;
+    s.onerror=function(){clearTimeout(timeout);window[cbName]=null;if(msg){msg.textContent='\u2717 GAS network error';msg.style.color='var(--red)';}};
+    document.head.appendChild(s);
+    return; // async — don't fall through to p.then
   }
-  p.then(function(ok){if(msg){msg.textContent=ok?'\u2713 Key works!':'\u2717 Invalid key';msg.style.color=ok?'var(--green)':'var(--red)';}}).catch(function(){if(msg){msg.textContent='\u2717 Network error';msg.style.color='var(--red)';}});
+  p.then(function(ok){if(msg){msg.textContent=ok?'\u2713 Key works!':'\u2717 Invalid key';msg.style.color=ok?'var(--green)':'var(--red)';}}).catch(function(err){if(msg){msg.textContent='\u2717 '+(err&&err.message||'Network error');msg.style.color='var(--red)';}});
 }
 
 // Helper: open camera from add-food search (single item mode)
@@ -10289,34 +10315,8 @@ function nutMsiVerifyItem(it){
   }
   var msiQuantifiedQuery=msiGramEst+'g '+query;
 
-  // Claude comparison — fires when Anthropic key is set
-  var _msiAnthropicKey=localStorage.getItem('wt_anthropic_key')||'';
-  if(_msiAnthropicKey){promises.push((function(){
-    return fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':_msiAnthropicKey,'anthropic-version':'2023-06-01'},
-      body:JSON.stringify({
-        model:'claude-haiku-4-5-20251001',
-        max_tokens:200,
-        system:'Return ONLY a JSON object, no markdown. Estimate nutrition for the food described.',
-        messages:[{role:'user',content:'Estimate nutrition for: "'+query+'", approximately '+serving+'g serving. Return JSON: {"calories":0,"prot":0,"carb":0,"fat":0}. All numbers per that serving. No other text.'}]
-      })
-    })
-    .then(function(r){return r.json();})
-    .then(function(d){
-      var text=(d.content&&d.content[0]&&d.content[0].text)||'';
-      text=text.trim().replace(/```json|```/g,'').trim();
-      var js=text.indexOf('{'),je=text.lastIndexOf('}');
-      if(js>=0&&je>js)text=text.slice(js,je+1);
-      var p=JSON.parse(text);
-      return {source:'Claude',status:'ok',
-        calories:Math.round(p.calories||0),
-        prot:Math.round((p.prot||0)*10)/10,
-        carb:Math.round((p.carb||0)*10)/10,
-        fat:Math.round((p.fat||0)*10)/10};
-    })
-    .catch(function(){return {source:'Claude',status:'error'};});
-  })());}
+  // Claude comparison — routed through GAS proxy to avoid CORS
+  promises.push(_claudeMsiFetch(query, serving));
 
   Promise.all(promises).then(function(results){
     nutMsiUpdateSourceRow(it.id,geminiSrc,results);
