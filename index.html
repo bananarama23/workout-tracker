@@ -9952,7 +9952,7 @@ function nutMsiContextConfirm(){
   nutMealScanOpenDirect(_msiLastB64,_msiLastMime);
 }
 function nutMealScanOpenDirect(b64,mime){
-  _msi=[];_msiMemory=false;_msiShowTotal=true;
+  _msi=[];_msiMemory=false;_msiShowTotal=true;_msiVerified={};
   var h=new Date().getHours();
   _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
   if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
@@ -10304,9 +10304,12 @@ function nutMsiNorm(arr){
 
 // ── Render ────────────────────────────────────────────────────────────────────
 // ── Meal scan background source verification ─────────────────────
+var _msiVerified={}; // itemId → true, prevents re-fetching on re-renders
 function nutMsiVerifyAll(items){
   items.forEach(function(it){
     if(it._fromFoods)return;
+    if(_msiVerified[it.id])return; // already fetching or fetched
+    _msiVerified[it.id]=true;
     nutMsiVerifyItem(it);
   });
 }
@@ -10376,12 +10379,11 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   }
 
   var allSourcesForDisplay=[geminiSrc].concat(sources);
-  var cols='52px 1fr 1fr 1fr 1fr 34px';
+  var cols='44px 1fr 1fr 1fr 32px';
   var html='<div style="margin-top:8px;background:var(--card2);border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);">';
   html+='<div style="display:grid;grid-template-columns:'+cols+';padding:3px 8px;background:var(--card);border-bottom:1px solid var(--border);">'+
     '<span></span>'+
     '<span style="font-size:0.45rem;color:var(--accent);font-weight:700;text-transform:uppercase;text-align:right;">CAL</span>'+
-    '<span style="font-size:0.45rem;color:var(--green);font-weight:700;text-transform:uppercase;text-align:right;">PRO</span>'+
     '<span style="font-size:0.45rem;color:var(--blue);font-weight:700;text-transform:uppercase;text-align:right;">CARB</span>'+
     '<span style="font-size:0.45rem;color:var(--red);font-weight:700;text-transform:uppercase;text-align:right;">SAT</span>'+
     '<span></span></div>';
@@ -10391,22 +10393,18 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
     if(s.status==='ok'||s.status==='low_confidence'){
       var calColor=highDisagree?'var(--orange)':'var(--accent)';
       var lowWarn=s.status==='low_confidence'?' ⚠':'';
-      var calColor=highDisagree?'var(--orange)':'var(--accent)';
-      var calColor=highDisagree?'var(--orange)':'var(--accent)';
-      var lowWarn=s.status==='low_confidence'?' ⚠':'';
       var fv=function(v){return (v===null||v===undefined||isNaN(v)||v==='')?'—':v;};
-      var fatVal=fv(s.fat);
-      var fatStr=fatVal==='—'?'':' · fat '+fatVal+'g';
+      var protFat='P'+fv(s.prot)+' F'+fv(s.fat);
       html+='<div style="display:grid;grid-template-columns:'+cols+';padding:5px 8px;align-items:center;'+border+'">'+
-        '<div><div style="font-size:0.55rem;color:var(--text2);font-weight:600;">'+s.source+lowWarn+'</div>'+
-        (fatStr?'<div style="font-size:0.46rem;color:var(--muted);">'+fatStr+'</div>':'')+
+        '<div><div style="font-size:0.55rem;color:var(--text2);font-weight:600;white-space:nowrap;">'+s.source+lowWarn+'</div>'+
+        '<div style="font-size:0.44rem;color:var(--muted);">'+protFat+'</div>'+
         '</div>'+
         '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.78rem;color:'+calColor+';">'+s.calories+'</div>'+
-        '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.prot)+'</div>'+
         '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.carb)+'</div>'+
         '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.sat)+'</div>'+
         '<button data-iid="'+itemId+'" data-src="'+s.source+'" class="msi-use-btn" style="background:var(--card);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-size:0.46rem;padding:2px 4px;cursor:pointer;font-weight:700;">use</button>'+
         '</div>';
+    } else if(s.status==='credits'){
       html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--orange);">'+s.source+' — out of credits</span></div>';
     } else if(s.status==='key_error'){
       html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--red);">'+s.source+' — key error</span></div>';
@@ -10418,17 +10416,15 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   });
 
   if(avgData){
-    var disagreeLabel=highDisagree?' <span style="color:var(--orange);font-size:0.44rem;">⚠ disagree</span>':'';
+    var disagreeLabel=highDisagree?' <span style="color:var(--orange);font-size:0.44rem;">⚠</span>':'';
     html+='<div style="display:grid;grid-template-columns:'+cols+';padding:5px 8px;align-items:center;background:var(--card);border-top:1px solid var(--border);">'+
       '<div style="font-size:0.55rem;color:var(--text2);font-weight:700;">Avg'+disagreeLabel+'</div>'+
       '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.78rem;color:var(--accent);">'+avgData.calories+'</div>'+
-      '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+avgData.prot+'</div>'+
       '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+avgData.carb+'</div>'+
       '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">—</div>'+
       '<button data-iid="'+itemId+'" data-src="avg" class="msi-use-btn" style="background:var(--accent);border:none;border-radius:6px;color:#000;font-size:0.46rem;padding:2px 4px;cursor:pointer;font-weight:900;">use</button>'+
       '</div>';
   }
-
 
   html+='</div>';
   var div=document.createElement('div');
@@ -10560,7 +10556,7 @@ function nutMsiRefineSubmit(itemId){
     nutMealScanRenderTotals();
     nutMealScanSetStatus('Updated "'+(_msi[idx].name)+'" via '+srcLabel,'var(--green)');
     // Re-run comparison
-    nutMsiVerifyItem(_msi[idx]);
+    delete _msiVerified[itemId]; nutMsiVerifyItem(_msi[idx]);
   }
 
   function showError(msg){
@@ -11007,7 +11003,7 @@ function nutMsiPageUploadHandler(inp){
 
 // ── Meal scan page navigation ─────────────────────────────────────────────────
 function nutMealScanOpenDirect(b64,mime){
-  _msi=[];_msiMemory=false;_msiShowTotal=true;_msiCombine=true;_nutCamMealMode=false;
+  _msi=[];_msiMemory=false;_msiShowTotal=true;_msiVerified={};_msiCombine=true;_nutCamMealMode=false;
   var h=new Date().getHours();
   _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
   if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
