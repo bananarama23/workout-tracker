@@ -9965,8 +9965,6 @@ function nutMealScanCallVision(b64,mime){
       }
       nutMealScanRender();
       nutMsiCheckHighCalorie();
-      // Fire background DB lookup for each item
-      setTimeout(function(){nutMsiVerifyAll(_msi);},400);
     } else {
       nutMealScanSetStatus('Could not parse \u2014 raw response below','var(--orange)');
       document.getElementById('nutMealScanItems').innerHTML=
@@ -10369,6 +10367,106 @@ function nutMsiApplySource(itemId,sourceName){
   nutMealScanRenderTotals();
 }
 
+// ── Gemini refine per item ────────────────────────────────────────
+function nutMsiRefineOpen(itemId){
+  var wrap=document.getElementById('refwrap-'+itemId);
+  if(!wrap)return;
+  // If already open, close it
+  if(wrap.querySelector('.msi-refine-input')){wrap.innerHTML='<button onclick="nutMsiRefineOpen('+itemId+')" style="background:none;border:none;padding:0;cursor:pointer;font-size:0.6rem;color:var(--muted);display:flex;align-items:center;gap:3px;"><span style="font-size:0.75rem;">💬</span> refine with Gemini</button>';return;}
+  var it=_msi.find(function(x){return x.id===itemId;});
+  if(!it)return;
+  wrap.innerHTML=
+    '<div style="display:flex;gap:6px;align-items:center;margin-top:2px;">'+
+    '<input id="refine-inp-'+itemId+'" type="text" placeholder="e.g. plain burger, 4 of these, McDonald\'s" '+
+      'style="flex:1;background:var(--card);border:1px solid var(--accent);border-radius:20px;padding:5px 12px;font-size:0.72rem;color:var(--text);outline:none;min-width:0;" '+
+      'onkeydown="if(event.key===\'Enter\')nutMsiRefineSubmit('+itemId+')">'+
+    '<button onclick="nutMsiRefineSubmit('+itemId+')" '+
+      'style="background:var(--accent);border:none;border-radius:20px;color:#000;font-size:0.65rem;padding:5px 12px;cursor:pointer;font-weight:700;white-space:nowrap;">Ask</button>'+
+    '<button onclick="nutMsiRefineOpen('+itemId+')" '+
+      'style="background:none;border:none;color:var(--muted);font-size:0.9rem;cursor:pointer;padding:2px 4px;">×</button>'+
+    '</div>';
+  setTimeout(function(){var inp=document.getElementById('refine-inp-'+itemId);if(inp)inp.focus();},50);
+}
+
+function nutMsiRefineSubmit(itemId){
+  var it=_msi.find(function(x){return x.id===itemId;});
+  if(!it)return;
+  var inp=document.getElementById('refine-inp-'+itemId);
+  var note=(inp?inp.value:'').trim();
+  var key=localStorage.getItem('wt_gemini_key')||'';
+  if(!key){nutMealScanSetStatus('No Gemini key','var(--orange)');return;}
+
+  var wrap=document.getElementById('refwrap-'+itemId);
+  if(wrap)wrap.innerHTML='<span style="font-size:0.6rem;color:var(--muted);">⏳ asking Gemini…</span>';
+
+  var b64=_msiLastB64,mime=_msiLastMime||'image/jpeg';
+  var sysInstr=
+    'You are a nutrition estimator. The user has a photo of food and is correcting one specific item.\n'+
+    'Return ONLY a single TSV row (no header, no extra text) with 11 columns:\n'+
+    'Name<TAB>Qty<TAB>WeightG<TAB>Calories<TAB>Protein<TAB>Carbs<TAB>Fat<TAB>Fibre<TAB>SatFat<TAB>Sodium<TAB>Confidence\n'+
+    'Qty = number of discrete pieces (never grams). Cal/Prot/Carb/Fat/SatFat/Fibre/Sodium are per single unit.\n'+
+    'Confidence: high, medium, or low.';
+  var userPrompt=
+    'Original item identified: "'+it.name+'" ('+it.cal+' cal each, qty '+it.qty+').\n'+
+    'User correction: "'+note+'".\n'+
+    'Re-estimate this item based on the correction. Output only the TSV row.';
+
+  var contentParts=[];
+  if(b64)contentParts.push({inline_data:{mime_type:mime,data:b64}});
+  contentParts.push({text:userPrompt});
+
+  var safety=[
+    {category:'HARM_CATEGORY_HARASSMENT',threshold:'BLOCK_ONLY_HIGH'},
+    {category:'HARM_CATEGORY_HATE_SPEECH',threshold:'BLOCK_ONLY_HIGH'},
+    {category:'HARM_CATEGORY_SEXUALLY_EXPLICIT',threshold:'BLOCK_ONLY_HIGH'},
+    {category:'HARM_CATEGORY_DANGEROUS_CONTENT',threshold:'BLOCK_ONLY_HIGH'}
+  ];
+
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+key,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      system_instruction:{parts:[{text:sysInstr}]},
+      contents:[{parts:contentParts}],
+      safetySettings:safety,
+      generationConfig:{temperature:0,maxOutputTokens:256}
+    })
+  })
+  .then(function(r){return r.json();})
+  .then(function(data){
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&
+             data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&
+             data.candidates[0].content.parts[0].text;
+    if(!text){
+      if(wrap)wrap.innerHTML='<span style="font-size:0.6rem;color:var(--red);">Gemini error — try again</span>';
+      return;
+    }
+    var parsed=nutMsiParseGeminiResponse(text.trim());
+    if(!parsed||!parsed.length){
+      if(wrap)wrap.innerHTML='<span style="font-size:0.6rem;color:var(--red);">Could not parse — try rephrasing</span>';
+      return;
+    }
+    var updated=parsed[0];
+    var idx=_msi.findIndex(function(x){return x.id===itemId;});
+    if(idx<0)return;
+    _msi[idx]=Object.assign({},_msi[idx],{
+      name:updated.name||_msi[idx].name,
+      qty:updated.qty||_msi[idx].qty,
+      cal:updated.cal||_msi[idx].cal,
+      prot:updated.prot,carb:updated.carb,fat:updated.fat,
+      fib:updated.fib,sat:updated.sat,sod:updated.sod,
+      weight_g:updated.weight_g,confidence:updated.confidence||'medium',
+      _edited:true
+    });
+    var row=document.getElementById('msrow-'+itemId);
+    if(row)row.innerHTML=nutMsiRowHTML(_msi[idx]);
+    nutMealScanRenderTotals();
+    nutMealScanSetStatus('Updated "'+(_msi[idx].name)+'" from Gemini','var(--green)');
+  })
+  .catch(function(err){
+    if(wrap)wrap.innerHTML='<span style="font-size:0.6rem;color:var(--red);">Network error</span>';
+  });
+}
+
 function nutMealScanRender(){
   nutMealScanRenderItems();nutMealScanRenderTotals();nutMsiSyncViewToggle();nutMsiCheckHighCalorie();
   // Show note when My Foods data was applied
@@ -10407,10 +10505,12 @@ function nutMsiRowHTML(it){
   h+='<button onclick="nutMealScanRemove('+it.id+')" style="background:none;border:none;color:var(--muted);font-size:0.9rem;cursor:pointer;padding:3px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.15s,color 0.15s;" onmouseover="this.style.background=\'var(--red-dim)\';this.style.color=\'var(--red)\'" onmouseout="this.style.background=\'none\';this.style.color=\'var(--muted)\'">&#10005;</button>';
   h+='</div>';
   h+='<div style="display:flex;gap:4px;align-items:center;">';
+  var dSat=_msiShowTotal?Math.round(it.sat*it.qty*10)/10:it.sat;
   h+=nutMsiPill(dCal,'','Cal','var(--accent)',true,it.id,'cal');
   h+=nutMsiPill(dProt,'g','P','var(--green)',false,it.id,'prot');
   h+=nutMsiPill(dCarb,'g','C','var(--blue)',false,it.id,'carb');
   h+=nutMsiPill(dFat,'g','F','var(--orange)',false,it.id,'fat');
+  h+=nutMsiPill(dSat,'g','Sat','var(--muted)',false,it.id,'sat');
   // Confidence + weight badge
   var _confColor=it._fromFoods?'var(--accent)':it._edited?'var(--blue)':it.confidence==='high'?'var(--green)':it.confidence==='low'?'var(--orange)':'var(--muted)';
   var _confIcon=it._fromFoods?'📋 ':it._edited?'✎ ':it.confidence==='high'?'✓ ':it.confidence==='low'?'⚠ ':'∼ ';
@@ -10418,6 +10518,10 @@ function nutMsiRowHTML(it){
   var _badge=_confIcon+_src+(it.confidence&&!it._fromFoods&&!it._edited?' · '+(it.confidence):'');
   if(it.weight_g)_badge+=' · '+it.weight_g+'g';
   h+='<div style="margin-left:auto;font-size:0.55rem;color:'+_confColor+';font-weight:700;letter-spacing:0.3px;white-space:nowrap;">'+_badge+'</div>';
+  h+='</div>';
+  // Refine bubble
+  h+='<div class="msi-refine-wrap" style="margin-top:5px;" id="refwrap-'+it.id+'">';
+  h+='<button onclick="nutMsiRefineOpen('+it.id+')" style="background:none;border:none;padding:0;cursor:pointer;font-size:0.6rem;color:var(--muted);display:flex;align-items:center;gap:3px;"><span style="font-size:0.75rem;">💬</span> refine with Gemini</button>';
   h+='</div>';
   return h;
 }
@@ -10871,7 +10975,7 @@ function nutMealScanToggleCombine(){_msiCombine=!_msiCombine;nutMealScanRenderCo
 
 
 <!-- MEAL SCAN PAGE — fixed flex column, only items area scrolls -->
-<div class="page hidden" id="page-mealscan" style="overflow-y:hidden;">
+<div class="page hidden" id="page-mealscan" style="overflow-y:auto;">
   <!-- Header -->
   <div style="background:var(--bg);padding:calc(var(--safe-t)+14px) 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;">
     <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
@@ -10894,37 +10998,37 @@ function nutMealScanToggleCombine(){_msiCombine=!_msiCombine;nutMealScanRenderCo
       <span style="font-size:0.58rem;color:var(--muted);font-weight:700;">TOTAL</span>
     </div>
   </div>
-  <!-- Scrollable items area -->
-  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;min-height:0;">
+  <!-- Items -->
+  <div>
     <div id="nutMealScanItems"></div>
     <div id="nutMealScanTotals" style="display:none;margin:8px 16px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;"></div>
     <div style="padding:4px 16px 12px;">
       <button onclick="nutMealScanAddItem()" style="width:100%;padding:11px;background:transparent;border:1px dashed var(--border2);border-radius:var(--r-sm);color:var(--muted);font-size:0.75rem;cursor:pointer;letter-spacing:0.5px;">+ Add item</button>
     </div>
     <div id="nutMsiCorrectionNote" style="display:none;margin:0 16px 12px;padding:10px 14px;background:rgba(200,255,0,0.06);border:1px solid rgba(200,255,0,0.2);border-radius:var(--r-sm);font-size:0.7rem;color:var(--muted);line-height:1.5;"></div>
-  </div>
-  <!-- Sticky bottom bar -->
-  <div style="flex-shrink:0;border-top:1px solid var(--border);padding:10px 16px calc(10px + var(--safe-b));background:var(--bg);display:flex;flex-direction:column;gap:8px;">
-    <div style="display:flex;gap:8px;align-items:center;">
-      <input id="nutMsiPageUpload" type="file" accept="image/*" style="display:none;" onchange="nutMsiPageUploadHandler(this)">
-      <button onclick="document.getElementById('nutMsiPageUpload').click()" style="padding:9px 12px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-size:0.72rem;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">&#128193; New photo</button>
-      <input id="nutMsiMealName" type="text" placeholder="Meal name (optional)" style="flex:1;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.85rem;padding:9px 12px;outline:none;box-sizing:border-box;min-width:0;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
-    </div>
-    <div style="display:flex;gap:8px;">
-      <div onclick="nutMealScanToggleCombine()" style="flex:1;display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;">
-        <div style="flex:1;"><div style="font-size:0.72rem;font-weight:600;color:var(--text);">One entry</div><div style="font-size:0.58rem;color:var(--muted);">Combine items</div></div>
-        <div id="nutMsiCombineTrack" style="width:36px;height:20px;border-radius:10px;background:var(--green);position:relative;flex-shrink:0;transition:background 0.2s;">
-          <div id="nutMsiCombineKnob" style="position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:all 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+    <!-- Bottom actions — scrolled to, not floating -->
+    <div style="padding:16px 16px calc(var(--safe-b)+20px);border-top:1px solid var(--border);margin-top:8px;display:flex;flex-direction:column;gap:8px;">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="nutMsiPageUpload" type="file" accept="image/*" style="display:none;" onchange="nutMsiPageUploadHandler(this)">
+        <button onclick="document.getElementById('nutMsiPageUpload').click()" style="padding:9px 12px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);font-size:0.72rem;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">&#128193; New photo</button>
+        <input id="nutMsiMealName" type="text" placeholder="Meal name (optional)" style="flex:1;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.85rem;padding:9px 12px;outline:none;box-sizing:border-box;min-width:0;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <div onclick="nutMealScanToggleCombine()" style="flex:1;display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;">
+          <div style="flex:1;"><div style="font-size:0.72rem;font-weight:600;color:var(--text);">One entry</div><div style="font-size:0.58rem;color:var(--muted);">Combine items</div></div>
+          <div id="nutMsiCombineTrack" style="width:36px;height:20px;border-radius:10px;background:var(--green);position:relative;flex-shrink:0;transition:background 0.2s;">
+            <div id="nutMsiCombineKnob" style="position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:all 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+          </div>
+        </div>
+        <div onclick="nutMealScanToggleMemory()" style="flex:1;display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;">
+          <div style="flex:1;"><div style="font-size:0.72rem;font-weight:600;color:var(--text);">Save all to foods</div><div style="font-size:0.58rem;color:var(--muted);">Edits always saved</div></div>
+          <div id="nutMealScanMemTrack" style="width:36px;height:20px;border-radius:10px;background:var(--border2);position:relative;flex-shrink:0;transition:background 0.2s;">
+            <div id="nutMealScanMemKnob" style="position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+          </div>
         </div>
       </div>
-      <div onclick="nutMealScanToggleMemory()" style="flex:1;display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;">
-        <div style="flex:1;"><div style="font-size:0.72rem;font-weight:600;color:var(--text);">Save all to foods</div><div style="font-size:0.58rem;color:var(--muted);">Edits always saved</div></div>
-        <div id="nutMealScanMemTrack" style="width:36px;height:20px;border-radius:10px;background:var(--border2);position:relative;flex-shrink:0;transition:background 0.2s;">
-          <div id="nutMealScanMemKnob" style="position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
-        </div>
-      </div>
+      <button onclick="nutMealScanSave()" style="width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">LOG MEAL</button>
     </div>
-    <button onclick="nutMealScanSave()" style="width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">LOG MEAL</button>
   </div>
 </div>
 
