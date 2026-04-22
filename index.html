@@ -7729,16 +7729,30 @@ function nutCtxConfirmInline(){
 
 // ── Shared fetch helpers ──────────────────────────────────────────
 function _nixFetch(query, serving, cnKey, geminiCalForQuery){
-  // Prefix with calories so API Ninjas NLP scales correctly — more reliable than grams
-  // API Ninjas understands natural language like "500 calorie french fries"
-  var quantifiedQuery=(geminiCalForQuery&&geminiCalForQuery>0)?Math.round(geminiCalForQuery)+' calorie '+query:query;
+  // Prefix with gram weight — API Ninjas scales per-100g data to match quantity
+  // Estimate grams from Gemini calories using food-type density heuristics
+  var gramEst=100;
+  if(geminiCalForQuery>0){
+    var qLow=query.toLowerCase();
+    var calPer100g=qLow.match(/fries|chips|nuts|avocado|cheese|bacon|butter/)? 350:
+                   qLow.match(/burger|sandwich|wrap|burrito|pizza/)? 250:
+                   qLow.match(/rice|pasta|noodle|bread|potato/)? 130:
+                   qLow.match(/chicken|beef|pork|fish|salmon|tuna|meat/)? 180:
+                   qLow.match(/salad|vegetable|broccoli|spinach|lettuce/)? 30:
+                   qLow.match(/soup|curry|stew|sauce/)? 80:
+                   qLow.match(/cake|cookie|chocolate|dessert|ice cream/)? 350:
+                   200; // default mixed dish
+    gramEst=Math.round(geminiCalForQuery/calPer100g*100);
+    gramEst=Math.max(50,Math.min(gramEst,800)); // clamp to reasonable range
+  }
+  var quantifiedQuery=gramEst+'g '+query;
   return new Promise(function(resolve){
     var cbName='_nutNinja_'+Date.now();
     var timeout=setTimeout(function(){
       window[cbName]=null;
       var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
       resolve({source:'API Ninjas',status:'timeout'});
-    },10000);
+    },20000);
     window[cbName]=function(result){
       clearTimeout(timeout);window[cbName]=null;
       var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
@@ -7752,7 +7766,7 @@ function _nixFetch(query, serving, cnKey, geminiCalForQuery){
       // Warn if query split oddly (>3 items for a single dish query = likely wrong match)
       var isSplit=items.length>3;
       var a={cal:0,prot:0,carbs:0,fat:0,fib:0,sf:0,sod:0};
-      items.forEach(function(it){a.cal+=parseFloat(it.calories)||0;a.prot+=parseFloat(it.protein_g)||0;a.carbs+=parseFloat(it.carbohydrates_total_g)||0;a.fat+=parseFloat(it.fat_total_g)||0;a.fib+=parseFloat(it.fiber_g)||0;a.sf+=parseFloat(it.fat_saturated_g)||0;a.sod+=parseFloat(it.sodium_mg)||0;});
+      if(items[0])console.log('[NutNinja] keys:',Object.keys(items[0]).join(','));items.forEach(function(it){a.cal+=parseFloat(it.calories||it.energy_kcal||0);a.prot+=parseFloat(it.protein_g||it.protein||0);a.carbs+=parseFloat(it.carbohydrates_total_g||it.carbohydrates||0);a.fat+=parseFloat(it.fat_total_g||it.fat||0);a.fib+=parseFloat(it.fiber_g||it.fibre_g||0);a.sf+=parseFloat(it.fat_saturated_g||0);a.sod+=parseFloat(it.sodium_mg||it.sodium||0);});
       resolve({source:'API Ninjas',status:isSplit?'split_warning':'ok',
         calories:Math.round(a.cal),protein:Math.round(a.prot*10)/10,
         carbs:Math.round(a.carbs*10)/10,fat:Math.round(a.fat*10)/10,
@@ -10134,7 +10148,6 @@ function nutMsiVerifyItem(it,cnKey,usdaKey){
   var rawWeight=it.weight_g||0;
   var geminiTotalCal=Math.round(it.cal*it.qty);
   var serving=rawWeight>10?rawWeight:(geminiTotalCal>0?Math.round(geminiTotalCal/2):100);
-  var geminiTotalCal=Math.round(it.cal*it.qty);
   var geminiSrc={source:'Gemini',status:geminiTotalCal>3000?'low_confidence':'ok',
     calories:geminiTotalCal,
     prot:Math.round(it.prot*it.qty*10)/10,
@@ -10142,10 +10155,26 @@ function nutMsiVerifyItem(it,cnKey,usdaKey){
     fat:Math.round(it.fat*it.qty*10)/10};
   var promises=[];
 
+  // Build gram-based query for API Ninjas (same density heuristics as _nixFetch)
+  var msiGramEst=100;
+  if(geminiTotalCal>0){
+    var qLow=query.toLowerCase();
+    var msiCalPer100g=qLow.match(/fries|chips|nuts|avocado|cheese|bacon|butter/)?350:
+                      qLow.match(/burger|sandwich|wrap|burrito|pizza/)?250:
+                      qLow.match(/rice|pasta|noodle|bread|potato/)?130:
+                      qLow.match(/chicken|beef|pork|fish|salmon|tuna|meat/)?180:
+                      qLow.match(/salad|vegetable|broccoli|spinach|lettuce/)?30:
+                      qLow.match(/soup|curry|stew|sauce/)?80:
+                      qLow.match(/cake|cookie|chocolate|dessert/)?350:200;
+    msiGramEst=Math.round(geminiTotalCal/msiCalPer100g*100);
+    msiGramEst=Math.max(50,Math.min(msiGramEst,800));
+  }
+  var msiQuantifiedQuery=msiGramEst+'g '+query;
+
   if(cnKey){
     promises.push(new Promise(function(resolve){
       var cbName='_msiNinja_'+it.id+'_'+Date.now();
-      var timeout=setTimeout(function(){window[cbName]=null;resolve({source:'API Ninjas',status:'timeout'});},10000);
+      var timeout=setTimeout(function(){window[cbName]=null;resolve({source:'API Ninjas',status:'timeout'});},20000);
       window[cbName]=function(result){
         clearTimeout(timeout);window[cbName]=null;
         if(!result){resolve({source:'API Ninjas',status:'error'});return;}
@@ -10156,13 +10185,14 @@ function nutMsiVerifyItem(it,cnKey,usdaKey){
         var items=Array.isArray(result.items)?result.items:[];
         if(!items.length){resolve({source:'API Ninjas',status:'not_found'});return;}
         var a={cal:0,prot:0,carb:0,fat:0};
-        items.forEach(function(x){a.cal+=parseFloat(x.calories)||0;a.prot+=parseFloat(x.protein_g)||0;a.carb+=parseFloat(x.carbohydrates_total_g)||0;a.fat+=parseFloat(x.fat_total_g)||0;});
+        if(items[0])console.log('[NutNinja MSI] cal='+items[0].calories+' prot='+items[0].protein_g+' keys='+Object.keys(items[0]).join(','));
+        items.forEach(function(x){a.cal+=parseFloat(x.calories||0);a.prot+=parseFloat(x.protein_g||0);a.carb+=parseFloat(x.carbohydrates_total_g||0);a.fat+=parseFloat(x.fat_total_g||0);});
         resolve({source:'API Ninjas',status:'ok',
           calories:Math.round(a.cal)||0,prot:Math.round((a.prot||0)*10)/10,
           carb:Math.round((a.carb||0)*10)/10,fat:Math.round((a.fat||0)*10)/10});
       };
       var s=document.createElement('script');s.id='s_'+cbName;
-      s.src=CLOUD_URL+'?type=getNutritionData&query='+encodeURIComponent(query)+'&callback='+cbName;
+      s.src=CLOUD_URL+'?type=getNutritionData&query='+encodeURIComponent(msiQuantifiedQuery)+'&callback='+cbName;
       s.onerror=function(){clearTimeout(timeout);window[cbName]=null;resolve({source:'API Ninjas',status:'error'});};
       document.head.appendChild(s);
     }));
