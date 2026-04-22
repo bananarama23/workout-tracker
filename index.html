@@ -10185,7 +10185,13 @@ function nutMsiVerifyItem(it,cnKey,usdaKey){
         var items=Array.isArray(result.items)?result.items:[];
         if(!items.length){resolve({source:'API Ninjas',status:'not_found'});return;}
         var a={cal:0,prot:0,carb:0,fat:0};
-        if(items[0])console.log('[NutNinja MSI] cal='+items[0].calories+' prot='+items[0].protein_g+' keys='+Object.keys(items[0]).join(','));
+        // Debug: log every field of every item to console
+        items.forEach(function(x,xi){
+          console.log('[NutNinja MSI item'+xi+']',JSON.stringify(x));
+        });
+        // Also show raw in status bar for debugging
+        var dbgEl=document.getElementById('nutMealScanStatus');
+        if(dbgEl&&items[0])dbgEl.textContent='Ninja raw: cal='+items[0].calories+' prot='+items[0].protein_g+' carb='+items[0].carbohydrates_total_g+' fat='+items[0].fat_total_g+' n='+items.length;
         items.forEach(function(x){a.cal+=parseFloat(x.calories||0);a.prot+=parseFloat(x.protein_g||0);a.carb+=parseFloat(x.carbohydrates_total_g||0);a.fat+=parseFloat(x.fat_total_g||0);});
         resolve({source:'API Ninjas',status:'ok',
           calories:Math.round(a.cal)||0,prot:Math.round((a.prot||0)*10)/10,
