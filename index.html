@@ -1441,7 +1441,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 </div>
 
 <!-- NUTRITION: Create / edit food -->
-<div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;z-index:900;background:var(--bg);flex-direction:column;overflow:hidden;">
+<div id="nutFoodFormOverlay" style="display:none;position:fixed;left:0;right:0;top:0;height:100%;z-index:950;background:var(--bg);flex-direction:column;overflow:hidden;">
   <!-- Header — fixed at top, always visible -->
   <div style="background:var(--bg);padding:calc(var(--safe-t) + 12px) 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;">
     <button onclick="nutCloseFoodForm()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);width:36px;height:36px;border-radius:50%;font-size:1.1rem;cursor:pointer;flex-shrink:0;">&#8592;</button>
@@ -1491,7 +1491,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     </div>
   </div>
   <!-- Footer — fixed at bottom, always visible, keyboard-aware -->
-  <div id="nutFoodFormFooter" style="background:var(--bg);padding:12px 16px calc(var(--safe-b) + 12px);border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;position:sticky;bottom:0;z-index:10;">
+  <div id="nutFoodFormFooter" style="background:var(--bg);padding:12px 16px calc(var(--nav-h) + var(--safe-b) + 12px);border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;position:sticky;bottom:0;z-index:10;">
     <button onclick="nutSaveFood()" style="flex:1;padding:14px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">SAVE FOOD</button>
     <button id="nutDeleteFoodBtn" onclick="nutDeleteFood()" style="display:none;padding:14px 18px;background:var(--red-dim);color:var(--red);border:1px solid var(--red);border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;cursor:pointer;">DELETE</button>
   </div>
@@ -7361,15 +7361,32 @@ function nutOpenFoodForm(idx){
   var cp=document.getElementById('nutScanComparePanel');if(cp){cp.innerHTML='';cp.style.display='none';}
   var ov=document.getElementById('nutFoodFormOverlay');
   var body=document.getElementById('nutFoodFormBody');
-  if(ov){ov.style.display='flex';_nutFoodFormPrevPage=currentPage;}
+  if(ov){ov.style.display='flex';_nutFoodFormPrevPage=currentPage;_nffSyncViewport();}
   if(body){body.scrollTop=0;}
 }
 var _nutFoodFormPrevPage='nutrition';
+var _nffVpHandler=null;
 function nutCloseFoodForm(){
   var ov=document.getElementById('nutFoodFormOverlay');
-  if(ov)ov.style.display='none';
+  if(ov){ov.style.display='none';ov.style.height='';}
+  if(_nffVpHandler&&window.visualViewport){window.visualViewport.removeEventListener('resize',_nffVpHandler);_nffVpHandler=null;}
   navTo(_nutFoodFormPrevPage||'nutrition');
 }
+function _nffSyncViewport(){
+  var ov=document.getElementById('nutFoodFormOverlay');
+  if(!ov||ov.style.display==='none')return;
+  if(window.visualViewport){
+    ov.style.height=window.visualViewport.height+'px';
+    ov.style.top=window.visualViewport.offsetTop+'px';
+  }
+}
+(function(){
+  if(!window.visualViewport)return;
+  // Attach once on page load — will fire whenever keyboard opens/closes
+  window.visualViewport.addEventListener('resize',function(){
+    _nffSyncViewport();
+  });
+})();
 
 // ── Lose It screenshot parser ──────────────────────────────────────
 function nutLoseItPickPhoto(){
@@ -10303,7 +10320,8 @@ function nutMsiVerifyItem(it){
     calories:geminiTotalCal,
     prot:Math.round(it.prot*it.qty*10)/10,
     carb:Math.round(it.carb*it.qty*10)/10,
-    fat:Math.round(it.fat*it.qty*10)/10};
+    fat:Math.round(it.fat*it.qty*10)/10,
+    sat:Math.round((it.sat||0)*it.qty*10)/10};
 
   // Show loading placeholder immediately
   var row=document.getElementById('msrow-'+it.id);
@@ -10358,14 +10376,13 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   }
 
   var allSourcesForDisplay=[geminiSrc].concat(sources);
-  var cols='52px 1fr 1fr 1fr 1fr 1fr 34px';
+  var cols='52px 1fr 1fr 1fr 1fr 34px';
   var html='<div style="margin-top:8px;background:var(--card2);border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);">';
   html+='<div style="display:grid;grid-template-columns:'+cols+';padding:3px 8px;background:var(--card);border-bottom:1px solid var(--border);">'+
     '<span></span>'+
     '<span style="font-size:0.45rem;color:var(--accent);font-weight:700;text-transform:uppercase;text-align:right;">CAL</span>'+
     '<span style="font-size:0.45rem;color:var(--green);font-weight:700;text-transform:uppercase;text-align:right;">PRO</span>'+
     '<span style="font-size:0.45rem;color:var(--blue);font-weight:700;text-transform:uppercase;text-align:right;">CARB</span>'+
-    '<span style="font-size:0.45rem;color:var(--orange);font-weight:700;text-transform:uppercase;text-align:right;">FAT</span>'+
     '<span style="font-size:0.45rem;color:var(--red);font-weight:700;text-transform:uppercase;text-align:right;">SAT</span>'+
     '<span></span></div>';
 
@@ -10374,17 +10391,22 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
     if(s.status==='ok'||s.status==='low_confidence'){
       var calColor=highDisagree?'var(--orange)':'var(--accent)';
       var lowWarn=s.status==='low_confidence'?' ⚠':'';
-      var fv=function(v){return (v===null||v===undefined||isNaN(v))?'—':v;};
+      var calColor=highDisagree?'var(--orange)':'var(--accent)';
+      var calColor=highDisagree?'var(--orange)':'var(--accent)';
+      var lowWarn=s.status==='low_confidence'?' ⚠':'';
+      var fv=function(v){return (v===null||v===undefined||isNaN(v)||v==='')?'—':v;};
+      var fatVal=fv(s.fat);
+      var fatStr=fatVal==='—'?'':' · fat '+fatVal+'g';
       html+='<div style="display:grid;grid-template-columns:'+cols+';padding:5px 8px;align-items:center;'+border+'">'+
-        '<div style="font-size:0.55rem;color:var(--text2);font-weight:600;white-space:nowrap;overflow:hidden;">'+s.source+lowWarn+'</div>'+
+        '<div><div style="font-size:0.55rem;color:var(--text2);font-weight:600;">'+s.source+lowWarn+'</div>'+
+        (fatStr?'<div style="font-size:0.46rem;color:var(--muted);">'+fatStr+'</div>':'')+
+        '</div>'+
         '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.78rem;color:'+calColor+';">'+s.calories+'</div>'+
         '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.prot)+'</div>'+
         '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.carb)+'</div>'+
-        '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.fat)+'</div>'+
         '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.sat)+'</div>'+
         '<button data-iid="'+itemId+'" data-src="'+s.source+'" class="msi-use-btn" style="background:var(--card);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-size:0.46rem;padding:2px 4px;cursor:pointer;font-weight:700;">use</button>'+
         '</div>';
-    } else if(s.status==='credits'){
       html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--orange);">'+s.source+' — out of credits</span></div>';
     } else if(s.status==='key_error'){
       html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--red);">'+s.source+' — key error</span></div>';
@@ -10402,11 +10424,11 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
       '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.78rem;color:var(--accent);">'+avgData.calories+'</div>'+
       '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+avgData.prot+'</div>'+
       '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+avgData.carb+'</div>'+
-      '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+avgData.fat+'</div>'+
       '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">—</div>'+
       '<button data-iid="'+itemId+'" data-src="avg" class="msi-use-btn" style="background:var(--accent);border:none;border-radius:6px;color:#000;font-size:0.46rem;padding:2px 4px;cursor:pointer;font-weight:900;">use</button>'+
       '</div>';
   }
+
 
   html+='</div>';
   var div=document.createElement('div');
