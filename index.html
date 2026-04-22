@@ -1173,7 +1173,6 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 
   <!-- Header — same pattern as budget hero -->
   <div style="background:linear-gradient(160deg,#070d00 0%,#07090C 100%);padding:calc(var(--safe-t) + 14px) 20px 0;border-bottom:1px solid var(--border);position:relative;">
-    <button onclick="nutSettingsOpen()" style="position:absolute;top:calc(var(--safe-t)+14px);left:16px;background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);padding:5px 10px;font-size:0.68rem;font-weight:700;letter-spacing:0.5px;cursor:pointer;z-index:2;">⚙ Keys</button>
     <div class="sync-pill sp-load" id="syncBadgeNut" style="position:absolute;top:calc(var(--safe-t)+14px);right:16px;"><div class="sp-dot"></div><span id="syncTextNut">Syncing</span></div>
 
     <!-- Date nav row -->
@@ -1302,6 +1301,34 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           </div>
           <div style="font-size:0.6rem;color:var(--muted);margin-bottom:14px;line-height:1.5;">Budget = base + (active − baseline) × ratio. Normal days use Normal Ratio, Cheat Day uses Cheat Ratio.</div>
           <button onclick="nutSaveTargets()" style="width:100%;padding:12px;background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">SAVE TARGETS</button>
+          <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:14px;">
+            <div style="font-size:0.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:10px;">API Keys</div>
+            <div style="margin-bottom:10px;">
+              <div style="font-size:0.62rem;color:var(--muted);margin-bottom:4px;">GEMINI <span style="font-weight:400;">aistudio.google.com/apikey</span></div>
+              <div style="display:flex;gap:6px;">
+                <input id="nsk_gemini" type="password" placeholder="AIza..." autocomplete="off" style="flex:1;padding:9px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;font-family:monospace;outline:none;">
+                <button onclick="nutSettingsTest('gemini')" style="padding:9px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:0.72rem;font-weight:700;cursor:pointer;">Test</button>
+              </div>
+              <div id="nsk_msg_gemini" style="font-size:0.68rem;min-height:14px;margin-top:3px;color:var(--muted);"></div>
+            </div>
+            <div style="margin-bottom:10px;">
+              <div style="font-size:0.62rem;color:var(--muted);margin-bottom:4px;">API NINJAS <span style="font-weight:400;">key in GAS Script Properties as NUT_NINJA_KEY</span></div>
+              <div style="display:flex;gap:6px;">
+                <input id="nsk_cn" type="password" placeholder="Enables cross-check via GAS..." autocomplete="off" style="flex:1;padding:9px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;font-family:monospace;outline:none;">
+                <button onclick="nutSettingsTest('cn')" style="padding:9px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:0.72rem;font-weight:700;cursor:pointer;">Test</button>
+              </div>
+              <div id="nsk_msg_cn" style="font-size:0.68rem;min-height:14px;margin-top:3px;color:var(--muted);"></div>
+            </div>
+            <div style="margin-bottom:12px;">
+              <div style="font-size:0.62rem;color:var(--muted);margin-bottom:4px;">USDA FOODDATA <span style="font-weight:400;">fdc.nal.usda.gov</span></div>
+              <div style="display:flex;gap:6px;">
+                <input id="nsk_usda" type="password" placeholder="API key..." autocomplete="off" style="flex:1;padding:9px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;font-family:monospace;outline:none;">
+                <button onclick="nutSettingsTest('usda')" style="padding:9px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:0.72rem;font-weight:700;cursor:pointer;">Test</button>
+              </div>
+              <div id="nsk_msg_usda" style="font-size:0.68rem;min-height:14px;margin-top:3px;color:var(--muted);"></div>
+            </div>
+            <button onclick="nutSettingsSave()" style="width:100%;padding:11px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text2);font-family:'Bebas Neue',sans-serif;font-size:0.9rem;letter-spacing:2px;font-weight:900;cursor:pointer;">SAVE KEYS</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1420,21 +1447,21 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 </div>
 
 <!-- NUTRITION: Create / edit food overlay -->
-<div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:400;" class="overlay-anim">
-  <!-- Sticky header - always visible -->
-  <div id="nutFoodFormHdr" style="position:absolute;top:0;left:0;right:0;background:var(--bg);border-radius:var(--r-lg) var(--r-lg) 0 0;margin:40px 12px 0;padding:16px 20px 12px;z-index:1;border-bottom:1px solid var(--border);box-sizing:border-box;">
+<div id="nutFoodFormOverlay" class="page" style="display:none;z-index:400;">
+  <!-- Fixed header — same pattern as other pages -->
+  <div style="position:fixed;top:0;left:0;right:0;background:var(--bg);padding:calc(var(--safe-t) + 12px) 16px 12px;border-bottom:1px solid var(--border);z-index:1;box-sizing:border-box;">
     <div style="display:flex;align-items:center;justify-content:space-between;">
+      <button onclick="nutCloseFoodForm()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);width:36px;height:36px;border-radius:50%;font-size:1.1rem;cursor:pointer;flex-shrink:0;">&#8592;</button>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutFoodFormTitle">ADD FOOD</div>
       <div style="display:flex;gap:8px;align-items:center;">
         <button onclick="nutCamOpen()" style="background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);padding:6px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;cursor:pointer;">📷 SCAN</button>
         <button onclick="nutOpenTypeFood()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);padding:6px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;cursor:pointer;">⌨ TYPE</button>
         <button onclick="nutSaveFood()" style="background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);padding:6px 14px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;font-weight:900;cursor:pointer;">SAVE</button>
-        <button onclick="nutCloseFoodForm()" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
       </div>
     </div>
   </div>
-  <!-- Scrollable body — top set by JS after header measures -->
-  <div id="nutFoodFormBody" style="position:absolute;top:120px;left:12px;right:12px;bottom:0;background:var(--bg);border-radius:0 0 var(--r-lg) var(--r-lg);overflow-y:scroll;-webkit-overflow-scrolling:touch;">
+  <!-- Scrollable body — padded below the fixed header -->
+  <div id="nutFoodFormBody" class="page-body" style="padding-top:calc(var(--safe-t) + 68px);">
     <div style="padding:16px 20px calc(var(--nav-h) + var(--safe-b) + 40px);">
     <!-- Scan status -->
     <div id="nutScanStatus" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;font-size:0.82rem;color:var(--muted);text-align:center;"></div>
@@ -7277,21 +7304,21 @@ function nutOpenFoodForm(idx){
   var ss=document.getElementById('nutScanStatus');if(ss){ss.style.display='none';ss.innerHTML='';}
   var ov=document.getElementById('nutFoodFormOverlay');
   var body=document.getElementById('nutFoodFormBody');
-  if(ov){ov.style.display='block';}
-  if(body){
-    body.scrollTop=0;
-    // Measure header height after render and set body top accordingly
-    setTimeout(function(){
-      var hdr=document.getElementById('nutFoodFormHdr');
-      if(hdr&&body){
-        var hdrBottom=hdr.getBoundingClientRect().bottom;
-        var ovTop=ov.getBoundingClientRect().top;
-        body.style.top=(hdrBottom-ovTop)+'px';
-      }
-    },0);
+  if(ov){
+    // Use classList like navTo does — remove active from all pages, add to food form
+    document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+    ov.classList.add('active');
+    _nutFoodFormPrevPage=currentPage;
+    currentPage='foodform';
   }
+  if(body){body.scrollTop=0;}
 }
-function nutCloseFoodForm(){var ov=document.getElementById('nutFoodFormOverlay');if(ov)ov.style.display='none';}
+var _nutFoodFormPrevPage='nutrition';
+function nutCloseFoodForm(){
+  var ov=document.getElementById('nutFoodFormOverlay');
+  if(ov)ov.classList.remove('active');
+  navTo(_nutFoodFormPrevPage||'nutrition');
+}
 
 // ── Smart camera ────────────────────────────────────────────────────
 // Flow: open camera → BarcodeDetector auto-detects → Open Food Facts lookup
@@ -7820,7 +7847,8 @@ function _buildVerifyMsg(sources, reconciledData, initialCalories, updated){
     if(Math.abs(diff)>50)parts.push('calories changed by '+(diff>0?'+':'')+diff);
   }
 
-  if(ok.length>1||highDisagree)parts.push('<span style="text-decoration:underline;cursor:pointer;" onclick="nutSrcDetailShow()">see breakdown</span>');
+  // Always show breakdown so user can see which source contributed
+  parts.push('<span style="text-decoration:underline;cursor:pointer;" onclick="nutSrcDetailShow()">sources</span>');
 
   return {html:parts.join(' \u00b7 '),color:color,highDisagree:highDisagree,ok:ok.length>0};
 }
@@ -7874,8 +7902,10 @@ function nutVerifyInlineBackground(foodName,context,initialData){
   var initialCalories=Math.round(initialData.calories||0);
   _fetchAllSources(query,serving,cnKey,usdaKey).then(function(results){
     var allSources=results;
-    _nutSrcData={sources:allSources,foodName:foodName,context:context,serving:serving,unit:initialData.unit||'g'};
+    _nutSrcData={sources:allSources,foodName:foodName,context:context,serving:serving,unit:initialData.unit||'g',
+      geminiCal:Math.round(initialData.calories||0),geminiProt:Math.round((initialData.protein||0)*10)/10,geminiCarbs:Math.round((initialData.carbs||0)*10)/10,geminiFat:Math.round((initialData.fat||0)*10)/10};
     _geminiReconcile(foodName,context,initialData,serving,allSources,function(reconciled){
+      if(reconciled){_nutSrcData.reconciledCal=Math.round(reconciled.calories||0);_nutSrcData.reconciledProt=Math.round((reconciled.protein||0)*10)/10;_nutSrcData.reconciledCarbs=Math.round((reconciled.carbs||0)*10)/10;_nutSrcData.reconciledFat=Math.round((reconciled.fat||0)*10)/10;}
       var msg=_buildVerifyMsg(allSources,reconciled,initialCalories,false);
       // Try to update the logged entry
       var updated=false;
@@ -7963,8 +7993,10 @@ function nutVerifyInBackground(foodName,context,extraSources,initialData,statusE
   var initialCalories=Math.round(initialData.calories||0);
   _fetchAllSources(query,serving,cnKey,usdaKey).then(function(results){
     var allSources=results;
-    _nutSrcData={sources:allSources,foodName:foodName,context:context,serving:serving,unit:initialData.unit||'g'};
+    _nutSrcData={sources:allSources,foodName:foodName,context:context,serving:serving,unit:initialData.unit||'g',
+      geminiCal:Math.round(initialData.calories||0),geminiProt:Math.round((initialData.protein||0)*10)/10,geminiCarbs:Math.round((initialData.carbs||0)*10)/10,geminiFat:Math.round((initialData.fat||0)*10)/10};
     _geminiReconcile(foodName,context,initialData,serving,allSources,function(reconciled){
+      if(reconciled){_nutSrcData.reconciledCal=Math.round(reconciled.calories||0);_nutSrcData.reconciledProt=Math.round((reconciled.protein||0)*10)/10;_nutSrcData.reconciledCarbs=Math.round((reconciled.carbs||0)*10)/10;_nutSrcData.reconciledFat=Math.round((reconciled.fat||0)*10)/10;}
       if(reconciled&&!_nutFieldsTouched)nutVerifyApply(reconciled);
       var msg=_buildVerifyMsg(allSources,reconciled,initialCalories,false);
       nutConfBannerShow(msg);
@@ -8013,15 +8045,41 @@ function nutConfBannerShow(msg){
 }
 
 function nutSrcDetailShow(){
-  if(!_nutSrcData||!_nutSrcData.sources)return;
-  var rows=_nutSrcData.sources.map(function(s){
-    return '<tr><td style="padding:6px 10px;color:var(--muted);font-size:0.78rem;">'+s.source+'</td><td style="padding:6px 10px;text-align:right;font-weight:700;color:var(--text1);">'+s.calories+'</td><td style="padding:6px 10px;text-align:right;color:var(--text2);">'+s.protein+'g</td><td style="padding:6px 10px;text-align:right;color:var(--text2);">'+s.carbs+'g</td><td style="padding:6px 10px;text-align:right;color:var(--text2);">'+s.fat+'g</td></tr>';
+  if(!_nutSrcData)return;
+  var sources=_nutSrcData.sources||[];
+  // Always include Gemini as the base source
+  var allRows=[{source:'Gemini (photo)',status:'ok',calories:_nutSrcData.geminiCal||'',protein:_nutSrcData.geminiProt||'',carbs:_nutSrcData.geminiCarbs||'',fat:_nutSrcData.geminiFat||'',_isGemini:true}].concat(sources);
+  var statusLabel={ok:'',not_found:'not found',error:'error',timeout:'timed out',key_error:'key error',split_warning:'split query',low_confidence:'low confidence'};
+  var statusColor={ok:'var(--text2)',not_found:'var(--muted)',error:'var(--red)',timeout:'var(--orange)',key_error:'var(--red)',split_warning:'var(--yellow)',low_confidence:'var(--orange)'};
+  var rows=allRows.map(function(s){
+    var hasData=s.status==='ok'||s.status==='split_warning'||s.status==='low_confidence'||s._isGemini;
+    var calStr=hasData&&s.calories!==''?s.calories:'—';
+    var protStr=hasData&&s.protein!==''?s.protein+'g':'—';
+    var carbStr=hasData&&s.carbs!==''?s.carbs+'g':'—';
+    var fatStr=hasData&&s.fat!==''?s.fat+'g':'—';
+    var stLbl=s._isGemini?'':(' <span style="font-size:0.62rem;color:'+statusColor[s.status||'ok']+';">'+(statusLabel[s.status||'ok']||s.status)+'</span>');
+    var note=s.matchedFood?('<div style="font-size:0.6rem;color:var(--muted);margin-top:1px;">matched: '+s.matchedFood+'</div>'):'';
+    return '<tr style="border-top:1px solid var(--border);">'+
+      '<td style="padding:8px 10px;color:var(--text2);font-size:0.78rem;">'+s.source+stLbl+note+'</td>'+
+      '<td style="padding:8px 10px;text-align:right;font-weight:700;color:'+(hasData?'var(--accent)':'var(--muted)')+';">'+calStr+'</td>'+
+      '<td style="padding:8px 10px;text-align:right;color:var(--text2);">'+protStr+'</td>'+
+      '<td style="padding:8px 10px;text-align:right;color:var(--text2);">'+carbStr+'</td>'+
+      '<td style="padding:8px 10px;text-align:right;color:var(--text2);">'+fatStr+'</td>'+
+      '</tr>';
   }).join('');
+  var reconciledNote=_nutSrcData.reconciledCal?
+    '<div style="margin-top:12px;padding:10px 12px;background:var(--card2);border-radius:var(--r-sm);border-left:3px solid var(--accent);">'+
+    '<div style="font-size:0.68rem;color:var(--muted);margin-bottom:2px;">RECONCILED (used)</div>'+
+    '<div style="font-size:0.88rem;font-weight:700;color:var(--accent);">'+_nutSrcData.reconciledCal+' cal &nbsp;·&nbsp; '+(_nutSrcData.reconciledProt||'?')+'g protein &nbsp;·&nbsp; '+(_nutSrcData.reconciledCarbs||'?')+'g carbs &nbsp;·&nbsp; '+(_nutSrcData.reconciledFat||'?')+'g fat</div>'+
+    '</div>':'';
   var html='<div style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:999;display:flex;align-items:flex-end;justify-content:center;" onclick="if(event.target===this)this.remove()">'+
-    '<div style="background:var(--card);border-radius:var(--r) var(--r) 0 0;padding:20px 16px 32px;width:100%;max-width:480px;box-sizing:border-box;">'+
-    '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:14px;">SOURCE BREAKDOWN</div>'+
-    '<table style="width:100%;border-collapse:collapse;"><tr style="font-size:0.68rem;color:var(--muted);"><th style="text-align:left;padding:4px 10px;">Source</th><th style="text-align:right;padding:4px 10px;">Cal</th><th style="text-align:right;padding:4px 10px;">Pro</th><th style="text-align:right;padding:4px 10px;">Carb</th><th style="text-align:right;padding:4px 10px;">Fat</th></tr>'+rows+'</table>'+
-    '<p style="font-size:0.72rem;color:var(--muted);margin:12px 0 0;">Values above are Gemini\'s reconciled estimate. Tap a row to use that source.</p>'+
+    '<div style="background:var(--card);border-radius:var(--r) var(--r) 0 0;padding:20px 16px 32px;width:100%;max-width:480px;box-sizing:border-box;max-height:80vh;overflow-y:auto;">'+
+    '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:4px;">SOURCE BREAKDOWN</div>'+
+    '<div style="font-size:0.7rem;color:var(--muted);margin-bottom:14px;">'+((_nutSrcData.foodName||'')+(_nutSrcData.context?' · '+_nutSrcData.context:''))+'</div>'+
+    '<table style="width:100%;border-collapse:collapse;">'+
+    '<tr style="font-size:0.62rem;color:var(--muted);"><th style="text-align:left;padding:4px 10px;">Source</th><th style="text-align:right;padding:4px 10px;">Cal</th><th style="text-align:right;padding:4px 10px;">Pro</th><th style="text-align:right;padding:4px 10px;">Carb</th><th style="text-align:right;padding:4px 10px;">Fat</th></tr>'+
+    rows+'</table>'+
+    reconciledNote+
     '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="width:100%;margin-top:16px;padding:14px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text2);font-size:0.88rem;font-weight:600;cursor:pointer;">Close</button>'+
     '</div></div>';
   document.body.insertAdjacentHTML('beforeend',html);
@@ -8037,18 +8095,26 @@ function nutKeyErrorShow(keyName, errorMsg){
 }
 
 function nutSettingsOpen(){
-  var ov=document.getElementById('nutSettingsOverlay');if(!ov)return;
+  // Fill both the overlay (if present) and the inline fields in Daily Targets
   function fill(id,key){var el=document.getElementById(id);if(el)el.value=localStorage.getItem(key)||'';}
   fill('nsk_gemini','wt_gemini_key');fill('nsk_cn','wt_cn_key');fill('nsk_usda','wt_usda_key');
   ['nsk_msg_gemini','nsk_msg_cn','nsk_msg_usda'].forEach(function(id){var el=document.getElementById(id);if(el)el.textContent='';});
-  ov.style.display='flex';
+  // Open the daily targets panel if it's not already open
+  var panel=document.getElementById('nutTargetsPanel');
+  if(panel&&panel.style.display==='none')nutToggleTargets();
+  // Scroll to keys section
+  setTimeout(function(){
+    var geminiFld=document.getElementById('nsk_gemini');
+    if(geminiFld)geminiFld.scrollIntoView({behavior:'smooth',block:'center'});
+  },300);
 }
 function nutSettingsClose(){var ov=document.getElementById('nutSettingsOverlay');if(ov)ov.style.display='none';}
 function nutSettingsSave(){
   function sv(id,key){var el=document.getElementById(id);if(el&&el.value.trim()){localStorage.setItem(key,el.value.trim());if(key==='wt_gemini_key'&&window.wtDB)wtDB.set(key,el.value.trim());}}
   sv('nsk_gemini','wt_gemini_key');sv('nsk_cn','wt_cn_key');sv('nsk_usda','wt_usda_key');
-  nutSettingsClose();
-  var st=document.getElementById('nutScanStatus');if(st){st.style.display='block';st.style.color='var(--green)';st.textContent='\u2713 Keys saved';setTimeout(function(){st.style.display='none';},2500);}
+  // Show brief confirmation
+  var msg=document.getElementById('nutFoodFormMsg')||document.getElementById('nutScanStatus');
+  if(msg){msg.style.display='block';msg.style.color='var(--green)';msg.textContent='✓ Keys saved';setTimeout(function(){msg.style.display='none';},2500);}
 }
 function nutSettingsTest(which){
   var keyId='nsk_'+which,msgId='nsk_msg_'+which;
@@ -10326,7 +10392,7 @@ function nutMealScanOpenDirect(b64,mime){
   if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
   // Close any open overlays before navigating to the meal scan page
   var addOv=document.getElementById('nutAddOverlay');if(addOv)addOv.style.display='none';
-  var foodFormOv=document.getElementById('nutFoodFormOverlay');if(foodFormOv)foodFormOv.style.display='none';
+  nutCloseFoodForm();
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
   var pg=document.getElementById('page-mealscan');if(pg){pg.classList.remove('hidden');pg.classList.add('active');}
   var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='none';
