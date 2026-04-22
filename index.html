@@ -7749,7 +7749,7 @@ function _nixFetch(query, serving, cnKey){
       // Warn if query split oddly (>3 items for a single dish query = likely wrong match)
       var isSplit=items.length>3;
       var a={cal:0,prot:0,carbs:0,fat:0,fib:0,sf:0,sod:0};
-      items.forEach(function(it){a.cal+=it.calories||0;a.prot+=it.protein_g||0;a.carbs+=it.carbohydrates_total_g||0;a.fat+=it.fat_total_g||0;a.fib+=it.fiber_g||0;a.sf+=it.fat_saturated_g||0;a.sod+=it.sodium_mg||0;});
+      items.forEach(function(it){a.cal+=parseFloat(it.calories)||0;a.prot+=parseFloat(it.protein_g)||0;a.carbs+=parseFloat(it.carbohydrates_total_g)||0;a.fat+=parseFloat(it.fat_total_g)||0;a.fib+=parseFloat(it.fiber_g)||0;a.sf+=parseFloat(it.fat_saturated_g)||0;a.sod+=parseFloat(it.sodium_mg)||0;});
       resolve({source:'API Ninjas',status:isSplit?'split_warning':'ok',
         calories:Math.round(a.cal),protein:Math.round(a.prot*10)/10,
         carbs:Math.round(a.carbs*10)/10,fat:Math.round(a.fat*10)/10,
@@ -9842,10 +9842,13 @@ function nutMealScanCallVision(b64,mime){
     '          - Iced Grande (16oz): ~120ml milk + ice (less milk than hot).\n'+
     '          - Hot Grande (16oz): ~360ml milk.\n'+
     '          Use this to calibrate protein and fat from milk content.\n'+
-    '  Step 6: Determine NATIVE UNIT — use the natural serving unit:\n'+
-    '          - Drinks: ml or oz. NEVER grams for a liquid.\n'+
-    '          - Rice/pasta/curry: grams of actual portion visible.\n'+
-    '          - Packaged: use label serving size.\n'+
+    '  Step 6: Determine NATIVE UNIT and QTY:\n'+
+    '          - Qty = number of discrete pieces (e.g. 6 gyoza, 1 burger, 2 spring rolls). NEVER use grams as qty.\n'+
+    '          - WeightG = total weight of the portion in grams (separate column from Qty).\n'+
+    '          - Drinks: unit=ml or oz, qty=1, weightG=volume in ml.\n'+
+    '          - Rice/pasta/loose food: qty=1, weightG=grams of portion.\n'+
+    '          - Packaged: qty=number of pieces, weightG=total grams.\n'+
+    '          - Cal/Prot/Carb/Fat are ALWAYS per single unit (per 1 piece, per 1 item). Totals = value × qty.\n'+
     '  Step 7: Break complex items into components and sum (e.g. Lavender Cream Chai = chai base + milk + cold foam).\n'+
     '  Step 8: Validate macro math: Calories ≈ (Protein×4) + (Carbs×4) + (Fat×9). If off by >10%, re-check fat/carbs.\n'+
     '  Step 9: Confirm SatFat ≤ Fat always.\n\n'+
@@ -10049,7 +10052,7 @@ function nutMsiParseTSV(text){
       item={
         id:Date.now()+i+(Math.random()*999|0),
         name:nameVal.replace(/^\d+[\.)\s]+/,'').trim(),
-        qty:Math.max(0.25,parseFloat(g('qty'))||1),
+        qty:(function(){var q=parseFloat(g('qty'))||1;var w=parseFloat(g('weight'))||0;return(q>20&&w>0)?1:Math.max(0.25,q>50?Math.min(q,20):q);})(),
         weight_g:Math.round(parseFloat(g('weight'))||0),
         cal:Math.round(parseFloat(g('cal'))||0),
         prot:Math.round((parseFloat(g('prot'))||0)*10)/10,
@@ -10063,10 +10066,14 @@ function nutMsiParseTSV(text){
     } else {
       // No header — Gemini default order: Name,Qty,WeightG,Cal,Prot,Carb,Fat,Fib,Sat,Sod,Conf
       var n=c.slice(1).map(function(x){return parseFloat(x)||0;});
+      var rawQty=n[0]||1;
+      // Sanity: if qty looks like grams (>20) but weightG is also set, qty is probably weight — clamp to 1
+      var rawWt=n[1]||0;
+      var safeQty=(rawQty>20&&rawWt>0)?1:(rawQty>50?Math.min(rawQty,20):Math.max(0.25,rawQty));
       item={
         id:Date.now()+i+(Math.random()*999|0),
         name:c[0].replace(/^\d+[\.)\s]+/,'').trim(),
-        qty:Math.max(0.25,n[0]||1),weight_g:Math.round(n[1]||0),
+        qty:Math.max(0.25,safeQty),weight_g:Math.round(rawWt||rawQty>20?rawQty:0),
         cal:Math.round(n[2]||0),prot:Math.round((n[3]||0)*10)/10,
         carb:Math.round((n[4]||0)*10)/10,fat:Math.round((n[5]||0)*10)/10,
         fib:Math.round((n[6]||0)*10)/10,sat:Math.round((n[7]||0)*10)/10,
@@ -10112,8 +10119,9 @@ function nutMsiVerifyAll(items){
 function nutMsiVerifyItem(it,cnKey,usdaKey){
   var query=it.name.replace(/\s*\(est\.\)/,'').trim();
   var serving=it.weight_g||(it.qty*100);
-  var geminiSrc={source:'Gemini',status:'ok',
-    calories:Math.round(it.cal*it.qty),
+  var geminiTotalCal=Math.round(it.cal*it.qty);
+  var geminiSrc={source:'Gemini',status:geminiTotalCal>3000?'low_confidence':'ok',
+    calories:geminiTotalCal,
     prot:Math.round(it.prot*it.qty*10)/10,
     carb:Math.round(it.carb*it.qty*10)/10,
     fat:Math.round(it.fat*it.qty*10)/10};
@@ -10133,10 +10141,10 @@ function nutMsiVerifyItem(it,cnKey,usdaKey){
         var items=Array.isArray(result.items)?result.items:[];
         if(!items.length){resolve({source:'API Ninjas',status:'not_found'});return;}
         var a={cal:0,prot:0,carb:0,fat:0};
-        items.forEach(function(x){a.cal+=x.calories||0;a.prot+=x.protein_g||0;a.carb+=x.carbohydrates_total_g||0;a.fat+=x.fat_total_g||0;});
+        items.forEach(function(x){a.cal+=parseFloat(x.calories)||0;a.prot+=parseFloat(x.protein_g)||0;a.carb+=parseFloat(x.carbohydrates_total_g)||0;a.fat+=parseFloat(x.fat_total_g)||0;});
         resolve({source:'API Ninjas',status:'ok',
-          calories:Math.round(a.cal),prot:Math.round(a.prot*10)/10,
-          carb:Math.round(a.carb*10)/10,fat:Math.round(a.fat*10)/10});
+          calories:Math.round(a.cal)||0,prot:Math.round((a.prot||0)*10)/10,
+          carb:Math.round((a.carb||0)*10)/10,fat:Math.round((a.fat||0)*10)/10});
       };
       var s=document.createElement('script');s.id='s_'+cbName;
       s.src=CLOUD_URL+'?type=getNutritionData&query='+encodeURIComponent(query)+'&callback='+cbName;
@@ -10178,6 +10186,10 @@ function nutMsiVerifyItem(it,cnKey,usdaKey){
 
 // Store source data per item for interactive selection
 var _msiSourceData={}; // itemId → {geminiSrc, sources}
+var _msiApplyMap={}; // numeric key → [itemId, sourceName] for onclick safety
+var _msiApplyIdx=0;
+function _msiReg(itemId,src){var k=_msiApplyIdx++;_msiApplyMap[k]=[itemId,src];return k;}
+function _msiUse(k){var v=_msiApplyMap[k];if(v)nutMsiApplySource(v[0],v[1]);}
 
 function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   var row=document.getElementById('msrow-'+itemId);
@@ -10197,42 +10209,64 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   // Build avg
   var avgCal=okSources.length>1?Math.round(allCals.reduce(function(a,b){return a+b;},0)/allCals.length):null;
 
-  var html='<div style="border-top:1px dashed var(--border);margin-top:6px;padding-top:6px;">';
-
-  // Source rows
+  // ── Pretty source comparison table ───────────────────────────────
   var allSourcesForDisplay=[geminiSrc].concat(sources);
-  html+=allSourcesForDisplay.map(function(s){
-    if(s.status==='ok'){
-      var macroStr=s.prot!==undefined?' <span style="color:var(--muted);">P'+s.prot+' C'+s.carb+' F'+s.fat+'</span>':'';
-      var matchStr=s.matchedFood?' <span style="color:var(--muted);font-size:0.5rem;opacity:0.7;">('+s.matchedFood.substring(0,22)+')</span>':'';
-      var useBtn='<button onclick="nutMsiApplySource('+itemId+',\''+s.source+'\')" '+
-        'style="margin-left:4px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;color:var(--text2);font-size:0.52rem;padding:1px 6px;cursor:pointer;font-weight:700;">use</button>';
-      return '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">'+
-        '<span style="color:var(--muted);min-width:60px;">'+s.source+'</span>'+
-        '<span style="color:var(--accent);font-weight:700;">'+s.calories+' cal</span>'+
-        macroStr+matchStr+useBtn+'</div>';
-    } else if(s.status==='not_found'){
-      return '<div style="color:var(--muted);margin-bottom:3px;font-size:0.55rem;">'+s.source+': not found</div>';
-    } else if(s.status==='key_error'){
-      return '<div style="margin-bottom:3px;"><span style="color:var(--red);">'+s.source+': key error</span> '+
-        '<button onclick="nutKeyErrorShow(\''+s.source+'\',\'invalid key\')" '+
-        'style="background:none;border:1px solid var(--red);border-radius:10px;color:var(--red);font-size:0.52rem;padding:1px 6px;cursor:pointer;">fix key</button></div>';
-    } else if(s.status==='timeout'){
-      return '<div style="color:var(--muted);margin-bottom:3px;font-size:0.55rem;">'+s.source+': timed out</div>';
-    } else {
-      return '<div style="color:var(--muted);margin-bottom:3px;font-size:0.55rem;">'+s.source+': error</div>';
-    }
-  }).join('');
+  var html='<div style="margin-top:8px;background:var(--card2);border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);">';
 
-  // Average + disagree row
+  // Header
+  html+='<div style="display:grid;grid-template-columns:72px 1fr 1fr 1fr 1fr 44px;padding:4px 10px;background:var(--card);border-bottom:1px solid var(--border);">'+
+    '<span style="font-size:0.48rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;"></span>'+
+    '<span style="font-size:0.48rem;color:var(--accent);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;text-align:right;">CAL</span>'+
+    '<span style="font-size:0.48rem;color:var(--green);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;text-align:right;">PRO</span>'+
+    '<span style="font-size:0.48rem;color:var(--blue);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;text-align:right;">CARB</span>'+
+    '<span style="font-size:0.48rem;color:var(--orange);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;text-align:right;">FAT</span>'+
+    '<span></span></div>';
+
+  allSourcesForDisplay.forEach(function(s,si){
+    var border=si<allSourcesForDisplay.length-1?'border-bottom:1px solid var(--border);':'';
+    if(s.status==='ok'||s.status==='low_confidence'){
+      var calColor=highDisagree&&okSources.length>1?'var(--orange)':'var(--accent)';
+      var lowWarn=s.status==='low_confidence'?' <span style="color:var(--orange);">⚠</span>':'';
+      var note=s.matchedFood?'<div style="font-size:0.46rem;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:68px;">'+s.matchedFood.substring(0,16)+'</div>':'';
+      var protVal=isNaN(s.prot)||s.prot===undefined?'—':s.prot;
+      var carbVal=isNaN(s.carb)||s.carb===undefined?'—':s.carb;
+      var fatVal=isNaN(s.fat)||s.fat===undefined?'—':s.fat;
+      html+='<div style="display:grid;grid-template-columns:72px 1fr 1fr 1fr 1fr 44px;padding:6px 10px;align-items:center;'+border+'">'+
+        '<div><div style="font-size:0.58rem;color:var(--text2);font-weight:600;">'+s.source+lowWarn+'</div>'+note+'</div>'+
+        '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.82rem;color:'+calColor+';">'+s.calories+'</div>'+
+        '<div style="text-align:right;font-size:0.6rem;color:var(--text2);">'+protVal+'g</div>'+
+        '<div style="text-align:right;font-size:0.6rem;color:var(--text2);">'+carbVal+'g</div>'+
+        '<div style="text-align:right;font-size:0.6rem;color:var(--text2);">'+fatVal+'g</div>'+
+        '<button data-iid="'+itemId+'" data-src="'+s.source+'" class="msi-use-btn" style="background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:0.5rem;padding:2px 6px;cursor:pointer;font-weight:700;">use</button>'+
+        '</div>';
+    } else if(s.status==='not_found'){
+      html+='<div style="padding:5px 10px;'+border+'display:flex;justify-content:space-between;align-items:center;">'+
+        '<span style="font-size:0.58rem;color:var(--muted);">'+s.source+'</span>'+
+        '<span style="font-size:0.52rem;color:var(--muted);font-style:italic;">not found</span></div>';
+    } else if(s.status==='key_error'){
+      html+='<div style="padding:5px 10px;'+border+'display:flex;justify-content:space-between;align-items:center;">'+
+        '<span style="font-size:0.58rem;color:var(--red);">'+s.source+' — key error</span>'+
+        '<button data-iid="'+itemId+'" data-src="__key__'+s.source+'" class="msi-use-btn" style="background:none;border:1px solid var(--red);border-radius:8px;color:var(--red);font-size:0.5rem;padding:2px 6px;cursor:pointer;">fix key</button>'+
+        '</div>';
+    } else if(s.status==='timeout'){
+      html+='<div style="padding:5px 10px;'+border+'display:flex;justify-content:space-between;">'+
+        '<span style="font-size:0.58rem;color:var(--muted);">'+s.source+'</span>'+
+        '<span style="font-size:0.52rem;color:var(--muted);font-style:italic;">timed out</span></div>';
+    } else {
+      html+='<div style="padding:5px 10px;'+border+'display:flex;justify-content:space-between;">'+
+        '<span style="font-size:0.58rem;color:var(--muted);">'+s.source+'</span>'+
+        '<span style="font-size:0.52rem;color:var(--muted);font-style:italic;">error</span></div>';
+    }
+  });
+
+  // Average row
   if(okSources.length>1){
-    var disagreeFlag=highDisagree?'<span style="color:var(--orange);font-weight:700;margin-left:6px;">\u26a0 disagree</span>':'';
-    html+='<div style="display:flex;align-items:center;gap:4px;margin-top:4px;border-top:1px dashed var(--border);padding-top:4px;">'+
-      '<span style="color:var(--muted);min-width:60px;">Average</span>'+
-      '<span style="color:var(--text2);font-weight:700;">'+avgCal+' cal</span>'+
-      disagreeFlag+
-      '<button onclick="nutMsiApplySource('+itemId+',\'avg\')" '+
-      'style="margin-left:4px;background:var(--accent);border:none;border-radius:10px;color:#000;font-size:0.52rem;padding:1px 6px;cursor:pointer;font-weight:900;">use avg</button>'+
+    var disagreeLabel=highDisagree?' <span style="color:var(--orange);">⚠ disagree</span>':'';
+    html+='<div style="display:grid;grid-template-columns:72px 1fr 1fr 1fr 1fr 44px;padding:6px 10px;align-items:center;background:var(--card);border-top:1px solid var(--border);">'+
+      '<span style="font-size:0.58rem;color:var(--text2);font-weight:700;">Avg'+disagreeLabel+'</span>'+
+      '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.82rem;color:var(--text1);">'+avgCal+'</div>'+
+      '<div></div><div></div><div></div>'+
+      '<button data-iid="'+itemId+'" data-src="avg" class="msi-use-btn" style="background:var(--accent);border:none;border-radius:8px;color:#000;font-size:0.5rem;padding:2px 6px;cursor:pointer;font-weight:900;">use</button>'+
       '</div>';
   }
 
@@ -10241,6 +10275,15 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   var div=document.createElement('div');
   div.className='msi-source-row';
   div.innerHTML=html;
+  // Use event delegation — no inline onclick needed
+  div.addEventListener('click',function(ev){
+    var btn=ev.target.closest('.msi-use-btn');
+    if(!btn)return;
+    var iid=parseInt(btn.dataset.iid);
+    var src=btn.dataset.src;
+    if(src&&src.indexOf('__key__')===0){nutKeyErrorShow(src.replace('__key__',''),'invalid key');}
+    else{nutMsiApplySource(iid,src);}
+  });
   row.appendChild(div);
 }
 
