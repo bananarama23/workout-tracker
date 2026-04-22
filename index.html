@@ -1513,7 +1513,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <button onclick="document.getElementById('nutServingOverlay').style.display='none'" style="background:var(--card);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;">&#215;</button>
       </div>
     </div>
-    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:8px;" id="nutServingDefault">Per 100g</div>
+    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:4px;" id="nutServingDefault">Per 100g</div>
+    <div id="nutServingSource" style="display:none;font-size:0.62rem;margin-bottom:10px;padding:4px 8px;background:var(--card);border-radius:6px;border:1px solid var(--border);"></div>
     <div id="nutPerItemRow" style="display:none;margin-bottom:12px;"></div>
     <!-- Amount + servings row -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
@@ -6872,7 +6873,10 @@ function nutRenderDay(){
       var gIdx=_nutEntries.indexOf(e);
       h+='<div class="sum-row" style="padding:10px 16px;cursor:pointer;" onclick="nutEditEntry('+gIdx+')">';
       h+='<div style="flex:1;min-width:0;">';
-      h+='<div class="sum-name" style="font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+e.food+'</div>';
+      h+='<div style="display:flex;align-items:center;gap:5px;">';
+      h+='<div class="sum-name" style="font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">'+e.food+'</div>';
+      if(e._src){h+='<span style="font-size:0.55rem;color:var(--muted);background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:1px 4px;flex-shrink:0;white-space:nowrap;">'+e._src+'</span>';}
+      h+='</div>';
       h+='<div class="sum-result" style="font-size:0.62rem;margin-top:2px;">P\u202f'+Math.round(e.protein||0)+'g \u00b7 C\u202f'+Math.round(e.carbs||0)+'g \u00b7 F\u202f'+Math.round(e.fat||0)+'g'+(e.fibre&&e.fibre>0?' \u00b7 Fib\u202f'+Math.round(e.fibre*10)/10+'g':'')+(e.sodium?(' \u00b7 Na\u202f'+Math.round(e.sodium)+'mg'):'')+((e.servings&&e.servings!==1)?' \u00b7 \u00d7'+e.servings:'')+'</div>';
       h+='</div>';
       var synced=e.id?_nutSyncedIds[String(e.id)]:true; // entries without id assumed legacy-synced
@@ -7602,9 +7606,9 @@ function nutFillFromScan(d,statusEl){
   setVal('nff_satfat',d.satFat!==null?Math.round(d.satFat*10)/10:'');
   setVal('nff_sodium',d.sodium!==null?Math.round(d.sodium):'');
   if(statusEl){statusEl.textContent='\u2713 '+(d.name||'Food')+' read \u2014 check and save';statusEl.style.color='var(--green)';setTimeout(function(){if(statusEl){statusEl.style.display='none';statusEl.style.color='';}},4000);}
-  // Show source attribution
-  var srcEl=document.getElementById('nff_source');
-  if(srcEl){srcEl.style.display='block';srcEl.textContent='\u2139 Source: Gemini vision estimate \u2014 verify values will refine this after saving';}
+  // Show initial source attribution (will be updated when verification completes)
+  _nutSrcData=null; // clear previous scan's sources
+  nutUpdateSourceBar();
   // Show context prompt after short delay (not for labels — they have all the data)
   var isLabel=!d.brand&&d.servingDesc!==undefined&&d.serving>0&&d.calories>0&&!d.type;
   // Heuristic: if it returned a brand field it came from real food path
@@ -7996,6 +8000,7 @@ function nutVerifyInBackground(foodName,context,extraSources,initialData,statusE
     _geminiReconcile(foodName,context,initialData,serving,allSources,function(reconciled){
       if(reconciled){_nutSrcData.reconciledCal=Math.round(reconciled.calories||0);_nutSrcData.reconciledProt=Math.round((reconciled.protein||0)*10)/10;_nutSrcData.reconciledCarbs=Math.round((reconciled.carbs||0)*10)/10;_nutSrcData.reconciledFat=Math.round((reconciled.fat||0)*10)/10;}
       if(reconciled&&!_nutFieldsTouched)nutVerifyApply(reconciled);
+      else nutUpdateSourceBar(); // still update source bar even if fields touched
       var msg=_buildVerifyMsg(allSources,reconciled,initialCalories,false);
       nutConfBannerShow(msg);
       // Fire key error alerts for any bad keys
@@ -8024,23 +8029,50 @@ function nutVerifyReconcile(foodName,context,initialData,sources,highDisagree,st
   });
 }
 
+function nutUpdateSourceBar(){
+  // Always update source bar regardless of whether fields were touched
+  var srcEl=document.getElementById('nff_source');
+  if(!srcEl)return;
+  if(!_nutSrcData||!_nutSrcData.sources||!_nutSrcData.sources.length){
+    srcEl.style.display='block';
+    srcEl.textContent='\u2139 Gemini vision estimate';
+    srcEl.style.color='var(--muted)';
+    return;
+  }
+  var okSrcs=_nutSrcData.sources.filter(function(s){return s.status==='ok'||s.status==='low_confidence'||s.status==='split_warning';});
+  var notFound=_nutSrcData.sources.filter(function(s){return s.status==='not_found';});
+  var errors=_nutSrcData.sources.filter(function(s){return s.status==='error'||s.status==='timeout'||s.status==='key_error';});
+  var parts=[];
+  if(okSrcs.length)parts.push('\u2713 '+okSrcs.map(function(s){
+    var note='';
+    if(s.status==='low_confidence')note=' (generic match)';
+    if(s.status==='split_warning')note=' (split query)';
+    return s.source+note;
+  }).join(' + '));
+  else parts.push('\u2139 Gemini estimate only');
+  if(notFound.length)parts.push(notFound.map(function(s){return s.source+': not found';}).join(' \u00b7 '));
+  if(errors.length)parts.push(errors.map(function(s){return s.source+': '+(s.status==='key_error'?'key error':s.status);}).join(' \u00b7 '));
+  srcEl.style.display='block';
+  srcEl.innerHTML=parts.join(' \u00b7 ')+'&nbsp;<span style="text-decoration:underline;cursor:pointer;color:var(--accent);" onclick="nutSrcDetailShow()">details</span>';
+  srcEl.style.color=okSrcs.length?'var(--green)':'var(--muted)';
+  // Also update serving picker source if it's open
+  var srvSrc=document.getElementById('nutServingSource');
+  if(srvSrc&&document.getElementById('nutServingOverlay').style.display!=='none'){
+    srvSrc.textContent=parts.join(' \u00b7 ');
+    srvSrc.style.color=okSrcs.length?'var(--green)':'var(--muted)';
+    srvSrc.style.display='block';
+  }
+}
+
 function nutVerifyApply(d){
   function upd(id,val,dp){if(val===null||val===undefined)return;var el=document.getElementById(id);if(!el)return;el.value=dp?Math.round(val*Math.pow(10,dp))/Math.pow(10,dp):Math.round(val);}
-  upd('nff_cal',d.calories,0);upd('nff_prot',d.protein,1);upd('nff_carb',d.carbs,1);upd('nff_fat',d.fat,1);
-  if(d.fibre!=null)upd('nff_fib',d.fibre,1);if(d.satFat!=null)upd('nff_satfat',d.satFat,1);if(d.sodium!=null)upd('nff_sodium',d.sodium,0);
-  if(_nffBase){_nffBase.calories=parseFloat(d.calories)||_nffBase.calories;_nffBase.protein=parseFloat(d.protein)||_nffBase.protein;_nffBase.carbs=parseFloat(d.carbs)||_nffBase.carbs;_nffBase.fat=parseFloat(d.fat)||_nffBase.fat;}
-  // Update source label with verified sources
-  var srcEl=document.getElementById('nff_source');
-  if(srcEl&&_nutSrcData&&_nutSrcData.sources){
-    var okSrcs=_nutSrcData.sources.filter(function(s){return s.status==='ok'||s.status==='low_confidence'||s.status==='split_warning';});
-    var notFound=_nutSrcData.sources.filter(function(s){return s.status==='not_found';});
-    var parts=[];
-    if(okSrcs.length)parts.push('\u2713 Verified via '+okSrcs.map(function(s){return s.source;}).join(' + '));
-    if(notFound.length)parts.push(notFound.map(function(s){return s.source;}).join(', ')+': not found');
-    srcEl.style.display='block';
-    srcEl.textContent=parts.join(' \u00b7 ')||'Gemini estimate';
-    srcEl.style.color=okSrcs.length?'var(--green)':'var(--muted)';
+  if(!_nutFieldsTouched){
+    upd('nff_cal',d.calories,0);upd('nff_prot',d.protein,1);upd('nff_carb',d.carbs,1);upd('nff_fat',d.fat,1);
+    if(d.fibre!=null)upd('nff_fib',d.fibre,1);if(d.satFat!=null)upd('nff_satfat',d.satFat,1);if(d.sodium!=null)upd('nff_sodium',d.sodium,0);
+    if(_nffBase){_nffBase.calories=parseFloat(d.calories)||_nffBase.calories;_nffBase.protein=parseFloat(d.protein)||_nffBase.protein;_nffBase.carbs=parseFloat(d.carbs)||_nffBase.carbs;_nffBase.fat=parseFloat(d.fat)||_nffBase.fat;}
   }
+  // Always update source bar — regardless of whether fields were touched
+  nutUpdateSourceBar();
 }
 
 function nutConfBannerShow(msg){
@@ -8535,6 +8567,23 @@ function nutPickFood(idx){
   _nutPerItemName='';
   nutCloseAdd();  document.getElementById('nutServingFoodName').textContent=f.name;
   document.getElementById('nutServingDefault').textContent='Macros per '+f.serving+f.unit+' serving'+(f.servingDesc?' ('+f.servingDesc+')':'');
+  // Show source in serving picker
+  var srvSrc=document.getElementById('nutServingSource');
+  if(srvSrc){
+    if(_nutSrcData&&_nutSrcData.sources&&_nutSrcData.sources.length){
+      var okS=_nutSrcData.sources.filter(function(s){return s.status==='ok'||s.status==='low_confidence'||s.status==='split_warning';});
+      var nf=_nutSrcData.sources.filter(function(s){return s.status==='not_found';});
+      var parts=[];
+      if(okS.length)parts.push('\u2713 '+okS.map(function(s){return s.source;}).join('+'));
+      else parts.push('\u2139 Gemini estimate');
+      if(nf.length)parts.push(nf.map(function(s){return s.source+': not found';}).join(' \u00b7 '));
+      srvSrc.textContent=parts.join(' \u00b7 ');
+      srvSrc.style.color=okS.length?'var(--green)':'var(--muted)';
+      srvSrc.style.display='block';
+    } else {
+      srvSrc.style.display='none';
+    }
+  }
   var lbl=document.getElementById('nutServingAmtLabel');
   if(lbl)lbl.textContent='Amount ('+f.unit+')';
   // Show per-item button if servingDesc contains a count (e.g. "14 crisps" → per-crisp option)
@@ -9888,6 +9937,8 @@ function nutMealScanCallVision(b64,mime){
       }
       nutMealScanRender();
       nutMsiCheckHighCalorie();
+      // Fire background DB lookup for each item
+      setTimeout(function(){nutMsiVerifyAll(_msi);},400);
     } else {
       nutMealScanSetStatus('Could not parse \u2014 raw response below','var(--orange)');
       document.getElementById('nutMealScanItems').innerHTML=
@@ -10047,6 +10098,183 @@ function nutMsiNorm(arr){
 
 
 // ── Render ────────────────────────────────────────────────────────────────────
+// ── Meal scan background source verification ─────────────────────
+function nutMsiVerifyAll(items){
+  var cnKey=localStorage.getItem('wt_cn_key')||'';
+  var usdaKey=localStorage.getItem('wt_usda_key')||'';
+  if(!cnKey&&!usdaKey)return; // no DB keys — skip
+  items.forEach(function(it){
+    if(it._fromFoods)return; // already from verified source
+    nutMsiVerifyItem(it,cnKey,usdaKey);
+  });
+}
+
+function nutMsiVerifyItem(it,cnKey,usdaKey){
+  var query=it.name.replace(/\s*\(est\.\)/,'').trim();
+  var serving=it.weight_g||(it.qty*100);
+  var geminiSrc={source:'Gemini',status:'ok',
+    calories:Math.round(it.cal*it.qty),
+    prot:Math.round(it.prot*it.qty*10)/10,
+    carb:Math.round(it.carb*it.qty*10)/10,
+    fat:Math.round(it.fat*it.qty*10)/10};
+  var promises=[];
+
+  if(cnKey){
+    promises.push(new Promise(function(resolve){
+      var cbName='_msiNinja_'+it.id+'_'+Date.now();
+      var timeout=setTimeout(function(){window[cbName]=null;resolve({source:'API Ninjas',status:'timeout'});},10000);
+      window[cbName]=function(result){
+        clearTimeout(timeout);window[cbName]=null;
+        if(!result){resolve({source:'API Ninjas',status:'error'});return;}
+        if(result.status==='error'){
+          var isKey=result.message&&(result.message.indexOf('NUT_NINJA_KEY')>=0||result.message.indexOf('401')>=0);
+          resolve({source:'API Ninjas',status:isKey?'key_error':'error',message:result.message});return;
+        }
+        var items=Array.isArray(result.items)?result.items:[];
+        if(!items.length){resolve({source:'API Ninjas',status:'not_found'});return;}
+        var a={cal:0,prot:0,carb:0,fat:0};
+        items.forEach(function(x){a.cal+=x.calories||0;a.prot+=x.protein_g||0;a.carb+=x.carbohydrates_total_g||0;a.fat+=x.fat_total_g||0;});
+        resolve({source:'API Ninjas',status:'ok',
+          calories:Math.round(a.cal),prot:Math.round(a.prot*10)/10,
+          carb:Math.round(a.carb*10)/10,fat:Math.round(a.fat*10)/10});
+      };
+      var s=document.createElement('script');s.id='s_'+cbName;
+      s.src=CLOUD_URL+'?type=getNutritionData&query='+encodeURIComponent(query)+'&callback='+cbName;
+      s.onerror=function(){clearTimeout(timeout);window[cbName]=null;resolve({source:'API Ninjas',status:'error'});};
+      document.head.appendChild(s);
+    }));
+  }
+
+  if(usdaKey){
+    promises.push(
+      fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query='+encodeURIComponent(query)+'&pageSize=1&api_key='+usdaKey)
+      .then(function(r){
+        if(r.status===401||r.status===403)return {source:'USDA',status:'key_error'};
+        if(!r.ok)return {source:'USDA',status:'error'};
+        return r.json().then(function(d){
+          if(!d||!d.foods||!d.foods.length)return {source:'USDA',status:'not_found'};
+          var n={};
+          (d.foods[0].foodNutrients||[]).forEach(function(x){
+            var nm=(x.nutrientName||'').toLowerCase();
+            if(nm.indexOf('energy')>=0&&!n.cal)n.cal=x.value;
+            else if(nm==='protein')n.prot=x.value;
+            else if(nm.indexOf('carbohydrate, by diff')>=0)n.carb=x.value;
+            else if(nm==='total lipid (fat)')n.fat=x.value;
+          });
+          if(!n.cal)return {source:'USDA',status:'not_found'};
+          var sc=serving/100;
+          return {source:'USDA',status:'ok',matchedFood:d.foods[0].description,
+            calories:Math.round(n.cal*sc),prot:Math.round((n.prot||0)*sc*10)/10,
+            carb:Math.round((n.carb||0)*sc*10)/10,fat:Math.round((n.fat||0)*sc*10)/10};
+        });
+      }).catch(function(){return {source:'USDA',status:'timeout'};})
+    );
+  }
+
+  Promise.all(promises).then(function(results){
+    nutMsiUpdateSourceRow(it.id,geminiSrc,results);
+  });
+}
+
+// Store source data per item for interactive selection
+var _msiSourceData={}; // itemId → {geminiSrc, sources}
+
+function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
+  var row=document.getElementById('msrow-'+itemId);
+  if(!row)return;
+  var existing=row.querySelector('.msi-source-row');
+  if(existing)existing.remove();
+
+  // Store for later use
+  _msiSourceData[itemId]={geminiSrc:geminiSrc,sources:sources};
+
+  var okSources=[geminiSrc].concat(sources.filter(function(s){return s.status==='ok';}));
+  var allCals=okSources.map(function(s){return s.calories;});
+  var calMin=Math.min.apply(null,allCals),calMax=Math.max.apply(null,allCals);
+  var spread=calMax-calMin,spreadPct=calMin>0?spread/calMin:0;
+  var highDisagree=(spreadPct>0.25||spread>100)&&okSources.length>1;
+
+  // Build avg
+  var avgCal=okSources.length>1?Math.round(allCals.reduce(function(a,b){return a+b;},0)/allCals.length):null;
+
+  var html='<div style="border-top:1px dashed var(--border);margin-top:6px;padding-top:6px;">';
+
+  // Source rows
+  var allSourcesForDisplay=[geminiSrc].concat(sources);
+  html+=allSourcesForDisplay.map(function(s){
+    if(s.status==='ok'){
+      var macroStr=s.prot!==undefined?' <span style="color:var(--muted);">P'+s.prot+' C'+s.carb+' F'+s.fat+'</span>':'';
+      var matchStr=s.matchedFood?' <span style="color:var(--muted);font-size:0.5rem;opacity:0.7;">('+s.matchedFood.substring(0,22)+')</span>':'';
+      var useBtn='<button onclick="nutMsiApplySource('+itemId+',\''+s.source+'\')" '+
+        'style="margin-left:4px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;color:var(--text2);font-size:0.52rem;padding:1px 6px;cursor:pointer;font-weight:700;">use</button>';
+      return '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">'+
+        '<span style="color:var(--muted);min-width:60px;">'+s.source+'</span>'+
+        '<span style="color:var(--accent);font-weight:700;">'+s.calories+' cal</span>'+
+        macroStr+matchStr+useBtn+'</div>';
+    } else if(s.status==='not_found'){
+      return '<div style="color:var(--muted);margin-bottom:3px;font-size:0.55rem;">'+s.source+': not found</div>';
+    } else if(s.status==='key_error'){
+      return '<div style="margin-bottom:3px;"><span style="color:var(--red);">'+s.source+': key error</span> '+
+        '<button onclick="nutKeyErrorShow(\''+s.source+'\',\'invalid key\')" '+
+        'style="background:none;border:1px solid var(--red);border-radius:10px;color:var(--red);font-size:0.52rem;padding:1px 6px;cursor:pointer;">fix key</button></div>';
+    } else if(s.status==='timeout'){
+      return '<div style="color:var(--muted);margin-bottom:3px;font-size:0.55rem;">'+s.source+': timed out</div>';
+    } else {
+      return '<div style="color:var(--muted);margin-bottom:3px;font-size:0.55rem;">'+s.source+': error</div>';
+    }
+  }).join('');
+
+  // Average + disagree row
+  if(okSources.length>1){
+    var disagreeFlag=highDisagree?'<span style="color:var(--orange);font-weight:700;margin-left:6px;">\u26a0 disagree</span>':'';
+    html+='<div style="display:flex;align-items:center;gap:4px;margin-top:4px;border-top:1px dashed var(--border);padding-top:4px;">'+
+      '<span style="color:var(--muted);min-width:60px;">Average</span>'+
+      '<span style="color:var(--text2);font-weight:700;">'+avgCal+' cal</span>'+
+      disagreeFlag+
+      '<button onclick="nutMsiApplySource('+itemId+',\'avg\')" '+
+      'style="margin-left:4px;background:var(--accent);border:none;border-radius:10px;color:#000;font-size:0.52rem;padding:1px 6px;cursor:pointer;font-weight:900;">use avg</button>'+
+      '</div>';
+  }
+
+  html+='</div>';
+
+  var div=document.createElement('div');
+  div.className='msi-source-row';
+  div.innerHTML=html;
+  row.appendChild(div);
+}
+
+function nutMsiApplySource(itemId,sourceName){
+  var data=_msiSourceData[itemId];if(!data)return;
+  var idx=_msi.findIndex(function(it){return it.id===itemId;});if(idx<0)return;
+  var it=_msi[idx];
+
+  var chosen=null;
+  if(sourceName==='avg'){
+    var okSrcs=[data.geminiSrc].concat(data.sources.filter(function(s){return s.status==='ok';}));
+    if(!okSrcs.length)return;
+    var avgCal=Math.round(okSrcs.reduce(function(a,s){return a+s.calories;},0)/okSrcs.length);
+    var ratio=it.cal>0?avgCal/(it.cal*it.qty):1;
+    chosen={cal:avgCal/it.qty,prot:Math.round(it.prot*ratio*10)/10,carb:Math.round(it.carb*ratio*10)/10,fat:Math.round(it.fat*ratio*10)/10};
+  } else {
+    var src=sourceName==='Gemini'?data.geminiSrc:data.sources.find(function(s){return s.source===sourceName&&s.status==='ok';});
+    if(!src)return;
+    var ratio=it.cal>0&&it.qty>0?src.calories/(it.cal*it.qty):1;
+    chosen={cal:src.calories/it.qty,prot:Math.round(it.prot*ratio*10)/10,carb:Math.round(it.carb*ratio*10)/10,fat:Math.round(it.fat*ratio*10)/10};
+    if(src.prot!==undefined){chosen.prot=src.prot/it.qty;chosen.carb=src.carb/it.qty;chosen.fat=src.fat/it.qty;}
+  }
+
+  _msi[idx]=Object.assign({},it,{cal:Math.round(chosen.cal*10)/10,prot:chosen.prot,carb:chosen.carb,fat:chosen.fat,_edited:true});
+
+  // Re-render the row content but keep the source panel
+  var row=document.getElementById('msrow-'+itemId);if(!row)return;
+  var srcPanel=row.querySelector('.msi-source-row');
+  var srcHTML=srcPanel?srcPanel.outerHTML:'';
+  row.innerHTML=nutMsiRowHTML(_msi[idx]);
+  row.insertAdjacentHTML('beforeend',srcHTML);
+  nutMealScanRenderTotals();
+}
+
 function nutMealScanRender(){
   nutMealScanRenderItems();nutMealScanRenderTotals();nutMsiSyncViewToggle();nutMsiCheckHighCalorie();
   // Show note when My Foods data was applied
@@ -10091,8 +10319,9 @@ function nutMsiRowHTML(it){
   h+=nutMsiPill(dFat,'g','F','var(--orange)',false,it.id,'fat');
   // Confidence + weight badge
   var _confColor=it._fromFoods?'var(--accent)':it._edited?'var(--blue)':it.confidence==='high'?'var(--green)':it.confidence==='low'?'var(--orange)':'var(--muted)';
-  var _confIcon=it._fromFoods?'?? ':it._edited?'✎ ':it.confidence==='high'?'✓ ':it.confidence==='low'?'⚠ ':'∼ ';
-  var _badge=it._fromFoods?'from foods':it._edited?'edited':_confIcon+(it.confidence||'medium');
+  var _confIcon=it._fromFoods?'📋 ':it._edited?'✎ ':it.confidence==='high'?'✓ ':it.confidence==='low'?'⚠ ':'∼ ';
+  var _src=it._fromFoods?'My Foods':it._edited?'edited':(it.source||'Gemini');
+  var _badge=_confIcon+_src+(it.confidence&&!it._fromFoods&&!it._edited?' · '+(it.confidence):'');
   if(it.weight_g)_badge+=' · '+it.weight_g+'g';
   h+='<div style="margin-left:auto;font-size:0.55rem;color:'+_confColor+';font-weight:700;letter-spacing:0.3px;white-space:nowrap;">'+_badge+'</div>';
   h+='</div>';
