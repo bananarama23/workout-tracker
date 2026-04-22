@@ -7695,6 +7695,175 @@ function nutCtxConfirmInline(){
   setTimeout(function(){nutVerifyInlineBackground(foodName,ctx,data);},300);
 }
 
+// ── Source result shape: {source, status, calories, protein, carbs, fat, fibre, satFat, sodium}
+// status: 'ok' | 'not_found' | 'error' | 'timeout' | 'key_error'
+
+// ── Shared fetch helpers ──────────────────────────────────────────
+function _nixFetch(query, serving, cnKey){
+  return new Promise(function(resolve){
+    var cbName='_nutNinja_'+Date.now();
+    var timeout=setTimeout(function(){
+      window[cbName]=null;
+      var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+      resolve({source:'API Ninjas',status:'timeout'});
+    },10000);
+    window[cbName]=function(result){
+      clearTimeout(timeout);window[cbName]=null;
+      var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+      if(!result){resolve({source:'API Ninjas',status:'error'});return;}
+      if(result.status==='error'){
+        var isKey=result.message&&(result.message.indexOf('NUT_NINJA_KEY')>=0||result.message.indexOf('401')>=0||result.message.indexOf('403')>=0);
+        resolve({source:'API Ninjas',status:isKey?'key_error':'error',message:result.message});return;
+      }
+      var items=Array.isArray(result.items)?result.items:[];
+      if(!items.length){resolve({source:'API Ninjas',status:'not_found'});return;}
+      // Warn if query split oddly (>3 items for a single dish query = likely wrong match)
+      var isSplit=items.length>3;
+      var a={cal:0,prot:0,carbs:0,fat:0,fib:0,sf:0,sod:0};
+      items.forEach(function(it){a.cal+=it.calories||0;a.prot+=it.protein_g||0;a.carbs+=it.carbohydrates_total_g||0;a.fat+=it.fat_total_g||0;a.fib+=it.fiber_g||0;a.sf+=it.fat_saturated_g||0;a.sod+=it.sodium_mg||0;});
+      resolve({source:'API Ninjas',status:isSplit?'split_warning':'ok',
+        calories:Math.round(a.cal),protein:Math.round(a.prot*10)/10,
+        carbs:Math.round(a.carbs*10)/10,fat:Math.round(a.fat*10)/10,
+        fibre:Math.round(a.fib*10)/10,satFat:Math.round(a.sf*10)/10,sodium:Math.round(a.sod)});
+    };
+    var s=document.createElement('script');s.id='s_'+cbName;
+    s.src=CLOUD_URL+'?type=getNutritionData&query='+encodeURIComponent(query)+'&callback='+cbName;
+    s.onerror=function(){clearTimeout(timeout);window[cbName]=null;resolve({source:'API Ninjas',status:'error'});};
+    document.head.appendChild(s);
+  });
+}
+
+function _usdaFetch(query, serving, usdaKey){
+  return fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query='+encodeURIComponent(query)+'&pageSize=1&api_key='+usdaKey,{signal:AbortSignal.timeout?AbortSignal.timeout(10000):undefined})
+  .then(function(r){
+    if(r.status===403||r.status===401)return {source:'USDA',status:'key_error'};
+    if(!r.ok)return {source:'USDA',status:'error'};
+    return r.json().then(function(d){
+      if(!d||!d.foods||!d.foods.length)return {source:'USDA',status:'not_found'};
+      var food=d.foods[0];
+      // Flag if result name doesn't look like the query (generic ingredient vs dish)
+      var foodName=(food.description||'').toLowerCase();
+      var q=query.toLowerCase();
+      var isGeneric=q.split(' ').filter(function(w){return w.length>3;}).every(function(w){return foodName.indexOf(w)<0;});
+      var n={};
+      (food.foodNutrients||[]).forEach(function(x){
+        var nm=(x.nutrientName||'').toLowerCase();
+        if(nm.indexOf('energy')>=0&&!n.calories)n.calories=x.value;
+        else if(nm==='protein')n.protein=x.value;
+        else if(nm.indexOf('carbohydrate, by diff')>=0)n.carbs=x.value;
+        else if(nm==='total lipid (fat)')n.fat=x.value;
+        else if(nm.indexOf('fiber')>=0)n.fibre=x.value;
+        else if(nm.indexOf('saturated')>=0)n.satFat=x.value;
+        else if(nm.indexOf('sodium')>=0)n.sodium=x.value;
+      });
+      if(!n.calories)return {source:'USDA',status:'not_found'};
+      var sc=serving/100;
+      return {source:'USDA',status:isGeneric?'low_confidence':'ok',matchedFood:food.description,
+        calories:Math.round((n.calories||0)*sc),protein:Math.round((n.protein||0)*sc*10)/10,
+        carbs:Math.round((n.carbs||0)*sc*10)/10,fat:Math.round((n.fat||0)*sc*10)/10,
+        fibre:Math.round((n.fibre||0)*sc*10)/10,satFat:Math.round((n.satFat||0)*sc*10)/10,
+        sodium:Math.round((n.sodium||0)*sc)};
+    });
+  })
+  .catch(function(){return {source:'USDA',status:'timeout'};});
+}
+
+// ── Build toast/banner message from source results ────────────────
+function _buildVerifyMsg(sources, reconciledData, initialCalories, updated){
+  var ok=sources.filter(function(s){return s.status==='ok'||s.status==='split_warning'||s.status==='low_confidence';});
+  var notFound=sources.filter(function(s){return s.status==='not_found';});
+  var errors=sources.filter(function(s){return s.status==='error'||s.status==='timeout';});
+  var keyErrors=sources.filter(function(s){return s.status==='key_error';});
+  var allCals=ok.map(function(s){return s.calories;}).filter(function(c){return c>0;});
+  var calSpread=allCals.length>1?Math.max.apply(null,allCals)-Math.min.apply(null,allCals):0;
+  var spreadPct=allCals.length>1&&Math.min.apply(null,allCals)>0?calSpread/Math.min.apply(null,allCals):0;
+  var highDisagree=(spreadPct>0.25||calSpread>150)&&ok.length>1;
+  var icon=highDisagree?'\u26a0\ufe0f':'\u2713';
+  var color=highDisagree?'var(--orange)':'var(--green)';
+  var parts=[];
+
+  if(ok.length===0){
+    // No sources found it
+    icon='\u2139\ufe0f';color='var(--muted)';
+    parts.push('Gemini estimate only \u2014 not found in any database');
+  } else if(highDisagree){
+    parts.push(icon+' Sources disagree ('+Math.min.apply(null,allCals)+'\u2013'+Math.max.apply(null,allCals)+' cal)');
+  } else {
+    var srcNames=ok.map(function(s){return s.source;}).join(' + ');
+    parts.push(icon+' Verified via '+srcNames);
+  }
+
+  // Warn about split queries
+  var splitSrc=sources.filter(function(s){return s.status==='split_warning';});
+  if(splitSrc.length)parts.push('\u26a0 API Ninjas split query into multiple items');
+
+  // Warn about low confidence USDA matches
+  var lowConf=sources.filter(function(s){return s.status==='low_confidence';});
+  if(lowConf.length)parts.push('USDA matched "'+lowConf[0].matchedFood+'" (may be generic)');
+
+  // Not found
+  if(notFound.length)parts.push(notFound.map(function(s){return s.source;}).join(', ')+': not found');
+
+  // Key errors — prompt to fix
+  if(keyErrors.length){
+    keyErrors.forEach(function(s){
+      parts.push('<span style="text-decoration:underline;cursor:pointer;" onclick="nutKeyErrorShow(\''+s.source+'\',\'invalid key\')">'+s.source+' key error \u2014 tap to fix</span>');
+    });
+  }
+
+  // Errors/timeouts
+  if(errors.length)parts.push(errors.map(function(s){return s.source;}).join(', ')+': '+(errors[0].status==='timeout'?'timed out':'error'));
+
+  // Cal change
+  if(updated&&reconciledData&&initialCalories){
+    var diff=Math.round((reconciledData.calories||0)-initialCalories);
+    if(Math.abs(diff)>50)parts.push('calories changed by '+(diff>0?'+':'')+diff);
+  }
+
+  if(ok.length>1||highDisagree)parts.push('<span style="text-decoration:underline;cursor:pointer;" onclick="nutSrcDetailShow()">see breakdown</span>');
+
+  return {html:parts.join(' \u00b7 '),color:color,highDisagree:highDisagree,ok:ok.length>0};
+}
+
+// ── Shared Gemini reconcile call ──────────────────────────────────
+function _geminiReconcile(foodName, context, initialData, serving, allSources, onDone){
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';if(!geminiKey){onDone(null);return;}
+  var okSources=allSources.filter(function(s){return s.status==='ok'||s.status==='split_warning'||s.status==='low_confidence';});
+  var prompt='Food: "'+foodName+'"'+(context?' ('+context+')':'')+'. Serving: '+serving+(initialData.unit||'g')+'.\n';
+  if(okSources.length>0){
+    prompt+='Sources:\n'+okSources.map(function(s){return s.source+(s.status==='low_confidence'?' (low confidence, may be generic)':'')+(s.status==='split_warning'?' (query may have split oddly)':'')+': '+s.calories+' cal, '+s.protein+'g protein, '+s.carbs+'g carbs, '+s.fat+'g fat';}).join('\n');
+    prompt+='\nReconcile. Ignore outliers and low-confidence results if they disagree with others.';
+  } else {
+    prompt+='No database results — use your best estimate based on standard recipes/restaurants.';
+  }
+  prompt+='\nReturn ONLY JSON: {"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0,"satFat":0,"sodium":0}. Macros in grams, sodium in mg.';
+  // 12s timeout so user gets a result even if slow
+  var done=false;
+  var timeout=setTimeout(function(){if(!done){done=true;onDone(null);}},12000);
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
+  }).then(function(r){return r.json();}).then(function(data){
+    if(done)return;done=true;clearTimeout(timeout);
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
+    if(!text){onDone(null);return;}
+    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    var js=text.indexOf('{'),je=text.lastIndexOf('}');if(js>=0&&je>js)text=text.slice(js,je+1);
+    try{onDone(JSON.parse(text));}catch(e){onDone(null);}
+  }).catch(function(){if(!done){done=true;clearTimeout(timeout);onDone(null);}});
+}
+
+// ── Run all source fetches in parallel ───────────────────────────
+function _fetchAllSources(query, serving, cnKey, usdaKey){
+  var promises=[];
+  if(cnKey)promises.push(_nixFetch(query,serving,cnKey));
+  if(usdaKey)promises.push(_usdaFetch(query,serving,usdaKey));
+  return Promise.all(promises);
+}
+
+// ════════════════════════════════════════════════════════════
+// INLINE SCAN VERIFY (add-from-photo flow → toast after log)
+// ════════════════════════════════════════════════════════════
 function nutVerifyInlineBackground(foodName,context,initialData){
   var cnKey=localStorage.getItem('wt_cn_key')||'';
   var usdaKey=localStorage.getItem('wt_usda_key')||'';
@@ -7702,136 +7871,82 @@ function nutVerifyInlineBackground(foodName,context,initialData){
   if(!geminiKey)return;
   var query=(context?context+' ':'')+foodName;
   var serving=parseFloat(initialData.serving)||100;
-  var promises=[];
-  if(cnKey){
-    promises.push(new Promise(function(resolve){
-      var cbName='_nutNinja_'+Date.now();
-      var timeout=setTimeout(function(){window[cbName]=null;resolve(null);},8000);
-      window[cbName]=function(result){
-        clearTimeout(timeout);window[cbName]=null;
-        if(!result||result.status==='error'||!result.items||!result.items.length){resolve(null);return;}
-        var a={cal:0,prot:0,carbs:0,fat:0,fib:0,sf:0,sod:0};
-        result.items.forEach(function(it){a.cal+=it.calories||0;a.prot+=it.protein_g||0;a.carbs+=it.carbohydrates_total_g||0;a.fat+=it.fat_total_g||0;a.fib+=it.fiber_g||0;a.sf+=it.fat_saturated_g||0;a.sod+=it.sodium_mg||0;});
-        resolve({source:'API Ninjas',calories:Math.round(a.cal),protein:Math.round(a.prot*10)/10,carbs:Math.round(a.carbs*10)/10,fat:Math.round(a.fat*10)/10,fibre:Math.round(a.fib*10)/10,satFat:Math.round(a.sf*10)/10,sodium:Math.round(a.sod)});
-      };
-      var s=document.createElement('script');s.id='s_'+cbName;
-      s.src=CLOUD_URL+'?type=getNutritionData&query='+encodeURIComponent(query)+'&callback='+cbName;
-      document.head.appendChild(s);
-    }));
-  }
-  if(usdaKey){
-    promises.push(
-      fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query='+encodeURIComponent(query)+'&pageSize=1&api_key='+usdaKey)
-      .then(function(r){return r.ok?r.json():null;})
-      .then(function(d){
-        if(!d||!d.foods||!d.foods.length)return null;
-        var n={};
-        (d.foods[0].foodNutrients||[]).forEach(function(x){
-          var nm=(x.nutrientName||'').toLowerCase();
-          if(nm.indexOf('energy')>=0&&!n.calories)n.calories=x.value;
-          else if(nm==='protein')n.protein=x.value;
-          else if(nm.indexOf('carbohydrate, by diff')>=0)n.carbs=x.value;
-          else if(nm==='total lipid (fat)')n.fat=x.value;
-          else if(nm.indexOf('fiber')>=0)n.fibre=x.value;
-          else if(nm.indexOf('saturated')>=0)n.satFat=x.value;
-          else if(nm.indexOf('sodium')>=0)n.sodium=x.value;
-        });
-        if(!n.calories)return null;
-        var sc=serving/100;
-        return {source:'USDA',calories:Math.round((n.calories||0)*sc),protein:Math.round((n.protein||0)*sc*10)/10,carbs:Math.round((n.carbs||0)*sc*10)/10,fat:Math.round((n.fat||0)*sc*10)/10,fibre:Math.round((n.fibre||0)*sc*10)/10,satFat:Math.round((n.satFat||0)*sc*10)/10,sodium:Math.round((n.sodium||0)*sc)};
-      }).catch(function(){return null;})
-    );
-  }
-  var geminiSrc={source:'Gemini',calories:Math.round(initialData.calories||0),protein:parseFloat(initialData.protein)||0,carbs:parseFloat(initialData.carbs)||0,fat:parseFloat(initialData.fat)||0};
-  if(!promises.length){
-    if(context)nutVerifyInlineGemini(foodName,context,initialData,serving);
-    return;
-  }
-  Promise.all(promises).then(function(results){
-    var sources=[geminiSrc].concat(results.filter(function(r){return r!==null;}));
-    if(sources.length<2){if(context)nutVerifyInlineGemini(foodName,context,initialData,serving);return;}
-    var cals=sources.map(function(s){return s.calories;}).filter(function(c){return c>0;});
-    var calMin=Math.min.apply(null,cals),calMax=Math.max.apply(null,cals);
-    var spread=calMax-calMin,spreadPct=calMin>0?spread/calMin:0;
-    var highDisagree=spreadPct>0.25||spread>150;
-    nutVerifyInlineReconcile(foodName,context,initialData,sources,highDisagree,serving);
+  var initialCalories=Math.round(initialData.calories||0);
+  _fetchAllSources(query,serving,cnKey,usdaKey).then(function(results){
+    var allSources=results;
+    _nutSrcData={sources:allSources,foodName:foodName,context:context,serving:serving,unit:initialData.unit||'g'};
+    _geminiReconcile(foodName,context,initialData,serving,allSources,function(reconciled){
+      var msg=_buildVerifyMsg(allSources,reconciled,initialCalories,false);
+      // Try to update the logged entry
+      var updated=false;
+      var calBefore=initialCalories;
+      if(reconciled){
+        var now=Date.now();
+        for(var i=_nutEntries.length-1;i>=0;i--){
+          if(_nutEntries[i].food&&_nutEntries[i].food.toLowerCase()===foodName.toLowerCase()){
+            if(_nutEntries[i].id&&(now-_nutEntries[i].id)<120000){
+              var entry=_nutEntries[i];
+              var amt=parseFloat(entry.amount||serving);
+              var ratio=amt/serving;
+              calBefore=_nutEntries[i].calories||initialCalories;
+              _nutEntries[i].calories=Math.round((reconciled.calories||0)*ratio);
+              _nutEntries[i].protein=Math.round((reconciled.protein||0)*ratio*10)/10;
+              _nutEntries[i].carbs=Math.round((reconciled.carbs||0)*ratio*10)/10;
+              _nutEntries[i].fat=Math.round((reconciled.fat||0)*ratio*10)/10;
+              updated=true;
+              nutSaveEntries();nutRenderDay();
+              break;
+            }
+          }
+        }
+      }
+      // Rebuild message with updated=true and actual cal diff
+      msg=_buildVerifyMsg(allSources,reconciled,calBefore,updated);
+      _nutShowVerifyBanner(msg,updated,reconciled,foodName,serving,calBefore);
+    });
   });
 }
 
 function nutVerifyInlineGemini(foodName,context,initialData,serving){
-  var geminiKey=localStorage.getItem('wt_gemini_key')||'';if(!geminiKey)return;
-  var prompt='Give accurate nutrition for: "'+context+' '+foodName+'". Use brand/restaurant data if brand mentioned. Serving: '+serving+(initialData.unit||'g')+'. Return ONLY JSON: {"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0,"satFat":0,"sodium":0}. Macros in grams, sodium in mg.';
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
-  }).then(function(r){return r.json();}).then(function(data){
-    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
-    if(!text)return;
-    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    var js=text.indexOf('{'),je=text.lastIndexOf('}');if(js>=0&&je>js)text=text.slice(js,je+1);
-    try{
-      var d=JSON.parse(text);
-      nutVerifyInlineToast('ok',[{source:'Gemini+context',calories:Math.round(d.calories||0)}],false,foodName,d,initialData,serving);
-    }catch(e){}
-  }).catch(function(){});
+  // Gemini-only refinement when no DB keys
+  _geminiReconcile(foodName,context,initialData,serving,[],function(d){
+    if(!d)return;
+    var msg=_buildVerifyMsg([],d,Math.round(initialData.calories||0),false);
+    _nutShowVerifyBanner(msg,false,d,foodName,serving,Math.round(initialData.calories||0));
+  });
 }
 
-function nutVerifyInlineReconcile(foodName,context,initialData,sources,highDisagree,serving){
-  var geminiKey=localStorage.getItem('wt_gemini_key')||'';if(!geminiKey)return;
-  var srcLines=sources.map(function(s){return s.source+': '+s.calories+' cal, '+s.protein+'g protein, '+s.carbs+'g carbs, '+s.fat+'g fat';}).join('\n');
-  var prompt='Food: "'+foodName+'"'+(context?' ('+context+')':'')+'. Serving: '+serving+(initialData.unit||'g')+'\nSources:\n'+srcLines+'\nReconcile. Weight toward majority; ignore outliers. Return ONLY JSON: {"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0,"satFat":0,"sodium":0}. Macros in grams, sodium in mg.';
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
-  }).then(function(r){return r.json();}).then(function(data){
-    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
-    if(!text)return;
-    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    var js=text.indexOf('{'),je=text.lastIndexOf('}');if(js>=0&&je>js)text=text.slice(js,je+1);
-    try{
-      var d=JSON.parse(text);
-      nutVerifyInlineToast(highDisagree?'warn':'ok',sources,highDisagree,foodName,d,initialData,serving);
-    }catch(e){}
-  }).catch(function(){});
+function _nutShowVerifyBanner(msg,updated,reconciledData,foodName,serving,calBefore){
+  var banner=document.getElementById('nutConfBanner');if(!banner)return;
+  var rejectBtn='';
+  if(updated&&reconciledData){
+    var diff=Math.round((reconciledData.calories||0)-calBefore);
+    if(Math.abs(diff)>50){
+      rejectBtn='<button onclick="nutVerifyReject(\''+foodName.replace(/'/g,'')+'\','+calBefore+')" style="background:none;border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--muted);font-size:0.68rem;padding:3px 8px;cursor:pointer;white-space:nowrap;">Revert</button>';
+    }
+  }
+  banner.innerHTML='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
+    '<span style="flex:1;font-size:0.78rem;color:'+msg.color+';">'+msg.html+'</span>'+
+    rejectBtn+
+    '<button onclick="document.getElementById(\'nutConfBanner\').style.display=\'none\'" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;">&#215;</button>'+
+    '</div>';
+  banner.style.display='block';
+  if(!msg.highDisagree&&!rejectBtn)setTimeout(function(){if(banner)banner.style.display='none';},6000);
 }
 
-function nutVerifyInlineToast(level,sources,highDisagree,foodName,reconciledData,initialData,serving){
-  // Find the most recently added entry for this food and update it
-  var recentIdx=-1;
+function nutVerifyReject(foodName,originalCal){
+  // Revert the most recent entry for this food back to original calories
   var now=Date.now();
   for(var i=_nutEntries.length-1;i>=0;i--){
     if(_nutEntries[i].food&&_nutEntries[i].food.toLowerCase()===foodName.toLowerCase()){
-      // Only update if logged in last 2 minutes
-      if(_nutEntries[i].id&&(now-_nutEntries[i].id)<120000){recentIdx=i;break;}
+      if(_nutEntries[i].id&&(now-_nutEntries[i].id)<120000){
+        _nutEntries[i].calories=originalCal;
+        nutSaveEntries();nutRenderDay();
+        var banner=document.getElementById('nutConfBanner');
+        if(banner){banner.innerHTML='<span style="font-size:0.78rem;color:var(--muted);">\u21a9 Reverted to original calories</span>';setTimeout(function(){banner.style.display='none';},2500);}
+        return;
+      }
     }
-  }
-  var updated=false;
-  if(recentIdx>=0&&reconciledData){
-    var entry=_nutEntries[recentIdx];
-    var ratio=entry.qty?(entry.qty*parseFloat(entry.servingSize||serving)/serving):1;
-    _nutEntries[recentIdx].calories=Math.round((reconciledData.calories||0)*ratio);
-    _nutEntries[recentIdx].protein=Math.round((reconciledData.protein||0)*ratio*10)/10;
-    _nutEntries[recentIdx].carbs=Math.round((reconciledData.carbs||0)*ratio*10)/10;
-    _nutEntries[recentIdx].fat=Math.round((reconciledData.fat||0)*ratio*10)/10;
-    updated=true;
-    nutSaveEntries();nutRenderDay();
-  }
-  // Show toast
-  var cals=sources.map(function(s){return s.calories;}).filter(function(c){return c>0;});
-  var icon=highDisagree?'⚠️':'✓';
-  var color=highDisagree?'var(--orange)':'var(--green)';
-  var msg='';
-  if(highDisagree){
-    msg=icon+' Sources disagree ('+Math.min.apply(null,cals)+'–'+Math.max.apply(null,cals)+' cal)'+(updated?' — entry updated':'')+' — <u style="cursor:pointer" onclick="nutSrcDetailShow()">see breakdown</u>';
-  } else {
-    var srcNames=sources.map(function(s){return s.source;}).join(', ');
-    msg=icon+' Verified via '+srcNames+(updated?' — entry updated':'');
-  }
-  var banner=document.getElementById('nutConfBanner');
-  if(banner){
-    banner.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><span style="font-size:0.78rem;color:'+color+';">'+msg+'</span><button onclick="document.getElementById(\'nutConfBanner\').style.display=\'none\'" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;">&#215;</button></div>';
-    banner.style.display='block';
-    if(!highDisagree)setTimeout(function(){if(banner)banner.style.display='none';},5000);
   }
 }
 
@@ -7845,104 +7960,38 @@ function nutVerifyInBackground(foodName,context,extraSources,initialData,statusE
   if(!geminiKey)return;
   var query=(context?context+' ':'')+foodName;
   var serving=parseFloat(initialData.serving)||100;
-  var unit=initialData.unit||'g';
-  var promises=[];
-  // API Ninjas routed through GAS to avoid CORS — cnKey just signals user has set the key in Script Properties
-  if(cnKey){
-    promises.push(new Promise(function(resolve){
-      var cbName='_nutNinja_'+Date.now();
-      var timeout=setTimeout(function(){window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);resolve(null);},8000);
-      window[cbName]=function(result){
-        clearTimeout(timeout);window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
-        if(!result||result.status==='error'||!result.items||!result.items.length){resolve(null);return;}
-        var a={cal:0,prot:0,carbs:0,fat:0,fib:0,sf:0,sod:0};
-        result.items.forEach(function(it){a.cal+=it.calories||0;a.prot+=it.protein_g||0;a.carbs+=it.carbohydrates_total_g||0;a.fat+=it.fat_total_g||0;a.fib+=it.fiber_g||0;a.sf+=it.fat_saturated_g||0;a.sod+=it.sodium_mg||0;});
-        resolve({source:'API Ninjas',calories:Math.round(a.cal),protein:Math.round(a.prot*10)/10,carbs:Math.round(a.carbs*10)/10,fat:Math.round(a.fat*10)/10,fibre:Math.round(a.fib*10)/10,satFat:Math.round(a.sf*10)/10,sodium:Math.round(a.sod)});
-      };
-      var s=document.createElement('script');s.id='s_'+cbName;
-      s.src=CLOUD_URL+'?type=getNutritionData&query='+encodeURIComponent(query)+'&callback='+cbName;
-      document.head.appendChild(s);
-    }));
-  }
-  if(usdaKey){
-    promises.push(
-      fetch('https://api.nal.usda.gov/fdc/v1/foods/search?query='+encodeURIComponent(query)+'&pageSize=1&api_key='+usdaKey)
-      .then(function(r){return r.ok?r.json():null;})
-      .then(function(d){
-        if(!d||!d.foods||!d.foods.length)return null;
-        var n={};
-        (d.foods[0].foodNutrients||[]).forEach(function(x){
-          var nm=(x.nutrientName||'').toLowerCase();
-          if(nm.indexOf('energy')>=0&&!n.calories)n.calories=x.value;
-          else if(nm==='protein')n.protein=x.value;
-          else if(nm.indexOf('carbohydrate, by diff')>=0)n.carbs=x.value;
-          else if(nm==='total lipid (fat)')n.fat=x.value;
-          else if(nm.indexOf('fiber')>=0)n.fibre=x.value;
-          else if(nm.indexOf('saturated')>=0)n.satFat=x.value;
-          else if(nm.indexOf('sodium')>=0)n.sodium=x.value;
-        });
-        if(!n.calories)return null;
-        var sc=serving/100;
-        return {source:'USDA',calories:Math.round((n.calories||0)*sc),protein:Math.round((n.protein||0)*sc*10)/10,carbs:Math.round((n.carbs||0)*sc*10)/10,fat:Math.round((n.fat||0)*sc*10)/10,fibre:Math.round((n.fibre||0)*sc*10)/10,satFat:Math.round((n.satFat||0)*sc*10)/10,sodium:Math.round((n.sodium||0)*sc)};
-      }).catch(function(){return null;})
-    );
-  }
-  var geminiSrc={source:'Gemini',calories:Math.round(initialData.calories||0),protein:Math.round((initialData.protein||0)*10)/10,carbs:Math.round((initialData.carbs||0)*10)/10,fat:Math.round((initialData.fat||0)*10)/10,fibre:Math.round((initialData.fibre||0)*10)/10,satFat:Math.round((initialData.satFat||0)*10)/10,sodium:Math.round(initialData.sodium||0)};
-  Promise.all(promises).then(function(results){
-    var sources=[geminiSrc].concat(results.filter(function(r){return r!==null;}));
-    _nutSrcData={sources:sources,foodName:foodName,context:context,serving:serving,unit:unit};
-    if(sources.length<2){
-      // Only Gemini — if context was provided do a refined call
-      if(context)nutVerifyGeminiRefine(foodName,context,initialData,sources,statusEl);
-      return;
-    }
-    var cals=sources.map(function(s){return s.calories;}).filter(function(c){return c>0;});
-    var calMin=Math.min.apply(null,cals),calMax=Math.max.apply(null,cals);
-    var spread=calMax-calMin,spreadPct=calMin>0?spread/calMin:0;
-    var highDisagree=spreadPct>0.25||spread>150;
-    nutVerifyReconcile(foodName,context,initialData,sources,highDisagree,statusEl);
+  var initialCalories=Math.round(initialData.calories||0);
+  _fetchAllSources(query,serving,cnKey,usdaKey).then(function(results){
+    var allSources=results;
+    _nutSrcData={sources:allSources,foodName:foodName,context:context,serving:serving,unit:initialData.unit||'g'};
+    _geminiReconcile(foodName,context,initialData,serving,allSources,function(reconciled){
+      if(reconciled&&!_nutFieldsTouched)nutVerifyApply(reconciled);
+      var msg=_buildVerifyMsg(allSources,reconciled,initialCalories,false);
+      nutConfBannerShow(msg);
+      // Fire key error alerts for any bad keys
+      allSources.filter(function(s){return s.status==='key_error';}).forEach(function(s){
+        setTimeout(function(){nutKeyErrorShow(s.source,'key rejected by server');},500);
+      });
+    });
   });
 }
 
 function nutVerifyGeminiRefine(foodName,context,initialData,sources,statusEl){
-  var geminiKey=localStorage.getItem('wt_gemini_key')||'';if(!geminiKey)return;
-  var prompt='Give accurate nutrition for: "'+context+' '+foodName+'". Use brand/restaurant data if brand is mentioned. Serving: '+initialData.serving+(initialData.unit||'g')+'. Return ONLY JSON with keys: calories,protein,carbs,fat,fibre,satFat,sodium. Macros in grams, sodium in mg.';
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
-  }).then(function(r){return r.json();}).then(function(data){
-    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
-    if(!text)return;
-    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    var js=text.indexOf('{'),je=text.lastIndexOf('}');if(js>=0&&je>js)text=text.slice(js,je+1);
-    try{
-      var d=JSON.parse(text);
-      var refined={source:'Gemini+context',calories:Math.round(d.calories||0),protein:Math.round((d.protein||0)*10)/10,carbs:Math.round((d.carbs||0)*10)/10,fat:Math.round((d.fat||0)*10)/10,fibre:Math.round((d.fibre||0)*10)/10,satFat:Math.round((d.satFat||0)*10)/10,sodium:Math.round(d.sodium||0)};
-      _nutSrcData={sources:[refined],foodName:foodName,context:context};
-      if(!_nutFieldsTouched)nutVerifyApply(d);
-      nutConfBannerShow('ok',[refined],false);
-    }catch(e){}
-  }).catch(function(){});
+  // Delegate to shared reconcile
+  var serving=parseFloat(initialData.serving)||100;
+  _geminiReconcile(foodName,context,initialData,serving,sources||[],function(d){
+    if(d&&!_nutFieldsTouched)nutVerifyApply(d);
+    var msg=_buildVerifyMsg(sources||[],d,Math.round(initialData.calories||0),false);
+    nutConfBannerShow(msg);
+  });
 }
-
 function nutVerifyReconcile(foodName,context,initialData,sources,highDisagree,statusEl){
-  var geminiKey=localStorage.getItem('wt_gemini_key')||'';if(!geminiKey)return;
-  var srcLines=sources.map(function(s){return s.source+': '+s.calories+' cal, '+s.protein+'g protein, '+s.carbs+'g carbs, '+s.fat+'g fat';}).join('\n');
-  var prompt='Food: "'+foodName+'"'+(context?' ('+context+')':'')+'. Serving: '+initialData.serving+(initialData.unit||'g')+'.\nSources:\n'+srcLines+'\nReconcile these estimates. Weight toward the majority; ignore outliers. Return ONLY JSON: {"calories":0,"protein":0,"carbs":0,"fat":0,"fibre":0,"satFat":0,"sodium":0}. Macros in grams, sodium in mg.';
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:200}})
-  }).then(function(r){return r.json();}).then(function(data){
-    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
-    if(!text)return;
-    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    var js=text.indexOf('{'),je=text.lastIndexOf('}');if(js>=0&&je>js)text=text.slice(js,je+1);
-    try{
-      var d=JSON.parse(text);
-      if(!_nutFieldsTouched)nutVerifyApply(d);
-      nutConfBannerShow(highDisagree?'warn':'ok',sources,highDisagree);
-    }catch(e){}
-  }).catch(function(){});
+  var serving=parseFloat(initialData.serving)||100;
+  _geminiReconcile(foodName,context,initialData,serving,sources,function(d){
+    if(d&&!_nutFieldsTouched)nutVerifyApply(d);
+    var msg=_buildVerifyMsg(sources,d,Math.round(initialData.calories||0),false);
+    nutConfBannerShow(msg);
+  });
 }
 
 function nutVerifyApply(d){
@@ -7952,22 +8001,15 @@ function nutVerifyApply(d){
   if(_nffBase){_nffBase.calories=parseFloat(d.calories)||_nffBase.calories;_nffBase.protein=parseFloat(d.protein)||_nffBase.protein;_nffBase.carbs=parseFloat(d.carbs)||_nffBase.carbs;_nffBase.fat=parseFloat(d.fat)||_nffBase.fat;}
 }
 
-function nutConfBannerShow(level,sources,highDisagree){
+function nutConfBannerShow(msg){
+  // msg is the object returned by _buildVerifyMsg
   var banner=document.getElementById('nutConfBanner');if(!banner)return;
-  var icon=level==='warn'?'\u26a0\ufe0f':'\u2713';
-  var color=level==='warn'?'var(--orange)':'var(--green)';
-  var srcNames=sources?sources.map(function(s){return s.source;}).join(', '):'';
-  var calVals=sources?sources.map(function(s){return s.source+': '+s.calories+'cal';}).join(' \u00b7 '):'';
-  var msg='';
-  if(highDisagree){
-    var cals=sources.map(function(s){return s.calories;}).filter(function(c){return c>0;});
-    msg=icon+' Sources disagree ('+Math.min.apply(null,cals)+'\u2013'+Math.max.apply(null,cals)+' cal) \u2014 reconciled. <span style="text-decoration:underline;cursor:pointer;" onclick="nutSrcDetailShow()">See breakdown</span>';
-  } else {
-    msg=icon+' Verified via '+srcNames;
-  }
-  banner.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><span style="font-size:0.78rem;color:'+color+';">'+msg+'</span><button onclick="document.getElementById(\'nutConfBanner\').style.display=\'none\'" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;">&#215;</button></div>';
+  banner.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'+
+    '<span style="font-size:0.78rem;color:'+msg.color+';">'+msg.html+'</span>'+
+    '<button onclick="document.getElementById(\'nutConfBanner\').style.display=\'none\'" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0 4px;">&#215;</button>'+
+    '</div>';
   banner.style.display='block';
-  if(!highDisagree)setTimeout(function(){if(banner)banner.style.display='none';},5000);
+  if(!msg.highDisagree)setTimeout(function(){if(banner)banner.style.display='none';},5000);
 }
 
 function nutSrcDetailShow(){
