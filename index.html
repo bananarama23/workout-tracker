@@ -53,7 +53,6 @@ button:active{opacity:0.82;}
 /* PAGES */
 .page{position:fixed;top:0;left:0;right:0;bottom:calc(var(--nav-h) + var(--safe-b));overflow-y:scroll;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;overscroll-behavior:contain;}
 .page.active{display:flex;animation:fadeIn 0.12s ease both;}
-#nutFoodFormOverlay.active{overflow:hidden;}
 .page-body{padding-bottom:32px;}
 
 /* NAV */
@@ -1447,30 +1446,26 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   <div id="nutProcessingLabel" style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:3px;color:var(--accent);opacity:0.85;">SCANNING</div>
 </div>
 
-<!-- NUTRITION: Create / edit food overlay -->
-<div id="nutFoodFormOverlay" class="page" style="z-index:400;overflow:hidden;flex-direction:column;">
-  <!-- Sticky header — contained within the page div, no leaking -->
-  <div style="position:sticky;top:0;background:var(--bg);padding:calc(var(--safe-t) + 12px) 16px 12px;border-bottom:1px solid var(--border);z-index:1;box-sizing:border-box;flex-shrink:0;">
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-      <button onclick="nutCloseFoodForm()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);width:36px;height:36px;border-radius:50%;font-size:1.1rem;cursor:pointer;flex-shrink:0;">&#8592;</button>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;" id="nutFoodFormTitle">ADD FOOD</div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <button onclick="nutCamOpen()" style="background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);padding:6px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;cursor:pointer;">📷 SCAN</button>
-        <button onclick="nutOpenTypeFood()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);padding:6px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;cursor:pointer;">⌨ TYPE</button>
-        <button onclick="nutSaveFood()" style="background:var(--accent);color:#000;border:none;border-radius:var(--r-sm);padding:6px 14px;font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:1px;font-weight:900;cursor:pointer;">SAVE</button>
-      </div>
+<!-- NUTRITION: Create / edit food -->
+<div id="nutFoodFormOverlay" style="display:none;position:fixed;inset:0;z-index:900;background:var(--bg);flex-direction:column;">
+  <!-- Header — fixed at top, always visible -->
+  <div style="background:var(--bg);padding:calc(var(--safe-t) + 12px) 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+    <button onclick="nutCloseFoodForm()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);width:36px;height:36px;border-radius:50%;font-size:1.1rem;cursor:pointer;flex-shrink:0;">&#8592;</button>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;flex:1;text-align:center;" id="nutFoodFormTitle">ADD FOOD</div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <button onclick="nutCamOpen()" style="background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:var(--r-sm);padding:6px 10px;font-family:'Bebas Neue',sans-serif;font-size:0.72rem;letter-spacing:1px;cursor:pointer;">📷</button>
+      <button onclick="nutOpenTypeFood()" style="background:var(--card2);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r-sm);padding:6px 10px;font-family:'Bebas Neue',sans-serif;font-size:0.72rem;letter-spacing:1px;cursor:pointer;">⌨</button>
     </div>
   </div>
-  <!-- Scrollable body -->
+  <!-- Scrollable body — flex:1 so it fills between header and footer -->
   <div id="nutFoodFormBody" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-    <div style="padding:16px 20px calc(var(--nav-h) + var(--safe-b) + 40px);">
+    <div style="padding:16px 20px 24px;">
     <!-- Scan status -->
     <div id="nutScanStatus" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;font-size:0.82rem;color:var(--muted);text-align:center;"></div>
-
     <input type="file" id="nutPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="nutHandlePhoto(this)">
     <div class="log-field"><label>Food Name</label><input id="nff_name" type="text" class="log-input" placeholder="e.g. Chicken Breast"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div class="log-field"><label>Serving size</label><input id="nff_serving" type="number" inputmode="decimal" class="log-input" placeholder="100"></div>
+      <div class="log-field"><label>Serving size</label><input id="nff_serving" type="number" inputmode="decimal" class="log-input" placeholder="100" oninput="nffServingScale()"></div>
       <div class="log-field"><label>Unit</label>
         <select id="nff_unit" class="log-input" style="padding:12px 14px;">
           <option value="g">g</option><option value="ml">ml</option><option value="oz">oz</option>
@@ -1480,8 +1475,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
     </div>
     <div class="log-field">
-      <label>Serving description <span style="color:var(--muted);font-weight:400;">(optional, e.g. "13 crisps" or "1 medium banana")</span></label>
-      <input id="nff_servdesc" type="text" class="log-input" placeholder="e.g. 13 crisps, 1 slice, 1 medium banana" oninput="nffServDescPreview()">
+      <label>Serving description <span style="color:var(--muted);font-weight:400;">(optional)</span></label>
+      <input id="nff_servdesc" type="text" class="log-input" placeholder="e.g. 13 crisps, 1 slice" oninput="nffServDescPreview()">
       <div id="nff_servdesc_preview" style="font-size:0.68rem;color:var(--green);margin-top:5px;min-height:16px;"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -1493,15 +1488,19 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div class="log-field"><label>Sat Fat (g)</label><input id="nff_satfat" type="number" inputmode="decimal" class="log-input" placeholder="0"></div>
       <div class="log-field" style="grid-column:1/-1;"><label>Sodium (mg)</label><input id="nff_sodium" type="number" inputmode="decimal" class="log-input" placeholder="0"></div>
     </div>
+    <!-- Source attribution — shown after scan -->
+    <div id="nff_source" style="display:none;font-size:0.68rem;color:var(--muted);margin-bottom:10px;padding:6px 10px;background:var(--card);border-radius:var(--r-sm);border:1px solid var(--border);"></div>
     <div class="log-msg" id="nutFoodFormMsg" style="margin-bottom:10px;"></div>
     <input type="hidden" id="nff_editIdx">
-    <div style="display:flex;gap:8px;">
-      <button onclick="nutSaveFood()" style="flex:1;padding:14px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">SAVE FOOD</button>
-      <button id="nutDeleteFoodBtn" onclick="nutDeleteFood()" style="display:none;padding:14px 18px;background:var(--red-dim);color:var(--red);border:1px solid var(--red);border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;cursor:pointer;">DELETE</button>
-    </div>
     </div>
   </div>
+  <!-- Footer — fixed at bottom, always visible -->
+  <div style="background:var(--bg);padding:12px 16px calc(var(--safe-b) + 12px);border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;">
+    <button onclick="nutSaveFood()" style="flex:1;padding:14px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">SAVE FOOD</button>
+    <button id="nutDeleteFoodBtn" onclick="nutDeleteFood()" style="display:none;padding:14px 18px;background:var(--red-dim);color:var(--red);border:1px solid var(--red);border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;cursor:pointer;">DELETE</button>
+  </div>
 </div>
+
 
 <!-- NUTRITION: Serving size picker -->
 <div id="nutServingOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;overflow-y:auto;-webkit-overflow-scrolling:touch;" class="overlay-anim">
@@ -7303,21 +7302,16 @@ function nutOpenFoodForm(idx){
   var msg=document.getElementById('nutFoodFormMsg');if(msg)msg.textContent='';
   // Clear scan/type status from previous use
   var ss=document.getElementById('nutScanStatus');if(ss){ss.style.display='none';ss.innerHTML='';}
+  var sf=document.getElementById('nff_source');if(sf){sf.style.display='none';sf.textContent='';}
   var ov=document.getElementById('nutFoodFormOverlay');
   var body=document.getElementById('nutFoodFormBody');
-  if(ov){
-    // Use classList like navTo does — remove active from all pages, add to food form
-    document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
-    ov.classList.add('active');
-    _nutFoodFormPrevPage=currentPage;
-    currentPage='foodform';
-  }
+  if(ov){ov.style.display='flex';_nutFoodFormPrevPage=currentPage;}
   if(body){body.scrollTop=0;}
 }
 var _nutFoodFormPrevPage='nutrition';
 function nutCloseFoodForm(){
   var ov=document.getElementById('nutFoodFormOverlay');
-  if(ov)ov.classList.remove('active');
+  if(ov)ov.style.display='none';
   navTo(_nutFoodFormPrevPage||'nutrition');
 }
 
@@ -7608,6 +7602,9 @@ function nutFillFromScan(d,statusEl){
   setVal('nff_satfat',d.satFat!==null?Math.round(d.satFat*10)/10:'');
   setVal('nff_sodium',d.sodium!==null?Math.round(d.sodium):'');
   if(statusEl){statusEl.textContent='\u2713 '+(d.name||'Food')+' read \u2014 check and save';statusEl.style.color='var(--green)';setTimeout(function(){if(statusEl){statusEl.style.display='none';statusEl.style.color='';}},4000);}
+  // Show source attribution
+  var srcEl=document.getElementById('nff_source');
+  if(srcEl){srcEl.style.display='block';srcEl.textContent='\u2139 Source: Gemini vision estimate \u2014 verify values will refine this after saving';}
   // Show context prompt after short delay (not for labels — they have all the data)
   var isLabel=!d.brand&&d.servingDesc!==undefined&&d.serving>0&&d.calories>0&&!d.type;
   // Heuristic: if it returned a brand field it came from real food path
@@ -8032,6 +8029,18 @@ function nutVerifyApply(d){
   upd('nff_cal',d.calories,0);upd('nff_prot',d.protein,1);upd('nff_carb',d.carbs,1);upd('nff_fat',d.fat,1);
   if(d.fibre!=null)upd('nff_fib',d.fibre,1);if(d.satFat!=null)upd('nff_satfat',d.satFat,1);if(d.sodium!=null)upd('nff_sodium',d.sodium,0);
   if(_nffBase){_nffBase.calories=parseFloat(d.calories)||_nffBase.calories;_nffBase.protein=parseFloat(d.protein)||_nffBase.protein;_nffBase.carbs=parseFloat(d.carbs)||_nffBase.carbs;_nffBase.fat=parseFloat(d.fat)||_nffBase.fat;}
+  // Update source label with verified sources
+  var srcEl=document.getElementById('nff_source');
+  if(srcEl&&_nutSrcData&&_nutSrcData.sources){
+    var okSrcs=_nutSrcData.sources.filter(function(s){return s.status==='ok'||s.status==='low_confidence'||s.status==='split_warning';});
+    var notFound=_nutSrcData.sources.filter(function(s){return s.status==='not_found';});
+    var parts=[];
+    if(okSrcs.length)parts.push('\u2713 Verified via '+okSrcs.map(function(s){return s.source;}).join(' + '));
+    if(notFound.length)parts.push(notFound.map(function(s){return s.source;}).join(', ')+': not found');
+    srcEl.style.display='block';
+    srcEl.textContent=parts.join(' \u00b7 ')||'Gemini estimate';
+    srcEl.style.color=okSrcs.length?'var(--green)':'var(--muted)';
+  }
 }
 
 function nutConfBannerShow(msg){
