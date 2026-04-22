@@ -10287,8 +10287,6 @@ function nutMsiVerifyAll(items){
 
 function nutMsiVerifyItem(it){
   var query=it.name.replace(/\s*\(est\.\)/,'').trim();
-  // Estimate a sensible serving weight — weight_g from parser may be 0 or 1
-  // Fall back to estimating from Gemini calories (avg ~2 cal/g for mixed food)
   var rawWeight=it.weight_g||0;
   var geminiTotalCal=Math.round(it.cal*it.qty);
   var serving=rawWeight>10?rawWeight:(geminiTotalCal>0?Math.round(geminiTotalCal/2):100);
@@ -10297,25 +10295,18 @@ function nutMsiVerifyItem(it){
     prot:Math.round(it.prot*it.qty*10)/10,
     carb:Math.round(it.carb*it.qty*10)/10,
     fat:Math.round(it.fat*it.qty*10)/10};
-  var promises=[];
 
-  // Estimate serving gram weight from Gemini calories
-  var msiGramEst=100;
-  if(geminiTotalCal>0){
-    var qLow=query.toLowerCase();
-    var msiCalPer100g=qLow.match(/fries|chips|nuts|avocado|cheese|bacon|butter/)?350:
-                      qLow.match(/burger|sandwich|wrap|burrito|pizza/)?250:
-                      qLow.match(/rice|pasta|noodle|bread|potato/)?130:
-                      qLow.match(/chicken|beef|pork|fish|salmon|tuna|meat/)?180:
-                      qLow.match(/salad|vegetable|broccoli|spinach|lettuce/)?30:
-                      qLow.match(/soup|curry|stew|sauce/)?80:
-                      qLow.match(/cake|cookie|chocolate|dessert/)?350:200;
-    msiGramEst=Math.round(geminiTotalCal/msiCalPer100g*100);
-    msiGramEst=Math.max(50,Math.min(msiGramEst,800));
+  // Show loading placeholder immediately
+  var row=document.getElementById('msrow-'+it.id);
+  if(row){
+    var existing=row.querySelector('.msi-source-row');if(existing)existing.remove();
+    var placeholder=document.createElement('div');
+    placeholder.className='msi-source-row';
+    placeholder.innerHTML='<div style="padding:6px 10px;font-size:0.6rem;color:var(--muted);font-style:italic;">✦ Asking Claude…</div>';
+    row.appendChild(placeholder);
   }
-  var msiQuantifiedQuery=msiGramEst+'g '+query;
 
-  // Claude comparison — routed through GAS proxy to avoid CORS
+  var promises=[];
   promises.push(_claudeMsiFetch(query, serving));
 
   Promise.all(promises).then(function(results){
@@ -10560,6 +10551,8 @@ function nutMsiRefineSubmit(itemId){
 
 function nutMealScanRender(){
   nutMealScanRenderItems();nutMealScanRenderTotals();nutMsiSyncViewToggle();nutMsiCheckHighCalorie();
+  // Trigger Claude comparison for all non-saved items
+  nutMsiVerifyAll(_msi);
   // Show note when My Foods data was applied
   var el=document.getElementById('nutMsiCorrectionNote');if(!el)return;
   var fromFoods=_msi.filter(function(it){return it._fromFoods;});
