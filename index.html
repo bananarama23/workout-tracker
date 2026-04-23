@@ -7776,7 +7776,8 @@ function _claudeMsiFetch(query, serving){
         prot:result.protein,
         carb:result.carbs,
         fat:result.fat,
-        sat:result.satFat});
+        sat:result.satFat,
+        fib:result.fibre||null});
     })
     .catch(function(){
       clearTimeout(timeout);
@@ -10366,13 +10367,14 @@ function nutMsiVerifyItem(it){
   var rawWeight=it.weight_g||0;
   var geminiTotalCal=Math.round(it.cal*it.qty);
   var serving=rawWeight>10?rawWeight:(geminiTotalCal>0?Math.round(geminiTotalCal/2):100);
-  // Store PER-UNIT so it matches Claude's per-unit values for correct averaging
+  // All sources store TOTALS (cal*qty). avg/chosen then divides by qty for per-unit storage in _msi.
   var geminiSrc={source:'Gemini',status:geminiTotalCal>3000?'low_confidence':(it.confidence==='high'?'high':'ok'),
-    calories:Math.round(it.cal),
-    prot:Math.round(it.prot*10)/10,
-    carb:Math.round(it.carb*10)/10,
-    fat:Math.round(it.fat*10)/10,
-    sat:Math.round((it.sat||0)*10)/10};
+    calories:geminiTotalCal,
+    prot:Math.round(it.prot*it.qty*10)/10,
+    carb:Math.round(it.carb*it.qty*10)/10,
+    fat:Math.round(it.fat*it.qty*10)/10,
+    sat:Math.round((it.sat||0)*it.qty*10)/10,
+    fib:Math.round((it.fib||0)*it.qty*10)/10};
 
   // Show loading placeholder immediately
   var row=document.getElementById('msrow-'+it.id);
@@ -10421,12 +10423,13 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   var avgData=null;
   var geminiIsHigh=geminiSrc.status==='high';
   if(geminiIsHigh){
-    // Gemini matched known brand data — use it directly as the "avg"
+    // Gemini matched known brand data — use it directly, divide by qty for per-unit
     avgData={
-      calories:geminiSrc.calories,
-      prot:geminiSrc.prot,
-      carb:geminiSrc.carb,
-      fat:geminiSrc.fat,
+      calories:Math.round(geminiSrc.calories/it.qty),
+      prot:Math.round(geminiSrc.prot/it.qty*10)/10,
+      carb:Math.round(geminiSrc.carb/it.qty*10)/10,
+      fat:Math.round(geminiSrc.fat/it.qty*10)/10,
+      fib:geminiSrc.fib?Math.round(geminiSrc.fib/it.qty*10)/10:null,
       _trustedBrand:true
     };
   } else if(okSources.length>1&&!highDisagree){
@@ -10533,12 +10536,14 @@ function nutMsiApplySource(itemId,sourceName,silent){
     if(!okSrcs.length)return;
     var n=okSrcs.length;
     var satOk=okSrcs.filter(function(s){return s.sat!=null&&s.sat!==''&&!isNaN(s.sat);});
+    var fibOk=okSrcs.filter(function(s){return s.fib!=null&&s.fib>0;});
     chosen={
       cal:Math.round(okSrcs.reduce(function(a,s){return a+s.calories;},0)/n)/it.qty,
       prot:Math.round(okSrcs.reduce(function(a,s){return a+(s.prot||0);},0)/n*10)/10/it.qty,
       carb:Math.round(okSrcs.reduce(function(a,s){return a+(s.carb||0);},0)/n*10)/10/it.qty,
       fat:Math.round(okSrcs.reduce(function(a,s){return a+(s.fat||0);},0)/n*10)/10/it.qty,
-      sat:satOk.length?Math.round(satOk.reduce(function(a,s){return a+(parseFloat(s.sat)||0);},0)/satOk.length*10)/10/it.qty:null
+      sat:satOk.length?Math.round(satOk.reduce(function(a,s){return a+(parseFloat(s.sat)||0);},0)/satOk.length*10)/10/it.qty:null,
+      fib:fibOk.length?Math.round(fibOk.reduce(function(a,s){return a+(s.fib||0);},0)/fibOk.length*10)/10/it.qty:null
     };
   } else {
     var src=sourceName==='Gemini'?data.geminiSrc:data.sources.find(function(s){return s.source===sourceName&&(s.status==='ok'||s.status==='low_confidence');});
@@ -10548,6 +10553,7 @@ function nutMsiApplySource(itemId,sourceName,silent){
 
   var updated={cal:Math.round(chosen.cal*10)/10,prot:Math.round(chosen.prot*10)/10,carb:Math.round(chosen.carb*10)/10,fat:Math.round(chosen.fat*10)/10,_edited:silent?it._edited:true};
   if(chosen.sat!=null)updated.sat=Math.round(chosen.sat*10)/10;
+  if(chosen.fib!=null)updated.fib=Math.round(chosen.fib*10)/10;
   _msi[idx]=Object.assign({},it,updated);
 
   // Re-render the row content but keep the source panel with live events
