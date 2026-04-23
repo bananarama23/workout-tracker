@@ -1752,7 +1752,7 @@ function setSyncBadges(state,detail){
   var queuedCount=0;
   try{queuedCount=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]').length;}catch(e){}
   var queuedTxt=queuedCount>0?' · '+queuedCount+' queued':'';
-  [['H','syncBadgeH','syncTextH'],['W','syncBadgeW','syncTextW'],['P','syncBadgeP','syncTextP'],['Plan','syncBadgePlan','syncTextPlan']].forEach(function(ids){
+  [['H','syncBadgeH','syncTextH'],['W','syncBadgeW','syncTextW'],['P','syncBadgeP','syncTextP'],['Plan','syncBadgePlan','syncTextPlan'],['Nut','syncBadgeNut','syncTextNut']].forEach(function(ids){
     var b=document.getElementById(ids[1]),t=document.getElementById(ids[2]);
     if(!b)return;
     b.className='sync-pill';
@@ -1915,6 +1915,8 @@ var sessionActive=false;
 function navTo(page){
   if(sessionActive&&page!=='home'&&page!=='workout'){page='session';}
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  // Restore hidden on special pages that get shown via remove('hidden')
+  var ms=document.getElementById('page-mealscan');if(ms&&!ms.classList.contains('active'))ms.classList.add('hidden');
   document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
   var pg=document.getElementById('page-'+page);
   if(pg){pg.classList.add('active');pg.classList.remove('hidden');}
@@ -11196,6 +11198,7 @@ function nutMealScanOpenDirect(b64,mime){
 
 function nutMealScanClose(){
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  var ms=document.getElementById('page-mealscan');if(ms)ms.classList.add('hidden');
   var pg=document.getElementById('page-nutrition');if(pg){pg.classList.remove('hidden');pg.classList.add('active');}
   document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
   var nb=document.getElementById('nav-nutrition');if(nb)nb.classList.add('active');
@@ -11203,7 +11206,8 @@ function nutMealScanClose(){
 }
 
 function nutMealScanRetake(){
-  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');p.classList.add('hidden');});
+  var ms=document.getElementById('page-mealscan');if(ms)ms.classList.add('hidden');
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   nutCamOpen();
 }
 
