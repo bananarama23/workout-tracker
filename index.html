@@ -10348,7 +10348,6 @@ function nutMsiNorm(arr){
 var _msiVerified={}; // itemId → true, prevents re-fetching on re-renders
 function nutMsiVerifyAll(items){
   items.forEach(function(it){
-    if(it._fromFoods)return;
     if(_msiVerified[it.id])return; // already fetching or fetched
     _msiVerified[it.id]=true;
     nutMsiVerifyItem(it);
@@ -10361,6 +10360,8 @@ function nutMsiVerifyItem(it){
   var rawWeight=it.weight_g||0;
   var geminiTotalCal=Math.round(it.cal*it.qty);
   var serving=rawWeight>10?rawWeight:(geminiTotalCal>0?Math.round(geminiTotalCal/2):100);
+  // Look up sheet data for this item
+  var _sheetMatch=_nutFoods.find(function(f){return f.name.toLowerCase()===it.name.replace(/\s*\(est\.\)/,'').trim().toLowerCase();});
   // All sources store TOTALS (cal*qty). avg/chosen then divides by qty for per-unit storage in _msi.
   var geminiSrc={source:'Gemini',status:geminiTotalCal>3000?'low_confidence':(it.confidence==='high'?'high':'ok'),
     calories:geminiTotalCal,
@@ -10374,7 +10375,7 @@ function nutMsiVerifyItem(it){
   var row=document.getElementById('msrow-'+it.id);
   if(row){
     var existing=row.querySelector('.msi-source-row');if(existing)existing.remove();
-    var cols='72px 1fr 1fr 1fr 1fr 1fr';
+    var cols='minmax(72px,auto) 1fr 1fr 1fr 1fr 1fr';
     var gCal=geminiSrc.calories,gProt=geminiSrc.prot,gCarb=geminiSrc.carb,gFat=geminiSrc.fat;
     var gColor=geminiSrc.status==='high'?'var(--green)':geminiSrc.status==='low_confidence'?'var(--orange)':'var(--accent)';
     var gLabel=geminiSrc.status==='high'?'Gemini ✓':geminiSrc.status==='low_confidence'?'Gemini ⚠':'Gemini';
@@ -10418,7 +10419,7 @@ function nutMsiVerifyItem(it){
   promises.push(_claudeMsiFetch(query, serving));
 
   Promise.all(promises).then(function(results){
-    nutMsiUpdateSourceRow(it.id,geminiSrc,results);
+    nutMsiUpdateSourceRow(it.id,geminiSrc,results,_sheetMatch,it.qty);
   });
 }
 
@@ -10429,7 +10430,7 @@ var _msiApplyIdx=0;
 function _msiReg(itemId,src){var k=_msiApplyIdx++;_msiApplyMap[k]=[itemId,src];return k;}
 function _msiUse(k){var v=_msiApplyMap[k];if(v)nutMsiApplySource(v[0],v[1]);}
 
-function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
+function nutMsiUpdateSourceRow(itemId,geminiSrc,sources,sheetMatch,qty){
   var row=document.getElementById('msrow-'+itemId);
   if(!row)return;
   var existing=row.querySelector('.msi-source-row');
@@ -10440,47 +10441,68 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   if(!it)return;
 
   sources=sources.filter(function(s){return s.status!=='no_key';});
-  _msiSourceData[itemId]={geminiSrc:geminiSrc,sources:sources};
+
+  // Build sheet data source if we have a match
+  var q=qty||1;
+  var sheetSrc=null;
+  if(sheetMatch&&sheetMatch.calories){
+    sheetSrc={
+      source:'📋 '+sheetMatch.name,status:'ok',
+      calories:Math.round(sheetMatch.calories*q),
+      prot:Math.round((sheetMatch.protein||0)*q*10)/10,
+      carb:Math.round((sheetMatch.carbs||0)*q*10)/10,
+      fat:Math.round((sheetMatch.fat||0)*q*10)/10,
+      sat:Math.round((sheetMatch.satFat||0)*q*10)/10,
+      fib:Math.round((sheetMatch.fibre||0)*q*10)/10
+    };
+  }
+
+  _msiSourceData[itemId]={geminiSrc:geminiSrc,sources:sources,sheetSrc:sheetSrc};
 
   var okSources=[geminiSrc].concat(sources.filter(function(s){return s.status==='ok'||s.status==='low_confidence';}));
+  if(sheetSrc)okSources.push(sheetSrc);
   var allCals=okSources.map(function(s){return s.calories;});
   var calMin=Math.min.apply(null,allCals),calMax=Math.max.apply(null,allCals);
   var spread=calMax-calMin,spreadPct=calMin>0?spread/calMin:0;
   var highDisagree=(spreadPct>0.25||spread>100)&&okSources.length>1;
 
-  // Smart averaging:
-  // - If Gemini has 'high' confidence (exact menu data), trust it — don't dilute with estimates
-  // - If sources highly disagree (>25% spread), don't auto-apply — let user choose
-  // - Exclude Claude from fibre avg since it doesn't return fibre
+  // avgData: always compute so badges always update.
+  // Sheet data takes priority if present (user-verified). Gemini high = trusted brand.
+  // highDisagree = show warning but still apply so badges aren't stuck on Gemini raw.
   var avgData=null;
   var geminiIsHigh=geminiSrc.status==='high';
-  if(geminiIsHigh){
-    // Gemini matched known brand data — store totals for display
+  if(sheetSrc){
+    // User's own sheet data — most trusted
     avgData={
-      calories:geminiSrc.calories,
-      prot:geminiSrc.prot,
-      carb:geminiSrc.carb,
-      fat:geminiSrc.fat,
-      fib:geminiSrc.fib||null,
-      sat:geminiSrc.sat||null,
+      calories:sheetSrc.calories,prot:sheetSrc.prot,carb:sheetSrc.carb,
+      fat:sheetSrc.fat,fib:sheetSrc.fib||null,sat:sheetSrc.sat||null,
+      _trustedSheet:true
+    };
+  } else if(geminiIsHigh){
+    avgData={
+      calories:geminiSrc.calories,prot:geminiSrc.prot,carb:geminiSrc.carb,
+      fat:geminiSrc.fat,fib:geminiSrc.fib||null,sat:geminiSrc.sat||null,
       _trustedBrand:true
     };
-  } else if(okSources.length>1&&!highDisagree){
+  } else {
+    // Always compute avg from available ok sources — even if highDisagree
     var n=okSources.length;
-    // Exclude fibre from sources that don't provide it (Claude)
     var fibreSrcs=okSources.filter(function(s){return s.fib!=null&&s.fib>0;});
+    var satSrcs=okSources.filter(function(s){return s.sat!=null&&s.sat!==''&&!isNaN(s.sat);});
     avgData={
       calories:Math.round(okSources.reduce(function(a,s){return a+(s.calories||0);},0)/n),
       prot:Math.round(okSources.reduce(function(a,s){return a+(s.prot||0);},0)/n*10)/10,
       carb:Math.round(okSources.reduce(function(a,s){return a+(s.carb||0);},0)/n*10)/10,
-      fat:Math.round(okSources.reduce(function(a,s){return a+(s.fat||0);},0)/n*10)/10
+      fat:Math.round(okSources.reduce(function(a,s){return a+(s.fat||0);},0)/n*10)/10,
+      sat:satSrcs.length?Math.round(satSrcs.reduce(function(a,s){return a+(parseFloat(s.sat)||0);},0)/satSrcs.length*10)/10:null,
+      _highDisagree:highDisagree
     };
     if(fibreSrcs.length)avgData.fib=Math.round(fibreSrcs.reduce(function(a,s){return a+(s.fib||0);},0)/fibreSrcs.length*10)/10;
   }
-  // highDisagree + no trusted brand = don't auto-apply, let user pick
 
   var allSourcesForDisplay=[geminiSrc].concat(sources);
-  var cols='72px 1fr 1fr 1fr 1fr 1fr';
+  if(sheetSrc)allSourcesForDisplay.push(sheetSrc);
+  var cols='minmax(72px,auto) 1fr 1fr 1fr 1fr 1fr';
   var html='<div style="margin-top:8px;background:var(--card2);border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);">';
   html+='<div style="display:grid;grid-template-columns:'+cols+';padding:3px 6px;background:var(--card);border-bottom:1px solid var(--border);">'+
     '<span></span>'+
@@ -10491,9 +10513,6 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
     '<span style="font-size:0.42rem;color:var(--red);font-weight:700;text-transform:uppercase;text-align:right;">SAT</span>'+
     '</div>';
 
-  var satSources=okSources.filter(function(s){return s.sat!=null&&s.sat!==''&&!isNaN(s.sat);});
-  if(avgData&&okSources.length>1){avgData.sat=satSources.length?Math.round(satSources.reduce(function(a,s){return a+(parseFloat(s.sat)||0);},0)/satSources.length*10)/10:null;}
-
   allSourcesForDisplay.forEach(function(s,si){
     var border=si<allSourcesForDisplay.length-1?'border-bottom:1px solid var(--border);':'';
     if(s.status==='ok'||s.status==='low_confidence'||s.status==='high'){
@@ -10502,9 +10521,9 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
       var fv=function(v){return (v===null||v===undefined||isNaN(v)||v==='')?'—':v;};
       var protFat='P'+fv(s.prot)+' F'+fv(s.fat);
       html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;'+border+'">'+
-        '<div style="overflow:hidden;">'+
-          '<div style="display:flex;align-items:center;gap:3px;flex-wrap:nowrap;">'+
-            '<div style="font-size:0.54rem;color:var(--text2);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+s.source+lowWarn+'</div>'+
+        '<div>'+
+          '<div style="display:flex;align-items:flex-start;gap:3px;flex-wrap:wrap;">'+
+            '<div style="font-size:0.54rem;color:var(--text2);font-weight:600;word-break:break-word;">'+s.source+lowWarn+'</div>'+
             '<button data-iid="'+itemId+'" data-src="'+s.source+'" class="msi-use-btn" style="background:var(--card);border:1px solid var(--border2);border-radius:5px;color:var(--text2);font-size:0.44rem;padding:1px 4px;cursor:pointer;font-weight:700;flex-shrink:0;line-height:1.4;">use</button>'+
           '</div>'+
         '</div>'+
@@ -10534,9 +10553,9 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   });
 
   if(avgData){
-    var disagreeLabel=highDisagree?' <span style="color:var(--orange);font-size:0.44rem;">⚠</span>':'';
-    var avgRowLabel=avgData&&avgData._trustedBrand?'Brand data':'Avg'+disagreeLabel;
-    var avgRowColor=avgData&&avgData._trustedBrand?'var(--green)':'var(--text2)';
+    var disagreeLabel=avgData._highDisagree?' <span style="color:var(--orange);font-size:0.44rem;">⚠</span>':'';
+    var avgRowLabel=avgData._trustedSheet?'Sheet data':avgData._trustedBrand?'Brand data':'Avg'+disagreeLabel;
+    var avgRowColor=avgData._trustedSheet?'var(--accent)':avgData._trustedBrand?'var(--green)':'var(--text2)';
     html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;background:var(--card);border-top:1px solid var(--border);">'+
       '<div style="display:flex;align-items:center;gap:3px;">'+
         '<div style="font-size:0.54rem;font-weight:700;white-space:nowrap;color:'+avgRowColor+';">'+avgRowLabel+'</div>'+
@@ -10560,9 +10579,9 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
     nutMsiApplySource(parseInt(btn.dataset.iid),btn.dataset.src);
   });
   row.appendChild(div);
-  // Auto-apply only when we have trusted data OR sources agree
-  // If highDisagree and no brand trust, let user choose manually
-  if(avgData&&(avgData._trustedBrand||!highDisagree)){
+  // Always auto-apply avg — badges should always reflect best estimate.
+  // highDisagree shows ⚠ in table so user can still pick manually.
+  if(avgData){
     setTimeout(function(){nutMsiApplySource(itemId,'avg',true);},0);
   }
 }
@@ -10573,6 +10592,12 @@ function nutMsiApplySource(itemId,sourceName,silent){
 
   var chosen=null;
   if(sourceName==='avg'){
+    // Sheet data takes priority for avg
+    if(data.sheetSrc){
+      var src=data.sheetSrc;
+      chosen={cal:src.calories/it.qty,prot:(src.prot||0)/it.qty,carb:(src.carb||0)/it.qty,
+              fat:(src.fat||0)/it.qty,sat:src.sat!=null?src.sat/it.qty:null,fib:src.fib!=null?src.fib/it.qty:null};
+    } else {
     var okSrcs=[data.geminiSrc].concat(data.sources.filter(function(s){return s.status==='ok'||s.status==='low_confidence';}));
     if(!okSrcs.length)return;
     var n=okSrcs.length;
@@ -10586,8 +10611,9 @@ function nutMsiApplySource(itemId,sourceName,silent){
       sat:satOk.length?Math.round(satOk.reduce(function(a,s){return a+(parseFloat(s.sat)||0);},0)/satOk.length*10)/10/it.qty:null,
       fib:fibOk.length?Math.round(fibOk.reduce(function(a,s){return a+(s.fib||0);},0)/fibOk.length*10)/10/it.qty:null
     };
+    } // end else (no sheetSrc)
   } else {
-    var src=sourceName==='Gemini'?data.geminiSrc:data.sources.find(function(s){return s.source===sourceName&&(s.status==='ok'||s.status==='low_confidence');});
+    var src=sourceName==='Gemini'?data.geminiSrc:(data.sheetSrc&&sourceName===data.sheetSrc.source)?data.sheetSrc:data.sources.find(function(s){return s.source===sourceName&&(s.status==='ok'||s.status==='low_confidence');});
     if(!src)return;
     chosen={cal:src.calories/it.qty,prot:(src.prot||0)/it.qty,carb:(src.carb||0)/it.qty,fat:(src.fat||0)/it.qty,sat:src.sat!=null?src.sat/it.qty:null};
   }
