@@ -10370,25 +10370,26 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   var avgData=null;
   if(okSources.length>1){
     var n=okSources.length;
-    var satSources=okSources.filter(function(s){return s.sat!=null&&s.sat!==''&&!isNaN(s.sat);});
     avgData={
       calories:Math.round(okSources.reduce(function(a,s){return a+(s.calories||0);},0)/n),
       prot:Math.round(okSources.reduce(function(a,s){return a+(s.prot||0);},0)/n*10)/10,
       carb:Math.round(okSources.reduce(function(a,s){return a+(s.carb||0);},0)/n*10)/10,
-      fat:Math.round(okSources.reduce(function(a,s){return a+(s.fat||0);},0)/n*10)/10,
-      sat:satSources.length?Math.round(satSources.reduce(function(a,s){return a+(parseFloat(s.sat)||0);},0)/satSources.length*10)/10:null
+      fat:Math.round(okSources.reduce(function(a,s){return a+(s.fat||0);},0)/n*10)/10
     };
   }
 
   var allSourcesForDisplay=[geminiSrc].concat(sources);
-  var cols='60px 1fr 1fr 1fr 30px';
+  var cols='auto 1fr 1fr 1fr';
   var html='<div style="margin-top:8px;background:var(--card2);border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);">';
   html+='<div style="display:grid;grid-template-columns:'+cols+';padding:3px 8px;background:var(--card);border-bottom:1px solid var(--border);">'+
     '<span></span>'+
     '<span style="font-size:0.45rem;color:var(--accent);font-weight:700;text-transform:uppercase;text-align:right;">CAL</span>'+
     '<span style="font-size:0.45rem;color:var(--blue);font-weight:700;text-transform:uppercase;text-align:right;">CARB</span>'+
     '<span style="font-size:0.45rem;color:var(--red);font-weight:700;text-transform:uppercase;text-align:right;">SAT</span>'+
-    '<span></span></div>';
+    '</div>';
+
+  var satSources=okSources.filter(function(s){return s.sat!=null&&s.sat!==''&&!isNaN(s.sat);});
+  if(okSources.length>1){avgData.sat=satSources.length?Math.round(satSources.reduce(function(a,s){return a+(parseFloat(s.sat)||0);},0)/satSources.length*10)/10:null;}
 
   allSourcesForDisplay.forEach(function(s,si){
     var border=si<allSourcesForDisplay.length-1?'border-bottom:1px solid var(--border);':'';
@@ -10398,13 +10399,14 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
       var fv=function(v){return (v===null||v===undefined||isNaN(v)||v==='')?'—':v;};
       var protFat='P'+fv(s.prot)+' F'+fv(s.fat);
       html+='<div style="display:grid;grid-template-columns:'+cols+';padding:5px 8px;align-items:center;'+border+'">'+
-        '<div><div style="font-size:0.55rem;color:var(--text2);font-weight:600;white-space:nowrap;">'+s.source+lowWarn+'</div>'+
-        '<div style="font-size:0.44rem;color:var(--muted);">'+protFat+'</div>'+
+        '<div style="display:flex;flex-direction:column;gap:2px;padding-right:4px;">'+
+          '<div style="font-size:0.55rem;color:var(--text2);font-weight:600;">'+s.source+lowWarn+'</div>'+
+          '<div style="font-size:0.44rem;color:var(--muted);">'+protFat+'</div>'+
+          '<button data-iid="'+itemId+'" data-src="'+s.source+'" class="msi-use-btn" style="align-self:flex-start;background:var(--card);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-size:0.46rem;padding:2px 5px;cursor:pointer;font-weight:700;margin-top:1px;">use</button>'+
         '</div>'+
         '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.78rem;color:'+calColor+';">'+s.calories+'</div>'+
         '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.carb)+'</div>'+
         '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.sat)+'</div>'+
-        '<button data-iid="'+itemId+'" data-src="'+s.source+'" class="msi-use-btn" style="background:var(--card);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-size:0.46rem;padding:2px 4px;cursor:pointer;font-weight:700;">use</button>'+
         '</div>';
     } else if(s.status==='credits'){
       html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--orange);">'+s.source+' — out of credits</span></div>';
@@ -10420,11 +10422,13 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   if(avgData){
     var disagreeLabel=highDisagree?' <span style="color:var(--orange);font-size:0.44rem;">⚠</span>':'';
     html+='<div style="display:grid;grid-template-columns:'+cols+';padding:5px 8px;align-items:center;background:var(--card);border-top:1px solid var(--border);">'+
-      '<div style="font-size:0.55rem;color:var(--text2);font-weight:700;">Avg'+disagreeLabel+'</div>'+
+      '<div style="display:flex;flex-direction:column;gap:2px;padding-right:4px;">'+
+        '<div style="font-size:0.55rem;color:var(--text2);font-weight:700;">Avg'+disagreeLabel+'</div>'+
+        '<button data-iid="'+itemId+'" data-src="avg" class="msi-use-btn" style="align-self:flex-start;background:var(--accent);border:none;border-radius:6px;color:#000;font-size:0.46rem;padding:2px 5px;cursor:pointer;font-weight:900;margin-top:1px;">use</button>'+
+      '</div>'+
       '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.78rem;color:var(--accent);">'+avgData.calories+'</div>'+
       '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+avgData.carb+'</div>'+
       '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+(avgData.sat!=null?avgData.sat:'—')+'</div>'+
-      '<button data-iid="'+itemId+'" data-src="avg" class="msi-use-btn" style="background:var(--accent);border:none;border-radius:6px;color:#000;font-size:0.46rem;padding:2px 4px;cursor:pointer;font-weight:900;">use</button>'+
       '</div>';
   }
 
