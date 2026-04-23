@@ -10370,16 +10370,18 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   var avgData=null;
   if(okSources.length>1){
     var n=okSources.length;
+    var satSources=okSources.filter(function(s){return s.sat!=null&&s.sat!==''&&!isNaN(s.sat);});
     avgData={
       calories:Math.round(okSources.reduce(function(a,s){return a+(s.calories||0);},0)/n),
       prot:Math.round(okSources.reduce(function(a,s){return a+(s.prot||0);},0)/n*10)/10,
       carb:Math.round(okSources.reduce(function(a,s){return a+(s.carb||0);},0)/n*10)/10,
-      fat:Math.round(okSources.reduce(function(a,s){return a+(s.fat||0);},0)/n*10)/10
+      fat:Math.round(okSources.reduce(function(a,s){return a+(s.fat||0);},0)/n*10)/10,
+      sat:satSources.length?Math.round(satSources.reduce(function(a,s){return a+(parseFloat(s.sat)||0);},0)/satSources.length*10)/10:null
     };
   }
 
   var allSourcesForDisplay=[geminiSrc].concat(sources);
-  var cols='44px 1fr 1fr 1fr 32px';
+  var cols='60px 1fr 1fr 1fr 30px';
   var html='<div style="margin-top:8px;background:var(--card2);border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);">';
   html+='<div style="display:grid;grid-template-columns:'+cols+';padding:3px 8px;background:var(--card);border-bottom:1px solid var(--border);">'+
     '<span></span>'+
@@ -10421,7 +10423,7 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
       '<div style="font-size:0.55rem;color:var(--text2);font-weight:700;">Avg'+disagreeLabel+'</div>'+
       '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.78rem;color:var(--accent);">'+avgData.calories+'</div>'+
       '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+avgData.carb+'</div>'+
-      '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">—</div>'+
+      '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+(avgData.sat!=null?avgData.sat:'—')+'</div>'+
       '<button data-iid="'+itemId+'" data-src="avg" class="msi-use-btn" style="background:var(--accent);border:none;border-radius:6px;color:#000;font-size:0.46rem;padding:2px 4px;cursor:pointer;font-weight:900;">use</button>'+
       '</div>';
   }
