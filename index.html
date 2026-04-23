@@ -9985,6 +9985,7 @@ function nutMsiContextConfirm(){
 }
 function nutMealScanOpenDirect(b64,mime){
   _msi=[];_msiMemory=false;_msiShowTotal=true;_msiVerified={};
+  var _oldWarn=document.getElementById("nutMsiHighCalWarn");if(_oldWarn)_oldWarn.remove();
   var h=new Date().getHours();
   _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
   if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
@@ -10448,10 +10449,16 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   var calMin=Math.min.apply(null,allCals),calMax=Math.max.apply(null,allCals);
   var spread=calMax-calMin,spreadPct=calMin>0?spread/calMin:0;
   var highDisagree=(spreadPct>0.25||spread>100)&&okSources.length>1;
-
-  // Always compute avg from all ok sources (Gemini + Claude) — even if highDisagree
+  // Gemini high = trust it and auto-apply; otherwise avg Gemini+Claude.
+  var geminiIsHigh=geminiSrc.status==='high';
   var avgData=null;
-  {
+  if(geminiIsHigh){
+    avgData={
+      calories:geminiSrc.calories,prot:geminiSrc.prot,carb:geminiSrc.carb,
+      fat:geminiSrc.fat,fib:geminiSrc.fib||null,sat:geminiSrc.sat||null,
+      _trustedGemini:true
+    };
+  } else {
     var n=okSources.length;
     var fibreSrcs=okSources.filter(function(s){return s.fib!=null&&s.fib>0;});
     var satSrcs=okSources.filter(function(s){return s.sat!=null&&s.sat!==''&&!isNaN(s.sat);});
@@ -10518,7 +10525,7 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   if(avgData){
     var disagreeLabel=avgData._highDisagree?' <span style="color:var(--orange);font-size:0.44rem;">⚠</span>':'';
     var avgRowLabel='Avg'+disagreeLabel;
-    var avgRowColor='var(--text2)';
+    var avgRowColor=geminiIsHigh?'var(--muted)':'var(--text2)';
     html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;background:var(--card);border-top:1px solid var(--border);">'+
       '<div style="display:flex;align-items:center;gap:3px;">'+
         '<div style="font-size:0.54rem;font-weight:700;white-space:nowrap;color:'+avgRowColor+';">'+avgRowLabel+'</div>'+
@@ -10542,9 +10549,10 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
     nutMsiApplySource(parseInt(btn.dataset.iid),btn.dataset.src);
   });
   row.appendChild(div);
-  // Always auto-apply avg — badges should always reflect best estimate.
-  // highDisagree shows ⚠ in table so user can still pick manually.
-  if(avgData){
+  // Gemini high → auto-apply Gemini; else auto-apply avg.
+  if(geminiIsHigh){
+    setTimeout(function(){nutMsiApplySource(itemId,'Gemini',true);},0);
+  } else if(avgData){
     setTimeout(function(){nutMsiApplySource(itemId,'avg',true);},0);
   }
 }
@@ -11191,6 +11199,7 @@ function nutMsiPageUploadHandler(inp){
 function nutMealScanOpenDirect(b64,mime){
   _msi=[];_msiMemory=false;_msiShowTotal=true;_msiVerified={};_msiCombine=true;_nutCamMealMode=false;
   var h=new Date().getHours();
+  var _oldWarn=document.getElementById("nutMsiHighCalWarn");if(_oldWarn)_oldWarn.remove();
   _msiMeal=h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack';
   if(typeof _nutAddMeal!=='undefined'&&_nutAddMeal)_msiMeal=_nutAddMeal;
   // Close any open overlays before navigating to the meal scan page
