@@ -10361,7 +10361,29 @@ function nutMsiVerifyItem(it){
   var geminiTotalCal=Math.round(it.cal*it.qty);
   var serving=rawWeight>10?rawWeight:(geminiTotalCal>0?Math.round(geminiTotalCal/2):100);
   // Look up sheet data for this item
-  var _sheetMatch=_nutFoods.find(function(f){return f.name.toLowerCase()===it.name.replace(/\s*\(est\.\)/,'').trim().toLowerCase();});
+  // Fuzzy sheet match — score word overlap between scanned name and saved food names
+  var _scanName=it.name.replace(/\s*\(est\.\)/,'').trim().toLowerCase();
+  // Strip leading numbers e.g. "3 Grilled Chicken" → "grilled chicken"
+  var _stopWords={a:1,an:1,the:1,of:1,with:1,and:1,in:1,on:1,per:1,inch:1,large:1,small:1,medium:1,regular:1,standard:1,plain:1,style:1,piece:1,pieces:1,serving:1,servings:1,each:1,phil:1};
+  function _msiWords(s){
+    return s.replace(/^[0-9]+\s+/,'').split(/[\s\-\/,]+/).filter(function(w){
+      return w.length>1&&!_stopWords[w]&&!/^[0-9]/.test(w);
+    });
+  }
+  var _scanWords=_msiWords(_scanName);
+  var _bestMatch=null,_bestScore=0;
+  _nutFoods.forEach(function(f){
+    // Skip entries with clearly bad calorie data (per-gram entries logged as per-serving)
+    if(!f.calories||f.calories<5)return;
+    var fw=_msiWords(f.name.toLowerCase());
+    var hits=_scanWords.filter(function(w){return fw.indexOf(w)>=0;}).length;
+    // Score against shorter name so partial names still match
+    var minLen=Math.min(_scanWords.length,fw.length)||1;
+    var score=hits/minLen;
+    // Require at least 2 word hits AND >60% coverage of shorter name
+    if(hits>=2&&score>0.6&&score>_bestScore){_bestScore=score;_bestMatch=f;}
+  });
+  var _sheetMatch=_bestMatch;
   // All sources store TOTALS (cal*qty). avg/chosen then divides by qty for per-unit storage in _msi.
   var geminiSrc={source:'Gemini',status:geminiTotalCal>3000?'low_confidence':(it.confidence==='high'?'high':'ok'),
     calories:geminiTotalCal,
@@ -10459,8 +10481,8 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources,sheetMatch,qty){
 
   _msiSourceData[itemId]={geminiSrc:geminiSrc,sources:sources,sheetSrc:sheetSrc};
 
+  // okSources = Gemini + Claude only — sheet data shown as reference, not averaged
   var okSources=[geminiSrc].concat(sources.filter(function(s){return s.status==='ok'||s.status==='low_confidence';}));
-  if(sheetSrc)okSources.push(sheetSrc);
   var allCals=okSources.map(function(s){return s.calories;});
   var calMin=Math.min.apply(null,allCals),calMax=Math.max.apply(null,allCals);
   var spread=calMax-calMin,spreadPct=calMin>0?spread/calMin:0;
