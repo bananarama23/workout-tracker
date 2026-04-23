@@ -10492,7 +10492,7 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
     '</div>';
 
   var satSources=okSources.filter(function(s){return s.sat!=null&&s.sat!==''&&!isNaN(s.sat);});
-  if(okSources.length>1){avgData.sat=satSources.length?Math.round(satSources.reduce(function(a,s){return a+(parseFloat(s.sat)||0);},0)/satSources.length*10)/10:null;}
+  if(avgData&&okSources.length>1){avgData.sat=satSources.length?Math.round(satSources.reduce(function(a,s){return a+(parseFloat(s.sat)||0);},0)/satSources.length*10)/10:null;}
 
   allSourcesForDisplay.forEach(function(s,si){
     var border=si<allSourcesForDisplay.length-1?'border-bottom:1px solid var(--border);':'';
