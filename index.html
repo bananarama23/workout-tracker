@@ -7885,16 +7885,7 @@ function nutCtxShow(foodName,detectedBrand,initialData,statusEl){
   if(inp){inp.value=detectedBrand||'';inp.placeholder='e.g. Burger King, homemade, large...';}
   document.getElementById('nutCtxStatus').textContent='';
   // Auto-dismiss countdown
-  var countdown=8;
-  var countEl=document.getElementById('nutCtxCountdown');
-  if(countEl)countEl.textContent='Skipping in '+countdown+'s';
   if(_nutCtxTimer)clearTimeout(_nutCtxTimer);
-  var iv=setInterval(function(){
-    countdown--;
-    if(countEl&&ov.style.display!=='none')countEl.textContent='Skipping in '+countdown+'s';
-    if(countdown<=0)clearInterval(iv);
-  },1000);
-  _nutCtxTimer=setTimeout(function(){clearInterval(iv);nutCtxSkip();},8000);
   ov.style.display='flex';
   setTimeout(function(){if(inp)inp.focus();},300);
 }
@@ -7929,16 +7920,7 @@ function nutCtxShowInline(foodName,detectedBrand,initialData){
   var inp=document.getElementById('nutCtxInput');
   if(inp){inp.value=detectedBrand||'';inp.placeholder='e.g. Burger King, homemade, large...';}
   document.getElementById('nutCtxStatus').textContent='';
-  var countdown=8;
-  var countEl=document.getElementById('nutCtxCountdown');
-  if(countEl)countEl.textContent='Skipping in '+countdown+'s';
   if(_nutCtxTimer)clearTimeout(_nutCtxTimer);
-  var iv=setInterval(function(){
-    countdown--;
-    if(countEl&&ov.style.display!=='none')countEl.textContent='Skipping in '+countdown+'s';
-    if(countdown<=0)clearInterval(iv);
-  },1000);
-  _nutCtxTimer=setTimeout(function(){clearInterval(iv);nutCtxSkipInline();},8000);
   ov.style.display='flex';
   setTimeout(function(){if(inp)inp.focus();},300);
 }
@@ -9905,6 +9887,34 @@ function nutMealScanCapture(){
 
 var _msiGeoPlace=''; // set by nutMsiGeoLookup, consumed by nutMealScanCallVision
 
+function nutMsiDetectBrand(b64,mime){
+  var geminiKey=localStorage.getItem('wt_gemini_key')||'';
+  if(!geminiKey){nutMsiCtxSetStatus('','',false);return;}
+  if(!b64){nutMsiCtxSetStatus('No brand detected','var(--muted)',false);return;}
+  var prompt='Look at this food photo. Identify ONLY the restaurant name, chain, or food brand if clearly visible (logos, packaging, uniforms, signage, tray liners). If no brand is identifiable, respond with exactly: none. Respond with just the brand name or none -- nothing else.';
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+geminiKey,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mime||'image/jpeg',data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:30}})
+  })
+  .then(function(r){return r.json();})
+  .then(function(data){
+    var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&
+             data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&
+             data.candidates[0].content.parts[0].text;
+    text=(text||'').trim().replace(/[^\w\s&'.,()-]/g,'').trim();
+    var hi=document.getElementById('nutMsiCtxHint');
+    var nm=document.getElementById('nutMsiMealName');
+    if(!text||text.toLowerCase()==='none'||text.toLowerCase()==='unknown'||text.length<2){
+      nutMsiCtxSetStatus('No brand detected','var(--muted)',false);
+    } else {
+      nutMsiCtxSetStatus('\u2713 '+text+' detected','var(--green)',false);
+      if(hi&&!hi.value)hi.value=text;
+      if(nm&&!nm.value)nm.value=text;
+      _msiGeoPlace=_msiGeoPlace||text;
+    }
+  })
+  .catch(function(){nutMsiCtxSetStatus('','',false);});
+}
 function nutMsiGeoLookup(){
   _msiGeoPlace='';
   if(!navigator.geolocation)return;
@@ -9940,6 +9950,12 @@ function nutMealScanRetake(){
 }
 
 // ── Open / close ──────────────────────────────────────────────────────────────
+function nutMsiCtxSetStatus(txt,col,showDot){
+  var el=document.getElementById('nutMsiCtxStatusText');
+  var dot=document.getElementById('nutMsiCtxStatusDot');
+  if(el){el.textContent=txt||'';el.style.color=col||'var(--muted)';}
+  if(dot)dot.style.display=showDot?'inline-block':'none';
+}
 function nutMealScanOpen(b64,mime){
   _msiLastB64=b64;_msiLastMime=mime;
   nutMsiGeoLookup(); // fire for all entry points, not just live capture
@@ -9948,6 +9964,8 @@ function nutMealScanOpen(b64,mime){
     cs.style.display='flex';
     var ri=document.getElementById('nutMsiCtxRestaurant');if(ri)ri.value='';
     var hi=document.getElementById('nutMsiCtxHint');if(hi)hi.value='';
+    nutMsiCtxSetStatus('Detecting restaurant…','var(--muted)',true);
+    nutMsiDetectBrand(b64,mime);
     // Auto-skip after 1.5s if user hasn't typed and geo found nothing
     var _ctxAutoSkip=setTimeout(function(){
       var riVal=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
@@ -10164,9 +10182,13 @@ function nutMealScanCallVision(b64,mime){
       nutMealScanRender();
       nutMsiCheckHighCalorie();
     } else {
-      nutMealScanSetStatus('Could not parse \u2014 raw response below','var(--orange)');
+      nutMealScanSetStatus('No items found \u2014 try a clearer photo or better lighting','var(--orange)');
       document.getElementById('nutMealScanItems').innerHTML=
-        '<div style="padding:14px 16px;color:var(--muted);font-size:0.72rem;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;">'+text+'</div>';
+        '<div style="text-align:center;padding:32px 20px;color:var(--muted);">'+
+        '<div style="font-size:1.8rem;margin-bottom:12px;">&#128247;</div>'+
+        '<div style="font-size:0.85rem;margin-bottom:8px;">Could not identify items</div>'+
+        '<div style="font-size:0.72rem;">Try better lighting or a closer shot</div>'+
+        '</div>';
     }
   })
   .catch(function(err){
@@ -10339,7 +10361,8 @@ function nutMsiVerifyAll(items){
 }
 
 function nutMsiVerifyItem(it){
-  var query=it.name.replace(/\s*\(est\.\)/,'').trim();
+  var _ctxBrand=(document.getElementById('nutMsiCtxHint')||{}).value||_msiGeoPlace||'';
+  var query=(_ctxBrand?_ctxBrand+' ':'')+it.name.replace(/\s*\(est\.\)/,'').trim();
   var rawWeight=it.weight_g||0;
   var geminiTotalCal=Math.round(it.cal*it.qty);
   var serving=rawWeight>10?rawWeight:(geminiTotalCal>0?Math.round(geminiTotalCal/2):100);
@@ -10504,12 +10527,20 @@ function nutMsiApplySource(itemId,sourceName,silent){
   if(chosen.sat!=null)updated.sat=Math.round(chosen.sat*10)/10;
   _msi[idx]=Object.assign({},it,updated);
 
-  // Re-render the row content but keep the source panel
+  // Re-render the row content but keep the source panel with live events
   var row=document.getElementById('msrow-'+itemId);if(!row)return;
   var srcPanel=row.querySelector('.msi-source-row');
-  var srcHTML=srcPanel?srcPanel.outerHTML:'';
+  var srcNode=srcPanel?srcPanel.cloneNode(true):null;
   row.innerHTML=nutMsiRowHTML(_msi[idx]);
-  row.insertAdjacentHTML('beforeend',srcHTML);
+  if(srcNode){
+    // Re-attach click listener so use buttons work after re-insert
+    srcNode.addEventListener('click',function(ev){
+      var btn=ev.target.closest('.msi-use-btn');
+      if(!btn)return;
+      nutMsiApplySource(parseInt(btn.dataset.iid),btn.dataset.src);
+    });
+    row.appendChild(srcNode);
+  }
   nutMealScanRenderTotals();
 }
 
@@ -10546,6 +10577,10 @@ function nutMsiRefineSubmit(itemId){
   var geminiKey=localStorage.getItem('wt_gemini_key')||'';
   var b64=_msiLastB64,mime=_msiLastMime||'image/jpeg';
 
+  // Include restaurant/context from the add-context sheet
+  var _ctxRestaurant=(document.getElementById('nutMsiCtxHint')||{}).value||_msiGeoPlace||'';
+  var _ctxNote=_ctxRestaurant?('\nRESTAURANT/CONTEXT: '+_ctxRestaurant+' \u2014 use this brand\'s exact published nutrition data if available.'):'';
+
   var sysInstr=
     'You are a nutrition estimator. The user has a photo of food and is correcting one specific item. '+
     'Return ONLY a single TSV row (no header, no extra text) with 11 columns: '+
@@ -10555,8 +10590,8 @@ function nutMsiRefineSubmit(itemId){
     'Confidence: high, medium, or low.';
   var userPrompt=
     'Original item: "'+it.name+'" ('+it.cal+' cal each, qty '+it.qty+'). '+
-    'User correction: "'+note+'". '+
-    'Re-estimate this item with the correction applied. Output only the TSV row.';
+    'User correction: "'+note+'". '+_ctxNote+
+    ' Re-estimate this item with the correction applied. Output only the TSV row.';
 
   var geminiDone=false, claudeDone=false;
   var geminiResult=null, claudeResult=null;
@@ -10662,7 +10697,7 @@ function nutMsiRefineSubmit(itemId){
     headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify({
       type:'callClaudeVision',
-      query:note+' '+it.name,
+      query:(_ctxRestaurant?_ctxRestaurant+' ':'')+note+' '+it.name,
       serving:it.weight_g||Math.round((it.cal*it.qty)/2),
       imageBase64:_msiLastB64||'',
       imageMime:_msiLastMime||'image/jpeg'
@@ -10889,7 +10924,18 @@ function nutMealScanAdjQty(id,d){
     // whole number zone: +1/-1
     it.qty=Math.max(0.25,Math.round(q)+d);
   }
-  var row=document.getElementById('msrow-'+id);if(row)row.innerHTML=nutMsiRowHTML(it);
+  var row=document.getElementById('msrow-'+id);if(!row){nutMealScanRenderTotals();return;}
+  var srcPanel=row.querySelector('.msi-source-row');
+  var srcNode=srcPanel?srcPanel.cloneNode(true):null;
+  row.innerHTML=nutMsiRowHTML(it);
+  if(srcNode){
+    srcNode.addEventListener('click',function(ev){
+      var btn=ev.target.closest('.msi-use-btn');
+      if(!btn)return;
+      nutMsiApplySource(parseInt(btn.dataset.iid),btn.dataset.src);
+    });
+    row.appendChild(srcNode);
+  }
   nutMealScanRenderTotals();
 }
 
@@ -11178,7 +11224,8 @@ function nutMealScanToggleCombine(){_msiCombine=!_msiCombine;nutMealScanRenderCo
   <div style="width:100%;background:var(--card);border-radius:22px 22px 0 0;padding:20px 20px calc(var(--nav-h) + var(--safe-b) + 20px);border-top:1px solid var(--border);animation:slideUp 0.22s cubic-bezier(0.32,0.72,0,1) both;">
     <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 16px;"></div>
     <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:4px;">ADD CONTEXT</div>
-    <div style="font-size:0.7rem;color:var(--muted);margin-bottom:14px;">Help Gemini identify portions more accurately</div>
+    <div style="font-size:0.7rem;color:var(--muted);margin-bottom:8px;">Help Gemini identify portions more accurately</div>
+    <div id="nutMsiCtxStatus" style="font-size:0.68rem;min-height:18px;margin-bottom:8px;display:flex;align-items:center;gap:6px;"><span id="nutMsiCtxStatusDot" style="display:none;width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 1.2s ease infinite;flex-shrink:0;"></span><span id="nutMsiCtxStatusText" style="color:var(--muted);"></span></div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
 
       <input id="nutMsiCtxHint" type="text" placeholder="Any clues (e.g. large portion, added extra rice)"
@@ -11215,7 +11262,7 @@ function nutMealScanToggleCombine(){_msiCombine=!_msiCombine;nutMealScanRenderCo
 
 
 <!-- MEAL SCAN PAGE — fixed flex column, only items area scrolls -->
-<div class="page hidden" id="page-mealscan" style="overflow-y:auto;">
+<div class="page hidden" id="page-mealscan" style="overflow-y:auto;padding-top:0;">
   <!-- Header -->
   <div style="background:var(--bg);padding:calc(var(--safe-t)+14px) 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;">
     <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
