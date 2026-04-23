@@ -10435,6 +10435,10 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   var existing=row.querySelector('.msi-source-row');
   if(existing)existing.remove();
 
+  // Look up the item so we can access qty for per-unit calculations
+  var it=_msi.find(function(x){return x.id===itemId;});
+  if(!it)return;
+
   sources=sources.filter(function(s){return s.status!=='no_key';});
   _msiSourceData[itemId]={geminiSrc:geminiSrc,sources:sources};
 
