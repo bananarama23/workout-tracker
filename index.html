@@ -10455,13 +10455,14 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   var avgData=null;
   var geminiIsHigh=geminiSrc.status==='high';
   if(geminiIsHigh){
-    // Gemini matched known brand data — use it directly, divide by qty for per-unit
+    // Gemini matched known brand data — store totals for display
     avgData={
-      calories:Math.round(geminiSrc.calories/it.qty),
-      prot:Math.round(geminiSrc.prot/it.qty*10)/10,
-      carb:Math.round(geminiSrc.carb/it.qty*10)/10,
-      fat:Math.round(geminiSrc.fat/it.qty*10)/10,
-      fib:geminiSrc.fib?Math.round(geminiSrc.fib/it.qty*10)/10:null,
+      calories:geminiSrc.calories,
+      prot:geminiSrc.prot,
+      carb:geminiSrc.carb,
+      fat:geminiSrc.fat,
+      fib:geminiSrc.fib||null,
+      sat:geminiSrc.sat||null,
       _trustedBrand:true
     };
   } else if(okSources.length>1&&!highDisagree){
@@ -10495,7 +10496,7 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
 
   allSourcesForDisplay.forEach(function(s,si){
     var border=si<allSourcesForDisplay.length-1?'border-bottom:1px solid var(--border);':'';
-    if(s.status==='ok'||s.status==='low_confidence'){
+    if(s.status==='ok'||s.status==='low_confidence'||s.status==='high'){
       var calColor=highDisagree?'var(--orange)':'var(--accent)';
       var lowWarn=s.status==='low_confidence'?' ⚠':'';
       var fv=function(v){return (v===null||v===undefined||isNaN(v)||v==='')?'—':v;};
@@ -10545,7 +10546,7 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
       '<div style="text-align:right;font-size:0.52rem;color:var(--green);">'+avgData.prot+'</div>'+
       '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+avgData.carb+'</div>'+
       '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+avgData.fat+'</div>'+
-      '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+(avgData.sat!=null?avgData.sat:'—')+'</div>'+
+      '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+(avgData.sat!=null?avgData.sat:'\u2014')+'</div>'+
       '</div>';
   }
 
