@@ -1915,7 +1915,6 @@ var sessionActive=false;
 function navTo(page){
   if(sessionActive&&page!=='home'&&page!=='workout'){page='session';}
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
-  // Restore hidden on special pages that get shown via remove('hidden')
   var ms=document.getElementById('page-mealscan');if(ms&&!ms.classList.contains('active'))ms.classList.add('hidden');
   document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
   var pg=document.getElementById('page-'+page);
