@@ -10366,12 +10366,13 @@ function nutMsiVerifyItem(it){
   var rawWeight=it.weight_g||0;
   var geminiTotalCal=Math.round(it.cal*it.qty);
   var serving=rawWeight>10?rawWeight:(geminiTotalCal>0?Math.round(geminiTotalCal/2):100);
-  var geminiSrc={source:'Gemini',status:geminiTotalCal>3000?'low_confidence':'ok',
-    calories:geminiTotalCal,
-    prot:Math.round(it.prot*it.qty*10)/10,
-    carb:Math.round(it.carb*it.qty*10)/10,
-    fat:Math.round(it.fat*it.qty*10)/10,
-    sat:Math.round((it.sat||0)*it.qty*10)/10};
+  // Store PER-UNIT so it matches Claude's per-unit values for correct averaging
+  var geminiSrc={source:'Gemini',status:geminiTotalCal>3000?'low_confidence':(it.confidence==='high'?'high':'ok'),
+    calories:Math.round(it.cal),
+    prot:Math.round(it.prot*10)/10,
+    carb:Math.round(it.carb*10)/10,
+    fat:Math.round(it.fat*10)/10,
+    sat:Math.round((it.sat||0)*10)/10};
 
   // Show loading placeholder immediately
   var row=document.getElementById('msrow-'+it.id);
@@ -10413,17 +10414,34 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   var spread=calMax-calMin,spreadPct=calMin>0?spread/calMin:0;
   var highDisagree=(spreadPct>0.25||spread>100)&&okSources.length>1;
 
-  // Avg across ALL macros
+  // Smart averaging:
+  // - If Gemini has 'high' confidence (exact menu data), trust it — don't dilute with estimates
+  // - If sources highly disagree (>25% spread), don't auto-apply — let user choose
+  // - Exclude Claude from fibre avg since it doesn't return fibre
   var avgData=null;
-  if(okSources.length>1){
+  var geminiIsHigh=geminiSrc.status==='high';
+  if(geminiIsHigh){
+    // Gemini matched known brand data — use it directly as the "avg"
+    avgData={
+      calories:geminiSrc.calories,
+      prot:geminiSrc.prot,
+      carb:geminiSrc.carb,
+      fat:geminiSrc.fat,
+      _trustedBrand:true
+    };
+  } else if(okSources.length>1&&!highDisagree){
     var n=okSources.length;
+    // Exclude fibre from sources that don't provide it (Claude)
+    var fibreSrcs=okSources.filter(function(s){return s.fib!=null&&s.fib>0;});
     avgData={
       calories:Math.round(okSources.reduce(function(a,s){return a+(s.calories||0);},0)/n),
       prot:Math.round(okSources.reduce(function(a,s){return a+(s.prot||0);},0)/n*10)/10,
       carb:Math.round(okSources.reduce(function(a,s){return a+(s.carb||0);},0)/n*10)/10,
       fat:Math.round(okSources.reduce(function(a,s){return a+(s.fat||0);},0)/n*10)/10
     };
+    if(fibreSrcs.length)avgData.fib=Math.round(fibreSrcs.reduce(function(a,s){return a+(s.fib||0);},0)/fibreSrcs.length*10)/10;
   }
+  // highDisagree + no trusted brand = don't auto-apply, let user pick
 
   var allSourcesForDisplay=[geminiSrc].concat(sources);
   var cols='72px 1fr 1fr 1fr 1fr 1fr';
@@ -10473,9 +10491,11 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
 
   if(avgData){
     var disagreeLabel=highDisagree?' <span style="color:var(--orange);font-size:0.44rem;">⚠</span>':'';
+    var avgRowLabel=avgData&&avgData._trustedBrand?'Brand data':'Avg'+disagreeLabel;
+    var avgRowColor=avgData&&avgData._trustedBrand?'var(--green)':'var(--text2)';
     html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;background:var(--card);border-top:1px solid var(--border);">'+
       '<div style="display:flex;align-items:center;gap:3px;">'+
-        '<div style="font-size:0.54rem;color:var(--text2);font-weight:700;white-space:nowrap;">Avg'+disagreeLabel+'</div>'+
+        '<div style="font-size:0.54rem;font-weight:700;white-space:nowrap;color:'+avgRowColor+';">'+avgRowLabel+'</div>'+
         '<button data-iid="'+itemId+'" data-src="avg" class="msi-use-btn" style="background:var(--accent);border:none;border-radius:5px;color:#000;font-size:0.44rem;padding:1px 4px;cursor:pointer;font-weight:900;flex-shrink:0;line-height:1.4;">use</button>'+
       '</div>'+
       '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.75rem;color:var(--accent);">'+avgData.calories+'</div>'+
@@ -10496,8 +10516,11 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
     nutMsiApplySource(parseInt(btn.dataset.iid),btn.dataset.src);
   });
   row.appendChild(div);
-  // Auto-apply avg as default when both sources available
-  if(avgData)nutMsiApplySource(itemId,'avg',true);
+  // Auto-apply only when we have trusted data OR sources agree
+  // If highDisagree and no brand trust, let user choose manually
+  if(avgData&&(avgData._trustedBrand||!highDisagree)){
+    nutMsiApplySource(itemId,'avg',true);
+  }
 }
 function nutMsiApplySource(itemId,sourceName,silent){
   var data=_msiSourceData[itemId];if(!data)return;
