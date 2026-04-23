@@ -10467,10 +10467,9 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources,sheetMatch,qty){
   var highDisagree=(spreadPct>0.25||spread>100)&&okSources.length>1;
 
   // avgData: always compute so badges always update.
-  // Sheet data takes priority if present (user-verified). Gemini high = trusted brand.
-  // highDisagree = show warning but still apply so badges aren't stuck on Gemini raw.
+  // Sheet data takes priority. Otherwise avg all ok sources (Gemini + Claude).
+  // Always compute so badges always update. highDisagree shows ⚠ in table.
   var avgData=null;
-  var geminiIsHigh=geminiSrc.status==='high';
   if(sheetSrc){
     // User's own sheet data — most trusted
     avgData={
@@ -10478,14 +10477,8 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources,sheetMatch,qty){
       fat:sheetSrc.fat,fib:sheetSrc.fib||null,sat:sheetSrc.sat||null,
       _trustedSheet:true
     };
-  } else if(geminiIsHigh){
-    avgData={
-      calories:geminiSrc.calories,prot:geminiSrc.prot,carb:geminiSrc.carb,
-      fat:geminiSrc.fat,fib:geminiSrc.fib||null,sat:geminiSrc.sat||null,
-      _trustedBrand:true
-    };
   } else {
-    // Always compute avg from available ok sources — even if highDisagree
+    // Always compute avg from all ok sources — even if highDisagree
     var n=okSources.length;
     var fibreSrcs=okSources.filter(function(s){return s.fib!=null&&s.fib>0;});
     var satSrcs=okSources.filter(function(s){return s.sat!=null&&s.sat!==''&&!isNaN(s.sat);});
@@ -10554,8 +10547,8 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources,sheetMatch,qty){
 
   if(avgData){
     var disagreeLabel=avgData._highDisagree?' <span style="color:var(--orange);font-size:0.44rem;">⚠</span>':'';
-    var avgRowLabel=avgData._trustedSheet?'Sheet data':avgData._trustedBrand?'Brand data':'Avg'+disagreeLabel;
-    var avgRowColor=avgData._trustedSheet?'var(--accent)':avgData._trustedBrand?'var(--green)':'var(--text2)';
+    var avgRowLabel=avgData._trustedSheet?'Sheet data':'Avg'+disagreeLabel;
+    var avgRowColor=avgData._trustedSheet?'var(--accent)':'var(--text2)';
     html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;background:var(--card);border-top:1px solid var(--border);">'+
       '<div style="display:flex;align-items:center;gap:3px;">'+
         '<div style="font-size:0.54rem;font-weight:700;white-space:nowrap;color:'+avgRowColor+';">'+avgRowLabel+'</div>'+
