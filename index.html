@@ -10495,7 +10495,7 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
 
   allSourcesForDisplay.forEach(function(s,si){
     var border=si<allSourcesForDisplay.length-1?'border-bottom:1px solid var(--border);':'';
-    if(s.status==='ok'||s.status==='low_confidence'){
+    if(s.status==='ok'||s.status==='low_confidence'||s.status==='high'){
       var calColor=highDisagree?'var(--orange)':'var(--accent)';
       var lowWarn=s.status==='low_confidence'?' ⚠':'';
       var fv=function(v){return (v===null||v===undefined||isNaN(v)||v==='')?'—':v;};
@@ -10541,11 +10541,11 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
         '<div style="font-size:0.54rem;font-weight:700;white-space:nowrap;color:'+avgRowColor+';">'+avgRowLabel+'</div>'+
         '<button data-iid="'+itemId+'" data-src="avg" class="msi-use-btn" style="background:var(--accent);border:none;border-radius:5px;color:#000;font-size:0.44rem;padding:1px 4px;cursor:pointer;font-weight:900;flex-shrink:0;line-height:1.4;">use</button>'+
       '</div>'+
-      '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.75rem;color:var(--accent);">'+avgData.calories+'</div>'+
-      '<div style="text-align:right;font-size:0.52rem;color:var(--green);">'+avgData.prot+'</div>'+
-      '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+avgData.carb+'</div>'+
-      '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+avgData.fat+'</div>'+
-      '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+(avgData.sat!=null?avgData.sat:'—')+'</div>'+
+      '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.75rem;color:var(--accent);">'+Math.round(avgData.calories*it.qty)+'</div>'+
+      '<div style="text-align:right;font-size:0.52rem;color:var(--green);">'+Math.round(avgData.prot*it.qty*10)/10+'</div>'+
+      '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+Math.round(avgData.carb*it.qty*10)/10+'</div>'+
+      '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+Math.round(avgData.fat*it.qty*10)/10+'</div>'+
+      '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+(avgData.sat!=null?Math.round(avgData.sat*it.qty*10)/10:'\u2014')+'</div>'+
       '</div>';
   }
 
