@@ -7746,17 +7746,25 @@ function nutFillFromScan(d,statusEl){
 }
 
 function _claudeMsiFetch(query, serving){
-  // Same GAS proxy, but maps protein/carbs/fat → prot/carb/fat for MSI table
+  // POST to GAS with image — falls back to text-only if image too large or unavailable
   return new Promise(function(resolve){
-    var cbName='_claudeMsiCb_'+Date.now();
     var timeout=setTimeout(function(){
-      window[cbName]=null;
-      var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
       resolve({source:'Claude',status:'timeout'});
-    },20000);
-    window[cbName]=function(result){
-      clearTimeout(timeout);window[cbName]=null;
-      var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    },25000);
+    var payload={type:'callClaudeVision',query:query,serving:serving};
+    // Only attach image if under ~4MB base64 (GAS 6MB limit with headroom)
+    if(_msiLastB64&&_msiLastB64.length<4*1024*1024){
+      payload.imageBase64=_msiLastB64;
+      payload.imageMime=_msiLastMime||'image/jpeg';
+    }
+    fetch(CLOUD_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(payload)
+    })
+    .then(function(r){return r.json();})
+    .then(function(result){
+      clearTimeout(timeout);
       if(!result||result.status!=='ok'){
         if(result&&result.message&&(result.message.indexOf('credit')>=0||result.message.indexOf('billing')>=0))
           resolve({source:'Claude',status:'credits'});
@@ -7769,11 +7777,11 @@ function _claudeMsiFetch(query, serving){
         carb:result.carbs,
         fat:result.fat,
         sat:result.satFat});
-    };
-    var s=document.createElement('script');s.id='s_'+cbName;
-    s.src=CLOUD_URL+'?type=callClaude&query='+encodeURIComponent(query)+'&serving='+encodeURIComponent(serving)+'&callback='+cbName;
-    s.onerror=function(){clearTimeout(timeout);window[cbName]=null;resolve({source:'Claude',status:'error'});};
-    document.head.appendChild(s);
+    })
+    .catch(function(){
+      clearTimeout(timeout);
+      resolve({source:'Claude',status:'error'});
+    });
   });
 }
 
@@ -8402,11 +8410,11 @@ function nutMsiFromAddOverlay(inp){
   reader.onload=function(e){
     var img=new Image();
     img.onload=function(){
-      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var maxW=1600,scale=Math.min(1,maxW/img.width,maxW/img.height);
       var c=document.createElement('canvas');
       c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
+      var b64=c.toDataURL('image/jpeg',0.92).split(',')[1];
       _msiLastB64=b64;_msiLastMime='image/jpeg';
       nutMealScanOpen(b64,'image/jpeg');
     };
@@ -9860,12 +9868,11 @@ function nutCamProcessImage(file,isMeal){
   reader.onload=function(e){
     var img=new Image();
     img.onload=function(){
-      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var maxW=isMeal?1600:1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
       var c=document.createElement('canvas');
       c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
-      nutProcessingShow(isMeal?'SCANNING MEAL':'SCANNING');
+      var b64=c.toDataURL('image/jpeg',isMeal?0.92:0.82).split(',')[1];
       nutCamClose();
       if(isMeal){_msiLastB64=b64;_msiLastMime='image/jpeg';nutMealScanOpen(b64,'image/jpeg');}
       else{var st=document.getElementById('nutScanStatus');if(st){st.style.display='block';st.style.color='var(--muted)';st.textContent='Reading\u2026';}nutCallVision(b64,'image/jpeg',st);}
@@ -9885,11 +9892,11 @@ function nutMealScanCapture(){
   if(!vid||!canvas)return;
   canvas.width=vid.videoWidth||1280;canvas.height=vid.videoHeight||720;
   canvas.getContext('2d').drawImage(vid,0,0,canvas.width,canvas.height);
-  var maxW=1024,scale=Math.min(1,maxW/canvas.width);
+  var maxW=1600,scale=Math.min(1,maxW/canvas.width);
   var c2=document.createElement('canvas');
   c2.width=Math.round(canvas.width*scale);c2.height=Math.round(canvas.height*scale);
   c2.getContext('2d').drawImage(canvas,0,0,c2.width,c2.height);
-  var b64=c2.toDataURL('image/jpeg',0.82).split(',')[1];
+  var b64=c2.toDataURL('image/jpeg',0.92).split(',')[1];
   _msiLastB64=b64;_msiLastMime='image/jpeg';
   nutProcessingShow('SCANNING MEAL');
   nutCamClose();
@@ -9925,6 +9932,9 @@ function nutMsiGeoLookup(){
 }
 
 function nutMealScanRetake(){
+  if(_msi.length&&_msi.some(function(it){return it._edited;})){
+    if(!confirm('Retake photo? Your edits will be lost.'))return;
+  }
   var ov=document.getElementById('nutMealScanOverlay');if(ov)ov.style.display='none';
   nutCamOpen();
 }
@@ -9938,17 +9948,26 @@ function nutMealScanOpen(b64,mime){
     cs.style.display='flex';
     var ri=document.getElementById('nutMsiCtxRestaurant');if(ri)ri.value='';
     var hi=document.getElementById('nutMsiCtxHint');if(hi)hi.value='';
+    // Auto-skip after 1.5s if user hasn't typed and geo found nothing
+    var _ctxAutoSkip=setTimeout(function(){
+      var riVal=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
+      var hiVal=(document.getElementById('nutMsiCtxHint')||{}).value||'';
+      if(!riVal&&!hiVal&&!_msiGeoPlace){nutMsiContextSkip();}
+    },1500);
+    cs.dataset.autoSkip=_ctxAutoSkip;
     setTimeout(function(){var r2=document.getElementById('nutMsiCtxRestaurant');if(r2)r2.focus();},350);
   } else {
     nutMealScanOpenDirect(b64,mime);
   }
 }
 function nutMsiContextSkip(){
-  var cs=document.getElementById('nutMsiContextSheet');if(cs)cs.style.display='none';
+  var cs=document.getElementById('nutMsiContextSheet');
+  if(cs){clearTimeout(cs.dataset.autoSkip);cs.style.display='none';}
   nutMealScanOpenDirect(_msiLastB64,_msiLastMime);
 }
 function nutMsiContextConfirm(){
-  var cs=document.getElementById('nutMsiContextSheet');if(cs)cs.style.display='none';
+  var cs=document.getElementById('nutMsiContextSheet');
+  if(cs){clearTimeout(cs.dataset.autoSkip);cs.style.display='none';}
   nutMealScanOpenDirect(_msiLastB64,_msiLastMime);
 }
 function nutMealScanOpenDirect(b64,mime){
@@ -10122,7 +10141,7 @@ function nutMealScanCallVision(b64,mime){
         if(known){
           var ratio=known.calories>0&&it.cal>0?it.cal/known.calories:1;
           // Only apply if calorie range is similar (within 60%) — otherwise it's probably a different dish
-          if(ratio>=0.4&&ratio<=1.6){
+          if(ratio>=0.7&&ratio<=1.3){
             return Object.assign({},it,{
               cal:known.calories,prot:known.protein,carb:known.carbs,
               fat:known.fat,fib:known.fibre,sat:known.satFat,sod:known.sodium||0,
@@ -10133,7 +10152,8 @@ function nutMealScanCallVision(b64,mime){
         return it;
       });
       var _totC=parsed.reduce(function(acc,it){return acc+it.cal*it.qty;},0);
-      if(_totC>1500){
+      var _warnThresh=700*parsed.length;
+      if(_totC>_warnThresh){
         nutMealScanSetStatus('\u26a0\ufe0f '+parsed.length+' items \u00b7 '+Math.round(_totC)+' kcal \u2014 does this look right?','var(--yellow)');
       } else {
         nutMealScanSetStatus(parsed.length+' item'+(parsed.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
@@ -10155,8 +10175,9 @@ function nutMealScanCallVision(b64,mime){
 // ── High-calorie warning banner ───────────────────────────────────────────────
 function nutMsiCheckHighCalorie(){
   var total=_msi.reduce(function(s,it){return s+it.cal*it.qty;},0);
+  var thresh=700*Math.max(1,_msi.length);
   var warn=document.getElementById('nutMsiHighCalWarn');
-  if(total>1500){
+  if(total>thresh){
     if(!warn){
       warn=document.createElement('div');
       warn.id='nutMsiHighCalWarn';
@@ -10450,9 +10471,9 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   });
   row.appendChild(div);
   // Auto-apply avg as default when both sources available
-  if(avgData)nutMsiApplySource(itemId,'avg');
+  if(avgData)nutMsiApplySource(itemId,'avg',true);
 }
-function nutMsiApplySource(itemId,sourceName){
+function nutMsiApplySource(itemId,sourceName,silent){
   var data=_msiSourceData[itemId];if(!data)return;
   var idx=_msi.findIndex(function(it){return it.id===itemId;});if(idx<0)return;
   var it=_msi[idx];
@@ -10476,7 +10497,7 @@ function nutMsiApplySource(itemId,sourceName){
     chosen={cal:src.calories/it.qty,prot:(src.prot||0)/it.qty,carb:(src.carb||0)/it.qty,fat:(src.fat||0)/it.qty,sat:src.sat!=null?src.sat/it.qty:null};
   }
 
-  var updated={cal:Math.round(chosen.cal*10)/10,prot:Math.round(chosen.prot*10)/10,carb:Math.round(chosen.carb*10)/10,fat:Math.round(chosen.fat*10)/10,_edited:true};
+  var updated={cal:Math.round(chosen.cal*10)/10,prot:Math.round(chosen.prot*10)/10,carb:Math.round(chosen.carb*10)/10,fat:Math.round(chosen.fat*10)/10,_edited:silent?it._edited:true};
   if(chosen.sat!=null)updated.sat=Math.round(chosen.sat*10)/10;
   _msi[idx]=Object.assign({},it,updated);
 
@@ -10628,20 +10649,27 @@ function nutMsiRefineSubmit(itemId){
     geminiDone=true;
   }
 
-  // Ask Claude via GAS proxy
-  var cbName='_refine_'+itemId+'_'+Date.now();
-  var timeout=setTimeout(function(){
-    window[cbName]=null;
-    var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+  // Ask Claude via GAS POST proxy (with image)
+  var _refineTimeout=setTimeout(function(){
     claudeDone=true;
     if(geminiDone&&!geminiResult)showError('Both AI sources timed out');
-  },20000);
-  window[cbName]=function(result){
-    clearTimeout(timeout);window[cbName]=null;
-    var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+  },25000);
+  fetch(CLOUD_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({
+      type:'callClaudeVision',
+      query:note+' '+it.name,
+      serving:it.weight_g||Math.round((it.cal*it.qty)/2),
+      imageBase64:_msiLastB64||'',
+      imageMime:_msiLastMime||'image/jpeg'
+    })
+  })
+  .then(function(r){return r.json();})
+  .then(function(result){
+    clearTimeout(_refineTimeout);
     claudeDone=true;
     if(result&&result.status==='ok'){
-      // Convert Claude JSON response to MSI item format
       claudeResult={
         _src:'Claude',
         name:it.name,qty:it.qty,
@@ -10655,11 +10683,12 @@ function nutMsiRefineSubmit(itemId){
       if(geminiDone&&!geminiResult)showError('Claude: no credits — add billing at console.anthropic.com');
     }
     if(!claudeResult&&geminiDone&&!geminiResult)showError('Could not refine — try rephrasing');
-  };
-  var s=document.createElement('script');s.id='s_'+cbName;
-  s.src=CLOUD_URL+'?type=callClaude&query='+(encodeURIComponent(note+' '+it.name))+'&serving='+(it.weight_g||Math.round((it.cal*it.qty)/2))+'&callback='+cbName;
-  s.onerror=function(){clearTimeout(timeout);window[cbName]=null;claudeDone=true;if(geminiDone&&!geminiResult)showError('Network error');};
-  document.head.appendChild(s);
+  })
+  .catch(function(){
+    clearTimeout(_refineTimeout);
+    claudeDone=true;
+    if(geminiDone&&!geminiResult)showError('Network error');
+  });
 }
 
 
@@ -10697,7 +10726,7 @@ function nutMsiRowHTML(it){
   h+='<div onclick="nutMealScanEditName('+it.id+')" style="flex:1;font-weight:600;font-size:0.87rem;color:var(--text);cursor:pointer;line-height:1.3;">'+it.name+'<span style="font-size:0.58rem;color:var(--muted);font-weight:400;margin-left:4px;">↩</span></div>';
   h+='<div style="display:flex;align-items:center;border:1px solid var(--border2);border-radius:20px;overflow:hidden;flex-shrink:0;">';
   h+='<button onclick="nutMealScanAdjQty('+it.id+',-1)" style="background:var(--card2);border:none;color:var(--text2);width:26px;height:26px;font-size:1rem;cursor:pointer;line-height:1;">−</button>';
-  h+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:0.9rem;padding:0 7px;min-width:36px;text-align:center;color:var(--text);line-height:1.1;">'+nutFmtQty(it.qty)+(it.qty===1?'<div style="font-size:0.42rem;color:var(--muted);letter-spacing:0px;margin-top:1px;">¼ ½ ¾</div>':'')+'</div>';
+  h+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:0.9rem;padding:0 7px;min-width:36px;text-align:center;color:var(--text);line-height:1.1;">'+nutFmtQty(it.qty)+'</div>';
   h+='<button onclick="nutMealScanAdjQty('+it.id+',1)" style="background:var(--card2);border:none;color:var(--text2);width:26px;height:26px;font-size:1rem;cursor:pointer;line-height:1;">+</button>';
   h+='</div>';
   h+='<button onclick="nutMealScanRemove('+it.id+')" style="background:none;border:none;color:var(--muted);font-size:0.9rem;cursor:pointer;padding:3px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.15s,color 0.15s;" onmouseover="this.style.background=\'var(--red-dim)\';this.style.color=\'var(--red)\'" onmouseout="this.style.background=\'none\';this.style.color=\'var(--muted)\'">&#10005;</button>';
@@ -10714,7 +10743,7 @@ function nutMsiRowHTML(it){
   var _confIcon=it._fromFoods?'📋 ':it._edited?'✎ ':it.confidence==='high'?'✓ ':it.confidence==='low'?'⚠ ':'∼ ';
   var _src=it._fromFoods?'My Foods':it._edited?'edited':(it.source||'Gemini');
   var _badge=_confIcon+_src+(it.confidence&&!it._fromFoods&&!it._edited?' · '+(it.confidence):'');
-  if(it.weight_g)_badge+=' · '+it.weight_g+'g';
+  if(it.weight_g>5&&it.qty===1)_badge+=' · '+it.weight_g+'g';
   h+='<div style="margin-left:auto;font-size:0.55rem;color:'+_confColor+';font-weight:700;letter-spacing:0.3px;white-space:nowrap;">'+_badge+'</div>';
   h+='</div>';
   // Refine bubble
@@ -10843,13 +10872,20 @@ function nutMealScanRefetch(id){
 }
 
 // ── Qty ───────────────────────────────────────────────────────────────────────
-var _msiSteps=[0.25,0.5,0.75,1,1.5,2,2.5,3,4,5,6,8,10,12];
+var _msiSteps=[0.25,0.5,0.75];
 function nutMealScanAdjQty(id,d){
   var it=_msi.find(function(x){return x.id===id;});if(!it)return;
-  var idx=_msiSteps.indexOf(it.qty);
-  if(idx<0){idx=_msiSteps.findIndex(function(s){return s>=it.qty;});if(idx<0)idx=_msiSteps.length-1;}
-  idx=Math.max(0,Math.min(_msiSteps.length-1,idx+d));
-  it.qty=_msiSteps[idx];
+  var q=it.qty;
+  if(q<1||( q===1&&d<0)){
+    // fractional zone: step through 0.25,0.5,0.75,1
+    var idx=_msiSteps.indexOf(q);
+    if(idx<0)idx=d<0?_msiSteps.length-1:0;
+    idx=Math.max(0,Math.min(_msiSteps.length-1,idx+d));
+    it.qty=d>0&&q===0.75?1:_msiSteps[idx];
+  } else {
+    // whole number zone: +1/-1
+    it.qty=Math.max(0.25,Math.round(q)+d);
+  }
   var row=document.getElementById('msrow-'+id);if(row)row.innerHTML=nutMsiRowHTML(it);
   nutMealScanRenderTotals();
 }
@@ -10868,26 +10904,27 @@ function nutMealScanAddItem(){
 }
 
 // ── Save ──────────────────────────────────────────────────────────────────────
+function _msiCleanName(n){return n.replace(/\s*\(est\.?\)\s*/gi,'').trim();}
 function nutMealScanSave(){
   if(!_msi.length)return;
   var _zeroCal=_msi.filter(function(it){return it.cal===0;});
   if(_zeroCal.length&&!confirm(_zeroCal.map(function(it){return it.name;}).join(', ')+' has 0 calories. Log anyway?'))return;
   var _tot=_msi.reduce(function(s,it){return s+it.cal*it.qty;},0);
-  if(_tot>1500&&!confirm(Math.round(_tot)+' kcal \u2014 this looks high. Correct?\n\nOK to log, Cancel to adjust.'))return;
+  if(_tot>700*Math.max(1,_msi.length)&&!confirm(Math.round(_tot)+' kcal \u2014 this looks high. Correct?\n\nOK to log, Cancel to adjust.'))return;
   var now=Date.now();
   var mealLabel=((document.getElementById('nutMsiMealName')||{}).value||'').trim();
   var entries;
   if(_msiCombine){
     var tC=0,tP=0,tCb=0,tF=0,tFb=0,tSt=0,tSod=0;
     _msi.forEach(function(it){var q=it.qty;tC+=it.cal*q;tP+=it.prot*q;tCb+=it.carb*q;tF+=it.fat*q;tFb+=it.fib*q;tSt+=it.sat*q;tSod+=it.sod*q;});
-    var foodName=mealLabel||_msi.map(function(it){return it.name;}).join(', ');
+    var foodName=mealLabel||_msi.map(function(it){return _msiCleanName(it.name);}).join(', ');
     entries=[{date:_nutDate,meal:_msiMeal,food:foodName,
       calories:Math.round(tC),protein:Math.round(tP*10)/10,carbs:Math.round(tCb*10)/10,
       fat:Math.round(tF*10)/10,fibre:Math.round(tFb*10)/10,satFat:Math.round(tSt*10)/10,
       sodium:Math.round(tSod),servings:1,id:now,updatedAt:now}];
   } else {
     entries=_msi.map(function(it,i){var q=it.qty;return{
-      date:_nutDate,meal:_msiMeal,food:it.name,
+      date:_nutDate,meal:_msiMeal,food:_msiCleanName(it.name),
       calories:Math.round(it.cal*q),protein:Math.round(it.prot*q*10)/10,
       carbs:Math.round(it.carb*q*10)/10,fat:Math.round(it.fat*q*10)/10,
       fibre:Math.round(it.fib*q*10)/10,satFat:Math.round(it.sat*q*10)/10,
@@ -10905,8 +10942,9 @@ function nutMealScanSave(){
   });
   if(foodsToSave.length){
     foodsToSave.forEach(function(it){
-      var existing=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===it.name.toLowerCase();});
-      var food={name:it.name,calories:it.cal,protein:it.prot,carbs:it.carb,
+      var cleanName=_msiCleanName(it.name);
+      var existing=_nutFoods.findIndex(function(f){return f.name.toLowerCase()===cleanName.toLowerCase();});
+      var food={name:cleanName,calories:it.cal,protein:it.prot,carbs:it.carb,
         fat:it.fat,fibre:it.fib,satFat:it.sat,sodium:it.sod,serving:1,unit:'serving'};
       if(existing>=0){
         // Overwrite with corrected values
@@ -10920,7 +10958,8 @@ function nutMealScanSave(){
     try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
     fetch(CLOUD_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
       body:JSON.stringify({type:'addFood',foods:foodsToSave.map(function(it){
-        return{name:it.name,calories:it.cal,protein:it.prot,carbs:it.carb,
+        var cleanName=_msiCleanName(it.name);
+        return{name:cleanName,calories:it.cal,protein:it.prot,carbs:it.carb,
           fat:it.fat,fibre:it.fib,satFat:it.sat,sodium:it.sod,serving:1,unit:'serving'};
       }),_nonce:now})
     }).catch(function(){});
@@ -10971,11 +11010,11 @@ function nutUploadMealHandler(inp){
   reader.onload=function(e){
     var img=new Image();
     img.onload=function(){
-      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var maxW=1600,scale=Math.min(1,maxW/img.width,maxW/img.height);
       var c=document.createElement('canvas');
       c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
+      var b64=c.toDataURL('image/jpeg',0.92).split(',')[1];
       _msiLastB64=b64;_msiLastMime='image/jpeg';
       nutMealScanOpen(b64,'image/jpeg');
     };
@@ -11002,11 +11041,11 @@ function nutMsiPageUploadHandler(inp){
   reader.onload=function(e){
     var img=new Image();
     img.onload=function(){
-      var maxW=1024,scale=Math.min(1,maxW/img.width,maxW/img.height);
+      var maxW=1600,scale=Math.min(1,maxW/img.width,maxW/img.height);
       var c=document.createElement('canvas');
       c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      var b64=c.toDataURL('image/jpeg',0.82).split(',')[1];
+      var b64=c.toDataURL('image/jpeg',0.92).split(',')[1];
       _msiLastB64=b64;_msiLastMime='image/jpeg';
       var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='none';
       nutMealScanSetStatus('Scanning new photo…','var(--muted)');
