@@ -9967,26 +9967,19 @@ function nutMealScanOpen(b64,mime){
     var hi=document.getElementById('nutMsiCtxHint');if(hi)hi.value='';
     nutMsiCtxSetStatus('Detecting restaurant…','var(--muted)',true);
     nutMsiDetectBrand(b64,mime);
-    // Auto-skip after 1.5s if user hasn't typed and geo found nothing
-    var _ctxAutoSkip=setTimeout(function(){
-      var riVal=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
-      var hiVal=(document.getElementById('nutMsiCtxHint')||{}).value||'';
-      if(!riVal&&!hiVal&&!_msiGeoPlace){nutMsiContextSkip();}
-    },1500);
-    cs.dataset.autoSkip=_ctxAutoSkip;
-    setTimeout(function(){var r2=document.getElementById('nutMsiCtxRestaurant');if(r2)r2.focus();},350);
+    setTimeout(function(){var r2=document.getElementById('nutMsiCtxHint');if(r2)r2.focus();},350);
   } else {
     nutMealScanOpenDirect(b64,mime);
   }
 }
 function nutMsiContextSkip(){
   var cs=document.getElementById('nutMsiContextSheet');
-  if(cs){clearTimeout(cs.dataset.autoSkip);cs.style.display='none';}
+  if(cs)cs.style.display='none';
   nutMealScanOpenDirect(_msiLastB64,_msiLastMime);
 }
 function nutMsiContextConfirm(){
   var cs=document.getElementById('nutMsiContextSheet');
-  if(cs){clearTimeout(cs.dataset.autoSkip);cs.style.display='none';}
+  if(cs)cs.style.display='none';
   nutMealScanOpenDirect(_msiLastB64,_msiLastMime);
 }
 function nutMealScanOpenDirect(b64,mime){
@@ -10376,13 +10369,47 @@ function nutMsiVerifyItem(it){
     sat:Math.round((it.sat||0)*it.qty*10)/10,
     fib:Math.round((it.fib||0)*it.qty*10)/10};
 
-  // Show loading placeholder immediately
+  // Show Gemini row immediately + Claude loading row
   var row=document.getElementById('msrow-'+it.id);
   if(row){
     var existing=row.querySelector('.msi-source-row');if(existing)existing.remove();
+    var cols='72px 1fr 1fr 1fr 1fr 1fr';
+    var gCal=geminiSrc.calories,gProt=geminiSrc.prot,gCarb=geminiSrc.carb,gFat=geminiSrc.fat;
+    var gColor=geminiSrc.status==='high'?'var(--green)':geminiSrc.status==='low_confidence'?'var(--orange)':'var(--accent)';
+    var gLabel=geminiSrc.status==='high'?'Gemini ✓':geminiSrc.status==='low_confidence'?'Gemini ⚠':'Gemini';
     var placeholder=document.createElement('div');
     placeholder.className='msi-source-row';
-    placeholder.innerHTML='<div style="padding:6px 10px;font-size:0.6rem;color:var(--muted);font-style:italic;">✦ Asking Claude…</div>';
+    placeholder.innerHTML=
+      '<div style="margin-top:8px;background:var(--card2);border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);">'+
+      '<div style="display:grid;grid-template-columns:'+cols+';padding:3px 6px;background:var(--card);border-bottom:1px solid var(--border);">'+
+        '<span></span>'+
+        '<span style="font-size:0.42rem;color:var(--accent);font-weight:700;text-transform:uppercase;text-align:right;">CAL</span>'+
+        '<span style="font-size:0.42rem;color:var(--green);font-weight:700;text-transform:uppercase;text-align:right;">PROT</span>'+
+        '<span style="font-size:0.42rem;color:var(--blue);font-weight:700;text-transform:uppercase;text-align:right;">CARB</span>'+
+        '<span style="font-size:0.42rem;color:var(--orange);font-weight:700;text-transform:uppercase;text-align:right;">FAT</span>'+
+        '<span style="font-size:0.42rem;color:var(--red);font-weight:700;text-transform:uppercase;text-align:right;">SAT</span>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;border-bottom:1px solid var(--border);">'+
+        '<div style="font-size:0.54rem;color:var(--text2);font-weight:600;">'+gLabel+'</div>'+
+        '<div style="text-align:right;font-family:'Bebas Neue',sans-serif;font-size:0.75rem;color:'+gColor+';">'+gCal+'</div>'+
+        '<div style="text-align:right;font-size:0.52rem;color:var(--green);">'+gProt+'</div>'+
+        '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+gCarb+'</div>'+
+        '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+gFat+'</div>'+
+        '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+Math.round((geminiSrc.sat||0))+'</div>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;" id="claude-row-'+it.id+'">'+
+        '<div style="font-size:0.54rem;color:var(--muted);">Claude</div>'+
+        '<div style="grid-column:2/-1;display:flex;align-items:center;gap:5px;justify-content:flex-end;">'+
+          '<div style="width:8px;height:8px;border:1.5px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>'+
+          '<span style="font-size:0.44rem;color:var(--muted);">asking...</span>'+
+        '</div>'+
+      '</div>'+
+      '</div>';
+    placeholder.addEventListener('click',function(ev){
+      var btn=ev.target.closest('.msi-use-btn');
+      if(!btn)return;
+      nutMsiApplySource(parseInt(btn.dataset.iid),btn.dataset.src);
+    });
     row.appendChild(placeholder);
   }
 
@@ -10486,9 +10513,17 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
     } else if(s.status==='key_error'){
       html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--red);">'+s.source+' — key error</span></div>';
     } else if(s.status==='timeout'){
-      html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--muted);">'+s.source+' — timed out</span></div>';
+      html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;'+border+'">'+
+        '<div style="font-size:0.54rem;color:var(--muted);">'+s.source+'</div>'+
+        '<div style="text-align:right;font-size:0.44rem;color:var(--muted);grid-column:2/-1;">timed out — check GAS</div>'+
+        '</div>';
+    } else if(s.status==='error'){
+      html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;'+border+'">'+
+        '<div style="font-size:0.54rem;color:var(--red);">'+s.source+'</div>'+
+        '<div style="text-align:right;font-size:0.44rem;color:var(--muted);grid-column:2/-1;">error</div>'+
+        '</div>';
     } else if(s.status!=='no_key'){
-      html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--muted);">'+s.source+' — error</span></div>';
+      html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--muted);">'+s.source+' — '+s.status+'</span></div>';
     }
   });
 
