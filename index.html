@@ -10563,7 +10563,7 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   // Auto-apply only when we have trusted data OR sources agree
   // If highDisagree and no brand trust, let user choose manually
   if(avgData&&(avgData._trustedBrand||!highDisagree)){
-    nutMsiApplySource(itemId,'avg',true);
+    setTimeout(function(){nutMsiApplySource(itemId,'avg',true);},0);
   }
 }
 function nutMsiApplySource(itemId,sourceName,silent){
@@ -10802,8 +10802,8 @@ function nutMsiRefineSubmit(itemId){
 
 function nutMealScanRender(){
   nutMealScanRenderItems();nutMealScanRenderTotals();nutMsiSyncViewToggle();nutMsiCheckHighCalorie();
-  // Trigger Claude comparison for all non-saved items
-  nutMsiVerifyAll(_msi);
+  // Trigger Claude comparison for all non-saved items (defer to let DOM settle)
+  setTimeout(function(){nutMsiVerifyAll(_msi);},0);
   // Show note when My Foods data was applied
   var el=document.getElementById('nutMsiCorrectionNote');if(!el)return;
   var fromFoods=_msi.filter(function(it){return it._fromFoods;});
