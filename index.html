@@ -10000,7 +10000,6 @@ function nutMealScanOpenDirect(b64,mime){
   var rest=(document.getElementById('nutMsiCtxRestaurant')||{}).value||'';
   var nm=document.getElementById('nutMsiMealName');if(nm&&rest&&!nm.value)nm.value=rest;
   nutMealScanRenderMealBtns();nutMealScanRenderMemory();
-  nutProcessingHide();
   if(b64)nutMealScanCallVision(b64,mime);
 }
 function nutMsiSpinner(){
@@ -10176,9 +10175,11 @@ function nutMealScanCallVision(b64,mime){
       } else {
         nutMealScanSetStatus(parsed.length+' item'+(parsed.length!==1?'s':'')+' found \u2014 tap to edit','var(--green)');
       }
+      nutProcessingHide();
       nutMealScanRender();
       nutMsiCheckHighCalorie();
     } else {
+      nutProcessingHide();
       nutMealScanSetStatus('No items found \u2014 try a clearer photo or better lighting','var(--orange)');
       document.getElementById('nutMealScanItems').innerHTML=
         '<div style="text-align:center;padding:32px 20px;color:var(--muted);">'+
@@ -10192,6 +10193,7 @@ function nutMealScanCallVision(b64,mime){
     var rb=document.getElementById('nutMealScanRetakeBtn');if(rb)rb.style.display='block';
     nutMealScanSetStatus('Network error \u2014 '+(err&&err.message||'check connection'),'var(--orange)');
   });
+    nutProcessingHide();
 }
 
 // ── High-calorie warning banner ───────────────────────────────────────────────
