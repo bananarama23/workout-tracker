@@ -8729,7 +8729,10 @@ function nutServingUnitChange(u){
 function nutServingEditFood(){
   // Close serving overlay, open food form for the current food
   var f=_nutServingFood;if(!f)return;
-  var idx=_nutFoods.indexOf(f);if(idx<0)return;
+  // Try reference match first, fall back to name match (scanned foods aren't same reference)
+  var idx=_nutFoods.indexOf(f);
+  if(idx<0)idx=_nutFoods.findIndex(function(x){return x.name===f.name;});
+  if(idx<0)return;
   document.getElementById('nutServingOverlay').style.display='none';
   nutOpenFoodForm(idx);
 }
