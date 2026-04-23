@@ -10535,12 +10535,28 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources,sheetMatch,qty){
       var lowWarn=s.status==='low_confidence'?' ⚠':'';
       var fv=function(v){return (v===null||v===undefined||isNaN(v)||v==='')?'—':v;};
       var protFat='P'+fv(s.prot)+' F'+fv(s.fat);
-      html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;'+border+'">'+
-        '<div>'+
-          '<div style="display:flex;align-items:flex-start;gap:3px;flex-wrap:wrap;">'+
-            '<div style="font-size:0.54rem;color:var(--text2);font-weight:600;word-break:break-word;">'+s.source+lowWarn+'</div>'+
+      // Long names (sheet data) get label on its own row; short names stay inline
+      var isLong=s.source.length>12;
+      if(isLong){
+        html+='<div style="'+border+'">'+
+          '<div style="display:flex;align-items:center;gap:4px;padding:4px 6px 2px;">'+
+            '<div style="font-size:0.54rem;color:var(--text2);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+s.source+lowWarn+'</div>'+
             '<button data-iid="'+itemId+'" data-src="'+s.source+'" class="msi-use-btn" style="background:var(--card);border:1px solid var(--border2);border-radius:5px;color:var(--text2);font-size:0.44rem;padding:1px 4px;cursor:pointer;font-weight:700;flex-shrink:0;line-height:1.4;">use</button>'+
           '</div>'+
+          '<div style="display:grid;grid-template-columns:'+cols+';padding:1px 6px 4px;align-items:center;">'+
+            '<div></div>'+
+            '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.75rem;color:'+calColor+';">'+s.calories+'</div>'+
+            '<div style="text-align:right;font-size:0.52rem;color:var(--green);">'+fv(s.prot)+'</div>'+
+            '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+fv(s.carb)+'</div>'+
+            '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+fv(s.fat)+'</div>'+
+            '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+fv(s.sat)+'</div>'+
+          '</div>'+
+        '</div>';
+      } else {
+      html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;'+border+'">'+
+        '<div style="display:flex;align-items:center;gap:3px;">'+
+          '<div style="font-size:0.54rem;color:var(--text2);font-weight:600;white-space:nowrap;">'+s.source+lowWarn+'</div>'+
+          '<button data-iid="'+itemId+'" data-src="'+s.source+'" class="msi-use-btn" style="background:var(--card);border:1px solid var(--border2);border-radius:5px;color:var(--text2);font-size:0.44rem;padding:1px 4px;cursor:pointer;font-weight:700;flex-shrink:0;line-height:1.4;">use</button>'+
         '</div>'+
         '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.75rem;color:'+calColor+';">'+s.calories+'</div>'+
         '<div style="text-align:right;font-size:0.52rem;color:var(--green);">'+fv(s.prot)+'</div>'+
@@ -10548,6 +10564,7 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources,sheetMatch,qty){
         '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+fv(s.fat)+'</div>'+
         '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+fv(s.sat)+'</div>'+
         '</div>';
+      }
     } else if(s.status==='credits'){
       html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--orange);">'+s.source+' — out of credits</span></div>';
     } else if(s.status==='key_error'){
