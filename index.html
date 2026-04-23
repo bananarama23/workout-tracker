@@ -10597,20 +10597,27 @@ function nutMsiApplySource(itemId,sourceName,silent){
   if(chosen.fib!=null)updated.fib=Math.round(chosen.fib*10)/10;
   _msi[idx]=Object.assign({},it,updated);
 
-  // Re-render the row content but keep the source panel with live events
+  // Update pill values in-place — avoids wiping the row and losing the source table
   var row=document.getElementById('msrow-'+itemId);if(!row)return;
-  var srcPanel=row.querySelector('.msi-source-row');
-  var srcNode=srcPanel?srcPanel.cloneNode(true):null;
-  row.innerHTML=nutMsiRowHTML(_msi[idx]);
-  if(srcNode){
-    // Re-attach click listener so use buttons work after re-insert
-    srcNode.addEventListener('click',function(ev){
-      var btn=ev.target.closest('.msi-use-btn');
-      if(!btn)return;
-      nutMsiApplySource(parseInt(btn.dataset.iid),btn.dataset.src);
-    });
-    row.appendChild(srcNode);
-  }
+  var it2=_msi[idx];
+  var dCal=_msiShowTotal?Math.round(it2.cal*it2.qty):it2.cal;
+  var dProt=_msiShowTotal?Math.round(it2.prot*it2.qty*10)/10:it2.prot;
+  var dCarb=_msiShowTotal?Math.round(it2.carb*it2.qty*10)/10:it2.carb;
+  var dFat=_msiShowTotal?Math.round(it2.fat*it2.qty*10)/10:it2.fat;
+  var dSat=_msiShowTotal?Math.round((it2.sat||0)*it2.qty*10)/10:(it2.sat||0);
+  var fields={cal:[dCal,''],prot:[dProt,'g'],carb:[dCarb,'g'],fat:[dFat,'g'],sat:[dSat,'g']};
+  Object.keys(fields).forEach(function(f){
+    var el=row.querySelector('[data-msival="'+itemId+'-'+f+'"]');
+    if(el)el.textContent=fields[f][0]+fields[f][1];
+  });
+  // Update confidence badge
+  var _confColor=it2._fromFoods?'var(--accent)':it2._edited?'var(--blue)':it2.confidence==='high'?'var(--green)':it2.confidence==='low'?'var(--orange)':'var(--muted)';
+  var _confIcon=it2._fromFoods?'📋 ':it2._edited?'✎ ':it2.confidence==='high'?'✓ ':it2.confidence==='low'?'⚠ ':'∼ ';
+  var _src=it2._fromFoods?'My Foods':it2._edited?'edited':(it2.source||'Gemini');
+  var _badge=_confIcon+_src+(it2.confidence&&!it2._fromFoods&&!it2._edited?' · '+(it2.confidence):'');
+  if(it2.weight_g>5&&it2.qty===1)_badge+=' · '+it2.weight_g+'g';
+  var badgeEl=row.querySelector('[style*="margin-left:auto"]');
+  if(badgeEl){badgeEl.style.color=_confColor;badgeEl.textContent=_badge;}
   nutMealScanRenderTotals();
 }
 
@@ -10887,7 +10894,7 @@ function nutFmtQty(q){
 }
 function nutMsiPill(val,unit,label,color,big,id,field){
   return '<div onclick="nutMsiEditOpen('+id+',\''+field+'\')" style="display:flex;flex-direction:column;align-items:center;background:var(--card2);border-radius:8px;padding:'+(big?'5px 10px':'4px 7px')+';cursor:pointer;min-width:'+(big?'48px':'36px')+';transition:background 0.12s;" onmouseover="this.style.background=\'var(--card3)\'" onmouseout="this.style.background=\'var(--card2)\'">'
-    +'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:'+(big?'1.05rem':'0.88rem')+';color:'+color+';">'+val+unit+'</div>'
+    +'<div data-msival="'+id+'-'+field+'" style="font-family:\'Bebas Neue\',sans-serif;font-size:'+(big?'1.05rem':'0.88rem')+';color:'+color+';">'+val+unit+'</div>'
     +'<div style="font-size:0.48rem;color:var(--muted);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-top:1px;">'+label+'</div></div>';
 }
 
