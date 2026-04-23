@@ -10821,9 +10821,30 @@ function msiClearFromFoods(){
 function nutMealScanRenderItems(){
   var c=document.getElementById('nutMealScanItems');if(!c)return;
   if(!_msi.length){c.innerHTML='';return;}
+  // Save existing source rows before wiping
+  var savedRows={};
+  _msi.forEach(function(it){
+    var row=document.getElementById('msrow-'+it.id);
+    if(row){var sr=row.querySelector('.msi-source-row');if(sr)savedRows[it.id]=sr.cloneNode(true);}
+  });
   c.innerHTML=_msi.map(function(it){
     return '<div id="msrow-'+it.id+'" style="padding:11px 16px;border-bottom:1px solid var(--border);">'+nutMsiRowHTML(it)+'</div>';
   }).join('');
+  // Restore source rows and re-attach event listeners
+  _msi.forEach(function(it){
+    if(savedRows[it.id]){
+      var row=document.getElementById('msrow-'+it.id);
+      if(row){
+        var sr=savedRows[it.id];
+        sr.addEventListener('click',function(ev){
+          var btn=ev.target.closest('.msi-use-btn');
+          if(!btn)return;
+          nutMsiApplySource(parseInt(btn.dataset.iid),btn.dataset.src);
+        });
+        row.appendChild(sr);
+      }
+    }
+  });
 }
 function nutMsiRowHTML(it){
   var dCal=_msiShowTotal?Math.round(it.cal*it.qty):it.cal;
