@@ -7677,16 +7677,17 @@ function nutCallVision(base64,mediaType,statusEl){
     return r.json();
   })
   .then(function(data){
-    if(data.error){if(statusEl){statusEl.textContent='API error: '+data.error.message;statusEl.style.color='var(--orange)';}return;}
+    if(data.error){nutProcessingHide();if(statusEl){statusEl.textContent='API error: '+data.error.message;statusEl.style.color='var(--orange)';}return;}
     var text=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text;
-    if(!text){var reason=data.candidates&&data.candidates[0]&&data.candidates[0].finishReason;if(statusEl){statusEl.textContent='No result'+(reason?' ('+reason+')':'')+' \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}return;}
+    if(!text){nutProcessingHide();var reason=data.candidates&&data.candidates[0]&&data.candidates[0].finishReason;if(statusEl){statusEl.textContent='No result'+(reason?' ('+reason+')':'')+' \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}return;}
     text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
     var js=text.indexOf('{'),je=text.lastIndexOf('}');
     if(js>=0&&je>js)text=text.slice(js,je+1);
-    try{var parsed=JSON.parse(text);nutFillFromScan(parsed,statusEl);}
-    catch(e){if(statusEl){statusEl.textContent='Parse error \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}}
+    try{var parsed=JSON.parse(text);nutProcessingHide();nutFillFromScan(parsed,statusEl);}
+    catch(e){nutProcessingHide();if(statusEl){statusEl.textContent='Parse error \u2014 try a clearer photo';statusEl.style.color='var(--orange)';}}
   })
   .catch(function(err){
+    nutProcessingHide();
     var msg=err&&err.message||'';
     if(msg.indexOf('BAD_KEY')>=0){localStorage.removeItem('wt_gemini_key');wtDB.del('wt_gemini_key');nutApiKeyShow(base64,mediaType,statusEl);var kmsg=document.getElementById('nutApiKeyMsg');if(kmsg)kmsg.textContent='Key rejected \u2014 paste a fresh one from AI Studio';}
     else if(msg.indexOf('credits:')>=0||msg.indexOf('quota')>=0||msg.indexOf('billing')>=0){if(statusEl){statusEl.textContent='Gemini out of credits \u2014 top up at aistudio.google.com/billing';statusEl.style.color='var(--orange)';}}
