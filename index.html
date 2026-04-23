@@ -10039,59 +10039,62 @@ function nutMealScanCallVision(b64,mime){
   var ctxBlock='';
   if(_ctxR)ctxBlock+='\nLOCATION/BRAND: '+_ctxR+' — treat this as confirmed. Match visible items to this brand\'s exact current menu. Do not guess a generic equivalent.';
   if(_ctxH)ctxBlock+='\nUSER NOTES: '+_ctxH;
-
   var sysInstr=
     'You are a precision Nutrition Data Extractor. Your job is to analyze food images and return accurate macro data.\n\n'+
     'THINKING PROCESS — work through this mentally before outputting:\n'+
-    '  Step 1: Identify brand/restaurant from logos, packaging, or context. If LOCATION/BRAND is provided, treat it as confirmed truth.\n'+
+    '  Step 1: Identify brand/restaurant from logos, packaging, uniforms, décor, or tray liners. If LOCATION/BRAND is provided, treat it as confirmed truth.\n'+
+    '          When a brand is confirmed: use that brand\'s EXACT published nutrition data from your training. Chain restaurants publish nutrition facts — use them.\n'+
     '  Step 2: Name the specific item precisely (e.g. "Iced Lavender Cream Chai Latte Grande", not "drink").\n'+
     '          Append "(est.)" to the name if you cannot confirm the item with high confidence.\n'+
-    '  Step 3: Use VISUAL SCALE CUES to calibrate portion size — do not default to "standard":\n'+
-    '          - Hands or fingers visible → use as scale reference (adult palm ≈ 85g protein, fist ≈ 240ml).\n'+
-    '          - Utensils visible → spoon/fork size confirms plate scale.\n'+
-    '          - Cup rim diameter → standard takeaway cup is 8-9cm, grande cup is ~12cm at rim.\n'+
-    '          - Plate diameter → standard restaurant plate is 28-30cm.\n'+
-    '          Only fall back to "standard restaurant portion" if NO visual cues are present.\n'+
+    '  Step 3: Use ALL VISUAL SCALE CUES to calibrate portion size — never default to "standard" without checking:\n'+
+    '          - Cutlery visible → standard dinner fork is 19cm, dessert fork 15cm, teaspoon 14cm. Use as a ruler against the food.\n'+
+    '          - Hands or fingers visible → adult palm ≈ 85g protein portion, fist ≈ 240ml volume.\n'+
+    '          - Plate/bowl diameter → dinner plate 28-30cm, side plate 20cm, ramen bowl 18-20cm.\n'+
+    '          - Cup/glass → takeaway cup base 6cm, grande cup rim 12cm, pint glass 15cm tall.\n'+
+    '          - Packaging/condiment sachets → sauce packet ≈ 10ml, sugar sachet ≈ 4g.\n'+
+    '          - Food height → stack of 3 pancakes ≈ 5cm, burger with bun ≈ 10cm.\n'+
+    '          If multiple cues conflict, prefer: cutlery > plate size > hand > cup.\n'+
     '  Step 4: Identify COOKING METHOD and apply fat adjustment:\n'+
-    '          - Deep fried: +20% fat vs baseline.\n'+
-    '          - Pan fried / sautéed: +10% fat.\n'+
-    '          - Grilled / steamed / poached: baseline, no adjustment.\n'+
-    '          - Sauce-heavy (curry, gravy): add oil/fat from the sauce separately.\n'+
+    '          - Deep fried: +20-25% fat vs raw baseline. Battered/breaded adds ~15-20g carbs and 10g fat per 100g coating.\n'+
+    '          - Pan fried / sautéed: +10-15% fat.\n'+
+    '          - Grilled / steamed / poached: baseline.\n'+
+    '          - Sauce-heavy (curry, gravy, cream sauce): sauce adds 8-15g fat per 150ml.\n'+
     '  Step 5: For drinks, identify TEMPERATURE — iced vs hot changes milk volume:\n'+
-    '          - Iced Grande (16oz): ~120ml milk + ice (less milk than hot).\n'+
-    '          - Hot Grande (16oz): ~360ml milk.\n'+
-    '          Use this to calibrate protein and fat from milk content.\n'+
+    '          - Iced Grande (16oz): ~120ml milk + ice. Hot Grande (16oz): ~360ml milk.\n'+
     '  Step 6: Determine NATIVE UNIT and QTY:\n'+
-    '          - Qty = number of discrete pieces (e.g. 6 gyoza, 1 burger, 2 spring rolls). NEVER use grams as qty.\n'+
-    '          - WeightG = total weight of the portion in grams (separate column from Qty).\n'+
-    '          - Drinks: unit=ml or oz, qty=1, weightG=volume in ml.\n'+
-    '          - Rice/pasta/loose food: qty=1, weightG=grams of portion.\n'+
-    '          - Packaged: qty=number of pieces, weightG=total grams.\n'+
-    '          - Cal/Prot/Carb/Fat are ALWAYS per single unit (per 1 piece, per 1 item). Totals = value × qty.\n'+
-    '  Step 7: Break complex items into components and sum (e.g. Lavender Cream Chai = chai base + milk + cold foam).\n'+
-    '  Step 8: Validate macro math: Calories ≈ (Protein×4) + (Carbs×4) + (Fat×9). If off by >10%, re-check fat/carbs.\n'+
+    '          - Qty = number of discrete pieces (e.g. 6 gyoza, 1 burger). NEVER use grams as qty.\n'+
+    '          - WeightG = total weight in grams (separate from Qty).\n'+
+    '          - Cal/Prot/Carb/Fat are ALWAYS per single unit. Totals = value × qty.\n'+
+    '  Step 7: Break complex items into components and sum.\n'+
+    '  Step 8: Validate: Calories ≈ (Protein×4) + (Carbs×4) + (Fat×9). If off >10%, recheck.\n'+
     '  Step 9: Confirm SatFat ≤ Fat always.\n\n'+
-    'ZERO RULES:\n'+
-    '  - NEVER output 0 for Calories, Protein, Carbs, or Fat unless the value is genuinely zero.\n'+
-    '  - If unsure, find the closest culinary match and estimate. A reasonable estimate beats a zero.\n'+
-    '  - Unknown fibre/satfat/sodium → estimate from closest match, not 0.\n\n'+
-    'BRAND DATA:\n'+
-    '  - Starbucks Iced Latte Grande: 130kcal/8P/13C/5F. Hot Grande: 190kcal/13P/15C/7F.\n'+
-    '  - Starbucks Iced Chai Latte Grande: 200kcal/7P/42C/3F. Hot: 240kcal/8P/45C/4F.\n'+
-    '  - Starbucks Lavender Cream Cold Foam (add-on): ~100kcal/1P/8C/8F/5satF.\n'+
-    '  - CoCo Ichibanya beef curry standard = 762kcal/21P/98C/28F.\n'+
-    '  - Wagamama chicken katsu curry = 782kcal/41P/89C/23F.\n\n'+
-    'SANITY GUARDRAILS:\n'+
-    '  - Gyoza/dumpling: ~25g each, 50-60kcal each. Hard cap 80kcal per piece.\n'+
-    '  - Spring roll (small): ~30g, 60-80kcal each.\n'+
-    '  - Rice bowl: 200-300g, 260-390kcal.\n'+
+    'RESTAURANT DATABASE — when brand is confirmed, use these exact published figures:\n'+
+    '  Starbucks: Iced Latte Grande 130/8P/13C/5F. Hot Latte Grande 190/13P/15C/7F.\n'+
+    '  Starbucks: Iced Chai Latte Grande 200/7P/42C/3F. Hot Chai Grande 240/8P/45C/4F.\n'+
+    '  Starbucks: Caramel Frappuccino Grande 380/5P/54C/15F. Cold Foam add-on 100/1P/8C/8F.\n'+
+    '  McDonald\'s: Big Mac 550/25P/45C/30F. Large Fries 490/6P/66C/23F. 6pc McNuggets 270/16P/17C/15F.\n'+
+    '  KFC: Original Recipe breast 390/39P/11C/21F. Zinger burger 450/27P/43C/18F.\n'+
+    '  Chipotle: Chicken burrito bowl (chicken+rice+beans+salsa) ~800/50P/80C/25F.\n'+
+    '  CoCo Ichibanya: Beef curry standard 762/21P/98C/28F. Chicken katsu curry 850/35P/102C/32F.\n'+
+    '  Wagamama: Chicken katsu curry 782/41P/89C/23F. Pad thai 650/28P/85C/18F.\n'+
+    '  Subway: 6-inch Chicken Teriyaki 330/23P/47C/5F. 6-inch Meatball Marinara 480/24P/59C/15F.\n'+
+    '  For any confirmed brand not listed: use your training knowledge of their published menu nutrition.\n\n'+
+    'PORTION SANITY GUARDRAILS:\n'+
+    '  - Single gyoza/dumpling: 25-30g, 45-65kcal. Hard cap 80kcal per piece.\n'+
+    '  - Chicken nugget: 15-20g, 40-50kcal each.\n'+
+    '  - Small spring roll: 30g, 60-80kcal.\n'+
+    '  - Cooked rice: 1 cup = 200g = 260kcal.\n'+
+    '  - Burger patty (quarter-pound cooked): ~90g, 240-280kcal.\n'+
+    '  - Slice of pizza: 100-150g, 250-350kcal.\n'+
     '  - Restaurant curry sauce: 150-200g, 100-200kcal.\n\n'+
+    'ZERO RULES:\n'+
+    '  - NEVER output 0 for Calories, Protein, Carbs, or Fat unless genuinely zero.\n'+
+    '  - Unknown fibre/satfat/sodium → estimate from closest match, not 0.\n\n'+
     'OUTPUT FORMAT:\n'+
-    '  Tab-separated values only. One item per line. No header. No markdown. No JSON. No extra text.\n'+
-    '  Exactly 11 columns per row, raw tabs, no quotes:\n'+
-    '  Name<TAB>Qty<TAB>WeightG<TAB>Calories<TAB>Protein<TAB>Carbs<TAB>Fat<TAB>Fibre<TAB>SatFat<TAB>Sodium<TAB>Confidence\n'+
-    '  Confidence: high=brand data confirmed, medium=estimated from cues, low=unclear.\n'+
-    '  Append "(est.)" to Name if not high confidence. Fill every column. Start immediately with the first item.';
+    '  Tab-separated values only. One item per line. No header. No markdown. No JSON.\n'+
+    '  Exactly 11 columns: Name<TAB>Qty<TAB>WeightG<TAB>Calories<TAB>Protein<TAB>Carbs<TAB>Fat<TAB>Fibre<TAB>SatFat<TAB>Sodium<TAB>Confidence\n'+
+    '  Confidence: high=official menu data used, medium=estimated from visual cues, low=unclear.\n'+
+    '  Append "(est.)" to Name if not high confidence. Fill every column. Start immediately.';
 
   var userPrompt=
     'Analyze this food image.'+ctxBlock+'\n\n'+
