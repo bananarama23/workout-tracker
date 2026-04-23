@@ -10379,13 +10379,15 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
   }
 
   var allSourcesForDisplay=[geminiSrc].concat(sources);
-  var cols='80px 1fr 1fr 1fr';
+  var cols='72px 1fr 1fr 1fr 1fr 1fr';
   var html='<div style="margin-top:8px;background:var(--card2);border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);">';
-  html+='<div style="display:grid;grid-template-columns:'+cols+';padding:3px 8px;background:var(--card);border-bottom:1px solid var(--border);">'+
+  html+='<div style="display:grid;grid-template-columns:'+cols+';padding:3px 6px;background:var(--card);border-bottom:1px solid var(--border);">'+
     '<span></span>'+
-    '<span style="font-size:0.45rem;color:var(--accent);font-weight:700;text-transform:uppercase;text-align:right;">CAL</span>'+
-    '<span style="font-size:0.45rem;color:var(--blue);font-weight:700;text-transform:uppercase;text-align:right;">CARB</span>'+
-    '<span style="font-size:0.45rem;color:var(--red);font-weight:700;text-transform:uppercase;text-align:right;">SAT</span>'+
+    '<span style="font-size:0.42rem;color:var(--accent);font-weight:700;text-transform:uppercase;text-align:right;">CAL</span>'+
+    '<span style="font-size:0.42rem;color:var(--green);font-weight:700;text-transform:uppercase;text-align:right;">PROT</span>'+
+    '<span style="font-size:0.42rem;color:var(--blue);font-weight:700;text-transform:uppercase;text-align:right;">CARB</span>'+
+    '<span style="font-size:0.42rem;color:var(--orange);font-weight:700;text-transform:uppercase;text-align:right;">FAT</span>'+
+    '<span style="font-size:0.42rem;color:var(--red);font-weight:700;text-transform:uppercase;text-align:right;">SAT</span>'+
     '</div>';
 
   var satSources=okSources.filter(function(s){return s.sat!=null&&s.sat!==''&&!isNaN(s.sat);});
@@ -10398,17 +10400,18 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
       var lowWarn=s.status==='low_confidence'?' ⚠':'';
       var fv=function(v){return (v===null||v===undefined||isNaN(v)||v==='')?'—':v;};
       var protFat='P'+fv(s.prot)+' F'+fv(s.fat);
-      html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 8px;align-items:center;'+border+'">'+
+      html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;'+border+'">'+
         '<div style="overflow:hidden;">'+
           '<div style="display:flex;align-items:center;gap:3px;flex-wrap:nowrap;">'+
             '<div style="font-size:0.54rem;color:var(--text2);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+s.source+lowWarn+'</div>'+
             '<button data-iid="'+itemId+'" data-src="'+s.source+'" class="msi-use-btn" style="background:var(--card);border:1px solid var(--border2);border-radius:5px;color:var(--text2);font-size:0.44rem;padding:1px 4px;cursor:pointer;font-weight:700;flex-shrink:0;line-height:1.4;">use</button>'+
           '</div>'+
-          '<div style="font-size:0.42rem;color:var(--muted);margin-top:1px;">'+protFat+'</div>'+
         '</div>'+
-        '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.78rem;color:'+calColor+';">'+s.calories+'</div>'+
-        '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.carb)+'</div>'+
-        '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+fv(s.sat)+'</div>'+
+        '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.75rem;color:'+calColor+';">'+s.calories+'</div>'+
+        '<div style="text-align:right;font-size:0.52rem;color:var(--green);">'+fv(s.prot)+'</div>'+
+        '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+fv(s.carb)+'</div>'+
+        '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+fv(s.fat)+'</div>'+
+        '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+fv(s.sat)+'</div>'+
         '</div>';
     } else if(s.status==='credits'){
       html+='<div style="padding:5px 8px;'+border+'"><span style="font-size:0.55rem;color:var(--orange);">'+s.source+' — out of credits</span></div>';
@@ -10423,14 +10426,16 @@ function nutMsiUpdateSourceRow(itemId,geminiSrc,sources){
 
   if(avgData){
     var disagreeLabel=highDisagree?' <span style="color:var(--orange);font-size:0.44rem;">⚠</span>':'';
-    html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 8px;align-items:center;background:var(--card);border-top:1px solid var(--border);">'+
+    html+='<div style="display:grid;grid-template-columns:'+cols+';padding:4px 6px;align-items:center;background:var(--card);border-top:1px solid var(--border);">'+
       '<div style="display:flex;align-items:center;gap:3px;">'+
         '<div style="font-size:0.54rem;color:var(--text2);font-weight:700;white-space:nowrap;">Avg'+disagreeLabel+'</div>'+
         '<button data-iid="'+itemId+'" data-src="avg" class="msi-use-btn" style="background:var(--accent);border:none;border-radius:5px;color:#000;font-size:0.44rem;padding:1px 4px;cursor:pointer;font-weight:900;flex-shrink:0;line-height:1.4;">use</button>'+
       '</div>'+
-      '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.78rem;color:var(--accent);">'+avgData.calories+'</div>'+
-      '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+avgData.carb+'</div>'+
-      '<div style="text-align:right;font-size:0.56rem;color:var(--text2);">'+(avgData.sat!=null?avgData.sat:'—')+'</div>'+
+      '<div style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:0.75rem;color:var(--accent);">'+avgData.calories+'</div>'+
+      '<div style="text-align:right;font-size:0.52rem;color:var(--green);">'+avgData.prot+'</div>'+
+      '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+avgData.carb+'</div>'+
+      '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+avgData.fat+'</div>'+
+      '<div style="text-align:right;font-size:0.52rem;color:var(--text2);">'+(avgData.sat!=null?avgData.sat:'—')+'</div>'+
       '</div>';
   }
 
@@ -10457,19 +10462,23 @@ function nutMsiApplySource(itemId,sourceName){
     var okSrcs=[data.geminiSrc].concat(data.sources.filter(function(s){return s.status==='ok'||s.status==='low_confidence';}));
     if(!okSrcs.length)return;
     var n=okSrcs.length;
+    var satOk=okSrcs.filter(function(s){return s.sat!=null&&s.sat!==''&&!isNaN(s.sat);});
     chosen={
       cal:Math.round(okSrcs.reduce(function(a,s){return a+s.calories;},0)/n)/it.qty,
       prot:Math.round(okSrcs.reduce(function(a,s){return a+(s.prot||0);},0)/n*10)/10/it.qty,
       carb:Math.round(okSrcs.reduce(function(a,s){return a+(s.carb||0);},0)/n*10)/10/it.qty,
-      fat:Math.round(okSrcs.reduce(function(a,s){return a+(s.fat||0);},0)/n*10)/10/it.qty
+      fat:Math.round(okSrcs.reduce(function(a,s){return a+(s.fat||0);},0)/n*10)/10/it.qty,
+      sat:satOk.length?Math.round(satOk.reduce(function(a,s){return a+(parseFloat(s.sat)||0);},0)/satOk.length*10)/10/it.qty:null
     };
   } else {
     var src=sourceName==='Gemini'?data.geminiSrc:data.sources.find(function(s){return s.source===sourceName&&(s.status==='ok'||s.status==='low_confidence');});
     if(!src)return;
-    chosen={cal:src.calories/it.qty,prot:(src.prot||0)/it.qty,carb:(src.carb||0)/it.qty,fat:(src.fat||0)/it.qty};
+    chosen={cal:src.calories/it.qty,prot:(src.prot||0)/it.qty,carb:(src.carb||0)/it.qty,fat:(src.fat||0)/it.qty,sat:src.sat!=null?src.sat/it.qty:null};
   }
 
-  _msi[idx]=Object.assign({},it,{cal:Math.round(chosen.cal*10)/10,prot:Math.round(chosen.prot*10)/10,carb:Math.round(chosen.carb*10)/10,fat:Math.round(chosen.fat*10)/10,_edited:true});
+  var updated={cal:Math.round(chosen.cal*10)/10,prot:Math.round(chosen.prot*10)/10,carb:Math.round(chosen.carb*10)/10,fat:Math.round(chosen.fat*10)/10,_edited:true};
+  if(chosen.sat!=null)updated.sat=Math.round(chosen.sat*10)/10;
+  _msi[idx]=Object.assign({},it,updated);
 
   // Re-render the row content but keep the source panel
   var row=document.getElementById('msrow-'+itemId);if(!row)return;
@@ -10540,7 +10549,8 @@ function nutMsiRefineSubmit(itemId){
       var avgProt=Math.round((geminiResult.prot+claudeResult.prot)/2*10)/10;
       var avgCarb=Math.round((geminiResult.carb+claudeResult.carb)/2*10)/10;
       var avgFat=Math.round((geminiResult.fat+claudeResult.fat)/2*10)/10;
-      var best=Object.assign({},geminiResult,{cal:avgCal,prot:avgProt,carb:avgCarb,fat:avgFat});
+      var avgSat=Math.round(((geminiResult.sat||0)+(claudeResult.sat||0))/2*10)/10;
+      var best=Object.assign({},geminiResult,{cal:avgCal,prot:avgProt,carb:avgCarb,fat:avgFat,sat:avgSat});
       applyRefined(best,'Gemini+Claude avg');
     } else {
       applyRefined(results[0], results[0]._src||'AI');
