@@ -2373,6 +2373,14 @@ function aiCoachNotesSave(txt){try{localStorage.setItem(AI_COACH_KEY,txt);}catch
 function aiWorkoutSave(home,hotel){
   try{localStorage.setItem(AI_WORKOUT_KEY,JSON.stringify({home:home,hotel:hotel,ts:Date.now()}));}catch(e){}
 }
+function aiWorkoutSaveOne(type,plan){
+  try{
+    var existing=aiWorkoutLoad()||{home:null,hotel:null};
+    existing[type]=plan;
+    existing.ts=Date.now();
+    localStorage.setItem(AI_WORKOUT_KEY,JSON.stringify(existing));
+  }catch(e){}
+}
 function aiWorkoutLoad(){
   try{
     var v=JSON.parse(localStorage.getItem(AI_WORKOUT_KEY)||'null');
@@ -3008,24 +3016,27 @@ function aiCoachBuildPrompt(type,ctx,chatHistory,priorWorkouts){
   var feedbackNote=profile.feedbackScore?'Last session feedback: '+profile.feedbackScore+'.':'';
   var durationNote='TARGET: home='+profile.homeDuration+'min hotel='+profile.hotelDuration+'min. Shorten rest before cutting exercises.';
 
+  var targetDuration=isHome?profile.homeDuration:profile.hotelDuration;
+  var priorStr=isHome?priorHomeStr:priorHotelStr;
+
   var prompt=[
-    'You are a personal trainer AI. Generate BOTH home and hotel strength workouts as strict JSON.',
+    'You are a personal trainer AI. Generate a '+type.toUpperCase()+' strength workout as strict JSON.',
     'ATHLETE GOALS: '+profile.goals.join(', ')+(profile.goalNote?' '+profile.goalNote:''),
     'PRIORITY EXERCISES (protect, progress first): '+profile.priorityExercises.join(', '),
     'TARGET RPE: '+rpeList,
     'STRUGGLING WITH: '+struggleList,
-    durationNote,
+    'TARGET DURATION: '+targetDuration+'min. Shorten rest before cutting exercises.',
     'PROGRESSION RULE: Adjust rest/hold/tempo BEFORE adding reps. Max +1 rep per exercise per session.',
     'MESOCYCLE: '+meso,
     feedbackNote,
-    'EXERCISE POOLS - HOME: '+HOME_EXERCISES.join(',')+' HOTEL: '+HOTEL_EXERCISES.join(',')+'. May suggest 1 swap via suggestedSwap field.',
+    'EXERCISE POOL: '+exercises.join(',')+'. May suggest 1 swap via suggestedSwap field.',
     'SESSION HISTORY: '+ctx.sessCtx||'none',
     'BODY: '+ctx.bodyCtx+' NUTRITION: '+ctx.nutCtx,
     'REP SEQUENCES (keep exactly): '+ctx.seqDefaults||'none',
     deloadLine,
-    priorHomeStr,priorHotelStr,chatStr,
+    priorStr,chatStr,
     ctx.coachNotes?'PERSISTENT NOTES: '+ctx.coachNotes:'',
-    'RETURN JSON with keys home and hotel. Each has: exercises(name,repTargets,restSecs,formCues,tweak,watchFor,goal,suggestedSwap,isPlank), coachingTitle, coachingIntro, bottomLine, nonNegotiables, estimatedMins, changeLog(array of strings explaining each change and why).'
+    'RETURN a single JSON object (no wrapper key) with: exercises(name,repTargets,restSecs,formCues,tweak,watchFor,goal,suggestedSwap,isPlank), coachingTitle, coachingIntro, bottomLine, nonNegotiables, estimatedMins, changeLog(array of strings).'
   ].filter(Boolean).join(' ');
 
   return prompt;
@@ -3069,10 +3080,12 @@ function aiCoachGenerate(type,onDone){
         var first=txt.indexOf('{'),last=txt.lastIndexOf('}');
         if(first>=0&&last>first)txt=txt.slice(first,last+1);
         var parsed=JSON.parse(txt);
-        if(parsed.home&&parsed.hotel){
-          _aiWorkout=parsed;
-          aiWorkoutSave(parsed.home,parsed.hotel);
-          onDone(parsed,null);
+        if(parsed.exercises){
+          // Single workout returned — save just this type, preserve the other
+          _aiWorkout[type]=parsed;
+          aiWorkoutSaveOne(type,parsed);
+          var out={};out[type]=parsed;
+          onDone(out,null);
         } else {
           onDone(null,'Unexpected response format from Claude.');
         }
