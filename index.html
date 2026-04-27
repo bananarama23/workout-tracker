@@ -3036,7 +3036,7 @@ function aiCoachBuildPrompt(type,ctx,chatHistory,priorWorkouts){
     deloadLine,
     priorStr,chatStr,
     ctx.coachNotes?'PERSISTENT NOTES: '+ctx.coachNotes:'',
-    'RETURN a single JSON object (no wrapper key) with: exercises(name,repTargets,restSecs,formCues,tweak,watchFor,goal,suggestedSwap,isPlank), coachingTitle, coachingIntro, bottomLine, nonNegotiables, estimatedMins, changeLog(array of strings).'
+    'RETURN a single JSON object (no wrapper key). Fields: coachingTitle(5 words max), coachingIntro(15 words max), bottomLine(10 words max), nonNegotiables(array, max 3 items, 8 words each), estimatedMins(number), changeLog(array, max 4 items, 10 words each), exercises(array of: name, repTargets, restSecs, formCues(8 words max), tweak(8 words max), watchFor(8 words max), goal(8 words max), suggestedSwap(exercise name only), isPlank(bool)).'
   ].filter(Boolean).join(' ');
 
   return prompt;
