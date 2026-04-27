@@ -3064,7 +3064,10 @@ function aiCoachGenerate(type,onDone){
         if(result&&result.status==='no_key'){onDone(null,'ANTHROPIC_API_KEY not set in GAS Script Properties.');return;}
         if(result&&result.status==='error'){onDone(null,result.message||'GAS error.');return;}
         var txt=((result.content||[]).find(function(b){return b.type==='text';})||{}).text||'';
+        // Strip fences, then extract the outermost {...} in case Claude adds prose
         txt=txt.replace(/```json|```/g,'').trim();
+        var first=txt.indexOf('{'),last=txt.lastIndexOf('}');
+        if(first>=0&&last>first)txt=txt.slice(first,last+1);
         var parsed=JSON.parse(txt);
         if(parsed.home&&parsed.hotel){
           _aiWorkout=parsed;
