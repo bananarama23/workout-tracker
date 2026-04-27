@@ -3036,7 +3036,7 @@ function aiCoachBuildPrompt(type,ctx,chatHistory,priorWorkouts){
     deloadLine,
     priorStr,chatStr,
     ctx.coachNotes?'PERSISTENT NOTES: '+ctx.coachNotes:'',
-    'RETURN a single JSON object (no wrapper key). Fields: coachingTitle(5 words max), coachingIntro(15 words max), bottomLine(10 words max), nonNegotiables(array, max 3 items, 8 words each), estimatedMins(number), changeLog(array, max 4 items, 10 words each), exercises(array of: name, repTargets, restSecs, formCues(8 words max), tweak(8 words max), watchFor(8 words max), goal(8 words max), suggestedSwap(exercise name only), isPlank(bool)).'
+    'RETURN a single JSON object (no wrapper key). Fields: coachingTitle(5 words max), coachingIntro(15 words max), bottomLine(10 words max), nonNegotiables(array, max 3 items, 8 words each), estimatedMins(number), changeLog(array, max 4 items, 10 words each), exercises(array of: name, repTargets(array of ints e.g.[12,10,8]), restSecs(int), formCues(8 words max), tweak(8 words max), watchFor(8 words max), goal(8 words max), suggestedSwap(exercise name only), isPlank(bool)).'
   ].filter(Boolean).join(' ');
 
   return prompt;
@@ -3081,6 +3081,23 @@ function aiCoachGenerate(type,onDone){
         if(first>=0&&last>first)txt=txt.slice(first,last+1);
         var parsed=JSON.parse(txt);
         if(parsed.exercises){
+          // Normalize repTargets — Claude may return a string ("12/10/8") or array
+          // Normalize array fields that Claude might return as strings
+          if(typeof parsed.nonNegotiables==='string')parsed.nonNegotiables=parsed.nonNegotiables.split(',').map(function(s){return s.trim();});
+          if(!Array.isArray(parsed.nonNegotiables))parsed.nonNegotiables=[];
+          if(typeof parsed.changeLog==='string')parsed.changeLog=parsed.changeLog.split(',').map(function(s){return s.trim();});
+          if(!Array.isArray(parsed.changeLog))parsed.changeLog=[];
+          parsed.estimatedMins=parseInt(parsed.estimatedMins)||0;
+          parsed.exercises=parsed.exercises.map(function(ex){
+            if(typeof ex.repTargets==='string'){
+              ex.repTargets=ex.repTargets.split('/').map(function(n){return parseInt(n)||0;});
+            } else if(!Array.isArray(ex.repTargets)){
+              ex.repTargets=[ex.repTargets||0];
+            }
+            ex.watchFor=ex.watchFor||null;
+            ex.restSecs=parseInt(ex.restSecs)||60;
+            return ex;
+          });
           // Single workout returned — save just this type, preserve the other
           _aiWorkout[type]=parsed;
           aiWorkoutSaveOne(type,parsed);
@@ -3303,7 +3320,7 @@ function aiPreWorkoutShowPlan(plan,type,feel){
     html+='<div style="margin-top:6px;font-size:0.68rem;color:'+(feel==='tired'?'var(--orange)':'var(--green)')+';">Coach adjusted for '+feel+' recovery</div>';
   }
   html+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:0.72rem;font-style:italic;color:var(--accent);">'+plan.bottomLine+'</div>';
-  html+='<div style="font-size:0.65rem;color:var(--muted);margin-top:6px;">~'+plan.estimatedMins+' min</div>';
+  if(plan.estimatedMins)html+='<div style="font-size:0.65rem;color:var(--muted);margin-top:6px;">~'+plan.estimatedMins+' min</div>';
   summaryEl.innerHTML=html;
 
   var actEl=document.getElementById('aiCoachActions');
