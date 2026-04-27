@@ -3041,7 +3041,7 @@ function aiCoachGenerate(type,onDone){
 
   var timeout=setTimeout(function(){
     onDone(null,'Claude timed out. Check your connection.');
-  },60000);
+  },110000);
 
   // Phase 1: POST prompt, get jobKey back
   fetch(CLOUD_URL,{
@@ -3106,7 +3106,7 @@ function aiCoachChat(userMsg,currentWorkout,chatHistory,onDone){
     'Rules: 1) Be decisive. 2) If user mentions recurring issue include saveNote field. 3) Return JSON: {"message":"reply under 60 words","updatedWorkout":{...},"saveNote":null}. 4) Strict JSON only.'
   ].join(' ');
 
-  var timeout=setTimeout(function(){onDone(null,'Timed out.');},25000);
+  var timeout=setTimeout(function(){onDone(null,'Timed out.');},45000);
 
   fetch(CLOUD_URL,{
     method:'POST',
@@ -3117,6 +3117,8 @@ function aiCoachChat(userMsg,currentWorkout,chatHistory,onDone){
     try{
       var txt=((result.content||[]).find(function(b){return b.type==='text';})||{}).text||'';
       txt=txt.replace(/```json|```/g,'').trim();
+      var first=txt.indexOf('{'),last=txt.lastIndexOf('}');
+      if(first>=0&&last>first)txt=txt.slice(first,last+1);
       var parsed=JSON.parse(txt);
       if(parsed.saveNote){
         var existing=aiCoachNotesLoad();
@@ -3234,7 +3236,7 @@ function aiPreWorkoutRecovery(feel){
   if(!plan){
     var statusEl=document.getElementById('aiCoachStatus');
     statusEl.style.display='block';
-    statusEl.textContent='Claude is building your personalised session…';
+    statusEl.textContent='Claude is building your personalised session… (Sonnet may take 30–60s)';
     aiCoachGenerate(_aiCoachCurrentType,function(result,err){
       statusEl.style.display='none';
       if(err){
