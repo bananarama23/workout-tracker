@@ -1,4 +1,4 @@
-const SW_VERSION = 'wt-shell-v19';
+const SW_VERSION = 'wt-shell-v19-hotfix1';
 const SHELL_CACHE = `wt-shell-${SW_VERSION}`;
 const OFFLINE_URLS = [
   './',
