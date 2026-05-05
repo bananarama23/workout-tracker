@@ -17310,15 +17310,24 @@ function connClearLatestHealthImportToday(){
   if(!confirm('Clear latest health import for today?'))return;
   try{
     var d=localDateStr();
-    var all=healthImportsLoad()||{};
-    if(all[d]){
-      delete all[d];
-      healthImportsSave(all);
-      appToast('Cleared health import for '+d+'.','var(--green)');
-    }else{
-      appToast('No health import found for today.','var(--orange)');
-    }
-    connRenderHealthLatestPreview();
+    wtBackendPost({type:'healthClearToday',date:d,_nonce:Date.now()}).then(function(res){
+      if(res&&res.status==='ok'){
+        var all=healthImportsLoad()||{};
+        if(all[d]){ delete all[d]; healthImportsSave(all); }
+        if(res.deleted) appToast('Cleared latest health import for '+d+'.','var(--green)');
+        else appToast('No health import found for today.','var(--orange)');
+        try{connSetupLog('healthClearToday response',res);}catch(e){}
+      }else{
+        var em=String((res&&res.message)||'Failed to clear today import.');
+        appToast(em,'var(--red)');
+        try{connSetupLog('healthClearToday response',res);}catch(e){}
+      }
+      connRenderHealthLatestPreview();
+    }).catch(function(err){
+      appToast('Failed to clear today import.','var(--red)');
+      try{connSetupLog('healthClearToday error',{error:String(err&&err.message||err)});}catch(e){}
+      connRenderHealthLatestPreview();
+    });
   }catch(e){appToast('Failed to clear today import.','var(--red)');}
 }
 function connSetupLog(msg,obj){
