@@ -2473,13 +2473,20 @@ function wtAppClientTokenGet(){
 function wtBackendPost(payload){
   var p=Object.assign({},payload||{});
   var tk=wtAppClientTokenGet();
-  var needToken={calendarConnect:1,calendarRefresh:1,calendarGetSummary:1,calendarDisconnect:1,authTest:1,setWeekPlan:1,aiOpenAIChat:1};
+  var needToken={calendarConnect:1,calendarRefresh:1,calendarGetSummary:1,calendarDisconnect:1,authTest:1,setWeekPlan:1,aiOpenAIChat:1,healthLatest:1};
   if(tk&&!p.appToken&&needToken[p.type])p.appToken=tk;
   return fetch(CLOUD_URL,{
     method:'POST',
     headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify(p)
-  }).then(function(r){return r.json();});
+  }).then(function(r){return r.json();}).then(function(res){
+    // Keep local Health cache aligned with backend canonical import payload.
+    // This replaces same-date local entries instead of creating duplicates.
+    if(p&&p.type==='healthImport'&&res&&res.status==='ok'&&res.import){
+      try{healthImportApply(res.import,{silent:true});}catch(e){}
+    }
+    return res;
+  });
 }
 function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
@@ -2642,6 +2649,20 @@ function wtFetchAppStatus(){
   }).catch(function(){
     try{return JSON.parse(localStorage.getItem(WT_APPSTATUS_CACHE_KEY)||'{}');}catch(e){return {};}
   });
+}
+function wtVersionParts(v){
+  var s=String(v||'');
+  var m=s.match(/(\d+)\.(\d+)\.(\d+)/);
+  if(!m)return [0,0,0];
+  return [parseInt(m[1],10)||0,parseInt(m[2],10)||0,parseInt(m[3],10)||0];
+}
+function wtVersionGte(a,b){
+  var x=wtVersionParts(a),y=wtVersionParts(b);
+  for(var i=0;i<3;i++){
+    if(x[i]>y[i])return true;
+    if(x[i]<y[i])return false;
+  }
+  return true;
 }
 function wtRegisterServiceWorker(){
   if(!('serviceWorker' in navigator))return Promise.resolve(false);
@@ -3023,6 +3044,20 @@ document.addEventListener('visibilitychange',function(){
         nutFetchEntries();
       }
     }
+    // Foreground Apple Health refresh (stale > 15m), shared guarded path.
+    try{
+      var now2=Date.now();
+      var lastOkTs=0;
+      if(HEALTH_LATEST_STATUS&&HEALTH_LATEST_STATUS.lastSuccessAt){
+        var parsed=Date.parse(String(HEALTH_LATEST_STATUS.lastSuccessAt));
+        if(isFinite(parsed))lastOkTs=parsed;
+      }
+      if(!lastOkTs&&_healthLatestLastOkAt)lastOkTs=_healthLatestLastOkAt;
+      var stale=(!lastOkTs)||((now2-lastOkTs)>(15*60*1000));
+      if(stale&&!_healthLatestInFlight){
+        syncLatestHealthImportFromBackend('foreground-refresh',{force:false});
+      }
+    }catch(_e){}
   }
 });
 document.addEventListener('click',function(){if(!wl)reqWL();},{once:true});
@@ -10623,6 +10658,9 @@ function homePrimaryActionTap(){
 var _trainerProposal=null;
 function healthImportsLoad(){return safeLsJson(HEALTH_IMPORTS_KEY,{},HEALTH_IMPORTS_KEY)||{};}
 function healthImportsSave(m){var v=JSON.stringify(m||{});try{localStorage.setItem(HEALTH_IMPORTS_KEY,v);}catch(e){}wtDB.set(HEALTH_IMPORTS_KEY,v);}
+var HEALTH_LATEST_STATUS={ok:false,error:null,lastAttemptAt:null,lastSuccessAt:null};
+var HEALTH_TEST_STATUS={ok:false,error:null,lastAttemptAt:null};
+var NUT_HEALTH_META_KEY='wt_nut_health_meta_v1';
 function healthCfgLoad(){
   var d={mode:'not_connected',bridgeToken:'',webhook:CLOUD_URL||'',activePref:'ask',lastSync:'',lastPayloadDate:'',status:'Not connected'};
   var v=safeLsJson(HEALTH_SYNC_CFG_KEY,d,HEALTH_SYNC_CFG_KEY)||d;
@@ -10726,11 +10764,72 @@ function healthApplyActiveConflict(date,appleVal){
   wtDB.set(NUT_ACTIVE_KEY,JSON.stringify(active));
   healthStatusSet('Sync success','Active calories updated from Apple ('+incoming+') for '+date+'.');
 }
+function progressWeightLoad(){
+  try{
+    var raw=localStorage.getItem(BODY_WEIGHT_CACHE_KEY)||'[]';
+    var arr=JSON.parse(raw)||[];
+    if(!Array.isArray(arr))arr=[];
+    return arr.map(function(x){
+      if(!x)return null;
+      var d=String(x.date||'');
+      var w=Number(x.weight!=null?x.weight:x.weight_lb);
+      if(!d||!isFinite(w)||w<=0)return null;
+      return {date:d,weight:nutRoundTo(w,2),weight_lb:nutRoundTo(w,2),waist:Number(x.waist||0)||0,arm:Number(x.arm||0)||0,source:String(x.source||''),received_at:String(x.received_at||'')};
+    }).filter(Boolean).sort(function(a,b){return String(a.date).localeCompare(String(b.date));});
+  }catch(e){return [];}
+}
+function progressWeightSave(entries){
+  var arr=Array.isArray(entries)?entries:[];
+  arr=arr.filter(Boolean).sort(function(a,b){return String(a.date).localeCompare(String(b.date));});
+  var v=JSON.stringify(arr);
+  try{localStorage.setItem(BODY_WEIGHT_CACHE_KEY,v);}catch(e){}
+  wtDB.set(BODY_WEIGHT_CACHE_KEY,v);
+}
+function applyImportedBodyWeightToProgress(importObj){
+  if(!importObj||!importObj.date)return;
+  var weight=Number(importObj.body_weight_lb);
+  if(!isFinite(weight)||weight<=0)return;
+  var entries=progressWeightLoad();
+  var nextEntry={date:String(importObj.date),weight_lb:nutRoundTo(weight,2),weight:nutRoundTo(weight,2),waist:0,arm:0,source:String(importObj.source||'apple_shortcut'),received_at:String(importObj.received_at||new Date().toISOString())};
+  var existing=entries.find(function(x){return x&&x.date===nextEntry.date;});
+  if(existing&&String(existing.source||'').toLowerCase()==='manual')return;
+  var filtered=entries.filter(function(x){return x&&x.date!==nextEntry.date;});
+  filtered.push(nextEntry);
+  progressWeightSave(filtered);
+  _bodyWeightData=filtered.slice(-20).map(function(x){return {date:x.date,weight:Number(x.weight||x.weight_lb||0),waist:Number(x.waist||0),arm:Number(x.arm||0),source:x.source,received_at:x.received_at};});
+}
+function nutritionHealthMetaLoad(){return safeLsJson(NUT_HEALTH_META_KEY,{},NUT_HEALTH_META_KEY)||{};}
+function nutritionHealthMetaSave(v){var s=JSON.stringify(v||{});try{localStorage.setItem(NUT_HEALTH_META_KEY,s);}catch(e){}wtDB.set(NUT_HEALTH_META_KEY,s);}
+function applyImportedActiveCaloriesToNutrition(importObj){
+  if(!importObj||!importObj.date)return;
+  var activeCalories=Number(importObj.active_energy_calories);
+  if(!isFinite(activeCalories)||activeCalories<0)return;
+  var date=String(importObj.date);
+  var meta=nutritionHealthMetaLoad();
+  var day=meta[date]||{};
+  day.apple_health_active_calories=Math.round(activeCalories);
+  day.apple_health_source=String(importObj.source||'apple_shortcut');
+  day.apple_health_received_at=String(importObj.received_at||new Date().toISOString());
+  meta[date]=day;
+  nutritionHealthMetaSave(meta);
+}
+function getHealthStatusMessage(latestImport){
+  if(latestImport){
+    if(HEALTH_LATEST_STATUS.error)return 'Latest sync failed — showing saved Apple Health data.';
+    return 'Apple Health import synced.';
+  }
+  if(HEALTH_LATEST_STATUS.error)return 'Latest sync failed. Run the iOS Shortcut, then refresh.';
+  if(HEALTH_TEST_STATUS.ok)return 'Health connection verified. No real Apple Health import received yet.';
+  if(HEALTH_TEST_STATUS.error)return 'Health connection test failed.';
+  return 'No Apple Health import received yet.';
+}
 function healthImportApply(payload,opts){
   var p=healthNormalizePayload(payload),all=healthImportsLoad();
   all[p.date]=p;
   healthImportsSave(all);
   healthApplyActiveConflict(p.date,p.active_energy_calories);
+  applyImportedBodyWeightToProgress(p);
+  applyImportedActiveCaloriesToNutrition(p);
   var cfg=healthCfgLoad();
   cfg.mode=(p.source==='apple_health_companion')?'companion':'shortcut';
   cfg.lastSync=p.received_at;
@@ -10749,6 +10848,7 @@ function healthImportApply(payload,opts){
   if(!(opts&&opts.silent))appToast('Health import saved: '+p.date,'var(--green)');
   try{if(currentPage==='home')homeRenderCommandCenter(localDateStr());}catch(e){}
   try{if(currentPage==='progress')buildProgressInsights(_cachedSessions||[]);}catch(e){}
+  try{if(currentPage==='nutrition')nutRenderDay();}catch(e){}
   return p;
 }
 function healthTestImport(){
@@ -10756,21 +10856,31 @@ function healthTestImport(){
   if(!cfg.bridgeToken){cfg.bridgeToken=healthBridgeTokenNew();cfg.mode='shortcut';healthCfgSave(cfg);}
   var d=localDateStr();
   var sample={source:'test',is_test:true,bridge_token:cfg.bridgeToken,date:d,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'America/Los_Angeles',steps:0,active_energy_calories:0,resting_energy_calories:0,sleep_hours:0,body_weight_lb:0,resting_heart_rate:0,average_heart_rate:0,workouts:[]};
+  HEALTH_TEST_STATUS.lastAttemptAt=new Date().toISOString();
   healthStatusSet('Sync pending','Health token test only — does not store data…');
   wtBackendPost({type:'healthImportTest',date:d,timezone:sample.timezone,payload:sample,bridge_token:cfg.bridgeToken,_nonce:Date.now()})
     .then(function(res){
-      if(res&&res.status==='ok'){
-        healthStatusSet('Sync success','Health token test only — does not store data.');
+      if(res&&res.status==='ok'&&res.is_test===true){
+        HEALTH_TEST_STATUS.ok=true;HEALTH_TEST_STATUS.error=null;
+        healthStatusSet('Sync success','Health connection verified. No real Apple Health import received yet.');
+        try{localStorage.removeItem(HEALTH_LAST_ERROR_KEY);}catch(_c){}
       }else{
+        HEALTH_TEST_STATUS.ok=false;
         var em=String((res&&res.message)||'unknown error');
         if(/HEALTH_BRIDGE_TOKEN not configured/i.test(em)) em='Add HEALTH_BRIDGE_TOKEN to Apps Script Script Properties, then redeploy.';
         else if(/Invalid bridge token/i.test(em)) em='The Health Bridge Token in this app or Shortcut does not match the backend.';
+        HEALTH_TEST_STATUS.error=em;
+        try{localStorage.setItem(HEALTH_LAST_ERROR_KEY,JSON.stringify({ts:Date.now(),error:em,kind:'healthImportTest'}));}catch(_e){}
         healthStatusSet('Sync failed','Backend health import failed: '+em);
       }
+      try{connRenderHealthLatestPreview();}catch(_e2){}
       healthSyncRender();
     })
     .catch(function(){
+      HEALTH_TEST_STATUS.ok=false;HEALTH_TEST_STATUS.error='network/unavailable';
+      try{localStorage.setItem(HEALTH_LAST_ERROR_KEY,JSON.stringify({ts:Date.now(),error:'network/unavailable',kind:'healthImportTest'}));}catch(_e){}
       healthStatusSet('Sync failed','Backend health import failed: network/unavailable');
+      try{connRenderHealthLatestPreview();}catch(_e3){}
       healthSyncRender();
     });
 }
@@ -11817,7 +11927,29 @@ function buildProgressInsights(sessions){
         +'<div><span style="color:var(--muted);">Avg active energy:</span> '+avgAct+' kcal</div>'
         +'<div><span style="color:var(--muted);">Avg sleep:</span> '+avgSleep+'h</div>'
         +'<div><span style="color:var(--muted);">Imported workouts:</span> '+wCount+'</div>'
+        +'<div id="progProviderStatusRows" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);"></div>'
         +'</div>';
+      aiBackendStatusTest().then(function(st){
+        var box=document.getElementById('progProviderStatusRows');
+        if(!box)return;
+        function line(name,ok){
+          var txt=ok?'Connected':'Not configured';
+          var col=ok?'var(--green)':'var(--orange)';
+          return '<div><span style="color:var(--muted);">'+name+':</span> <span style="color:'+col+';">'+txt+'</span></div>';
+        }
+        if(!st||st.status!=='ok'){
+          box.innerHTML='<div><span style="color:var(--muted);">AI providers:</span> <span style="color:var(--orange);">Unavailable</span></div>';
+          return;
+        }
+        var p=st.providers||{};
+        box.innerHTML=
+          line('ChatGPT',!!p.openai)+
+          line('Gemini',!!p.gemini)+
+          line('Claude',!!p.anthropic);
+      }).catch(function(){
+        var box=document.getElementById('progProviderStatusRows');
+        if(box)box.innerHTML='<div><span style="color:var(--muted);">AI providers:</span> <span style="color:var(--orange);">Unavailable</span></div>';
+      });
     }
   }
 
@@ -11905,6 +12037,16 @@ function updateHealthCheckPanel(){
       }
       var aiNode=document.getElementById('healthCheckAiBackendStatus');
       if(aiNode)aiNode.innerHTML=aiStatusHtml;
+      var pNode=document.getElementById('healthCheckProviderRows');
+      if(pNode){
+        if(!st||st.status!=='ok'){
+          pNode.innerHTML='ChatGPT: <span style="color:var(--orange);">Unavailable</span> · Gemini: <span style="color:var(--orange);">Unavailable</span> · Claude: <span style="color:var(--orange);">Unavailable</span>';
+        }else{
+          var p=st.providers||{};
+          function tag(v){return '<span style="color:'+(v?'var(--green)':'var(--orange)')+';">'+(v?'Connected':'Not configured')+'</span>';}
+          pNode.innerHTML='ChatGPT: '+tag(!!p.openai)+' · Gemini: '+tag(!!p.gemini)+' · Claude: '+tag(!!p.anthropic);
+        }
+      }
     }catch(e){}
   }).catch(function(){});
   var qCol=qLen===0?'var(--green)':qLen<=5?'var(--yellow)':'var(--orange)';
@@ -11915,6 +12057,7 @@ function updateHealthCheckPanel(){
     '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);"><span style="color:var(--muted);font-size:0.72rem;">Nutrition queue</span><span style="font-size:0.75rem;color:'+qCol+';">'+qLen+' pending</span></div>'+
     '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);"><span style="color:var(--muted);font-size:0.72rem;">Nutrition queue failed</span><span style="font-size:0.75rem;color:'+qFailCol+';">'+qFail+'</span></div>'+
     '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);"><span style="color:var(--muted);font-size:0.72rem;">AI backend</span><span id="healthCheckAiBackendStatus">'+aiStatusHtml+'</span></div>'+
+    '<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:0.7rem;color:var(--text2);" id="healthCheckProviderRows">ChatGPT: <span style="color:var(--muted);">checking…</span> · Gemini: <span style="color:var(--muted);">checking…</span> · Claude: <span style="color:var(--muted);">checking…</span></div>'+
     '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);"><span style="color:var(--muted);font-size:0.72rem;">Last writer</span><span style="font-size:0.75rem;color:var(--text2);">'+lastWriter+'</span></div>'+
     '<div style="display:flex;justify-content:space-between;padding:8px 0;"><span style="color:var(--muted);font-size:0.72rem;">Errors (24h)</span><span style="font-size:0.75rem;color:'+(errCount24h?'var(--orange)':'var(--green)')+';">'+errCount24h+'</span></div>';
 }
@@ -12350,9 +12493,18 @@ function buildBodyWeightChart(){
     window[cb]=null;var s=document.getElementById('s_'+cb);if(s)s.parentNode.removeChild(s);
     var rows=(result&&result.rows)?result.rows:[];
     var data=rows.filter(function(r){return r.weight&&parseFloat(r.weight)>0;})
-      .map(function(r){return{date:r.date,weight:parseFloat(r.weight),waist:parseFloat(r.waist)||0,arm:parseFloat(r.arm)||0};})
+      .map(function(r){return{date:r.date,weight:parseFloat(r.weight),waist:parseFloat(r.waist)||0,arm:parseFloat(r.arm)||0,source:'manual'};})
       .sort(function(a,b){return a.date<b.date?-1:1;})
       .slice(-20);
+    // Keep imported Apple weight for days without manual entries.
+    try{
+      var imported=progressWeightLoad().filter(function(x){return String(x.source||'').toLowerCase()!=='manual';});
+      imported.forEach(function(iw){
+        var hasManual=data.some(function(d){return d&&d.date===iw.date;});
+        if(!hasManual)data.push({date:iw.date,weight:Number(iw.weight||iw.weight_lb||0),waist:Number(iw.waist||0),arm:Number(iw.arm||0),source:iw.source||'apple_shortcut',received_at:iw.received_at||''});
+      });
+      data=data.filter(function(x){return x&&isFinite(Number(x.weight))&&Number(x.weight)>0;}).sort(function(a,b){return a.date<b.date?-1:1;}).slice(-20);
+    }catch(_e){}
     _bodyWeightData=data; // cache for Gemini prompt
     var _bwv=JSON.stringify(data);try{localStorage.setItem(BODY_WEIGHT_CACHE_KEY,_bwv);}catch(e){}wtDB.set(BODY_WEIGHT_CACHE_KEY,_bwv);
     // Refresh the PR grid so BW row shows updated data and trend
@@ -13965,7 +14117,7 @@ document.addEventListener('DOMContentLoaded',function(){
   wtStartupRecalcAll('DOMContentLoaded');
   try{wtApplyPersonalConnectionDefaults();}catch(e){}
   try{_wtStartupSyncPromise=wtFetchAppStatus().then(function(st){
-    if(st&&st.min_frontend_version&&String(st.min_frontend_version)!==String(WT_FRONTEND_VERSION)){
+    if(st&&st.min_frontend_version&&!wtVersionGte(WT_FRONTEND_VERSION,st.min_frontend_version)){
       wtShowPwaBanner('note','Backend may be newer than this app version. Local-only mode remains available.',[{label:'Later',fn:'wtHidePwaBanner()'}]);
     }
   });}catch(e){}
@@ -13978,6 +14130,7 @@ document.addEventListener('DOMContentLoaded',function(){
   dayDoneRender();
   setTimeout(autoDayDoneCheck,2000);
   setTimeout(appStateLoad,1000);
+  setTimeout(function(){try{syncLatestHealthImportFromBackend('startup',{force:false});}catch(e){}},1800);
   setTimeout(weeklyReviewAutoCheck,5000);
   setTimeout(aiAnchorAutoCheck,5200);
   setTimeout(aiAutopilotAutoCheck,6500);
@@ -15318,6 +15471,13 @@ function nutRenderDay(){
     else if(adjustment>0){acAdj.textContent='+'+Math.round(adjustment)+' extra kcal';acAdj.style.color='var(--green)';}
     else if(adjustment<0){acAdj.textContent=Math.round(adjustment)+' kcal';acAdj.style.color='var(--red)';}
     else{acAdj.textContent='At base';acAdj.style.color='var(--muted)';}
+    try{
+      var nhm=nutritionHealthMetaLoad();
+      var md=(nhm&&nhm[_nutDate])?nhm[_nutDate]:null;
+      if(md&&isFinite(Number(md.apple_health_active_calories))){
+        acAdj.textContent+=' · Active calories: '+Math.round(Number(md.apple_health_active_calories))+' (Apple Health)';
+      }
+    }catch(_e){}
   }
 
   var mb=document.getElementById('nutMacroBars');
@@ -17234,9 +17394,21 @@ function connRenderHealthLatestPreview(){
   var warnEl=document.getElementById('connHealthLatestWarnings');
   var rawEl=document.getElementById('connHealthRawJson');
   if(!host)return;
+  var all=healthImportsLoad()||{};
+  var allKeys=Object.keys(all||{}).filter(Boolean);
+  var hasOnlyTest=allKeys.length>0&&allKeys.every(function(k){
+    var v=all[k]||{};
+    return (v.is_test===true)||String(v.source||'').toLowerCase()==='test';
+  });
   var imp=connLatestHealthImport();
   if(!imp){
-    host.innerHTML='<div style="font-size:0.72rem;color:var(--muted);">No real Apple Health import found. Run the iOS Shortcut.</div>';
+    var msg=hasOnlyTest?'Last import was test/stale data. Run the iOS Shortcut for a real import.':getHealthStatusMessage(null);
+    try{
+      var lastErr=safeLsJson(HEALTH_LAST_ERROR_KEY,{},HEALTH_LAST_ERROR_KEY)||{};
+      var em=String(lastErr.error||'');
+      if(/invalid bridge token|unauthorized|auth/i.test(em)) msg='Shortcut import failed auth. Check HEALTH_BRIDGE_TOKEN in app, Shortcut, and backend.';
+    }catch(_e){}
+    host.innerHTML='<div style="font-size:0.72rem;color:var(--muted);">'+escHtml(msg)+'</div>';
     if(warnEl)warnEl.style.display='none';
     if(rawEl)rawEl.style.display='none';
     return;
@@ -17263,6 +17435,7 @@ function connRenderHealthLatestPreview(){
    +'<div style="color:var(--muted);">Resting heart rate</div><div>'+escHtml(connFmtMaybe(imp.resting_heart_rate,'bpm'))+'</div>'
    +'<div style="color:var(--muted);">Average heart rate</div><div>'+escHtml(connFmtMaybe(imp.average_heart_rate,'bpm'))+'</div>'
    +'</div>';
+  host.innerHTML+='<div style="margin-top:8px;font-size:0.66rem;color:var(--muted);">'+escHtml(getHealthStatusMessage(imp))+'</div>';
 
   var warnings=connHealthWarnings(imp,baseline);
   if(warnEl){
@@ -17276,9 +17449,77 @@ function connRenderHealthLatestPreview(){
     rawEl.textContent=JSON.stringify(cleaned,null,2);
   }
 }
+var _healthLatestInFlight=false;
+var _healthLatestLastOkAt=0;
+var _healthLatestLastWarnAt=0;
+function syncLatestHealthImportFromBackend(caller,opts){
+  var who=String(caller||'unknown');
+  var o=opts&&typeof opts==='object'?opts:{};
+  var force=!!o.force;
+  var now=Date.now();
+  if(_healthLatestInFlight){
+    return Promise.resolve({status:'skipped',reason:'in_flight'});
+  }
+  if(!force && (now-_healthLatestLastOkAt)<30000){
+    return Promise.resolve({status:'skipped',reason:'recent_ok'});
+  }
+  _healthLatestInFlight=true;
+  HEALTH_LATEST_STATUS.lastAttemptAt=new Date().toISOString();
+  return wtBackendPost({type:'healthLatest',_nonce:Date.now()}).then(function(res){
+    if(res&&res.status==='ok'&&res.stored===true&&res.import){
+      healthImportApply(res.import,{silent:true});
+      _healthLatestLastOkAt=Date.now();
+      HEALTH_LATEST_STATUS.ok=true;
+      HEALTH_LATEST_STATUS.error=null;
+      HEALTH_LATEST_STATUS.lastSuccessAt=new Date().toISOString();
+      try{if(typeof buildProgressInsights==='function')buildProgressInsights(_cachedSessions||[]);}catch(_eA){}
+      try{if(typeof nutRenderDay==='function')nutRenderDay();}catch(_eB){}
+      return res;
+    }
+    if(res&&res.status==='ok'&&res.stored===false){
+      HEALTH_LATEST_STATUS.ok=true;
+      HEALTH_LATEST_STATUS.error=null;
+      return res;
+    }
+    HEALTH_LATEST_STATUS.ok=false;
+    HEALTH_LATEST_STATUS.error=String((res&&res.message)||'unexpected response');
+    return res;
+  }).catch(function(err){
+    HEALTH_LATEST_STATUS.ok=false;
+    HEALTH_LATEST_STATUS.error=String(err&&err.message||err||'fetch failed');
+    try{console.warn('healthLatest fetch failed; keeping existing local import',err);}catch(_e5){}
+    try{if(typeof buildProgressInsights==='function')buildProgressInsights(_cachedSessions||[]);}catch(_eC){}
+    try{if(typeof nutRenderDay==='function')nutRenderDay();}catch(_eD){}
+    var t=Date.now();
+    if((t-_healthLatestLastWarnAt)>12000){
+      _healthLatestLastWarnAt=t;
+      appToast('Latest sync failed; showing last saved import.','var(--orange)');
+    }
+    return null;
+  }).finally(function(){
+    _healthLatestInFlight=false;
+  });
+}
 function connRefreshLatestHealthImport(){
   connRenderHealthLatestPreview();
-  appToast('Latest Health Import refreshed.','var(--green)');
+  syncLatestHealthImportFromBackend('manual-refresh',{force:true}).then(function(res){
+    if(res&&res.status==='ok'&&res.stored===true&&res.import){
+      connRenderHealthLatestPreview();
+      appToast('Latest Health Import refreshed.','var(--green)');
+      return;
+    }
+    if(res&&res.status==='ok'&&res.stored===false){
+      connRenderHealthLatestPreview();
+      appToast('No Apple Health import received yet.','var(--orange)');
+      return;
+    }
+    if(res&&res.status==='skipped'){
+      connRenderHealthLatestPreview();
+      return;
+    }
+    // On failures, keep current local import visible.
+    connRenderHealthLatestPreview();
+  });
 }
 function connToggleRawHealthJson(){
   var el=document.getElementById('connHealthRawJson');
