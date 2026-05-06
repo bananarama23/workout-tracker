@@ -2550,7 +2550,7 @@ function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
 }
 
-var WT_FRONTEND_VERSION='19.2.8-chol-nested-json-fix';
+var WT_FRONTEND_VERSION='19.2.9-ios-viewport-gap-fix';
 var WT_SW_VERSION='wt-shell-v19-setup3';
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -2586,8 +2586,15 @@ function wtStartupRecalcAll(reason){
   try{
     var docEl=document.documentElement;
     var vv=window.visualViewport;
-    var vh=(vv&&vv.height)?vv.height:window.innerHeight;
-    var vw=(vv&&vv.width)?vv.width:window.innerWidth;
+    var ih=window.innerHeight||0;
+    var iw=window.innerWidth||0;
+    var vvh=(vv&&vv.height)?vv.height:0;
+    var vvw=(vv&&vv.width)?vv.width:0;
+    // iOS standalone can report a stale/shrunken visualViewport after rotate/keyboard,
+    // which causes the app shell to shrink and leaves a large black gap below nav.
+    // Prefer the larger stable value for app-shell layout.
+    var vh=Math.max(ih,vvh)||ih||vvh||0;
+    var vw=Math.max(iw,vvw)||iw||vvw||0;
     docEl.style.setProperty('--wt-vh',vh+'px');
     docEl.style.setProperty('--wt-vw',vw+'px');
     docEl.style.setProperty('--wt-vv-top',((vv&&vv.offsetTop)||0)+'px');
