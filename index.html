@@ -2550,7 +2550,7 @@ function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
 }
 
-var WT_FRONTEND_VERSION='19.2.7-chol-render-cleanup2';
+var WT_FRONTEND_VERSION='19.2.8-chol-nested-json-fix';
 var WT_SW_VERSION='wt-shell-v19-setup3';
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -19600,6 +19600,41 @@ function aiPrettyCoachText(text){
 function aiCholCoachHtml(text){
   function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   function title(k){return String(k||'').replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});}
+  function renderJsonNode(label,val,depth){
+    var pad=depth?('margin-left:'+(depth*10)+'px;'):'';
+    var out=[];
+    if(val==null)return out;
+    if(Array.isArray(val)){
+      if(label)out.push('<div style="'+pad+'font-weight:700;color:var(--text);margin:8px 0 4px;">'+esc(title(label))+'</div>');
+      val.forEach(function(item){
+        if(item&&typeof item==='object'){
+          out.push('<div style="'+pad+'color:var(--text2);">•</div>');
+          out=out.concat(renderJsonNode('',item,depth+1));
+        }else{
+          out.push('<div style="'+pad+'color:var(--text2);">• '+esc(String(item))+'</div>');
+        }
+      });
+      return out;
+    }
+    if(typeof val==='object'){
+      if(label)out.push('<div style="'+pad+'font-weight:700;color:var(--text);margin:8px 0 4px;">'+esc(title(label))+'</div>');
+      Object.keys(val).forEach(function(k){
+        var v=val[k];
+        if(v&&typeof v==='object'){
+          out=out.concat(renderJsonNode(k,v,depth+1));
+        }else{
+          out.push('<div style="'+pad+'color:var(--text2);"><span style="color:var(--text2);">'+esc(title(k))+':</span> '+esc(String(v))+'</div>');
+        }
+      });
+      return out;
+    }
+    if(label){
+      out.push('<div style="'+pad+'"><span style="color:var(--text2);">'+esc(title(label))+':</span> '+esc(String(val))+'</div>');
+    }else{
+      out.push('<div style="'+pad+'">'+esc(String(val))+'</div>');
+    }
+    return out;
+  }
   var raw=String(text||'').trim();
   if(!raw)return '';
   raw=raw.replace(/^\s*```(?:json|markdown|md|text)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
@@ -19623,23 +19658,10 @@ function aiCholCoachHtml(text){
       Object.keys(obj).forEach(function(k){if(keys.indexOf(k)<0)keys.push(k);});
       var out=[];
       keys.forEach(function(k){
-        var v=obj[k];
-        if(v==null)return;
-        if(Array.isArray(v)){
-          out.push('<div style="font-weight:700;color:var(--text);margin:10px 0 4px;">'+esc(title(k))+'</div>');
-          out.push('<div style="padding-left:2px;">'+v.map(function(x){return '• '+esc(String(x));}).join('<br>')+'</div>');
-        }else if(typeof v==='object'){
-          out.push('<div style="font-weight:700;color:var(--text);margin:10px 0 4px;">'+esc(title(k))+'</div>');
-          Object.keys(v).forEach(function(sk){
-            out.push('<div><span style="color:var(--text2);">'+esc(title(sk))+':</span> '+esc(String(v[sk]))+'</div>');
-          });
-        }else{
-          out.push('<div style="font-weight:700;color:var(--text);margin:10px 0 4px;">'+esc(title(k))+'</div>');
-          out.push('<div>'+esc(String(v)).replace(/\n/g,'<br>')+'</div>');
-        }
+        out=out.concat(renderJsonNode(k,obj[k],0));
       });
       if(out.length){
-        return '<div style="font-size:.62rem;color:var(--muted);margin-bottom:8px;">Format v19.2.4</div>'+out.join('');
+        return '<div style="font-size:.62rem;color:var(--muted);margin-bottom:8px;">Format v19.2.8</div>'+out.join('');
       }
     }catch(e){}
   }
@@ -19707,7 +19729,7 @@ function aiCholCoachHtml(text){
     .replace(/\n{3,}/g,'\n\n')
     .trim();
   var pretty=aiPrettyCoachText(loose||raw);
-  return '<div style="font-size:.62rem;color:var(--muted);margin-bottom:8px;">Format v19.2.7</div>'+esc(pretty).replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
+  return '<div style="font-size:.62rem;color:var(--muted);margin-bottom:8px;">Format v19.2.8</div>'+esc(pretty).replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
 }
 
 // ── Cholesterol AI Feedback ─────────────────────────────────────
