@@ -2550,7 +2550,7 @@ function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
 }
 
-var WT_FRONTEND_VERSION='19.2.9-ios-viewport-gap-fix';
+var WT_FRONTEND_VERSION='19.3.0-ai-error-diagnostics';
 var WT_SW_VERSION='wt-shell-v19-setup3';
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -5196,7 +5196,8 @@ function aiCoachOpenAICall(payload,timeoutMs){
   });
 }
 function aiCoachFriendlyApiError(err){
-  var msg=String(err||'').toLowerCase();
+  var raw=String(err||'OpenAI error.');
+  var msg=raw.toLowerCase();
   if(msg.indexOf('backend auth failed for this site')>=0||msg.indexOf('unauthorized')>=0||msg.indexOf('app_token_not_configured')>=0||msg.indexOf('app_client_token')>=0){
     return 'Backend auth failed on this browser. Open Connection Setup and run Auth Test.';
   }
@@ -5211,7 +5212,13 @@ function aiCoachFriendlyApiError(err){
     }catch(e){}
   }
   if(msg.indexOf('openai key missing')>=0||msg.indexOf('api key')>=0||msg.indexOf('invalid_api_key')>=0||msg.indexOf('incorrect api key')>=0){
-    return 'AI backend unavailable right now. Try again later or use manual logging.';
+    return 'AI key/config issue for this browser or backend deployment. Run Connection Setup → Auth Test, then verify GAS keys/deployment.';
+  }
+  if(msg.indexOf('ai backend unavailable')>=0||msg.indexOf('manual logging still works')>=0||msg.indexOf('no local api keys are configured')>=0){
+    return 'AI backend is unreachable from this browser session. Run Connection Setup → Auth Test. If auth passes, redeploy GAS and retry.';
+  }
+  if(msg.indexOf('timeout')>=0||msg.indexOf('aborted')>=0||msg.indexOf('network')>=0||msg.indexOf('failed to fetch')>=0){
+    return 'AI request timed out/network failed. Retry once; if it repeats, check connection and backend status.';
   }
   if(msg.indexOf('insufficient_quota')>=0||msg.indexOf('quota')>=0||msg.indexOf('billing')>=0||msg.indexOf('credit')>=0||msg.indexOf('402')>=0){
     creditsAlert();
@@ -5220,7 +5227,7 @@ function aiCoachFriendlyApiError(err){
   if(msg.indexOf('rate limit')>=0||msg.indexOf('429')>=0){
       return 'OpenAI rate limit hit. Wait a moment and retry.';
   }
-  return String(err||'OpenAI error.');
+  return raw;
 }
 function coachDataQualityAlerts(sessions){
   var arr=sessions||[];
