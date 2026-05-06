@@ -90,11 +90,12 @@
   --r:  14px;
   --r-sm: 10px;
   --r-lg: 20px;
+  --wt-app-h: 100dvh;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html{height:100%;min-height:100%;overflow:hidden;width:100%;}
 body{
-  height:var(--wt-vh,100dvh);
+  height:var(--wt-app-h,var(--wt-vh,100dvh));
   min-height:100%;
   overflow:hidden;
   width:100%;
@@ -134,6 +135,15 @@ button:active{opacity:0.82;}
 .nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + var(--safe-b));min-height:var(--nav-h);background:rgba(7,9,12,0.98);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(42,52,68,0.85);display:flex;align-items:flex-start;padding-top:10px;padding-bottom:var(--safe-b);z-index:900;box-sizing:border-box;}
 .ios-gap-fix .nav{height:var(--nav-h)!important;padding-bottom:0!important;bottom:0!important;}
 .ios-gap-fix .page{bottom:var(--nav-h)!important;}
+/* Hard mode for iOS standalone portrait when viewport is misreported */
+.ios-standalone-forcefill body{height:var(--wt-app-h)!important;}
+.ios-standalone-forcefill .nav{
+  bottom:auto!important;
+  top:calc(var(--wt-app-h) - var(--nav-h))!important;
+  height:var(--nav-h)!important;
+  padding-bottom:0!important;
+}
+.ios-standalone-forcefill .page{bottom:var(--nav-h)!important;}
 .nav-btn{flex:1;min-height:50px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 2px 6px;transition:opacity 0.15s,color 0.15s;}
 .nav-btn:focus{outline:none;}
 .nav-btn:active{opacity:0.6;}
@@ -2597,7 +2607,7 @@ function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
 }
 
-var WT_FRONTEND_VERSION='19.3.5-ios-gap-killer';
+var WT_FRONTEND_VERSION='19.3.6-ios-forcefill-nav';
 var WT_SW_VERSION='wt-shell-v19-setup3';
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -2642,6 +2652,16 @@ function wtStartupRecalcAll(reason){
     // Prefer the larger stable value for app-shell layout.
     var vh=Math.max(ih,vvh)||ih||vvh||0;
     var vw=Math.max(iw,vvw)||iw||vvw||0;
+    var sh=0, sah=0;
+    try{sh=Math.round((window.screen&&window.screen.height)||0);}catch(_e){sh=0;}
+    try{sah=Math.round((window.screen&&window.screen.availHeight)||0);}catch(_e2){sah=0;}
+    var appH=vh;
+    var isPortrait=vh>=vw;
+    if(wtIsStandalone()&&isPortrait){
+      // In iOS standalone portrait, screen metrics are often more reliable than visual viewport.
+      var screenH=Math.max(sh,sah,0);
+      if(screenH>0)appH=Math.max(vh,screenH);
+    }
     // iOS standalone bug guard: safe-area bottom can become absurdly large.
     // Read env() via CSS var and clamp to sane device values.
     var sbRaw=0;
@@ -2650,6 +2670,7 @@ function wtStartupRecalcAll(reason){
     }catch(_e){sbRaw=0;}
     var safeB=Math.max(0,Math.min(48,Math.round(sbRaw)));
     docEl.style.setProperty('--safe-b',safeB+'px');
+    docEl.style.setProperty('--wt-app-h',appH+'px');
     docEl.style.setProperty('--wt-vh',vh+'px');
     docEl.style.setProperty('--wt-vw',vw+'px');
     docEl.style.setProperty('--wt-vv-top',((vv&&vv.offsetTop)||0)+'px');
@@ -2657,7 +2678,7 @@ function wtStartupRecalcAll(reason){
     var nav=document.querySelector('nav.nav');
     var navH=Math.max(70,Math.round((nav&&nav.getBoundingClientRect().height)||70));
     docEl.style.setProperty('--nav-h',navH+'px');
-    wtBootLog('viewport recalculated',{reason:reason,vw:Math.round(vw),vh:Math.round(vh),navH:navH,safeB:safeB,sbRaw:sbRaw});
+    wtBootLog('viewport recalculated',{reason:reason,vw:Math.round(vw),vh:Math.round(vh),appH:Math.round(appH),screenH:Math.max(sh,sah),navH:navH,safeB:safeB,sbRaw:sbRaw});
     wtDetectAndFixIosBottomGap(reason);
   }catch(e){}
 }
@@ -2671,18 +2692,31 @@ function wtDetectAndFixIosBottomGap(reason){
     var navRect=nav.getBoundingClientRect();
     var gap=Math.max(0,Math.round(vh-navRect.bottom));
     var root=document.documentElement;
+    var appH=parseFloat(getComputedStyle(root).getPropertyValue('--wt-app-h'))||vh;
+    var appGap=Math.max(0,Math.round(appH-navRect.bottom));
     // If a large phantom bottom gap exists, force "no-safe-bottom" shell.
     if(gap>=20){
       if(!root.classList.contains('ios-gap-fix')){
         root.classList.add('ios-gap-fix');
         root.style.setProperty('--safe-b','0px');
       }
-      wtBootLog('ios gap fix ON',{reason:reason,gap:gap,vh:vh,navBottom:Math.round(navRect.bottom)});
+      wtBootLog('ios gap fix ON',{reason:reason,gap:gap,appGap:appGap,vh:vh,appH:appH,navBottom:Math.round(navRect.bottom)});
     }else{
       if(root.classList.contains('ios-gap-fix')){
         root.classList.remove('ios-gap-fix');
       }
-      wtBootLog('ios gap fix OFF',{reason:reason,gap:gap,vh:vh,navBottom:Math.round(navRect.bottom)});
+      wtBootLog('ios gap fix OFF',{reason:reason,gap:gap,appGap:appGap,vh:vh,appH:appH,navBottom:Math.round(navRect.bottom)});
+    }
+    // Force-fill mode when nav is far above computed app height (common standalone iOS bug).
+    if(wtIsStandalone()&&appGap>=80){
+      root.classList.add('ios-standalone-forcefill');
+      root.style.setProperty('--safe-b','0px');
+      wtBootLog('ios forcefill ON',{reason:reason,appGap:appGap,appH:appH,navBottom:Math.round(navRect.bottom)});
+    }else{
+      if(root.classList.contains('ios-standalone-forcefill')){
+        root.classList.remove('ios-standalone-forcefill');
+        wtBootLog('ios forcefill OFF',{reason:reason,appGap:appGap,appH:appH,navBottom:Math.round(navRect.bottom)});
+      }
     }
   }catch(e){}
 }
