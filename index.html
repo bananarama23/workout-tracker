@@ -5197,6 +5197,9 @@ function aiCoachOpenAICall(payload,timeoutMs){
 }
 function aiCoachFriendlyApiError(err){
   var msg=String(err||'').toLowerCase();
+  if(msg.indexOf('backend auth failed for this site')>=0||msg.indexOf('unauthorized')>=0||msg.indexOf('app_token_not_configured')>=0||msg.indexOf('app_client_token')>=0){
+    return 'Backend auth failed on this browser. Open Connection Setup and run Auth Test.';
+  }
   function creditsAlert(){
     try{
       var k='wt_ai_credit_alert_ts';
@@ -5215,7 +5218,7 @@ function aiCoachFriendlyApiError(err){
     return 'OpenAI credits exhausted. Top up billing at platform.openai.com, then retry.';
   }
   if(msg.indexOf('rate limit')>=0||msg.indexOf('429')>=0){
-    return 'OpenAI rate limit hit. Wait a moment and retry.';
+      return 'OpenAI rate limit hit. Wait a moment and retry.';
   }
   return String(err||'OpenAI error.');
 }
@@ -7109,9 +7112,10 @@ function tryLoadWorkout(){
         el.textContent=finalText;
         window._coachPulsePendingDetailed=false;
         try{localStorage.setItem(pulseKey,JSON.stringify({sig:sig,text:finalText,ts:Date.now()}));}catch(e){}
-      }).catch(function(){
+      }).catch(function(err){
         clearTimeout(pulseWatchdog);
-        coachPulseRelease('Coach Pulse request failed. Tap refresh to retry.');
+        var m=aiCoachFriendlyApiError(err||'Coach Pulse request failed. Tap refresh to retry.');
+        coachPulseRelease(m);
       });
     }catch(e){}
   }
