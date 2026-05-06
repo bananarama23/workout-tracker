@@ -91,6 +91,7 @@
   --r-sm: 10px;
   --r-lg: 20px;
   --wt-app-h: 100dvh;
+  --wt-gap-corr: 0px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html{height:100%;min-height:100%;overflow:hidden;width:100%;}
@@ -133,8 +134,18 @@ button:active{opacity:0.82;}
 
 /* NAV */
 .nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + var(--safe-b));min-height:var(--nav-h);background:rgba(7,9,12,0.98);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(42,52,68,0.85);display:flex;align-items:flex-start;padding-top:10px;padding-bottom:var(--safe-b);z-index:900;box-sizing:border-box;}
+.nav{transform:translateY(var(--wt-gap-corr));}
 .ios-gap-fix .nav{height:var(--nav-h)!important;padding-bottom:0!important;bottom:0!important;}
 .ios-gap-fix .page{bottom:var(--nav-h)!important;}
+/* Always-on anchor mode for iOS standalone: pin nav to computed app bottom */
+.standalone-nav-lock .nav{
+  bottom:auto!important;
+  top:calc(var(--wt-app-h) - var(--nav-h))!important;
+  height:var(--nav-h)!important;
+  padding-bottom:0!important;
+  transform:none!important;
+}
+.standalone-nav-lock .page{bottom:var(--nav-h)!important;}
 /* Hard mode for iOS standalone portrait when viewport is misreported */
 .ios-standalone-forcefill body{height:var(--wt-app-h)!important;}
 .ios-standalone-forcefill .nav{
@@ -2607,7 +2618,7 @@ function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
 }
 
-var WT_FRONTEND_VERSION='19.3.6-ios-forcefill-nav';
+var WT_FRONTEND_VERSION='19.3.8-standalone-nav-lock';
 var WT_SW_VERSION='wt-shell-v19-setup3';
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -2657,7 +2668,8 @@ function wtStartupRecalcAll(reason){
     try{sah=Math.round((window.screen&&window.screen.availHeight)||0);}catch(_e2){sah=0;}
     var appH=vh;
     var isPortrait=vh>=vw;
-    if(wtIsStandalone()&&isPortrait){
+    var _isStandalone=wtIsStandalone();
+    if(_isStandalone&&isPortrait){
       // In iOS standalone portrait, screen metrics are often more reliable than visual viewport.
       var screenH=Math.max(sh,sah,0);
       if(screenH>0)appH=Math.max(vh,screenH);
@@ -2694,6 +2706,14 @@ function wtDetectAndFixIosBottomGap(reason){
     var root=document.documentElement;
     var appH=parseFloat(getComputedStyle(root).getPropertyValue('--wt-app-h'))||vh;
     var appGap=Math.max(0,Math.round(appH-navRect.bottom));
+    // Always apply measured bottom-gap correction in standalone mode.
+    if(wtIsStandalone()){
+      var corr=Math.max(0,Math.min(220,gap));
+      root.style.setProperty('--wt-gap-corr',corr+'px');
+    }else{
+      root.style.setProperty('--wt-gap-corr','0px');
+    }
+
     // If a large phantom bottom gap exists, force "no-safe-bottom" shell.
     if(gap>=20){
       if(!root.classList.contains('ios-gap-fix')){
@@ -23174,3 +23194,5 @@ function nutMealScanToggleClaudeFullPass(){
      ========================================================================= -->
 </body>
 </html>
+    if(_isStandalone) docEl.classList.add('standalone-nav-lock');
+    else docEl.classList.remove('standalone-nav-lock');
