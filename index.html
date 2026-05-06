@@ -84,7 +84,8 @@
   --text2: #8A95A8;
   --muted: #44526A;
   --nav-h: 70px;
-  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-b-env: env(safe-area-inset-bottom, 0px);
+  --safe-b: var(--safe-b-env);
   --safe-t: env(safe-area-inset-top, 62px);
   --r:  14px;
   --r-sm: 10px;
@@ -125,12 +126,12 @@ button:active{opacity:0.82;}
 #uniTopBar .utb-bat{font-size:0.65rem;color:var(--text2);font-weight:600;line-height:1;}
 
 /* PAGES */
-.page{position:fixed;top:0;left:0;right:0;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));overflow-y:scroll;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;overscroll-behavior:contain;}
+.page{position:fixed;top:0;left:0;right:0;bottom:calc(var(--nav-h) + var(--safe-b));overflow-y:scroll;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;overscroll-behavior:contain;}
 .page.active{display:flex;animation:fadeIn 0.12s ease both;}
 .page-body{padding-bottom:32px;}
 
 /* NAV */
-.nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));min-height:var(--nav-h);background:rgba(7,9,12,0.98);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(42,52,68,0.85);display:flex;align-items:flex-start;padding-top:10px;padding-bottom:env(safe-area-inset-bottom, 0px);z-index:900;box-sizing:border-box;}
+.nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + var(--safe-b));min-height:var(--nav-h);background:rgba(7,9,12,0.98);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(42,52,68,0.85);display:flex;align-items:flex-start;padding-top:10px;padding-bottom:var(--safe-b);z-index:900;box-sizing:border-box;}
 .nav-btn{flex:1;min-height:50px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 2px 6px;transition:opacity 0.15s,color 0.15s;}
 .nav-btn:focus{outline:none;}
 .nav-btn:active{opacity:0.6;}
@@ -2594,7 +2595,7 @@ function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
 }
 
-var WT_FRONTEND_VERSION='19.3.1-browser-auth-self-heal';
+var WT_FRONTEND_VERSION='19.3.4-ios-webapp-safearea-clamp';
 var WT_SW_VERSION='wt-shell-v19-setup3';
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -2639,6 +2640,14 @@ function wtStartupRecalcAll(reason){
     // Prefer the larger stable value for app-shell layout.
     var vh=Math.max(ih,vvh)||ih||vvh||0;
     var vw=Math.max(iw,vvw)||iw||vvw||0;
+    // iOS standalone bug guard: safe-area bottom can become absurdly large.
+    // Read env() via CSS var and clamp to sane device values.
+    var sbRaw=0;
+    try{
+      sbRaw=parseFloat(getComputedStyle(docEl).getPropertyValue('--safe-b-env'))||0;
+    }catch(_e){sbRaw=0;}
+    var safeB=Math.max(0,Math.min(48,Math.round(sbRaw)));
+    docEl.style.setProperty('--safe-b',safeB+'px');
     docEl.style.setProperty('--wt-vh',vh+'px');
     docEl.style.setProperty('--wt-vw',vw+'px');
     docEl.style.setProperty('--wt-vv-top',((vv&&vv.offsetTop)||0)+'px');
@@ -2646,7 +2655,7 @@ function wtStartupRecalcAll(reason){
     var nav=document.querySelector('nav.nav');
     var navH=Math.max(70,Math.round((nav&&nav.getBoundingClientRect().height)||70));
     docEl.style.setProperty('--nav-h',navH+'px');
-    wtBootLog('viewport recalculated',{reason:reason,vw:Math.round(vw),vh:Math.round(vh),navH:navH});
+    wtBootLog('viewport recalculated',{reason:reason,vw:Math.round(vw),vh:Math.round(vh),navH:navH,safeB:safeB,sbRaw:sbRaw});
   }catch(e){}
 }
 function wtEnsureActivePageRendered(){
@@ -7114,18 +7123,30 @@ function tryLoadWorkout(){
           +'Latest verdict: '+((verdict&&verdict.verdict)?verdict.verdict:'none')+'. '
           +'7-day stats: strength '+wStr+', HIIT '+wHiit+', hard-feel '+hardPct+'%, miss '+missPct+'%, progress '+progWord+'. '
           +'Session log: '+perf+'.');
-      aiCoachOpenAICall({
-        model:detailedRefresh?'gpt-5.5':'gpt-5.4-mini',
-        messages:[{role:'system',content:'Direct coach, no sugarcoating.'},{role:'user',content:p}],
-        max_completion_tokens:detailedRefresh?900:140
-      },detailedRefresh?42000:22000).then(function(r){
+      function coachPulseRunAttempt(attempt){
+        return aiCoachOpenAICall({
+          model:detailedRefresh?'gpt-5.5':'gpt-5.4-mini',
+          response_format:{type:'json_object'},
+          messages:[{role:'system',content:'Direct coach, no sugarcoating.'},{role:'user',content:p}],
+          max_completion_tokens:detailedRefresh?900:140
+        },detailedRefresh?42000:22000).then(function(r){
         clearTimeout(pulseWatchdog);
         window._coachPulseAiBusy=false;
         var txt=((((r||{}).choices||[])[0]||{}).message||{}).content||'';
         var parsed=aiCoachExtractJson(txt)||null;
         if(!parsed){
+          // Fallback: show a concise plain-text summary instead of hard failing.
+          var plain=String(txt||'').replace(/```json|```/gi,'').trim();
+          if(plain){
+            plain=plain.replace(/\s+/g,' ').slice(0,260);
+            el.style.color='var(--text2)';
+            el.textContent='Coach Pulse fallback: '+plain;
+            window._coachPulsePendingDetailed=false;
+            try{localStorage.setItem(pulseKey,JSON.stringify({sig:sig,text:el.textContent,ts:Date.now()}));}catch(e){}
+            return;
+          }
           coachPulseRelease('Coach Pulse had a parse hiccup. Tap refresh to retry.');
-          return;
+          throw new Error('coachpulse_parse_failed');
         }
         if(detailedRefresh&&parsed.headline){
           var ef=Array.isArray(parsed.exercise_feedback)?parsed.exercise_feedback.slice(0,8):[];
@@ -7155,21 +7176,37 @@ function tryLoadWorkout(){
           el.innerHTML=html;
           window._coachPulsePendingDetailed=false;
           try{localStorage.setItem(pulseKey,JSON.stringify({sig:sig,kind:'detailed',html:html,text:el.innerText,ts:Date.now()}));}catch(e){}
-          return;
+          return true;
         }
         if(!parsed.pulse){
           coachPulseRelease('Coach Pulse returned an empty result. Tap refresh to retry.');
-          return;
+          throw new Error('coachpulse_empty_result');
         }
         var finalText=lastLine+verdictLine+String(parsed.pulse)+(parsed.next?(' Next: '+parsed.next+'.'):'')+(parsed.risk?(' Risk: '+parsed.risk+'.'):'');
         el.textContent=finalText;
         window._coachPulsePendingDetailed=false;
         try{localStorage.setItem(pulseKey,JSON.stringify({sig:sig,text:finalText,ts:Date.now()}));}catch(e){}
+        return true;
       }).catch(function(err){
+        // Auto-retry transient failures up to 2 times so user usually taps once.
+        var maxAutoRetries=2;
+        if(attempt<maxAutoRetries){
+          var waitMs=(attempt===0?700:1300);
+          if(el){
+            el.style.color='var(--muted)';
+            el.textContent='Coach Pulse retrying… ('+(attempt+1)+'/'+maxAutoRetries+')';
+          }
+          return new Promise(function(res){setTimeout(res,waitMs);}).then(function(){
+            return coachPulseRunAttempt(attempt+1);
+          });
+        }
         clearTimeout(pulseWatchdog);
         var m=aiCoachFriendlyApiError(err||'Coach Pulse request failed. Tap refresh to retry.');
         coachPulseRelease(m);
+        return false;
       });
+      }
+      coachPulseRunAttempt(0);
     }catch(e){}
   }
   function appendVerdictLine(base){
@@ -14438,6 +14475,9 @@ document.addEventListener('DOMContentLoaded',function(){
 window.addEventListener('load',function(){wtStartupRecalcAll('load');});
 window.addEventListener('resize',function(){wtStartupRecalcAll('resize');});
 window.addEventListener('orientationchange',function(){wtStartupRecalcAll('orientationchange');});
+window.addEventListener('pageshow',function(){wtStartupRecalcAll('pageshow');});
+document.addEventListener('visibilitychange',function(){if(!document.hidden)wtStartupRecalcAll('visibilitychange:visible');});
+window.addEventListener('focus',function(){wtStartupRecalcAll('focus');});
 if(window.visualViewport){
   window.visualViewport.addEventListener('resize',function(){wtStartupRecalcAll('visualViewport.resize');});
   window.visualViewport.addEventListener('scroll',function(){wtStartupRecalcAll('visualViewport.scroll');});
