@@ -593,6 +593,18 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 .pt-rest{background:var(--card2);color:var(--muted);}
 .pt-travel{background:var(--purple-dim);color:var(--purple);}
 .plan-msg{text-align:center;padding:8px;font-size:0.78rem;font-weight:600;min-height:20px;color:var(--muted);}
+/* Plan row compact controls (override global 44px button min-height) */
+#page-plan .plan-day .ui-icon-btn{
+  min-height:0 !important;
+  min-width:0 !important;
+  width:24px !important;
+  height:24px !important;
+  padding:0 !important;
+}
+#page-plan .plan-day .pt-btn{
+  padding:5px 10px;
+  font-size:0.62rem;
+}
 
 /* PREVIEW PAGE */
 .preview-ex{background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 16px 10px;overflow:hidden;}
@@ -797,52 +809,6 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   .today-badge{font-size:0.46rem;padding:2px 6px;margin-left:2px;}
   .pt-btn{font-size:0.62rem;padding:5px 10px;}
   .ui-icon-btn{width:26px !important;height:26px !important;}
-}
-
-/* Plan page compact mode for iPhone widths (visual only) */
-@media (max-width:480px){
-  #page-plan .ph{padding-left:14px;padding-right:14px;padding-bottom:10px;}
-  #page-plan .ph h1{font-size:1.58rem;letter-spacing:1.5px;}
-  #page-plan .ph-sub{font-size:0.68rem;}
-  #page-plan .page-body{padding-top:8px;}
-  #page-plan .sync-pill{right:10px;max-width:88px;}
-
-  #page-plan .log-tab{min-height:38px;font-size:0.64rem;padding:7px 4px;}
-  #page-plan .plan-grid{padding:9px;gap:7px;}
-  #page-plan .plan-day{padding:9px 10px;border-radius:10px;}
-  #page-plan .pd-left{gap:8px;}
-  #page-plan .pd-day{font-size:0.8rem;min-width:24px;}
-  #page-plan .pd-date{font-size:0.58rem;}
-  #page-plan .pt-btn{font-size:0.56rem;padding:4px 8px;}
-  #page-plan .plan-msg{font-size:0.66rem;padding:6px;}
-
-  #page-plan #weekGoalBar{margin:8px 10px 0 !important;padding:9px 10px !important;}
-  #page-plan #weekGoalBar span{font-size:0.6rem !important;}
-  #page-plan #planGrid + div{padding:0 10px 10px !important;}
-  #page-plan #trainerPlanWrap,
-  #page-plan #calendarPlanWrap,
-  #page-plan #weeklyFeedbackWrap{margin-top:9px !important;}
-
-  #page-plan #trainerPlanWrap > div > div:first-child,
-  #page-plan #calendarPlanWrap > div > div:first-child{padding:8px 10px !important;}
-  #page-plan #trainerWeeklyReview,
-  #page-plan #calendarPlanWrap > div > div:nth-child(2),
-  #page-plan #weeklyFeedbackSummary,
-  #page-plan #weeklyFeedbackDetail,
-  #page-plan #weeklyFeedbackStatus{padding:10px !important;}
-
-  #page-plan #calendarIcalUrlInput{
-    min-width:0 !important;
-    width:100% !important;
-    font-size:16px !important;
-    padding:8px 10px !important;
-  }
-  #page-plan #calendarPlanWrap button,
-  #page-plan #trainerPlanWrap button,
-  #page-plan #weeklyFeedbackBtn{
-    font-size:0.62rem !important;
-    padding:8px 9px !important;
-  }
 }
 
 .hidden{display:none !important;}
@@ -2473,7 +2439,7 @@ var CAL_SYNC_RULES_KEY='wt_calendar_rules_v1';
 var WT_AUTH_OK_CACHE_KEY='wt_auth_ok_cache_v1';
 // Personal private defaults (Staticrypt deployment): first-load prefill only, never overwrite non-empty values.
 var WT_PERSONAL_DEFAULTS={
-  appClientToken:'wt_app_40a9fe828552d3a5e046bb490ffa7f05c4910519',
+  appClientToken:'',
   healthBridgeToken:'wt_health_2becd34dbfe3e70980517fce2e5aa49e0d40',
   calendarIcalUrl:'https://calendar.google.com/calendar/ical/philksmith%40gmail.com/private-29f5f251620b2a780368620b891f7185/basic.ics'
 };
@@ -2513,13 +2479,9 @@ function wtPrefillCalendarInputsFromCfg(){
 function wtApplyPersonalConnectionDefaults(){
   try{
     var _log=[];
-    // App token local default
-    var at=String(localStorage.getItem(APP_CLIENT_TOKEN_KEY)||'').trim();
-    if(!at&&WT_PERSONAL_DEFAULTS.appClientToken){
-      localStorage.setItem(APP_CLIENT_TOKEN_KEY,WT_PERSONAL_DEFAULTS.appClientToken);
-      try{if(window.wtDB&&wtDB.set)wtDB.set(APP_CLIENT_TOKEN_KEY,WT_PERSONAL_DEFAULTS.appClientToken);}catch(_e){}
-      _log.push('appToken:applied-default');
-    }else{_log.push('appToken:skipped-existing');}
+    // No browser app token is needed in single-user backend mode.
+    try{localStorage.removeItem(APP_CLIENT_TOKEN_KEY);localStorage.removeItem(APP_CLIENT_TOKEN_LEGACY_KEY);localStorage.removeItem(WT_AUTH_OK_CACHE_KEY);}catch(_e){}
+    _log.push('appToken:not-required');
     // Health bridge token default
     var hcfg=healthCfgLoad();
     if(hcfg&&!String(hcfg.bridgeToken||'').trim()&&WT_PERSONAL_DEFAULTS.healthBridgeToken){
@@ -2542,15 +2504,7 @@ function wtApplyPersonalConnectionDefaults(){
   }catch(e){}
 }
 function wtAppClientTokenGet(){
-  try{
-    var v=String(localStorage.getItem(APP_CLIENT_TOKEN_KEY)||'').trim();
-    if(v)return v;
-    var legacy=String(localStorage.getItem(APP_CLIENT_TOKEN_LEGACY_KEY)||'').trim();
-    if(legacy){
-      localStorage.setItem(APP_CLIENT_TOKEN_KEY,legacy);
-      return legacy;
-    }
-  }catch(e){}
+  // Single-user backend mode: no per-browser app token required.
   return '';
 }
 function wtAuthCacheGet(){
@@ -2562,45 +2516,14 @@ function wtAuthCacheSet(ok,msg){
   }catch(e){}
 }
 function wtEnsureBackendAuthReady(opts){
-  opts=opts||{};
-  var maxAgeMs=opts.maxAgeMs||5*60*1000;
-  var cached=wtAuthCacheGet();
-  if(cached&&cached.ok&&((Date.now()-(cached.ts||0))<maxAgeMs)) return Promise.resolve({status:'ok',cached:true});
-  if(typeof navigator!=='undefined'&&navigator.onLine===false){
-    return Promise.reject(new Error('Offline — cannot verify backend auth.'));
-  }
-  return wtBackendPost({type:'authTest',_nonce:Date.now()}).then(function(r){
-    if(r&&r.status==='ok'){wtAuthCacheSet(true,'authorized');return r;}
-    if(r&&r.code==='UNAUTHORIZED'){
-      // Self-heal once: re-apply default token for this browser session and retry.
-      try{
-        if(WT_PERSONAL_DEFAULTS&&WT_PERSONAL_DEFAULTS.appClientToken){
-          localStorage.setItem(APP_CLIENT_TOKEN_KEY,WT_PERSONAL_DEFAULTS.appClientToken);
-          try{if(window.wtDB&&wtDB.set)wtDB.set(APP_CLIENT_TOKEN_KEY,WT_PERSONAL_DEFAULTS.appClientToken);}catch(_e){}
-        }
-      }catch(e){}
-      return wtBackendPost({type:'authTest',_nonce:Date.now()}).then(function(r2){
-        if(r2&&r2.status==='ok'){wtAuthCacheSet(true,'authorized-after-repair');return r2;}
-        var msg2=(r2&&r2.code==='UNAUTHORIZED')
-          ?'App token mismatch in this browser session.'
-          :String((r2&&r2.message)||'Auth test failed.');
-        wtAuthCacheSet(false,msg2);
-        throw new Error(msg2);
-      });
-    }
-    var msg=String((r&&r.message)||'Auth test failed.');
-    wtAuthCacheSet(false,msg);
-    throw new Error(msg);
-  }).catch(function(err){
-    wtAuthCacheSet(false,String(err&&err.message||err||'Auth check failed.'));
-    throw err;
-  });
+  // Single-user backend mode: skip browser auth checks so iPhone/Safari storage cannot break AI.
+  wtAuthCacheSet(true,'auth-not-required');
+  return Promise.resolve({status:'ok',message:'Backend auth not required'});
 }
 function wtBackendPost(payload){
   var p=Object.assign({},payload||{});
-  var tk=wtAppClientTokenGet();
-  var needToken={calendarConnect:1,calendarRefresh:1,calendarGetSummary:1,calendarDisconnect:1,authTest:1,setWeekPlan:1,aiOpenAIChat:1,healthLatest:1};
-  if(tk&&!p.appToken&&needToken[p.type])p.appToken=tk;
+  // No browser auth token is attached. Backend must run in single-user/no-auth mode.
+  try{delete p.appToken;}catch(_e){}
   return fetch(CLOUD_URL,{
     method:'POST',
     headers:{'Content-Type':'text/plain;charset=utf-8'},
@@ -2618,7 +2541,7 @@ function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
 }
 
-var WT_FRONTEND_VERSION='19.4.0-navtap-reanchor';
+var WT_FRONTEND_VERSION='19.4.2-plan-row-compact';
 var WT_SW_VERSION='wt-shell-v19-setup3';
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -5219,9 +5142,7 @@ function aiCoachOpenAICall(payload,timeoutMs){
     var _hasJsonWord=_msgs.some(function(m){
       var c=m&&m.content;
       if(typeof c==='string') return /\bjson\b/i.test(c);
-      if(Array.isArray(c)){
-        return c.some(function(p){ return p&&typeof p.text==='string'&&/\bjson\b/i.test(p.text); });
-      }
+      if(Array.isArray(c)) return c.some(function(p){return p&&typeof p.text==='string'&&/\bjson\b/i.test(p.text);});
       return false;
     });
     if(!_hasJsonWord){
@@ -5245,106 +5166,21 @@ function aiCoachOpenAICall(payload,timeoutMs){
         return j;
       });
   }
-  function runDirectWithModel(modelName){
-    var key=(localStorage.getItem('wt_openai_key')||'').trim();
-    if(!key) return Promise.reject(new Error('AI backend unavailable. Manual logging still works.'));
-    var req=Object.assign({},body,{model:modelName||body.model||'gpt-5.5'});
-    var ctrl=typeof AbortController!=='undefined'?new AbortController():null;
-    var timer=setTimeout(function(){if(ctrl)ctrl.abort();},timeoutMs||90000);
-    return fetch('https://api.openai.com/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify(req),
-      signal:ctrl?ctrl.signal:undefined
-    }).then(function(r){return r.json();}).then(function(j){
-      if(!j||j.error) throw new Error((j&&j.error&&j.error.message)||'OpenAI request failed');
-      aiUsageTrackFromApi(j,req.model||'');
-      return j;
-    }).finally(function(){clearTimeout(timer);});
-  }
-  function _messagesToGeminiText(messages){
-    var out=[];
-    (messages||[]).forEach(function(m){
-      var c=m&&m.content;
-      if(typeof c==='string'){ out.push(c); return; }
-      if(Array.isArray(c)){
-        c.forEach(function(p){
-          if(p&&typeof p.text==='string') out.push(p.text);
-        });
-      }
-    });
-    return out.join('\n\n').trim();
-  }
-  function runDirectGemini(){
-    var gk=(localStorage.getItem('wt_gemini_key')||'').trim();
-    if(!gk) return Promise.reject(new Error('Gemini key missing.'));
-    var textPrompt=_messagesToGeminiText(body.messages||[]);
-    if(!textPrompt) return Promise.reject(new Error('No prompt text for Gemini.'));
-    var ctrl=typeof AbortController!=='undefined'?new AbortController():null;
-    var timer=setTimeout(function(){if(ctrl)ctrl.abort();},timeoutMs||90000);
-    var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key='+encodeURIComponent(gk);
-    var reqBody={
-      contents:[{role:'user',parts:[{text:textPrompt}]}],
-      generationConfig:{responseMimeType:'application/json'}
-    };
-    return fetch(url,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(reqBody),
-      signal:ctrl?ctrl.signal:undefined
-    }).then(function(r){return r.json();}).then(function(j){
-      var txt='';
-      try{
-        txt=j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts&&j.candidates[0].content.parts[0]&&j.candidates[0].content.parts[0].text||'';
-      }catch(e){}
-      if(!txt){
-        throw new Error((j&&j.error&&j.error.message)||'Gemini request failed');
-      }
-      return {choices:[{message:{content:txt}}],_provider:'gemini'};
-    }).finally(function(){clearTimeout(timer);});
-  }
-  function hasLocalOpenAIKey(){
-    try{return !!(localStorage.getItem('wt_openai_key')||'').trim();}catch(e){return false;}
-  }
-  function hasLocalGeminiKey(){
-    try{return !!(localStorage.getItem('wt_gemini_key')||'').trim();}catch(e){return false;}
-  }
-  function runBestDirectFallback(modelName){
-    // Prefer OpenAI direct when available; only attempt Gemini if its key exists.
-    if(hasLocalOpenAIKey()){
-      return runDirectWithModel(modelName).catch(function(err1){
-        if(hasLocalGeminiKey()) return runDirectGemini();
-        throw err1;
-      });
-    }
-    if(hasLocalGeminiKey()) return runDirectGemini();
-    return Promise.reject(new Error('AI backend unavailable and no local API keys are configured for this site.'));
-  }
   var requestedModel=String(body.model||'').trim();
-  return wtEnsureBackendAuthReady({maxAgeMs:5*60*1000}).then(function(){
-    return runWithModel(requestedModel);
-  }).catch(function(err){
+  return runWithModel(requestedModel).catch(function(err){
     var msg=String(err&&err.message||err||'').toLowerCase();
-    // If backend rejects auth, surface that directly (don't mask with fallback key errors).
-    if(msg.indexOf('unauthorized')>=0||msg.indexOf('app_token_not_configured')>=0||msg.indexOf('app token')>=0||msg.indexOf('403')>=0){
-      throw new Error('Backend auth failed for this site. Check APP_CLIENT_TOKEN match between this app and Apps Script deployment.');
-    }
     var shouldFallback=requestedModel&&requestedModel!=='gpt-5.5'&&(
       msg.indexOf('model')>=0||msg.indexOf('not found')>=0||msg.indexOf('unsupported')>=0||msg.indexOf('unavailable')>=0
     );
-    if(shouldFallback){
-      return runWithModel('gpt-5.5').catch(function(){
-        return runBestDirectFallback('gpt-5.5');
-      });
-    }
-    return runBestDirectFallback(requestedModel);
+    if(shouldFallback) return runWithModel('gpt-5.5');
+    throw err;
   });
 }
 function aiCoachFriendlyApiError(err){
   var raw=String(err||'OpenAI error.');
   var msg=raw.toLowerCase();
   if(msg.indexOf('backend auth failed for this site')>=0||msg.indexOf('unauthorized')>=0||msg.indexOf('app_token_not_configured')>=0||msg.indexOf('app_client_token')>=0){
-    return 'Backend auth failed on this browser. Open Connection Setup and run Auth Test.';
+    return 'Backend AI is unavailable. Redeploy the Google Apps Script backend and verify OPENAI_API_KEY in Script Properties.';
   }
   function creditsAlert(){
     try{
@@ -5357,10 +5193,10 @@ function aiCoachFriendlyApiError(err){
     }catch(e){}
   }
   if(msg.indexOf('openai key missing')>=0||msg.indexOf('api key')>=0||msg.indexOf('invalid_api_key')>=0||msg.indexOf('incorrect api key')>=0){
-    return 'AI key/config issue for this browser or backend deployment. Run Connection Setup → Auth Test, then verify GAS keys/deployment.';
+    return 'Backend AI key/config issue. Verify OPENAI_API_KEY in Google Apps Script Script Properties, then redeploy the backend.';
   }
   if(msg.indexOf('ai backend unavailable')>=0||msg.indexOf('manual logging still works')>=0||msg.indexOf('no local api keys are configured')>=0){
-    return 'AI backend is unreachable from this browser session. Run Connection Setup → Auth Test. If auth passes, redeploy GAS and retry.';
+    return 'AI backend is unreachable. Redeploy the Google Apps Script backend and retry.';
   }
   if(msg.indexOf('timeout')>=0||msg.indexOf('aborted')>=0||msg.indexOf('network')>=0||msg.indexOf('failed to fetch')>=0){
     return 'AI request timed out/network failed. Retry once; if it repeats, check connection and backend status.';
@@ -10196,29 +10032,26 @@ function renderPlanGrid(days,today){
     var isPast=!isNextWeek&&ds<today;
     var daySessions=_cachedSessions?_cachedSessions.filter(function(sess){return sess.date===ds;}):[]; 
     var isDone=daySessions.length>0;
-    html+='<div class="plan-day'+(isToday?' today':isPast?' past':'')+'" style="align-items:center;padding:12px 16px;">';
+    html+='<div class="plan-day'+(isToday?' today':isPast?' past':'')+'" style="align-items:center;padding:10px 12px;">';
     html+='<div class="pd-left" style="cursor:pointer;" onclick="'+(isLocked?'':'cyclePlanType(\''+ds+'\')')+'">'+
       '<div class="pd-day">'+dayNames[i]+'</div>'+
       '<div class="pd-date">'+d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</div>';
     if(isToday)html+='<span class="today-badge">TODAY</span>';
     html+='</div>';
-    html+='<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">';
-    html+='<div style="display:flex;gap:6px;align-items:center;">'
-      +'<button class="ui-icon-btn" onclick="event.stopPropagation();trainerToggleLock(\''+ds+'\')" style="width:28px;height:28px;font-size:0.9rem;line-height:1;flex-shrink:0;padding:0;'+(isLocked?'background:var(--blue-dim);border-color:rgba(59,131,246,0.35);color:var(--blue);':'')+'">'+(isLocked?'🔒':'🔓')+'</button>'
-      +(isLocked?'<span style="font-size:0.56rem;color:var(--blue);font-weight:700;">locked</span>':'')
-      +'</div>';
+    html+='<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-end;">';
     // Primary type
     var mainDone=_planTypeDone(type,ds);
-    html+='<div style="display:flex;align-items:center;gap:6px;">';
+    html+='<div style="display:flex;align-items:center;gap:5px;">';
+    html+='<button class="ui-icon-btn" onclick="event.stopPropagation();trainerToggleLock(\''+ds+'\')" style="width:24px;height:24px;font-size:0.78rem;line-height:1;flex-shrink:0;padding:0;'+(isLocked?'background:var(--blue-dim);border-color:rgba(59,131,246,0.35);color:var(--blue);':'')+'">'+(isLocked?'🔒':'🔓')+'</button>';
     html+='<div class="pt-btn '+(PLAN_COLORS[type]||'pt-rest')+'" style="cursor:'+(isLocked?'default':'pointer')+';opacity:'+(isLocked?'0.78':'1')+';" onclick="'+(isLocked?'':'event.stopPropagation();cyclePlanType(\''+ds+'\')')+'">'+( mainDone?'✓ ':'')+type.toUpperCase()+'</div>';
-    if(!isPast&&!isLocked)html+='<button class="ui-icon-btn" onclick="event.stopPropagation();addPlanExtra(\''+ds+'\')" style="width:28px;height:28px;font-size:1rem;line-height:1;flex-shrink:0;padding:0;">+</button>';
+    if(!isPast&&!isLocked)html+='<button class="ui-icon-btn" onclick="event.stopPropagation();addPlanExtra(\''+ds+'\')" style="width:24px;height:24px;font-size:0.9rem;line-height:1;flex-shrink:0;padding:0;">+</button>';
     html+='</div>';
     // Extra types — each with their own done check
     extras.forEach(function(exType,ei){
       var exDone=_planTypeDone(exType,ds);
-      html+='<div style="display:flex;align-items:center;gap:6px;">';
+      html+='<div style="display:flex;align-items:center;gap:5px;">';
       html+='<div class="pt-btn '+(PLAN_COLORS[exType]||'pt-rest')+'" style="cursor:'+(isLocked?'default':'pointer')+';opacity:'+(isLocked?'0.78':'1')+';" onclick="'+(isLocked?'':'event.stopPropagation();cyclePlanExtra(\''+ds+'\','+ei+')')+'">'+( exDone?'✓ ':'')+exType.toUpperCase()+'</div>';
-      if(!isPast&&!isLocked)html+='<button class="ui-icon-btn" onclick="event.stopPropagation();removePlanExtra(\''+ds+'\','+ei+')" style="width:28px;height:28px;background:var(--red-dim);border-color:rgba(255,58,92,0.45);color:var(--red);font-size:1rem;line-height:1;flex-shrink:0;padding:0;">−</button>';
+      if(!isPast&&!isLocked)html+='<button class="ui-icon-btn" onclick="event.stopPropagation();removePlanExtra(\''+ds+'\','+ei+')" style="width:24px;height:24px;background:var(--red-dim);border-color:rgba(255,58,92,0.45);color:var(--red);font-size:0.9rem;line-height:1;flex-shrink:0;padding:0;">−</button>';
       html+='</div>';
     });
     // Day note
@@ -17999,8 +17832,7 @@ function connResetConnectionDefaults(){
   if(!confirm('Reset connection defaults and run full backend checks now?'))return;
   connSetupLogClear();
   try{
-    localStorage.setItem(APP_CLIENT_TOKEN_KEY,WT_PERSONAL_DEFAULTS.appClientToken);
-    try{if(window.wtDB&&wtDB.set)wtDB.set(APP_CLIENT_TOKEN_KEY,WT_PERSONAL_DEFAULTS.appClientToken);}catch(_e){}
+    try{localStorage.removeItem(APP_CLIENT_TOKEN_KEY);localStorage.removeItem(APP_CLIENT_TOKEN_LEGACY_KEY);localStorage.removeItem(WT_AUTH_OK_CACHE_KEY);}catch(_e){}
 
     var hcfg=healthCfgLoad();
     hcfg.bridgeToken=WT_PERSONAL_DEFAULTS.healthBridgeToken;
@@ -18019,7 +17851,7 @@ function connResetConnectionDefaults(){
     if(conn)conn.value=WT_PERSONAL_DEFAULTS.calendarIcalUrl;
 
     connRenderStatuses();
-    connSetupLog('Defaults force-reset applied',{appToken:'set',healthToken:'set',icalUrl:'set'});
+    connSetupLog('Defaults force-reset applied',{appToken:'not required',healthToken:'set',icalUrl:'set'});
 
     wtBackendPost({type:'authTest',_nonce:Date.now()}).then(function(r1){
       connSetupLog('authTest response',r1);
@@ -18079,17 +17911,15 @@ function connRenderStatuses(){
   }
 }
 function connGenerateAppToken(){
-  var t=wtStrongToken('wt_app_');
-  try{localStorage.setItem(APP_CLIENT_TOKEN_KEY,t);}catch(e){}
+  try{localStorage.removeItem(APP_CLIENT_TOKEN_KEY);localStorage.removeItem(APP_CLIENT_TOKEN_LEGACY_KEY);localStorage.removeItem(WT_AUTH_OK_CACHE_KEY);}catch(e){}
   connRenderStatuses();
-  appToast('App Client Token generated. Copy it to Script Properties.','var(--green)');
+  appToast('Browser app token removed. Backend auth is not required.','var(--green)');
 }
-function connCopyAppToken(){ wtCopyText(wtAppClientTokenGet(),'App Client Token'); }
+function connCopyAppToken(){ wtCopyText('No APP_CLIENT_TOKEN needed. Backend runs in single-user mode.','App Token'); }
 function connCopyScriptProps(){
-  var appToken=wtAppClientTokenGet();
   var hcfg=healthCfgLoad();
   var healthToken=hcfg.bridgeToken||'';
-  var txt='Open Google Apps Script.\nGo to Project Settings.\nScroll to Script Properties.\nAdd:\n\nAPP_CLIENT_TOKEN = '+(appToken||'<generated app client token>')+'\nHEALTH_BRIDGE_TOKEN = '+(healthToken||'<generated health bridge token>')+'\nOPENAI_API_KEY = optional, for AI food scan\nGEMINI_API_KEY = optional\nANTHROPIC_API_KEY = optional\n\nSave.\nDeploy → Manage deployments → Edit → New version → Deploy.';
+  var txt='Open Google Apps Script.\nGo to Project Settings.\nScroll to Script Properties.\nAdd:\n\nHEALTH_BRIDGE_TOKEN = '+(healthToken||'<generated health bridge token>')+'\nOPENAI_API_KEY = optional, for AI food scan\nGEMINI_API_KEY = optional\nANTHROPIC_API_KEY = optional\n\nSave.\nDeploy → Manage deployments → Edit → New version → Deploy.';
   wtCopyText(txt,'Apps Script setup instructions');
 }
 function connTestBackend(){
@@ -18105,14 +17935,10 @@ function connTestBackend(){
 }
 function connTestAppToken(){
   var el=document.getElementById('connTokenStatus');
-  if(el)el.textContent='App token: testing auth...';
-  wtBackendPost({type:'authTest',_nonce:Date.now()}).then(function(r){
-    if(r&&r.status==='ok'){ wtAuthCacheSet(true,'authorized'); if(el)el.innerHTML='App token: <strong>authorized</strong>'; return; }
-    var msg=String((r&&r.message)||'Auth failed');
-    if(r&&r.code==='APP_TOKEN_NOT_CONFIGURED')msg='Add APP_CLIENT_TOKEN to Apps Script Script Properties, then redeploy.';
-    else if(r&&r.code==='UNAUTHORIZED')msg='The app token saved in this app does not match APP_CLIENT_TOKEN in Apps Script.';
-    if(el)el.textContent='App token: '+msg;
-  }).catch(function(){wtAuthCacheSet(false,'backend unavailable');if(el)el.textContent='App token: backend unavailable';});
+  wtEnsureBackendAuthReady({maxAgeMs:0}).then(function(){
+    if(el)el.innerHTML='App token: <strong>not required</strong>';
+    appToast('Backend auth not required.','var(--green)');
+  });
 }
 function connRepairBrowserAuth(){
   var el=document.getElementById('connTokenStatus');
@@ -21252,20 +21078,6 @@ function nutMealScanCallVision(b64,mime){
       .then(function(r){
         if(!r||r.status!=='ok') throw new Error((r&&r.message)||'AI backend unavailable');
         return r.data||{};
-      }).catch(function(err){
-        var key=(localStorage.getItem('wt_openai_key')||'').trim();
-        if(!key) throw err;
-        var ctrl=typeof AbortController!=='undefined'?new AbortController():null;
-        var timer=setTimeout(function(){if(ctrl)ctrl.abort();},timeoutMs||25000);
-        return fetch('https://api.openai.com/v1/chat/completions',{
-          method:'POST',
-          headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-          body:JSON.stringify(payload),
-          signal:ctrl?ctrl.signal:undefined
-        }).then(function(r){return r.json();}).then(function(j){
-          if(!j||j.error) throw new Error((j&&j.error&&j.error.message)||'OpenAI request failed');
-          return j;
-        }).finally(function(){clearTimeout(timer);});
       });
   }
 
