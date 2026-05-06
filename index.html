@@ -2522,15 +2522,58 @@ function wtEnsureBackendAuthReady(opts){
   wtAuthCacheSet(true,'auth-not-required');
   return Promise.resolve({status:'ok',message:'Backend auth not required'});
 }
+function wtIsTransientError_(err){
+  var m=String((err&&err.message)||err||'').toLowerCase();
+  return (
+    m.indexOf('timeout')>=0||
+    m.indexOf('network')>=0||
+    m.indexOf('failed to fetch')>=0||
+    m.indexOf('abort')>=0||
+    m.indexOf('503')>=0||
+    m.indexOf('502')>=0||
+    m.indexOf('504')>=0||
+    m.indexOf('429')>=0
+  );
+}
+function wtFetchJsonWithRetry_(url,fetchOpts,retryCfg){
+  var cfg=Object.assign({tries:3,timeoutMs:30000,baseDelayMs:350},retryCfg||{});
+  function oneAttempt(attempt){
+    var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var timer=null;
+    if(ctrl&&cfg.timeoutMs>0){
+      timer=setTimeout(function(){try{ctrl.abort();}catch(e){}},cfg.timeoutMs);
+    }
+    var opts=Object.assign({},fetchOpts||{});
+    if(ctrl)opts.signal=ctrl.signal;
+    return fetch(url,opts).then(function(r){
+      if(timer)clearTimeout(timer);
+      if(!r||!r.ok){
+        throw new Error('HTTP '+(r&&r.status||'unknown'));
+      }
+      return r.json();
+    }).catch(function(err){
+      if(timer)clearTimeout(timer);
+      var isLast=attempt>=(cfg.tries-1);
+      if(isLast||!wtIsTransientError_(err))throw err;
+      var wait=cfg.baseDelayMs*Math.pow(2,attempt);
+      return new Promise(function(res){setTimeout(res,wait);}).then(function(){return oneAttempt(attempt+1);});
+    });
+  }
+  return oneAttempt(0);
+}
 function wtBackendPost(payload){
   var p=Object.assign({},payload||{});
   // No browser auth token is attached. Backend must run in single-user/no-auth mode.
   try{delete p.appToken;}catch(_e){}
-  return fetch(CLOUD_URL,{
+  return wtFetchJsonWithRetry_(CLOUD_URL,{
     method:'POST',
     headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify(p)
-  }).then(function(r){return r.json();}).then(function(res){
+  },{
+    tries:3,
+    timeoutMs:40000,
+    baseDelayMs:400
+  }).then(function(res){
     // Keep local Health cache aligned with backend canonical import payload.
     // This replaces same-date local entries instead of creating duplicates.
     if(p&&p.type==='healthImport'&&res&&res.status==='ok'&&res.import){
@@ -5158,8 +5201,16 @@ function aiCoachOpenAICall(payload,timeoutMs){
   }
   function runWithModel(modelName){
     var req=Object.assign({},body,{model:modelName||body.model||'gpt-5.5'});
-    return wtBackendPost({type:'aiOpenAIChat',payload:req,timeoutMs:timeoutMs||90000,_nonce:Date.now()})
-      .then(function(r){
+    function callOnce(){
+      return wtBackendPost({type:'aiOpenAIChat',payload:req,timeoutMs:timeoutMs||90000,_nonce:Date.now()});
+    }
+    function callWithRetry(attempt){
+      return callOnce().catch(function(err){
+        if(attempt>=1||!wtIsTransientError_(err))throw err;
+        return new Promise(function(res){setTimeout(res,550);}).then(function(){return callWithRetry(attempt+1);});
+      });
+    }
+    return callWithRetry(0).then(function(r){
         if(!r||r.status!=='ok'){
           throw new Error((r&&r.message)||'AI backend unavailable. Manual logging still works.');
         }
@@ -5755,7 +5806,17 @@ var _aiCoachMode=''; // 'post' or 'pre'
 var _aiCoachCurrentType='home'; // 'home' or 'hotel'
 var _aiCoachChatTurns=0;
 var _aiCoachCurrentWorkout=null; // the workout being shown/adjusted
+var _aiCoachChatBusy=false;
+var _aiCoachGeneratingBusy=false;
 function aiCoachTurnLimit(){return _aiCoachMode==='global'?20:6;}
+function aiCoachSetSendEnabled(on){
+  try{
+    var wrap=document.getElementById('aiCoachChatInput');
+    if(!wrap)return;
+    var btn=wrap.querySelector('button');
+    if(btn)btn.disabled=!on;
+  }catch(e){}
+}
 var AI_AUTO_MODE_KEY='wt_ai_auto_mode';
 function aiCoachAutoEnabled(){
   try{
@@ -6031,6 +6092,9 @@ function aiUpdateAutopilotStatusUI(){
 function aiCoachClose(){
   document.getElementById('aiCoachOverlay').style.display='none';
   _aiCoachHistory=[];_aiCoachChatTurns=0;
+  _aiCoachChatBusy=false;
+  _aiCoachGeneratingBusy=false;
+  aiCoachSetSendEnabled(true);
 }
 
 function aiCoachShow(mode){
@@ -6045,6 +6109,9 @@ function aiCoachShow(mode){
   _aiCoachMode=mode;
   _aiCoachHistory=[];
   _aiCoachChatTurns=0;
+  _aiCoachChatBusy=false;
+  _aiCoachGeneratingBusy=false;
+  aiCoachSetSendEnabled(true);
 }
 
 // ── POST WORKOUT: Coach Feedback ───────────────────────────────────────────
@@ -6103,12 +6170,18 @@ function aiPostRecoveryAndGenerate(feel,nextType){
   window._aiRecoveryFeel=feel;
   window._aiSorenessFeel=soreness;
   var nextLabel=nextType==='home'?'Home':'Hotel';
+  if(_aiCoachGeneratingBusy){
+    appToast('Coach is already generating. Please wait…','var(--orange)');
+    return;
+  }
+  _aiCoachGeneratingBusy=true;
   document.getElementById('aiCoachActions').style.display='none';
   document.getElementById('aiCoachMode').textContent='Post-workout · Generating next '+nextLabel+' session…';
   var statusEl=document.getElementById('aiCoachStatus');
   statusEl.style.display='block';
   statusEl.textContent='GPT is reviewing your session and building your next '+nextLabel+' workout…';
   aiCoachGenerate(nextType,function(result,err){
+    _aiCoachGeneratingBusy=false;
     statusEl.style.display='none';
     if(err){statusEl.style.display='block';statusEl.textContent='⚠ '+err;return;}
     var t=result[nextType];
@@ -6201,10 +6274,16 @@ function aiPreWorkoutRecovery(feel){
   var plan=cached?cached[_aiCoachCurrentType]:null;
 
   if(!plan){
+    if(_aiCoachGeneratingBusy){
+      appToast('Coach is already generating. Please wait…','var(--orange)');
+      return;
+    }
+    _aiCoachGeneratingBusy=true;
     var statusEl=document.getElementById('aiCoachStatus');
     statusEl.style.display='block';
     statusEl.textContent='GPT is building your personalised session…';
     aiCoachGenerate(_aiCoachCurrentType,function(result,err){
+      _aiCoachGeneratingBusy=false;
       statusEl.style.display='none';
       if(err){
         statusEl.style.display='block';
@@ -6418,6 +6497,10 @@ function aiCoachChipTap(btn,text){
 }
 
 function aiCoachSendChat(){
+  if(_aiCoachChatBusy){
+    appToast('Coach is still responding…','var(--orange)');
+    return;
+  }
   var lim=aiCoachTurnLimit();
   if(_aiCoachChatTurns>=lim){
     document.getElementById('aiCoachTurnsLeft').textContent='Adjustment limit reached — start your workout!';
@@ -6435,6 +6518,8 @@ function aiCoachSendChat(){
   logEl.innerHTML+='<div id="aiTyping" style="color:var(--muted);font-size:0.72rem;padding:4px 0;">Coach is thinking…</div>';
 
   _aiCoachHistory.push({role:'user',content:msg});
+  _aiCoachChatBusy=true;
+  aiCoachSetSendEnabled(false);
 
   aiCoachChat(msg,_aiCoachCurrentWorkout,_aiCoachHistory.slice(0,-1),function(result,err){
     var typing=document.getElementById('aiTyping');
@@ -6442,6 +6527,8 @@ function aiCoachSendChat(){
 
     if(err||!result){
       logEl.innerHTML+='<div style="color:var(--red);font-size:0.75rem;padding:4px 0;">⚠ '+( err||'Error')+'</div>';
+      _aiCoachChatBusy=false;
+      aiCoachSetSendEnabled(_aiCoachChatTurns<lim);
       return;
     }
 
@@ -6514,7 +6601,10 @@ function aiCoachSendChat(){
     document.getElementById('aiCoachTurnsLeft').textContent=remaining>0?remaining+' messages remaining':'Adjustment limit reached — start when ready.';
     if(_aiCoachChatTurns>=lim){
       document.getElementById('aiCoachChatInput').querySelector('button').disabled=true;
+    }else{
+      aiCoachSetSendEnabled(true);
     }
+    _aiCoachChatBusy=false;
   });
 }
 
@@ -6641,12 +6731,18 @@ function aiCoachLoadAndStart(){
 }
 
 function aiCoachRegenerateManual(){
+  if(_aiCoachGeneratingBusy){
+    appToast('Coach is already generating. Please wait…','var(--orange)');
+    return;
+  }
+  _aiCoachGeneratingBusy=true;
   document.getElementById('aiCoachSummary').style.display='none';
   document.getElementById('aiCoachActions').style.display='none';
   var statusEl=document.getElementById('aiCoachStatus');
   statusEl.style.display='block';
   statusEl.textContent='Regenerating…';
   aiCoachGenerate(_aiCoachCurrentType,function(result,err){
+    _aiCoachGeneratingBusy=false;
     statusEl.style.display='none';
     if(err){statusEl.style.display='block';statusEl.textContent='⚠ '+err;return;}
     _aiCoachCurrentWorkout=result[_aiCoachCurrentType];
@@ -6788,6 +6884,10 @@ function editDoneSession(){
 function tryLoadWorkout(){
   window.refreshCoachPulse=function(){
     try{
+      if(window._coachPulseAiBusy){
+        appToast('Coach Pulse is already refreshing…','var(--orange)');
+        return;
+      }
       var bodyEl=document.getElementById('workoutCoachPulseBody');
       if(bodyEl){
         bodyEl.style.color='var(--muted)';
@@ -6797,6 +6897,16 @@ function tryLoadWorkout(){
       localStorage.removeItem('wt_workout_coach_pulse_ai_v1');
       window._coachPulseDetailedRefresh=true;
       window._coachPulseRunAiOnce=true;
+      setTimeout(function(){
+        if(window._coachPulsePendingDetailed&&!window._coachPulseAiBusy){
+          window._coachPulsePendingDetailed=false;
+          var el=document.getElementById('workoutCoachPulseBody');
+          if(el&&String(el.textContent||'').indexOf('Refreshing detailed Coach Pulse')>=0){
+            el.style.color='var(--text2)';
+            el.textContent='Coach Pulse did not complete. Tap refresh again.';
+          }
+        }
+      },55000);
       tryLoadWorkout();
       appToast('Refreshing Coach Pulse…','var(--text2)');
     }catch(e){}
@@ -8877,12 +8987,59 @@ function wtTestsOpenPanel(){
       '<button type="button" onclick="wtCopyPwaDiag()" class="log-btn" style="flex:1;">Copy PWA diagnostics</button>'+
       '<button type="button" onclick="wtClearAppCache()" class="log-btn">Clear app cache</button>'+
     '</div>'+
+    '<div style="margin-top:8px;display:flex;gap:8px;">'+
+      '<button type="button" onclick="wtInspectNutQueue()" class="log-btn" style="flex:1;">Inspect nutrition queue</button>'+
+      '<button type="button" onclick="wtClearNutQueueLocal()" class="log-btn">Clear queue (this window)</button>'+
+    '</div>'+
+    '<div id="wtDiagQueue" style="margin-top:8px;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px;font-size:0.68rem;color:var(--muted);">Nutrition queue: not inspected.</div>'+
     '<div id="wtDiagVersion" style="margin-top:8px;font-size:0.66rem;color:var(--muted);"></div>'+
     '<div id="wtDiagReport" style="margin-top:8px;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px;"></div>'+
     '<div style="margin-top:8px;font-size:0.64rem;color:var(--muted);">Release checklist: run full smoke, backend tests, manual food entry, AI scan, decimal serving, saved/logged separation, workout finish, Health Sync import, backup sanitizer, local-only mode, no official-source UI.</div>'+
     '</div>';
   document.body.appendChild(d);
   wtTestsRenderReport();
+}
+function wtInspectNutQueue(){
+  try{
+    var q=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');
+    if(!Array.isArray(q))q=[];
+    var total=q.length;
+    var byType={};
+    q.forEach(function(it){
+      var t=String((it&&it.type)||'unknown');
+      byType[t]=(byType[t]||0)+1;
+    });
+    var top=Object.keys(byType).sort(function(a,b){return byType[b]-byType[a];}).slice(0,6);
+    var detail=top.length?top.map(function(k){return k+': '+byType[k];}).join(' · '):'none';
+    var oldest=q.length?q.reduce(function(a,it){var ts=parseInt(it&&it.ts,10)||Date.now();return Math.min(a,ts);},Date.now()):0;
+    var age=oldest?Math.max(0,Math.round((Date.now()-oldest)/60000)):0;
+    var el=document.getElementById('wtDiagQueue');
+    if(el){
+      el.style.color=total?'var(--orange)':'var(--green)';
+      el.textContent='Nutrition queue: '+total+' pending · oldest '+(total?(age+'m'):'n/a')+' · '+detail;
+    }
+    appToast('Queue inspected: '+total+' pending.','var(--text2)');
+  }catch(e){
+    var el2=document.getElementById('wtDiagQueue');
+    if(el2){el2.style.color='var(--red)';el2.textContent='Nutrition queue inspect failed.';}
+    appToast('Queue inspect failed.','var(--orange)');
+  }
+}
+function wtClearNutQueueLocal(){
+  if(!confirm('Clear nutrition sync queue for this app window only? This does NOT clear your phone browser queue.'))return;
+  try{
+    try{localStorage.setItem(NUT_SYNC_QUEUE_KEY,'[]');}catch(e){}
+    try{wtDB.set(NUT_SYNC_QUEUE_KEY,'[]');}catch(e){}
+    try{nutSyncStatusRender();}catch(e){}
+    try{nutBadge('cached','Saved on phone');}catch(e){}
+    var el=document.getElementById('wtDiagQueue');
+    if(el){el.style.color='var(--green)';el.textContent='Nutrition queue: 0 pending (cleared in this window).';}
+    appToast('Nutrition queue cleared in this window.','var(--green)');
+  }catch(e2){
+    var el2=document.getElementById('wtDiagQueue');
+    if(el2){el2.style.color='var(--red)';el2.textContent='Failed to clear nutrition queue.';}
+    appToast('Could not clear queue.','var(--orange)');
+  }
 }
 function wtTestsRunAndRender(kind){
   var rep=wtTestsRun(kind);
@@ -11345,7 +11502,7 @@ function coachUnifiedDaily(today){
   var base=trainerRecommendToday(ds);
   var calDay=null;
   if(_calendarWeekSummary&&Array.isArray(_calendarWeekSummary.days)){
-    calDay=_calendarWeekSummary.days.find(function(d){return String(d.date||'')===ds;})||null;
+    calDay=_calendarWeekSummary.days.find(function(d){return calendarDayDateKey(d)===ds;})||null;
   }
   var finalLabel=coachLabelNormalize(base.label);
   var reason=String(base.reason||'');
@@ -11568,15 +11725,37 @@ function calendarWeekStartStr(){
   var wr=calendarCurrentWeekRangeLocal();
   return wr.start;
 }
+function calendarDateKeyLocal(v){
+  if(v===null||v===undefined)return '';
+  var s=String(v).trim();
+  if(!s)return '';
+  var m=s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if(m&&m[1])return m[1];
+  var d=new Date(s);
+  if(!isNaN(d.getTime())){
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  return '';
+}
+function calendarDayDateKey(day){
+  if(!day||typeof day!=='object')return '';
+  return calendarDateKeyLocal(day.date||day.local_date||day.date_local||day.day||day.start_date||day.start||day.dateStr||'');
+}
 function calendarDateInCurrentWeekLocal(ds){
-  if(!ds||!/^\d{4}-\d{2}-\d{2}$/.test(String(ds)))return false;
+  var key=calendarDateKeyLocal(ds);
+  if(!key||!/^\d{4}-\d{2}-\d{2}$/.test(String(key)))return false;
   var wr=calendarCurrentWeekRangeLocal();
-  return String(ds)>=wr.start&&String(ds)<=wr.end;
+  return String(key)>=wr.start&&String(key)<=wr.end;
 }
 function calendarFilterSummaryToCurrentWeek(summary){
   if(!summary||!Array.isArray(summary.days))return summary;
   var wr=calendarCurrentWeekRangeLocal();
-  var kept=summary.days.filter(function(d){return calendarDateInCurrentWeekLocal(String(d&&d.date||''));});
+  var kept=summary.days.map(function(d){
+    var copy=Object.assign({},d||{});
+    var k=calendarDayDateKey(copy);
+    if(k)copy.date=k;
+    return copy;
+  }).filter(function(d){return calendarDateInCurrentWeekLocal(String(d&&d.date||''));});
   var out=Object.assign({},summary);
   out.weekStart=wr.start;
   out.weekEnd=wr.end;
@@ -11647,7 +11826,18 @@ function _calendarMapLabelToPlan_(lbl){
   if(u==='HOME')return 'Home';
   if(u==='HOTEL')return 'Hotel';
   if(u==='HIIT')return 'HIIT';
+  if(u==='REST')return 'Rest';
   return 'Travel';
+}
+function _calendarInferLabelFromEvents_(day){
+  var ev=(day&&day.real_events_used)||[];
+  var text=ev.map(function(e){return String((e&&e.title)||'')+' '+String((e&&e.location)||'');}).join(' ').toLowerCase();
+  if(!text)return null;
+  if(/\b(flight|flying|airport|travel|transit|layover|overnight|red-eye|redeye)\b/.test(text))return 'TRAVEL';
+  if(/\b(hotel|check-in|check in|check-out|check out)\b/.test(text))return 'HOTEL';
+  if(/\b(hiit|interval|sprint|run club|track)\b/.test(text))return 'HIIT';
+  if(/\b(gym|strength|weights|lifting|pull-ups|pullups|workout)\b/.test(text))return 'HOME';
+  return null;
 }
 function _calendarApplyRules_(summary){
   var rules=calendarRulesLoad();
@@ -11699,23 +11889,42 @@ function calendarBuildWeekFromCalendar(){
       var summary=calendarFilterSummaryToCurrentWeek(_calendarApplyRules_(r));
       _calendarWeekSummary=summary;
       calendarSummarySave(summary);
-      calendarStatusRender('Calendar summary ready ('+(summary.ignoredReminders||0)+' reminders ignored).');
       var locks=trainerLocksLoad(),proposal={},reasons=[];
+      var changed=0,lockedCount=0;
+      var days=getWeekDates(_planWeekOffset||0).map(function(d){return fmtDate(d);});
+      var byDate={};
       (summary.days||[]).forEach(function(d){
-        var ds=String(d.date||'');
+        var k=calendarDayDateKey(d);
+        if(k)byDate[k]=d;
+      });
+      days.forEach(function(ds){
         var cur=_weekPlan[ds]||'Rest';
+        var d=byDate[ds]||null;
         if(locks[ds]&&locks[ds].locked){
           proposal[ds]=cur;
+          lockedCount++;
           reasons.push(ds+': kept '+cur+' (locked).');
           return;
         }
-        var mapped=_calendarMapLabelToPlan_(d.recommended_label);
+        if(!d){
+          proposal[ds]=cur;
+          reasons.push(ds+': no calendar events matched current week window; kept '+cur+'.');
+          return;
+        }
+        var inferred=_calendarInferLabelFromEvents_(d);
+        var mapped=_calendarMapLabelToPlan_(inferred||d.recommended_label);
         proposal[ds]=mapped;
-        reasons.push(ds+': '+(d.reason||'Calendar rule')+(d.ignored_count?(' ('+d.ignored_count+' reminders ignored).'):''));
+        if(mapped!==cur)changed++;
+        reasons.push(ds+': '+(d.reason||'Calendar rule')+(inferred&&inferred!==String(d.recommended_label||'').toUpperCase()?(' (event text inferred '+inferred+').'):'')+(d.ignored_count?(' ('+d.ignored_count+' reminders ignored).'):''));
       });
+      calendarStatusRender('Calendar summary ready: '+(summary.days||[]).length+' day(s) with events, '+changed+' change(s), '+lockedCount+' locked.');
       _trainerProposal={weekStart:summary.weekStart||calendarWeekStartStr(),proposal:proposal,reasons:reasons,fatigue:trainerFatigueScore(),createdAt:Date.now(),calendar:true,summary:summary};
       trainerRenderProposalSheet();
-      appToast('Calendar proposal ready. Review before applying.','var(--blue)');
+      if(changed===0){
+        appToast('Calendar sync ran: 0 day changes (check locks or event labels).','var(--yellow)');
+      }else{
+        appToast('Calendar proposal ready: '+changed+' day(s) changed.','var(--blue)');
+      }
     })
     .catch(function(){calendarStatusRender('Calendar unavailable — using saved plan');});
 }
@@ -11799,7 +12008,7 @@ function trainerBuildWeeklyProposal(){
   }
   if(_calendarWeekSummary&&Array.isArray(_calendarWeekSummary.days)){
     _calendarWeekSummary.days.forEach(function(d){
-      var ds=String(d.date||'');
+      var ds=calendarDayDateKey(d);
       if(!proposal[ds]||trainerDayLocked(ds))return;
       var mapped=_calendarMapLabelToPlan_(d.recommended_label);
       if(mapped==='Travel'&&proposal[ds]!=='Travel'){
@@ -14591,7 +14800,8 @@ function nutEffectiveBudget(date){
   if(active===null)return base;
   var activeBase=_nutTargets.activeBase||NUT_ACTIVE_BASE;
   var ratio=nutIsCheatDay(date||_nutDate)?(_nutTargets.cheatRatio||0.75):(_nutTargets.normalRatio||0.5);
-  return base+Math.round((active-activeBase)*ratio);
+  var bonus=Math.max(0,active-activeBase);
+  return base+Math.round(bonus*ratio);
 }
 var _nutActiveTimer=null;
 var NUT_QUEUE_HARD_LIMIT=2500;
@@ -15745,9 +15955,9 @@ function nutRenderDay(){
   var entries=nutDayEntries(),tot=nutTotals(entries);
   var activeCals=nutGetActiveCals(_nutDate);
   var activeBase=_nutTargets.activeBase||NUT_ACTIVE_BASE;
-  var normalRatio=_nutTargets.normalRatio||0.5;
-  var adjustment=activeCals!==null?Math.round((activeCals-activeBase)*normalRatio):0;
+  var baseBudget=_nutTargets.cal||2100;
   var calBudget=nutEffectiveBudget(_nutDate),eaten=Math.round(tot.calories),remain=calBudget-eaten;
+  var adjustment=calBudget-baseBudget;
 
   var ring=document.getElementById('nutCalRing');
   if(ring){
@@ -16719,10 +16929,8 @@ function nutLoseItHandlePhoto(input){
     },45000).then(function(data){
       var text=data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
       if(!text)throw new Error('no result');
-      text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-      var js=text.indexOf('{'),je=text.lastIndexOf('}');
-      if(js>=0&&je>js)text=text.slice(js,je+1);
-      var parsed=JSON.parse(text);
+      var parsed=aiCoachExtractJson(text);
+      if(!parsed)throw new Error('parse failed');
       if(parsed.name){var ne=document.getElementById('nff_name');if(ne&&!ne.value)ne.value=parsed.name;}
       if(parsed.serving){var se=document.getElementById('nff_serving');if(se)se.value=parsed.serving;}
       var ue=document.getElementById('nff_unit');if(ue&&parsed.unit)ue.value=parsed.unit;
@@ -16832,6 +17040,7 @@ function nutHandlePhoto(input){
 }
 
 var _nutVisionPending=null; // {base64, mediaType, statusEl} — held while key overlay is open
+var _nutVisionBusy=false;
 
 function nutApiKeyShow(base64,mediaType,statusEl){
   _nutVisionPending=(base64)?{base64:base64,mediaType:mediaType,statusEl:statusEl}:null;
@@ -16879,6 +17088,11 @@ function nutApiKeySave(){
 }
 
 function nutCallVision(base64,mediaType,statusEl){
+  if(_nutVisionBusy){
+    if(statusEl){statusEl.style.display='block';statusEl.style.color='var(--muted)';statusEl.textContent='Scan already in progress…';}
+    return;
+  }
+  _nutVisionBusy=true;
   if(statusEl){statusEl.style.display='block';statusEl.style.color='var(--muted)';statusEl.textContent='Scanning with GPT Vision...';}
   nutProcessingHide();
 
@@ -16910,10 +17124,8 @@ function nutCallVision(base64,mediaType,statusEl){
   },60000).then(function(data){
     var text=data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content||'';
     if(!text){throw new Error('No result');}
-    text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    var js=text.indexOf('{'),je=text.lastIndexOf('}');
-    if(js>=0&&je>js)text=text.slice(js,je+1);
-    var parsed=JSON.parse(text);
+    var parsed=aiCoachExtractJson(text);
+    if(!parsed)throw new Error('Could not parse nutrition JSON');
     nutFillFromScan(parsed,statusEl);
   })
   .catch(function(err){
@@ -16925,7 +17137,7 @@ function nutCallVision(base64,mediaType,statusEl){
       statusEl.style.color='var(--orange)';
     }
   })
-  .finally(function(){nutProcessingHide();});
+  .finally(function(){nutProcessingHide();_nutVisionBusy=false;});
 }
 
 // ── State for scaling and background verification ─────────────────
@@ -19436,7 +19648,8 @@ function progAIRunFeedback(btn,card,result){
     var effectiveBudget=calBase;
     if(activeCals!==null){
       var ratio=isCheat?cheatRatio:normalRatio;
-      effectiveBudget=calBase+Math.round((activeCals-activeBase)*ratio);
+      var bonus=Math.max(0,activeCals-activeBase);
+      effectiveBudget=calBase+Math.round(bonus*ratio);
     }
     var surplus=logged?(kcal-effectiveBudget):null;
     return {date:d,kcal:kcal,prot:prot,logged:logged,isCheat:isCheat,isDone:isDone,
