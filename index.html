@@ -5160,22 +5160,39 @@ function aiCoachOpenAICall(payload,timeoutMs){
       return {choices:[{message:{content:txt}}],_provider:'gemini'};
     }).finally(function(){clearTimeout(timer);});
   }
+  function hasLocalOpenAIKey(){
+    try{return !!(localStorage.getItem('wt_openai_key')||'').trim();}catch(e){return false;}
+  }
+  function hasLocalGeminiKey(){
+    try{return !!(localStorage.getItem('wt_gemini_key')||'').trim();}catch(e){return false;}
+  }
+  function runBestDirectFallback(modelName){
+    // Prefer OpenAI direct when available; only attempt Gemini if its key exists.
+    if(hasLocalOpenAIKey()){
+      return runDirectWithModel(modelName).catch(function(err1){
+        if(hasLocalGeminiKey()) return runDirectGemini();
+        throw err1;
+      });
+    }
+    if(hasLocalGeminiKey()) return runDirectGemini();
+    return Promise.reject(new Error('AI backend unavailable and no local API keys are configured for this site.'));
+  }
   var requestedModel=String(body.model||'').trim();
   return runWithModel(requestedModel).catch(function(err){
     var msg=String(err&&err.message||err||'').toLowerCase();
+    // If backend rejects auth, surface that directly (don't mask with fallback key errors).
+    if(msg.indexOf('unauthorized')>=0||msg.indexOf('app_token_not_configured')>=0||msg.indexOf('app token')>=0||msg.indexOf('403')>=0){
+      throw new Error('Backend auth failed for this site. Check APP_CLIENT_TOKEN match between this app and Apps Script deployment.');
+    }
     var shouldFallback=requestedModel&&requestedModel!=='gpt-5.5'&&(
       msg.indexOf('model')>=0||msg.indexOf('not found')>=0||msg.indexOf('unsupported')>=0||msg.indexOf('unavailable')>=0
     );
     if(shouldFallback){
       return runWithModel('gpt-5.5').catch(function(){
-        return runDirectWithModel('gpt-5.5').catch(function(){
-          return runDirectGemini();
-        });
+        return runBestDirectFallback('gpt-5.5');
       });
     }
-    return runDirectWithModel(requestedModel).catch(function(){
-      return runDirectGemini();
-    });
+    return runBestDirectFallback(requestedModel);
   });
 }
 function aiCoachFriendlyApiError(err){
