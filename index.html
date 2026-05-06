@@ -132,6 +132,8 @@ button:active{opacity:0.82;}
 
 /* NAV */
 .nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + var(--safe-b));min-height:var(--nav-h);background:rgba(7,9,12,0.98);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(42,52,68,0.85);display:flex;align-items:flex-start;padding-top:10px;padding-bottom:var(--safe-b);z-index:900;box-sizing:border-box;}
+.ios-gap-fix .nav{height:var(--nav-h)!important;padding-bottom:0!important;bottom:0!important;}
+.ios-gap-fix .page{bottom:var(--nav-h)!important;}
 .nav-btn{flex:1;min-height:50px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 2px 6px;transition:opacity 0.15s,color 0.15s;}
 .nav-btn:focus{outline:none;}
 .nav-btn:active{opacity:0.6;}
@@ -2595,7 +2597,7 @@ function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
 }
 
-var WT_FRONTEND_VERSION='19.3.4-ios-webapp-safearea-clamp';
+var WT_FRONTEND_VERSION='19.3.5-ios-gap-killer';
 var WT_SW_VERSION='wt-shell-v19-setup3';
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -2656,6 +2658,32 @@ function wtStartupRecalcAll(reason){
     var navH=Math.max(70,Math.round((nav&&nav.getBoundingClientRect().height)||70));
     docEl.style.setProperty('--nav-h',navH+'px');
     wtBootLog('viewport recalculated',{reason:reason,vw:Math.round(vw),vh:Math.round(vh),navH:navH,safeB:safeB,sbRaw:sbRaw});
+    wtDetectAndFixIosBottomGap(reason);
+  }catch(e){}
+}
+function wtDetectAndFixIosBottomGap(reason){
+  try{
+    if(!wtIsStandalone())return;
+    var nav=document.querySelector('nav.nav');
+    if(!nav)return;
+    var vv=window.visualViewport;
+    var vh=Math.round((vv&&vv.height)||window.innerHeight||0);
+    var navRect=nav.getBoundingClientRect();
+    var gap=Math.max(0,Math.round(vh-navRect.bottom));
+    var root=document.documentElement;
+    // If a large phantom bottom gap exists, force "no-safe-bottom" shell.
+    if(gap>=20){
+      if(!root.classList.contains('ios-gap-fix')){
+        root.classList.add('ios-gap-fix');
+        root.style.setProperty('--safe-b','0px');
+      }
+      wtBootLog('ios gap fix ON',{reason:reason,gap:gap,vh:vh,navBottom:Math.round(navRect.bottom)});
+    }else{
+      if(root.classList.contains('ios-gap-fix')){
+        root.classList.remove('ios-gap-fix');
+      }
+      wtBootLog('ios gap fix OFF',{reason:reason,gap:gap,vh:vh,navBottom:Math.round(navRect.bottom)});
+    }
   }catch(e){}
 }
 function wtEnsureActivePageRendered(){
