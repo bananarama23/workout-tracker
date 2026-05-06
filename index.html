@@ -593,6 +593,18 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 .pt-rest{background:var(--card2);color:var(--muted);}
 .pt-travel{background:var(--purple-dim);color:var(--purple);}
 .plan-msg{text-align:center;padding:8px;font-size:0.78rem;font-weight:600;min-height:20px;color:var(--muted);}
+/* Plan row compact controls (override global 44px button min-height) */
+#page-plan .plan-day .ui-icon-btn{
+  min-height:0 !important;
+  min-width:0 !important;
+  width:24px !important;
+  height:24px !important;
+  padding:0 !important;
+}
+#page-plan .plan-day .pt-btn{
+  padding:5px 10px;
+  font-size:0.62rem;
+}
 
 /* PREVIEW PAGE */
 .preview-ex{background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 16px 10px;overflow:hidden;}
@@ -797,52 +809,6 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   .today-badge{font-size:0.46rem;padding:2px 6px;margin-left:2px;}
   .pt-btn{font-size:0.62rem;padding:5px 10px;}
   .ui-icon-btn{width:26px !important;height:26px !important;}
-}
-
-/* Plan page compact mode for iPhone widths (visual only) */
-@media (max-width:480px){
-  #page-plan .ph{padding-left:14px;padding-right:14px;padding-bottom:10px;}
-  #page-plan .ph h1{font-size:1.58rem;letter-spacing:1.5px;}
-  #page-plan .ph-sub{font-size:0.68rem;}
-  #page-plan .page-body{padding-top:8px;}
-  #page-plan .sync-pill{right:10px;max-width:88px;}
-
-  #page-plan .log-tab{min-height:38px;font-size:0.64rem;padding:7px 4px;}
-  #page-plan .plan-grid{padding:9px;gap:7px;}
-  #page-plan .plan-day{padding:9px 10px;border-radius:10px;}
-  #page-plan .pd-left{gap:8px;}
-  #page-plan .pd-day{font-size:0.8rem;min-width:24px;}
-  #page-plan .pd-date{font-size:0.58rem;}
-  #page-plan .pt-btn{font-size:0.56rem;padding:4px 8px;}
-  #page-plan .plan-msg{font-size:0.66rem;padding:6px;}
-
-  #page-plan #weekGoalBar{margin:8px 10px 0 !important;padding:9px 10px !important;}
-  #page-plan #weekGoalBar span{font-size:0.6rem !important;}
-  #page-plan #planGrid + div{padding:0 10px 10px !important;}
-  #page-plan #trainerPlanWrap,
-  #page-plan #calendarPlanWrap,
-  #page-plan #weeklyFeedbackWrap{margin-top:9px !important;}
-
-  #page-plan #trainerPlanWrap > div > div:first-child,
-  #page-plan #calendarPlanWrap > div > div:first-child{padding:8px 10px !important;}
-  #page-plan #trainerWeeklyReview,
-  #page-plan #calendarPlanWrap > div > div:nth-child(2),
-  #page-plan #weeklyFeedbackSummary,
-  #page-plan #weeklyFeedbackDetail,
-  #page-plan #weeklyFeedbackStatus{padding:10px !important;}
-
-  #page-plan #calendarIcalUrlInput{
-    min-width:0 !important;
-    width:100% !important;
-    font-size:16px !important;
-    padding:8px 10px !important;
-  }
-  #page-plan #calendarPlanWrap button,
-  #page-plan #trainerPlanWrap button,
-  #page-plan #weeklyFeedbackBtn{
-    font-size:0.62rem !important;
-    padding:8px 9px !important;
-  }
 }
 
 .hidden{display:none !important;}
@@ -2618,7 +2584,7 @@ function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
 }
 
-var WT_FRONTEND_VERSION='19.4.0-navtap-reanchor';
+var WT_FRONTEND_VERSION='19.4.2-plan-row-compact';
 var WT_SW_VERSION='wt-shell-v19-setup3';
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -10196,29 +10162,26 @@ function renderPlanGrid(days,today){
     var isPast=!isNextWeek&&ds<today;
     var daySessions=_cachedSessions?_cachedSessions.filter(function(sess){return sess.date===ds;}):[]; 
     var isDone=daySessions.length>0;
-    html+='<div class="plan-day'+(isToday?' today':isPast?' past':'')+'" style="align-items:center;padding:12px 16px;">';
+    html+='<div class="plan-day'+(isToday?' today':isPast?' past':'')+'" style="align-items:center;padding:10px 12px;">';
     html+='<div class="pd-left" style="cursor:pointer;" onclick="'+(isLocked?'':'cyclePlanType(\''+ds+'\')')+'">'+
       '<div class="pd-day">'+dayNames[i]+'</div>'+
       '<div class="pd-date">'+d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</div>';
     if(isToday)html+='<span class="today-badge">TODAY</span>';
     html+='</div>';
-    html+='<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">';
-    html+='<div style="display:flex;gap:6px;align-items:center;">'
-      +'<button class="ui-icon-btn" onclick="event.stopPropagation();trainerToggleLock(\''+ds+'\')" style="width:28px;height:28px;font-size:0.9rem;line-height:1;flex-shrink:0;padding:0;'+(isLocked?'background:var(--blue-dim);border-color:rgba(59,131,246,0.35);color:var(--blue);':'')+'">'+(isLocked?'🔒':'🔓')+'</button>'
-      +(isLocked?'<span style="font-size:0.56rem;color:var(--blue);font-weight:700;">locked</span>':'')
-      +'</div>';
+    html+='<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-end;">';
     // Primary type
     var mainDone=_planTypeDone(type,ds);
-    html+='<div style="display:flex;align-items:center;gap:6px;">';
+    html+='<div style="display:flex;align-items:center;gap:5px;">';
+    html+='<button class="ui-icon-btn" onclick="event.stopPropagation();trainerToggleLock(\''+ds+'\')" style="width:24px;height:24px;font-size:0.78rem;line-height:1;flex-shrink:0;padding:0;'+(isLocked?'background:var(--blue-dim);border-color:rgba(59,131,246,0.35);color:var(--blue);':'')+'">'+(isLocked?'🔒':'🔓')+'</button>';
     html+='<div class="pt-btn '+(PLAN_COLORS[type]||'pt-rest')+'" style="cursor:'+(isLocked?'default':'pointer')+';opacity:'+(isLocked?'0.78':'1')+';" onclick="'+(isLocked?'':'event.stopPropagation();cyclePlanType(\''+ds+'\')')+'">'+( mainDone?'✓ ':'')+type.toUpperCase()+'</div>';
-    if(!isPast&&!isLocked)html+='<button class="ui-icon-btn" onclick="event.stopPropagation();addPlanExtra(\''+ds+'\')" style="width:28px;height:28px;font-size:1rem;line-height:1;flex-shrink:0;padding:0;">+</button>';
+    if(!isPast&&!isLocked)html+='<button class="ui-icon-btn" onclick="event.stopPropagation();addPlanExtra(\''+ds+'\')" style="width:24px;height:24px;font-size:0.9rem;line-height:1;flex-shrink:0;padding:0;">+</button>';
     html+='</div>';
     // Extra types — each with their own done check
     extras.forEach(function(exType,ei){
       var exDone=_planTypeDone(exType,ds);
-      html+='<div style="display:flex;align-items:center;gap:6px;">';
+      html+='<div style="display:flex;align-items:center;gap:5px;">';
       html+='<div class="pt-btn '+(PLAN_COLORS[exType]||'pt-rest')+'" style="cursor:'+(isLocked?'default':'pointer')+';opacity:'+(isLocked?'0.78':'1')+';" onclick="'+(isLocked?'':'event.stopPropagation();cyclePlanExtra(\''+ds+'\','+ei+')')+'">'+( exDone?'✓ ':'')+exType.toUpperCase()+'</div>';
-      if(!isPast&&!isLocked)html+='<button class="ui-icon-btn" onclick="event.stopPropagation();removePlanExtra(\''+ds+'\','+ei+')" style="width:28px;height:28px;background:var(--red-dim);border-color:rgba(255,58,92,0.45);color:var(--red);font-size:1rem;line-height:1;flex-shrink:0;padding:0;">−</button>';
+      if(!isPast&&!isLocked)html+='<button class="ui-icon-btn" onclick="event.stopPropagation();removePlanExtra(\''+ds+'\','+ei+')" style="width:24px;height:24px;background:var(--red-dim);border-color:rgba(255,58,92,0.45);color:var(--red);font-size:0.9rem;line-height:1;flex-shrink:0;padding:0;">−</button>';
       html+='</div>';
     });
     // Day note
