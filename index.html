@@ -2618,7 +2618,7 @@ function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
 }
 
-var WT_FRONTEND_VERSION='19.3.8-standalone-nav-lock';
+var WT_FRONTEND_VERSION='19.4.0-navtap-reanchor';
 var WT_SW_VERSION='wt-shell-v19-setup3';
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -2687,6 +2687,8 @@ function wtStartupRecalcAll(reason){
     docEl.style.setProperty('--wt-vw',vw+'px');
     docEl.style.setProperty('--wt-vv-top',((vv&&vv.offsetTop)||0)+'px');
     docEl.style.setProperty('--wt-vv-left',((vv&&vv.offsetLeft)||0)+'px');
+    if(_isStandalone) docEl.classList.add('standalone-nav-lock');
+    else docEl.classList.remove('standalone-nav-lock');
     var nav=document.querySelector('nav.nav');
     var navH=Math.max(70,Math.round((nav&&nav.getBoundingClientRect().height)||70));
     docEl.style.setProperty('--nav-h',navH+'px');
@@ -3417,6 +3419,12 @@ function navTo(page){
   } else if(pill){
     pill.remove();
   }
+  // iOS standalone can drift after UI/page transitions; re-apply viewport/nav anchoring.
+  try{
+    requestAnimationFrame(function(){wtStartupRecalcAll('navTo:raf');});
+    setTimeout(function(){wtStartupRecalcAll('navTo:120ms');},120);
+    setTimeout(function(){wtStartupRecalcAll('navTo:420ms');},420);
+  }catch(e){}
 }
 function showLeaveWorkoutPrompt(){
   var ov=document.getElementById('leaveWorkoutOverlay');
@@ -23194,5 +23202,3 @@ function nutMealScanToggleClaudeFullPass(){
      ========================================================================= -->
 </body>
 </html>
-    if(_isStandalone) docEl.classList.add('standalone-nav-lock');
-    else docEl.classList.remove('standalone-nav-lock');
