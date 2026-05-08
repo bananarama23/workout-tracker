@@ -1,4 +1,4 @@
-const SW_VERSION = 'wt-shell-v20-pwa-tap-unlock';
+const SW_VERSION = 'wt-shell-v22-ios-vp-hit-test-fix';
 const SHELL_CACHE = `wt-shell-${SW_VERSION}`;
 const OFFLINE_URLS = [
   './',
