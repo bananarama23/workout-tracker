@@ -2295,10 +2295,10 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     </div>
     <div id="trainerProposalBody" style="font-size:0.76rem;color:var(--text2);line-height:1.6;"></div>
     <div style="display:flex;gap:8px;margin-top:12px;">
-      <button type="button" onclick="trainerApplyProposal()" style="flex:1;padding:12px;background:var(--accent);color:#000;border:none;border-radius:10px;font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:1.4px;font-weight:900;cursor:pointer;">Apply proposed week</button>
-      <button type="button" onclick="trainerApplyProposalUnlockedOnly()" style="padding:12px 14px;background:var(--blue-dim);border:1px solid rgba(59,131,246,0.3);border-radius:10px;color:var(--blue);font-size:0.74rem;font-weight:700;cursor:pointer;">Apply unlocked days</button>
-      <button type="button" onclick="trainerCloseProposal();calendarPlannerToggleRules(true);" style="padding:12px 14px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;color:var(--text2);font-size:0.74rem;font-weight:700;cursor:pointer;">Edit rules</button>
-      <button type="button" onclick="trainerCloseProposal()" style="padding:12px 14px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;color:var(--muted);font-size:0.74rem;font-weight:700;cursor:pointer;">Cancel</button>
+      <button id="trainerApplyProposalBtn" type="button" onclick="trainerApplyProposal()" style="flex:1;padding:12px;background:var(--accent);color:#000;border:none;border-radius:10px;font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:1.4px;font-weight:900;cursor:pointer;">Apply proposed week</button>
+      <button id="trainerApplyProposalUnlockedBtn" type="button" onclick="trainerApplyProposalUnlockedOnly()" style="padding:12px 14px;background:var(--blue-dim);border:1px solid rgba(59,131,246,0.3);border-radius:10px;color:var(--blue);font-size:0.74rem;font-weight:700;cursor:pointer;">Apply only unlocked days</button>
+      <button id="trainerEditRulesBtn" type="button" onclick="trainerCloseProposal();calendarPlannerToggleRules(true);" style="padding:12px 14px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;color:var(--text2);font-size:0.74rem;font-weight:700;cursor:pointer;">Edit rules</button>
+      <button id="trainerCancelProposalBtn" type="button" onclick="trainerCloseProposal()" style="padding:12px 14px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;color:var(--muted);font-size:0.74rem;font-weight:700;cursor:pointer;">Cancel</button>
     </div>
   </div>
 </div>
@@ -2643,13 +2643,20 @@ function wtBackendPost(payload){
   var p=Object.assign({},payload||{});
   // No browser auth token is attached. Backend must run in single-user/no-auth mode.
   try{delete p.appToken;}catch(_e){}
+  var reqTimeoutMs=parseInt(p.timeoutMs,10)||0;
+  var fetchTimeoutMs=40000;
+  if(reqTimeoutMs>0){
+    // Allow caller-specific deadlines (Coach Pulse / generation), with a small client-side headroom.
+    fetchTimeoutMs=Math.min(180000,Math.max(25000,reqTimeoutMs+6000));
+  }
+  var retryTries=(String(p.type||'')==='aiOpenAIChat')?2:3;
   return wtFetchJsonWithRetry_(CLOUD_URL,{
     method:'POST',
     headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify(p)
   },{
-    tries:3,
-    timeoutMs:40000,
+    tries:retryTries,
+    timeoutMs:fetchTimeoutMs,
     baseDelayMs:400
   }).then(function(res){
     // Keep local Health cache aligned with backend canonical import payload.
@@ -3597,12 +3604,13 @@ var COACH_CONFIRMED_WORKOUT_KEY='wt_coach_confirmed_workout_v1';
 var COACH_VALID_WORKOUT_CACHE_KEY='wt_coach_valid_workout_cache_v1';
 var COACH_PULSE_CACHE_KEY='wt_workout_coach_pulse_ai_v1'; // legacy compact cache key
 var COACH_PULSE_ARTIFACT_KEY='wt_coach_pulse_artifacts_v2';
-var COACH_PULSE_ARTIFACT_SCHEMA_VERSION=2;
+var COACH_PULSE_ARTIFACT_SCHEMA_VERSION=3;
 var _coachLatestPromise=null;
 var _coachLatestTs=0;
 var _coachLatestKey='';
 var _coachPulseReqId=0;
 var _coachPulseActiveReqId=0;
+var _coachPulseDetailedJobs={};
 var _aiCoachGenerateReqId=0;
 var _aiCoachGenerateActiveId=0;
 var _aiCoachRegenerationCorrection=false;
@@ -3769,10 +3777,26 @@ function coachLoadConfirmedWorkout(){
     return w;
   }catch(e){return null;}
 }
-function coachSetPulseState(msg,color,reqId){
+function coachSetPulseState(msg,color,reqId,opts){
   if(reqId&&_coachPulseActiveReqId&&reqId!==_coachPulseActiveReqId)return;
+  opts=opts||{};
   var el=document.getElementById('workoutCoachPulseBody');
-  if(el){el.style.color=color||'var(--muted)';el.textContent=msg;}
+  if(!el)return;
+  if(opts.preserveRich){
+    var txt=String(el.textContent||el.innerText||'');
+    var hasRich=/COACH PULSE\s+[—-]\s+(TODAY|DETAILED|STRUCTURED FALLBACK)/i.test(txt);
+    if(hasRich){
+      var html=String(el.innerHTML||'').replace(/<div class="wt-coach-inline-status"[\s\S]*?<\/div>\s*$/,'');
+      if(msg){
+        el.innerHTML=html+'<div class="wt-coach-inline-status" style="margin-top:6px;color:'+(opts.noteColor||'var(--muted)')+';font-size:0.68rem;">'+escHtml(String(msg))+'</div>';
+      }else{
+        el.innerHTML=html;
+      }
+      return;
+    }
+  }
+  el.style.color=color||'var(--muted)';
+  el.textContent=msg;
 }
 function coachPulseRuntimeSource(){
   try{
@@ -3782,6 +3806,20 @@ function coachPulseRuntimeSource(){
   }catch(e){}
   return 'safari';
 }
+function coachPulseCoachStateRevision(){
+  try{
+    var st=coachStateLoad?coachStateLoad():null;
+    if(!st)return 'none';
+    var debt=(st.progressionDebt||[]).slice(0,3).map(function(d){return String((d&&d.slot)||'');}).join(',');
+    return [
+      String(st.trainingPhase||''),
+      String(st.mesocycleWeek||''),
+      String(st.behavioralState||''),
+      debt,
+      String(st.lastUpdatedAt||'')
+    ].join('|');
+  }catch(e){return 'none';}
+}
 function coachPulseEntryTs(entry){
   if(!entry)return 0;
   var ts=0;
@@ -3789,6 +3827,8 @@ function coachPulseEntryTs(entry){
     if(entry.compact&&entry.compact.ts)ts=Math.max(ts,parseInt(entry.compact.ts,10)||0);
     if(entry.detailed&&entry.detailed.ts)ts=Math.max(ts,parseInt(entry.detailed.ts,10)||0);
     if(entry.lastKnownDetailed&&entry.lastKnownDetailed.ts)ts=Math.max(ts,parseInt(entry.lastKnownDetailed.ts,10)||0);
+    if(entry.detailedUpdatedAt)ts=Math.max(ts,parseInt(entry.detailedUpdatedAt,10)||0);
+    if(entry.detailedStatusUpdatedAt)ts=Math.max(ts,parseInt(entry.detailedStatusUpdatedAt,10)||0);
     if(entry.updatedAt)ts=Math.max(ts,parseInt(entry.updatedAt,10)||0);
   }catch(e){}
   return ts;
@@ -3839,6 +3879,16 @@ function coachPulseBuildSyncStateValue(){
       updatedAt:Date.now(),
       artifacts:(s.artifacts||[]).slice(0,2).map(function(it){
         var row=Object.assign({},it||{});
+        row.sourceRuntime=row.sourceRuntime||row.runtime||coachPulseRuntimeSource();
+        row.pulseSchemaVersion=COACH_PULSE_ARTIFACT_SCHEMA_VERSION;
+        row.sourceSessionId=row.sourceSessionId||row.sessionId||'';
+        row.coachStateRevision=row.coachStateRevision||'';
+        row.pulseRequestId=row.pulseRequestId||0;
+        row.pulseJobId=row.pulseJobId||'';
+        row.detailedStatus=row.detailedStatus||'';
+        row.detailedUpdatedAt=row.detailedUpdatedAt||0;
+        row.detailedStatusUpdatedAt=row.detailedStatusUpdatedAt||0;
+        row.detailedError=row.detailedError||null;
         if(row.compact){
           row.compact={text:String(row.compact.text||'').slice(0,520),html:String(row.compact.html||'').slice(0,700),ts:row.compact.ts||0,sig:row.compact.sig||''};
         }
@@ -3866,6 +3916,12 @@ function coachPulseBuildSyncStateValue(){
 function coachPulseMergeEntry(base,incoming){
   var out=Object.assign({},base||{},incoming||{});
   out.runtime=out.runtime||coachPulseRuntimeSource();
+  out.sourceRuntime=out.sourceRuntime||out.runtime||coachPulseRuntimeSource();
+  out.pulseSchemaVersion=COACH_PULSE_ARTIFACT_SCHEMA_VERSION;
+  out.sourceSessionId=out.sourceSessionId||out.sessionId||'';
+  out.coachStateRevision=out.coachStateRevision||'';
+  out.pulseRequestId=Math.max(parseInt((base&&base.pulseRequestId)||0,10)||0,parseInt((incoming&&incoming.pulseRequestId)||0,10)||0);
+  out.pulseJobId=String((incoming&&incoming.pulseJobId)||out.pulseJobId||'');
   out.updatedAt=Math.max(parseInt((base&&base.updatedAt)||0,10)||0,parseInt((incoming&&incoming.updatedAt)||0,10)||0,Date.now());
   function newer(a,b){
     var at=parseInt((a&&a.ts)||0,10)||0;
@@ -3887,6 +3943,28 @@ function coachPulseMergeEntry(base,incoming){
   }
   if(out.detailed&&(!out.lastKnownDetailed||parseInt(out.detailed.ts,10)>=parseInt(out.lastKnownDetailed.ts,10))){
     out.lastKnownDetailed=out.detailed;
+  }
+  var inStatusTs=parseInt((incoming&&incoming.detailedStatusUpdatedAt)||0,10)||0;
+  var baseStatusTs=parseInt((base&&base.detailedStatusUpdatedAt)||0,10)||0;
+  var inReqId=parseInt((incoming&&incoming.pulseRequestId)||0,10)||0;
+  var baseReqId=parseInt((base&&base.pulseRequestId)||0,10)||0;
+  var reqGateOk=(baseReqId>0&&inReqId>0)?(inReqId>=baseReqId):true;
+  if(reqGateOk&&inStatusTs>=baseStatusTs){
+    if(incoming&&incoming.detailedStatus!==undefined)out.detailedStatus=incoming.detailedStatus;
+    if(incoming&&incoming.detailedError!==undefined)out.detailedError=incoming.detailedError;
+    if(incoming&&incoming.detailedUpdatedAt!==undefined)out.detailedUpdatedAt=incoming.detailedUpdatedAt;
+    if(incoming&&incoming.detailedStatusUpdatedAt!==undefined)out.detailedStatusUpdatedAt=incoming.detailedStatusUpdatedAt;
+  }else{
+    out.detailedStatus=(base&&base.detailedStatus)||out.detailedStatus||'';
+    out.detailedError=(base&&base.detailedError)!==undefined?base.detailedError:(out.detailedError||null);
+    out.detailedUpdatedAt=(base&&base.detailedUpdatedAt)||out.detailedUpdatedAt||0;
+    out.detailedStatusUpdatedAt=(base&&base.detailedStatusUpdatedAt)||out.detailedStatusUpdatedAt||0;
+  }
+  if(out.detailed&&out.detailed.html){
+    out.detailedStatus='detailed_available';
+    out.detailedError=null;
+    out.detailedUpdatedAt=parseInt(out.detailed.ts,10)||Date.now();
+    out.detailedStatusUpdatedAt=Math.max(parseInt(out.detailedStatusUpdatedAt||0,10)||0,out.detailedUpdatedAt);
   }
   return out;
 }
@@ -3932,39 +4010,91 @@ function coachPulseFindLatestDetailed(){
 }
 function coachPulsePersistCompact(meta){
   if(!meta)return;
+  var now=Date.now();
   coachPulseUpsertArtifact({
     pulseId:meta.pulseId||'',
     sessionId:meta.sessionId||'',
     sig:meta.sig||'',
     runtime:coachPulseRuntimeSource(),
-    compact:{text:String(meta.text||''),html:String(meta.html||''),sig:String(meta.sig||''),ts:Date.now(),status:'ok'},
-    updatedAt:Date.now()
+    sourceRuntime:coachPulseRuntimeSource(),
+    sourceSessionId:meta.sourceSessionId||meta.sessionId||'',
+    coachStateRevision:String(meta.coachStateRevision||coachPulseCoachStateRevision()||''),
+    pulseRequestId:parseInt(meta.pulseRequestId,10)||0,
+    pulseJobId:String(meta.pulseJobId||''),
+    pulseSchemaVersion:COACH_PULSE_ARTIFACT_SCHEMA_VERSION,
+    compact:{text:String(meta.text||''),html:String(meta.html||''),sig:String(meta.sig||''),ts:now,status:'ok'},
+    updatedAt:now
   });
 }
 function coachPulsePersistDetailed(meta){
   if(!meta)return;
+  var now=Date.now();
   coachPulseUpsertArtifact({
     pulseId:meta.pulseId||'',
     sessionId:meta.sessionId||'',
     sig:meta.sig||'',
     runtime:coachPulseRuntimeSource(),
-    detailed:{html:String(meta.html||''),text:String(meta.text||''),model:String(meta.model||''),ts:Date.now(),status:'ok'},
-    lastKnownDetailed:{html:String(meta.html||''),text:String(meta.text||''),model:String(meta.model||''),ts:Date.now(),status:'ok'},
-    updatedAt:Date.now()
+    sourceRuntime:coachPulseRuntimeSource(),
+    sourceSessionId:meta.sourceSessionId||meta.sessionId||'',
+    coachStateRevision:String(meta.coachStateRevision||coachPulseCoachStateRevision()||''),
+    pulseRequestId:parseInt(meta.pulseRequestId,10)||0,
+    pulseJobId:String(meta.pulseJobId||''),
+    pulseSchemaVersion:COACH_PULSE_ARTIFACT_SCHEMA_VERSION,
+    detailed:{html:String(meta.html||''),text:String(meta.text||''),model:String(meta.model||''),ts:now,status:'ok'},
+    lastKnownDetailed:{html:String(meta.html||''),text:String(meta.text||''),model:String(meta.model||''),ts:now,status:'ok'},
+    detailedStatus:'detailed_available',
+    detailedError:null,
+    detailedUpdatedAt:now,
+    detailedStatusUpdatedAt:now,
+    updatedAt:now
   });
 }
 function coachPulsePersistError(meta){
   if(!meta)return;
   var k=String(meta.kind||'error');
-  var err={code:String(meta.code||'coachpulse_error'),message:String(meta.message||''),ts:Date.now(),status:'error'};
+  var now=Date.now();
+  var err={code:String(meta.code||'coachpulse_error'),message:String(meta.message||''),ts:now,status:'error'};
   var obj={}; obj[k]=err;
+  var status=String(meta.detailedStatus||'');
+  var detailedErr=(meta.detailedError!==undefined)?meta.detailedError:(status?{code:err.code,message:err.message,ts:now}:null);
   coachPulseUpsertArtifact({
     pulseId:meta.pulseId||'',
     sessionId:meta.sessionId||'',
     sig:meta.sig||'',
     runtime:coachPulseRuntimeSource(),
+    sourceRuntime:coachPulseRuntimeSource(),
+    sourceSessionId:meta.sourceSessionId||meta.sessionId||'',
+    coachStateRevision:String(meta.coachStateRevision||coachPulseCoachStateRevision()||''),
+    pulseRequestId:parseInt(meta.pulseRequestId,10)||0,
+    pulseJobId:String(meta.pulseJobId||''),
+    pulseSchemaVersion:COACH_PULSE_ARTIFACT_SCHEMA_VERSION,
+    detailedStatus:status||undefined,
+    detailedError:detailedErr,
+    detailedUpdatedAt:(status==='detailed_available')?now:undefined,
+    detailedStatusUpdatedAt:status?now:undefined,
     errors:obj,
-    updatedAt:Date.now()
+    updatedAt:now
+  });
+}
+function coachPulsePersistDetailedStatus(meta){
+  if(!meta)return;
+  var now=Date.now();
+  coachPulseUpsertArtifact({
+    pulseId:meta.pulseId||'',
+    sessionId:meta.sessionId||'',
+    sig:meta.sig||'',
+    runtime:coachPulseRuntimeSource(),
+    sourceRuntime:coachPulseRuntimeSource(),
+    sourceSessionId:meta.sourceSessionId||meta.sessionId||'',
+    coachStateRevision:String(meta.coachStateRevision||coachPulseCoachStateRevision()||''),
+    pulseRequestId:parseInt(meta.pulseRequestId,10)||0,
+    pulseJobId:String(meta.pulseJobId||''),
+    pulseSchemaVersion:COACH_PULSE_ARTIFACT_SCHEMA_VERSION,
+    detailedStatus:String(meta.status||''),
+    detailedError:meta.error||null,
+    detailedUpdatedAt:meta.detailedUpdatedAt||undefined,
+    detailedStatusUpdatedAt:now,
+    updatedAt:now
   });
 }
 function coachDelay(ms){return new Promise(function(res){setTimeout(res,ms);});}
@@ -3993,19 +4123,41 @@ function getLatestValidWorkout(opts){
   _coachLatestTs=now;
   _coachLatestKey=reqKey;
   _coachLatestPromise=(function(){
-    var confirmed=coachLoadConfirmedWorkout();
-    var confirmedIsCurrent=!!(confirmed&&confirmed.confirmedAt&&(Date.now()-(parseInt(confirmed.confirmedAt,10)||0)<45*60*1000));
-    if(confirmed&&confirmedIsCurrent&&!opts.preferSheet){
+    function phase(msg,color){
+      try{ if(typeof opts.onPhase==='function')opts.onPhase(msg,color||'var(--muted)'); }catch(_e){}
+      if(!opts.silentUi)coachSetPulseState(msg,color,opts.requestId,opts.uiOptions||null);
+    }
+    function localFallback(){
+      var confirmed=coachLoadConfirmedWorkout();
       var cacheBest=coachLoadCachedValidWorkout();
       var localBest=(_cachedSessions||[]).filter(coachIsValidWorkout).reduce(function(best,s){return coachNewerWorkout(best,s);},null);
       var best=coachNewerWorkout(coachNewerWorkout(confirmed,cacheBest),localBest);
-      coachSetPulseState('Checking latest workout…',null,opts.requestId);
+      return best||null;
+    }
+    var confirmed=coachLoadConfirmedWorkout();
+    var confirmedIsCurrent=!!(confirmed&&confirmed.confirmedAt&&(Date.now()-(parseInt(confirmed.confirmedAt,10)||0)<45*60*1000));
+    if(confirmed&&confirmedIsCurrent&&!opts.preferSheet){
+      var best=localFallback();
+      phase('Checking latest workout…');
       return Promise.resolve({workout:best,source:(best===confirmed?'confirmed-local':(best&&best.source)||'cache'),fallback:false});
     }
-    coachSetPulseState(opts.phase||'Checking latest workout…',null,opts.requestId);
+    wtLogEvent('coachpulse_latest_verify_started',{
+      pulseRequestId:parseInt(opts.requestId,10)||0,
+      sourceWorkout:(confirmed?'local':'unknown'),
+      preferSheet:!!opts.preferSheet,
+      runtime:coachPulseRuntimeSource()
+    });
+    phase(opts.phase||'Checking latest workout…');
     function sheetAttempt(attempt){
       var state=attempt===0?'Syncing with sheet…':'Could not verify yet, retrying…';
-      coachSetPulseState(state,null,opts.requestId);
+      phase(state);
+      if(attempt>0){
+        wtLogEvent('coachpulse_latest_verify_retry',{
+          pulseRequestId:parseInt(opts.requestId,10)||0,
+          attempt:attempt,
+          runtime:coachPulseRuntimeSource()
+        });
+      }
       return wtBackendPost({type:'getRecentWorkouts',limit:12,_nonce:Date.now(),timeoutMs:45000}).then(function(r){
         var data=(r&&r.data)||r||{};
         var list=data.workouts||r.workouts||data.sessions||r.sessions||[];
@@ -4021,8 +4173,16 @@ function getLatestValidWorkout(opts){
         throw new Error('empty latest workout response');
       }).catch(function(err){
         if(attempt<2)return coachDelay(650+(attempt*450)).then(function(){return sheetAttempt(attempt+1);});
-        var c=confirmed||coachLoadCachedValidWorkout();
-        if(c)return {workout:c,source:c.source||'cache',fallback:true,error:String(err&&err.message||err||'sheet unavailable')};
+        var c=localFallback();
+        if(c){
+          wtLogEvent('coachpulse_latest_verify_failed_using_local',{
+            pulseRequestId:parseInt(opts.requestId,10)||0,
+            errorCode:String(err&&err.message||err||'sheet_unavailable'),
+            sourceWorkout:String(c.source||'local_canonical'),
+            runtime:coachPulseRuntimeSource()
+          });
+          return {workout:c,source:c.source||'local_canonical',fallback:true,error:String(err&&err.message||err||'sheet unavailable')};
+        }
         throw err;
       });
     }
@@ -4036,10 +4196,10 @@ function coachEnsureLatestThen(cb,opts){
   return getLatestValidWorkout(opts||{}).then(function(res){
     if(opts&&opts.requestId&&_coachPulseActiveReqId&&opts.requestId!==_coachPulseActiveReqId)return res;
     if(res&&res.workout){
-      coachSetPulseState(res.fallback?'Analyzing workout from saved sync…':'Analyzing workout…','var(--muted)',opts&&opts.requestId);
+      if(!(opts&&opts.silentUi))coachSetPulseState(res.fallback?'Analyzing workout from saved sync…':'Analyzing workout…','var(--muted)',opts&&opts.requestId);
       coachMergeSessions([res.workout]);
     }else{
-      coachSetPulseState('No workout found after checking sheet and local cache. Log or import a workout first.','var(--orange)',opts&&opts.requestId);
+      if(!(opts&&opts.silentUi))coachSetPulseState('No workout found after checking sheet and local cache. Log or import a workout first.','var(--orange)',opts&&opts.requestId);
     }
     if(cb)cb(res);
     return res;
@@ -4359,6 +4519,13 @@ function wtLogEvent(name,meta){
       planId:m.planId||'',
       pulseId:m.pulseId||'',
       targetType:m.targetType||'',
+      requestedTargetType:m.requestedTargetType||'',
+      actualPlanType:m.actualPlanType||'',
+      coachStateRevision:m.coachStateRevision||'',
+      schemaVersion:m.schemaVersion||'',
+      promptVersion:m.promptVersion||'',
+      runtime:m.runtime||'',
+      cacheKey:m.cacheKey||'',
       attempt:m.attempt||'',
       durationMs:m.durationMs||'',
       errorCode:m.errorCode||'',
@@ -5166,6 +5333,7 @@ var exs=[],wType='home',logs=[],curEx=0,curSet=0,phase='idle',_betweenTok=0;
 var _aiWorkout={home:null,hotel:null}; // generated workouts per type
 var _aiGenerationJobs={};
 var AI_GENERATION_STATE_KEY='wt_ai_generation_state_v1';
+var AI_GENERATION_PROMPT_VERSION='gen_prompt_v2_target_safe';
 var _aiCoachHistory=[]; // pre-workout chat history (max 3 turns)
 var _aiCoachContext=''; // persistent notes (shoulder issues etc) saved to localStorage
 var AI_COACH_KEY='wt_ai_coach_notes';
@@ -5223,8 +5391,43 @@ function aiCoachLatestSourceSessionId(){
     return (all[0]&&(all[0].sessionId||_sessionSig(all[0])))||'none';
   }catch(e){return 'none';}
 }
-function aiCoachGenerationKey(type){
-  return [aiCoachLatestSourceSessionId(),String(type||'home'),window._aiCoachRegenerationCorrection?'correction':'standard',WORKOUT_SCHEMA_VERSION].join('|');
+function aiCoachStateRevision(ctx){
+  try{
+    var st=(ctx&&ctx.coachState)?ctx.coachState:coachStateLoad();
+    if(!st)return 'none';
+    var debt=(st.progressionDebt||[]).slice(0,3).map(function(d){return String((d&&d.slot)||'');}).join(',');
+    var plateau=(st.plateauFlags||[]).slice(0,3).map(function(d){return String((d&&d.slot)||'');}).join(',');
+    return [st.trainingPhase||'',st.mesocycleWeek||'',st.behavioralState||'',debt,plateau,st.lastUpdatedAt||''].join('|');
+  }catch(e){return 'none';}
+}
+function aiCoachEquipmentProfile(type,ctx){
+  try{
+    var p=(ctx&&ctx.profile)?ctx.profile:aiProfileLoad();
+    var t=String(type||'home');
+    return [
+      t,
+      p.homeEquip?'home_bar':'home_no_bar',
+      p.hotelEquip?'hotel_row':'hotel_no_row',
+      p.homeDuration||'',
+      p.hotelDuration||''
+    ].join('|');
+  }catch(e){return String(type||'home')+'|unknown';}
+}
+function aiCoachGenerationKey(type,ctx){
+  var target=String(type||'home');
+  var sourceSessionId=aiCoachLatestSourceSessionId();
+  var coachRev=aiCoachStateRevision(ctx);
+  var envProfile=aiCoachEquipmentProfile(target,ctx);
+  var correction=window._aiCoachRegenerationCorrection?'correction':'standard';
+  return [
+    target,
+    sourceSessionId,
+    coachRev,
+    envProfile,
+    correction,
+    WORKOUT_SCHEMA_VERSION,
+    AI_GENERATION_PROMPT_VERSION
+  ].join('|');
 }
 function aiCoachSetGenerationPersistedState(state,meta){
   try{
@@ -7139,6 +7342,73 @@ function aiCoachValidatePlan(parsed,type,ctx,cached){
   parsed=aiCoachSanitizePlanForEnvironment(parsed,type,ctx);
   return {ok:true,plan:parsed};
 }
+function aiCoachStrictGenerationValidation(plan,requestedType,ctx){
+  var target=String(requestedType||'home').toLowerCase();
+  if(!plan||!Array.isArray(plan.exercises)||!plan.exercises.length){
+    return {ok:false,errorCode:'plan_missing_exercises',actualPlanType:String((plan&&plan.targetType)||target||'').toLowerCase()||'unknown'};
+  }
+  var actual=String((plan&&plan.targetType)||target||'').toLowerCase();
+  if(actual&&actual!==target){
+    return {ok:false,errorCode:'plan_type_mismatch',actualPlanType:actual};
+  }
+  var included={}, deferredBySlot={};
+  (plan.exercises||[]).forEach(function(ex){
+    var nm=String((ex&&ex.name)||'').toUpperCase().trim();
+    if(nm)included[nm]=true;
+  });
+  (plan.deferredSlots||[]).forEach(function(d){
+    if(d&&d.slot)deferredBySlot[String(d.slot)]=true;
+  });
+  function listHasInvalidRefs(list){
+    var bad=false;
+    (Array.isArray(list)?list:[]).forEach(function(line){
+      if(bad)return;
+      var refs=aiCoachFindOmittedExerciseRefs(String(line||''),included);
+      if(!refs.length)return;
+      var hasNonDeferred=refs.some(function(r){return !deferredBySlot[r.slot];});
+      if(hasNonDeferred)bad=true;
+    });
+    return bad;
+  }
+  if(listHasInvalidRefs(plan.changeLog)||listHasInvalidRefs(plan.technicalWatchpoints)||listHasInvalidRefs(plan.whatStayedSame)||listHasInvalidRefs(plan.fallbacks)){
+    return {ok:false,errorCode:'narrative_references_omitted_exercise',actualPlanType:actual};
+  }
+  if(plan.seqOverrides&&typeof plan.seqOverrides==='object'){
+    var seqKeys=Object.keys(plan.seqOverrides);
+    for(var i=0;i<seqKeys.length;i++){
+      var seqName=String(seqKeys[i]||'').toUpperCase().trim();
+      if(!included[seqName]){
+        return {ok:false,errorCode:'tempo_for_omitted_exercise',actualPlanType:actual};
+      }
+    }
+  }
+  var slotInfo=aiCoachComputeSlotStatus(plan,target,ctx);
+  var availability=slotInfo&&slotInfo.availability?slotInfo.availability:{};
+  var profile=(ctx&&ctx.profile)?ctx.profile:aiProfileLoad();
+  var hasVerticalPull=(plan.exercises||[]).some(function(ex){return coachSlotKey(ex&&ex.name||'')==='vertical_pull';});
+  if(target==='hotel'&&!availability.vertical_pull&&hasVerticalPull){
+    return {ok:false,errorCode:'hotel_vertical_pull_unavailable',actualPlanType:actual};
+  }
+  if(target==='hotel'&&!availability.vertical_pull){
+    var hasVerticalPullNarrative=false;
+    var lines=[].concat(plan.changeLog||[],plan.technicalWatchpoints||[],plan.whatStayedSame||[],plan.fallbacks||[]);
+    lines.forEach(function(line){
+      if(hasVerticalPullNarrative)return;
+      var refs=aiCoachFindOmittedExerciseRefs(String(line||''),included);
+      if(refs.some(function(r){return r.slot==='vertical_pull';}))hasVerticalPullNarrative=true;
+    });
+    if(hasVerticalPullNarrative&&!deferredBySlot.vertical_pull){
+      return {ok:false,errorCode:'hotel_vertical_pull_referenced_without_deferral',actualPlanType:actual};
+    }
+  }
+  if(target==='home'&&profile.homeEquip){
+    var verticalDebt=!!((ctx&&ctx.coachState&&Array.isArray(ctx.coachState.progressionDebt)?ctx.coachState.progressionDebt:[]).some(function(d){return d&&d.slot==='vertical_pull';}));
+    if(verticalDebt&&!hasVerticalPull){
+      return {ok:false,errorCode:'home_vertical_pull_due_missing',actualPlanType:actual};
+    }
+  }
+  return {ok:true,actualPlanType:actual};
+}
 
 function aiCoachApplyGuardrails(plan,type,ctx,recoveryFeel){
   if(!plan||!Array.isArray(plan.exercises))return plan;
@@ -7212,21 +7482,38 @@ function aiCoachSetGenerationState(msg){
 }
 function aiCoachGenerate(type,onDone,opts){
   opts=opts||{};
+  type=String(type||'home').toLowerCase();
   var reqId=opts.requestId||(++_aiCoachGenerateReqId);
   _aiCoachGenerateActiveId=reqId;
   if(opts.regenerationCorrection!==undefined)window._aiCoachRegenerationCorrection=!!opts.regenerationCorrection;
-  var generationKey=opts.generationKey||aiCoachGenerationKey(type);
+  var keyCtx=aiCoachBuildContext();
+  var generationKey=opts.generationKey||aiCoachGenerationKey(type,keyCtx);
   var generationId='gen_'+btoa(unescape(encodeURIComponent(generationKey))).replace(/[^a-zA-Z0-9]/g,'').slice(0,48);
+  var genMetaBase={
+    generationId:generationId,
+    targetType:type,
+    requestedTargetType:type,
+    sourceSessionId:aiCoachLatestSourceSessionId(),
+    coachStateRevision:aiCoachStateRevision(keyCtx),
+    schemaVersion:WORKOUT_SCHEMA_VERSION,
+    promptVersion:AI_GENERATION_PROMPT_VERSION,
+    runtime:coachPulseRuntimeSource(),
+    requestId:reqId,
+    cacheKey:generationKey
+  };
+  wtLogEvent('generation_requested',genMetaBase);
   if(!opts.latestReady&&_aiGenerationJobs[generationKey]){
     aiCoachSetGenerationState('Generation already running…');
     _aiCoachGenerateActiveId=_aiGenerationJobs[generationKey].requestId;
     _aiGenerationJobs[generationKey].callbacks.push({onDone:onDone,requestId:_aiGenerationJobs[generationKey].requestId});
+    wtLogEvent('generation_cache_hit',Object.assign({},genMetaBase,{cacheHit:true,errorCode:'inflight_job_reused'}));
     return _aiGenerationJobs[generationKey].promise;
   }
   if(!opts.latestReady){
     _aiGenerationJobs[generationKey]={requestId:reqId,callbacks:[{onDone:onDone,requestId:reqId}],promise:null};
     aiCoachSetGenerationPersistedState('generation_pending',{generationId:generationId,targetType:type,requestId:reqId});
-    wtLogEvent('generation_started',{generationId:generationId,targetType:type,requestId:reqId});
+    wtLogEvent('generation_cache_miss',Object.assign({},genMetaBase,{cacheHit:false}));
+    wtLogEvent('generation_started',Object.assign({},genMetaBase));
   }
   function deliver(result,err){
     var job=_aiGenerationJobs[generationKey];
@@ -7236,22 +7523,27 @@ function aiCoachGenerate(type,onDone,opts){
       try{cb.onDone(result,err);}catch(e){}
     });
   }
+  function discardStaleResponse(reason){
+    var job=_aiGenerationJobs[generationKey];
+    if(job&&job.requestId===reqId)delete _aiGenerationJobs[generationKey];
+    wtLogEvent('generation_discarded_invalid',Object.assign({},genMetaBase,{errorCode:String(reason||'stale_response_ignored')}));
+  }
   if(!opts.latestReady){
     aiCoachSetGenerateButtonsDisabled(true);
     aiCoachSetGenerationState('Reading recent workouts…');
-    wtLogEvent('generation_latest_context_started',{generationId:generationId,targetType:type,requestId:reqId});
+    wtLogEvent('generation_latest_context_started',Object.assign({},genMetaBase));
     _sheetSessions=null;
     _coachLatestPromise=null;
     var p=coachEnsureLatestThen(null,{preferSheet:true,force:true,phase:'Reading recent workouts…'}).then(function(res){
-      if(reqId!==_aiCoachGenerateActiveId)return;
-      wtLogEvent('generation_latest_context_finished',{generationId:generationId,targetType:type,requestId:reqId,cacheHit:!!(res&&res.fallback)});
+      if(reqId!==_aiCoachGenerateActiveId){discardStaleResponse('latest_context_stale_response');return;}
+      wtLogEvent('generation_latest_context_finished',Object.assign({},genMetaBase,{cacheHit:!!(res&&res.fallback)}));
       if(res&&res.fallback)aiCoachSetGenerationState('Sheet is slow; using most recent synced workout…');
       else aiCoachSetGenerationState('Applying progression rules…');
       return aiCoachGenerate(type,onDone,{latestReady:true,requestId:reqId,regenerationCorrection:opts.regenerationCorrection,generationKey:generationKey});
     }).catch(function(){
-      if(reqId!==_aiCoachGenerateActiveId)return;
+      if(reqId!==_aiCoachGenerateActiveId){discardStaleResponse('latest_context_error_stale_response');return;}
       aiCoachSetGenerationState('Could not verify sheet; using local coach context…');
-      wtLogEvent('generation_latest_context_finished',{generationId:generationId,targetType:type,requestId:reqId,errorCode:'latest_context_failed'});
+      wtLogEvent('generation_latest_context_finished',Object.assign({},genMetaBase,{errorCode:'latest_context_failed'}));
       return aiCoachGenerate(type,onDone,{latestReady:true,requestId:reqId,generationKey:generationKey});
     });
     _aiGenerationJobs[generationKey].promise=p;
@@ -7267,7 +7559,11 @@ function aiCoachGenerate(type,onDone,opts){
     if(typeof parsed.changeLog==='string')parsed.changeLog=parsed.changeLog.split(',').map(function(s){return s.trim();});
     parsed.seqOverrides=normalizeSeqOverrides(parsed.seqOverrides);
     var checked=aiCoachValidatePlan(parsed,type,ctx,cached);
+    if(!checked.ok){
+      wtLogEvent('generation_validation_failed',Object.assign({},genMetaBase,{errorCode:String(checked.message||'base_validation_failed')}));
+    }
     var p=checked.plan;
+    p.targetType=String(p.targetType||type).toLowerCase();
     p.seqOverrides=normalizeSeqOverrides(p.seqOverrides);
     p.exercises=p.exercises.map(function(ex){
       ex.watchFor=ex.watchFor||null;
@@ -7278,16 +7574,30 @@ function aiCoachGenerate(type,onDone,opts){
     });
     p=aiCoachApplyGuardrails(p,type,ctx,'normal');
     p=aiCoachSanitizePlanForEnvironment(p,type,ctx);
-    return {plan:p,ok:checked.ok};
+    var strict=aiCoachStrictGenerationValidation(p,type,ctx);
+    if(!strict.ok){
+      wtLogEvent('generation_validation_failed',Object.assign({},genMetaBase,{actualPlanType:String(strict.actualPlanType||p.targetType||''),errorCode:String(strict.errorCode||'validation_failed')}));
+      return {plan:p,ok:false,validationError:String(strict.errorCode||'validation_failed'),actualPlanType:String(strict.actualPlanType||p.targetType||'')};
+    }
+    return {plan:p,ok:checked.ok,actualPlanType:String(strict.actualPlanType||p.targetType||type)};
   }
   function finalize(plan){
-    if(reqId!==_aiCoachGenerateActiveId)return;
+    if(reqId!==_aiCoachGenerateActiveId){discardStaleResponse('finalize_stale_response');return;}
     aiCoachSetGenerationState('Finalizing coach plan…');
+    var strictFinal=aiCoachStrictGenerationValidation(plan,type,ctx);
+    if(!strictFinal.ok){
+      wtLogEvent('generation_discarded_invalid',Object.assign({},genMetaBase,{actualPlanType:String(strictFinal.actualPlanType||''),errorCode:String(strictFinal.errorCode||'validation_failed')}));
+      plan=aiCoachBuildFallbackPlan(type,ctx,cached);
+      plan.targetType=type;
+      plan.generationState='generation_fallback_used';
+      plan.confidenceReason='validation_failed_safe_fallback';
+    }
     plan.planId=plan.planId||wtNewId('plan');
     plan.sourceSessionId=aiCoachLatestSourceSessionId();
-    plan.targetType=type;
+    plan.targetType=String(plan.targetType||type).toLowerCase();
     plan.generatedAt=plan.generatedAt||wtNowIso();
     plan.schemaVersion=WORKOUT_SCHEMA_VERSION;
+    plan.promptVersion=AI_GENERATION_PROMPT_VERSION;
     plan.generationId=generationId;
     plan.generationState=plan.generationState||'generation_complete';
     plan=aiCoachSanitizePlanForEnvironment(plan,type,ctx);
@@ -7311,41 +7621,52 @@ function aiCoachGenerate(type,onDone,opts){
     aiCoachSetGenerateButtonsDisabled(false);
     window._aiCoachRegenerationCorrection=false;
     aiCoachSetGenerationPersistedState(plan.generationState,{generationId:generationId,planId:plan.planId,targetType:type,requestId:reqId});
-    wtLogEvent(plan.generationState==='generation_fallback_used'?'generation_fallback_used':'generation_success',{generationId:generationId,planId:plan.planId,targetType:type,requestId:reqId});
+    wtLogEvent(plan.generationState==='generation_fallback_used'?'generation_fallback_used':'generation_success',Object.assign({},genMetaBase,{planId:plan.planId,actualPlanType:String(plan.targetType||''),targetType:type,fallbackUsed:plan.generationState==='generation_fallback_used'}));
+    wtLogEvent('generation_displayed',Object.assign({},genMetaBase,{planId:plan.planId,actualPlanType:String(plan.targetType||''),targetType:type}));
+    wtLogEvent('generation_saved',Object.assign({},genMetaBase,{planId:plan.planId,actualPlanType:String(plan.targetType||''),targetType:type}));
     deliver(out,null);
   }
-  function runModel(model,maxTokens,timeoutMs){
-    wtLogEvent('generation_model_call_started',{generationId:generationId,targetType:type,requestId:reqId,model:model});
+  function runModel(model,maxTokens,timeoutMs,promptText){
+    wtLogEvent('generation_model_call_started',Object.assign({},genMetaBase,{model:model}));
     var start=Date.now();
     return aiCoachOpenAICall({
       model:model,
-      messages:[{role:'user',content:prompt}],
+      messages:[{role:'user',content:(promptText||prompt)}],
       max_tokens:maxTokens
     },timeoutMs||60000).then(function(r){
-      wtLogEvent('generation_model_call_finished',{generationId:generationId,targetType:type,requestId:reqId,model:model,durationMs:Date.now()-start});
+      wtLogEvent('generation_model_call_finished',Object.assign({},genMetaBase,{model:model,durationMs:Date.now()-start}));
       return r;
     }).catch(function(err){
-      wtLogEvent('generation_timeout',{generationId:generationId,targetType:type,requestId:reqId,model:model,durationMs:Date.now()-start,errorCode:String(err&&err.message||err||'model_failed')});
+      wtLogEvent('generation_timeout',Object.assign({},genMetaBase,{model:model,durationMs:Date.now()-start,errorCode:String(err&&err.message||err||'model_failed')}));
       throw err;
     });
   }
   function runModelPlan(model,maxTokens,timeoutMs){
-    function once(retried){
-      return runModel(model,maxTokens,timeoutMs).then(function(r){
+    var repairPrompt=prompt+'\n\nVALIDATION REPAIR MODE: Return strict JSON only. The plan MUST match requested target type "'+type.toUpperCase()+'". Do not reference omitted exercises in WHAT CHANGED/WATCHPOINTS/tempo. If vertical pull is unavailable in HOTEL, mark it only under deferredSlots.';
+    function once(retriedJson,usedRepair){
+      var activePrompt=usedRepair?repairPrompt:prompt;
+      return runModel(model,maxTokens,timeoutMs,activePrompt).then(function(r){
         if(r&&r.error)throw new Error(aiCoachFriendlyApiError(r.error.message||'OpenAI error.'));
         var content=((((r.choices||[])[0]||{}).message||{}).content)||'';
         var json=aiCoachExtractJson(content);
         if(!json){
-          if(!retried){
+          if(!retriedJson){
             aiCoachSetGenerationState('Invalid coach JSON, retrying once…');
-            return once(true);
+            return once(true,usedRepair);
           }
           throw new Error('invalid_coach_json');
         }
-        return normalizePlan(json);
+        var normalized=normalizePlan(json);
+        if(normalized.ok)return normalized;
+        if(!usedRepair){
+          wtLogEvent('generation_repair_attempted',Object.assign({},genMetaBase,{errorCode:String(normalized.validationError||'validation_failed'),actualPlanType:String(normalized.actualPlanType||'')}));
+          aiCoachSetGenerationState('Repairing invalid workout plan…');
+          return once(false,true);
+        }
+        throw new Error('plan_validation_failed:'+String(normalized.validationError||'validation_failed'));
       });
     }
-    return once(false);
+    return once(false,false);
   }
   function shouldEscalate(firstPass){
     try{
@@ -8183,6 +8504,43 @@ function aiPreWorkoutRecovery(feel){
 
   var cached=aiWorkoutLoad();
   var plan=cached?cached[_aiCoachCurrentType]:null;
+  var preCtx=aiCoachBuildContext();
+  var preGenMeta={
+    generationId:(plan&&plan.generationId)||'',
+    planId:(plan&&plan.planId)||'',
+    targetType:_aiCoachCurrentType,
+    requestedTargetType:_aiCoachCurrentType,
+    sourceSessionId:aiCoachLatestSourceSessionId(),
+    coachStateRevision:aiCoachStateRevision(preCtx),
+    schemaVersion:WORKOUT_SCHEMA_VERSION,
+    promptVersion:AI_GENERATION_PROMPT_VERSION,
+    runtime:coachPulseRuntimeSource(),
+    requestId:Date.now(),
+    cacheKey:aiCoachGenerationKey(_aiCoachCurrentType,preCtx)
+  };
+  if(plan){
+    var cachedChecked=aiCoachValidatePlan(JSON.parse(JSON.stringify(plan||{})),_aiCoachCurrentType,preCtx,cached);
+    var cachedStrict=aiCoachStrictGenerationValidation(cachedChecked.plan||plan,_aiCoachCurrentType,preCtx);
+    var targetMismatch=String((plan&&plan.targetType)||_aiCoachCurrentType).toLowerCase()!==String(_aiCoachCurrentType||'home').toLowerCase();
+    if(!cachedChecked.ok||!cachedStrict.ok||targetMismatch){
+      wtLogEvent('generation_discarded_invalid',Object.assign({},preGenMeta,{
+        actualPlanType:String((plan&&plan.targetType)||''),
+        errorCode:targetMismatch?'cached_plan_target_mismatch':String((cachedStrict&&cachedStrict.errorCode)||'cached_plan_invalid')
+      }));
+      plan=null;
+      try{
+        if(cached&&typeof cached==='object'){
+          cached[_aiCoachCurrentType]=null;
+          localStorage.setItem(AI_WORKOUT_KEY,JSON.stringify(cached));
+        }
+      }catch(_e){}
+    }else{
+      plan=cachedChecked.plan||plan;
+      wtLogEvent('generation_cache_hit',Object.assign({},preGenMeta,{cacheHit:true,actualPlanType:String(plan.targetType||_aiCoachCurrentType)}));
+    }
+  }else{
+    wtLogEvent('generation_cache_miss',Object.assign({},preGenMeta,{cacheHit:false,errorCode:'no_cached_plan'}));
+  }
 
   if(!plan){
     if(_aiCoachGeneratingBusy){
@@ -8260,7 +8618,32 @@ function aiCoachBuildSlotDashboard(plan){
 
 function aiPreWorkoutShowPlan(plan,type,feel){
   plan=plan||{};
-  try{plan=aiCoachSanitizePlanForEnvironment(plan,type,aiCoachBuildContext());}catch(e){}
+  var _dispCtx=aiCoachBuildContext();
+  try{plan=aiCoachSanitizePlanForEnvironment(plan,type,_dispCtx);}catch(e){}
+  try{
+    var _dispValid=aiCoachStrictGenerationValidation(plan,type,_dispCtx);
+    if(!_dispValid.ok){
+      wtLogEvent('generation_discarded_invalid',{
+        generationId:plan.generationId||'',
+        planId:plan.planId||'',
+        targetType:type,
+        requestedTargetType:type,
+        actualPlanType:String(_dispValid.actualPlanType||plan.targetType||''),
+        sourceSessionId:plan.sourceSessionId||aiCoachLatestSourceSessionId(),
+        coachStateRevision:aiCoachStateRevision(_dispCtx),
+        schemaVersion:WORKOUT_SCHEMA_VERSION,
+        promptVersion:AI_GENERATION_PROMPT_VERSION,
+        runtime:coachPulseRuntimeSource(),
+        errorCode:String(_dispValid.errorCode||'display_validation_failed'),
+        requestId:Date.now(),
+        cacheKey:aiCoachGenerationKey(type,_dispCtx)
+      });
+      plan=aiCoachBuildFallbackPlan(type,_dispCtx,aiWorkoutLoad());
+      plan.targetType=type;
+      plan.generationState='generation_fallback_used';
+      plan.confidenceReason='display_validation_failed_safe_fallback';
+    }
+  }catch(e){}
   if(!plan.coachingTitle)plan.coachingTitle='Coach update';
   if(!plan.coachingIntro)plan.coachingIntro='Adjusted from your latest context and performance trends.';
   if(!plan.bottomLine)plan.bottomLine='Execute cleanly and reassess after this session.';
@@ -8814,34 +9197,51 @@ function editDoneSession(){
 }
 
 function tryLoadWorkout(){
-  window.refreshCoachPulse=function(){
-    try{
-      if(window._coachPulseAiBusy){
-        appToast('Coach Pulse is already refreshing…','var(--orange)');
-        return;
-      }
+	  window.refreshCoachPulse=function(){
+	    try{
+	      if(window._coachPulseAiBusy){
+	        coachSetPulseState('Detailed Coach Pulse updating…',null,_coachPulseActiveReqId||0,{preserveRich:true});
+	        appToast('Coach Pulse is already refreshing…','var(--orange)');
+	        return;
+	      }
       var pulseReqId=++_coachPulseReqId;
       _coachPulseActiveReqId=pulseReqId;
       window._coachPulsePendingDetailed=true;
       window._coachPulseDetailedRefresh=true;
       window._coachPulseRunAiOnce=true;
-      coachSetPulseState('Checking latest workout…',null,pulseReqId);
-      coachEnsureLatestThen(function(){
-        if(pulseReqId!==_coachPulseActiveReqId)return;
+      var localCandidate=(function(){
+        var confirmed=coachLoadConfirmedWorkout();
+        var cacheBest=coachLoadCachedValidWorkout();
+        var localBest=(_cachedSessions||[]).filter(coachIsValidWorkout).reduce(function(best,s){return coachNewerWorkout(best,s);},null);
+        return coachNewerWorkout(coachNewerWorkout(confirmed,cacheBest),localBest);
+      })();
+      if(localCandidate){
+        coachMergeSessions([localCandidate]);
+        coachSetPulseState('Refreshing detailed Coach Pulse…',null,pulseReqId,{preserveRich:true});
         tryLoadWorkout();
-      },{preferSheet:true,force:true,phase:'Checking latest workout…',requestId:pulseReqId});
-      setTimeout(function(){
+      }else{
+        coachSetPulseState('Checking latest workout…',null,pulseReqId);
+      }
+      coachEnsureLatestThen(function(res){
         if(pulseReqId!==_coachPulseActiveReqId)return;
-        if(window._coachPulsePendingDetailed&&!window._coachPulseAiBusy){
-          window._coachPulsePendingDetailed=false;
-          var el=document.getElementById('workoutCoachPulseBody');
-          if(el&&/Checking latest workout|Syncing with sheet|retrying|Refreshing detailed/.test(String(el.textContent||''))){
-            el.style.color='var(--text2)';
-            el.textContent='Could not verify yet. Tap refresh to retry; cached workout data is preserved.';
-          }
+        if(!localCandidate||String((res&&res.source)||'')==='sheet'){
+          tryLoadWorkout();
+        }else{
+          coachSetPulseState('Checking sheet…',null,pulseReqId,{preserveRich:true,noteColor:'var(--muted)'});
         }
-      },65000);
-      appToast('Refreshing Coach Pulse…','var(--text2)');
+      },{
+        preferSheet:true,
+        force:true,
+        phase:'Checking sheet…',
+        requestId:pulseReqId,
+        silentUi:true,
+        onPhase:function(msg){
+          if(pulseReqId!==_coachPulseActiveReqId)return;
+          if(!msg)return;
+          coachSetPulseState(msg,'var(--muted)',pulseReqId,{preserveRich:true,noteColor:'var(--muted)'});
+        }
+      });
+      appToast('Refreshing detailed Coach Pulse…','var(--text2)');
     }catch(e){}
   };
   function updateWorkoutCoachPulse(){
@@ -8898,14 +9298,18 @@ function tryLoadWorkout(){
         try{
           var sessionIdForVerdict=(last&&(last.sessionId||_sessionSig(last)))||'none';
           var sigForVerdict='verdict|'+sessionIdForVerdict+'|'+(last&&last.date||localDateStr());
-          coachPulsePersistDetailed({
-            pulseId:'verdict|'+sessionIdForVerdict,
-            sessionId:sessionIdForVerdict,
-            sig:sigForVerdict,
-            html:pulseHtml,
-            text:(function(){var d=document.createElement('div');d.innerHTML=pulseHtml;return d.innerText||'';})(),
-            model:'verdict_cache'
-          });
+	          coachPulsePersistDetailed({
+	            pulseId:'verdict|'+sessionIdForVerdict,
+	            sessionId:sessionIdForVerdict,
+	            sourceSessionId:sessionIdForVerdict,
+	            sig:sigForVerdict,
+	            html:pulseHtml,
+	            text:(function(){var d=document.createElement('div');d.innerHTML=pulseHtml;return d.innerText||'';})(),
+	            model:'verdict_cache',
+	            coachStateRevision:coachPulseCoachStateRevision(),
+	            pulseRequestId:_coachPulseActiveReqId||0,
+	            pulseJobId:'verdict|'+sessionIdForVerdict
+	          });
         }catch(_e){}
         el.innerHTML=pulseHtml;
         return;
@@ -9011,82 +9415,147 @@ function tryLoadWorkout(){
       var phaseLine=(cctx&&cctx.coachState)?('Phase '+cctx.coachState.trainingPhase+' · '+(cctx.coachState.behavioralState||'on_track')+'. '):'';
       var mainLimiter=(cctx&&cctx.coachState&&cctx.coachState.plateauFlags&&cctx.coachState.plateauFlags[0])?('Limiter: '+coachSlotLabel(cctx.coachState.plateauFlags[0].slot)+'. '):(worstSlot?('Limiter: '+worstSlot+'. '):'');
       var weekLine=phaseLine+mainLimiter+'7d: '+wStr+' strength, '+wHiit+' HIIT, miss '+missPct+'%, avg '+avgText+'m. Progress: '+progWord+'. '+nextAction;
-      var confChip='<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid var(--border);border-radius:999px;font-size:0.62rem;color:'+confCol+';margin-right:6px;">Confidence '+confBand.toUpperCase()+' '+confScore+'/100</span>';
-      var compactPulseHtml=confChip+'<span>'+escHtml(lastLine+verdictLine+weekLine)+'</span>';
-      var pulseKey=COACH_PULSE_CACHE_KEY;
-      var sessionId=(last&&(last.sessionId||_sessionSig(last)))||(latestAny&&(latestAny.sessionId||_sessionSig(latestAny)))||'none';
-      var latestSig=last?_sessionSig(last):(latestAny?_sessionSig(latestAny):'none');
-      var stateSig=(cctx&&cctx.coachState)?('|phase:'+cctx.coachState.trainingPhase+'|debt:'+((cctx.coachState.progressionDebt||[])[0]||{}).slot):'';
-      var sig='d:'+localDateStr()+'|latest:'+latestSig+'|n:'+w.length+'|s:'+wStr+'|h:'+wHiit+'|hp:'+hardPct+stateSig;
-      var pulseId='pulse|'+sessionId+'|'+(last&&last.date||localDateStr());
-      var artifact=coachPulseFindArtifact(sessionId,sig,false);
-      var cached=null;
-      try{cached=JSON.parse(localStorage.getItem(pulseKey)||'null');}catch(e){}
+	      var confChip='<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid var(--border);border-radius:999px;font-size:0.62rem;color:'+confCol+';margin-right:6px;">Confidence '+confBand.toUpperCase()+' '+confScore+'/100</span>';
+	      var compactPulseHtml=confChip+'<span>'+escHtml(lastLine+verdictLine+weekLine)+'</span>';
+	      var pulseKey=COACH_PULSE_CACHE_KEY;
+	      var sessionId=(last&&(last.sessionId||_sessionSig(last)))||(latestAny&&(latestAny.sessionId||_sessionSig(latestAny)))||'none';
+	      var latestSig=last?_sessionSig(last):(latestAny?_sessionSig(latestAny):'none');
+	      var coachStateRevision=aiCoachStateRevision(cctx);
+	      var stateSig=(cctx&&cctx.coachState)?('|phase:'+cctx.coachState.trainingPhase+'|debt:'+((cctx.coachState.progressionDebt||[])[0]||{}).slot):'';
+	      var sig='d:'+localDateStr()+'|latest:'+latestSig+'|n:'+w.length+'|s:'+wStr+'|h:'+wHiit+'|hp:'+hardPct+stateSig;
+	      var pulseId='pulse|'+sessionId+'|'+(last&&last.date||localDateStr());
+	      var pulseJobKey=[sessionId,'detailed',COACH_PULSE_ARTIFACT_SCHEMA_VERSION,coachStateRevision].join('|');
+	      var pulseMetaBase={
+	        pulseId:pulseId,
+	        sessionId:sessionId,
+	        sourceSessionId:sessionId,
+	        sourceWorkout:(last?'local':'cache'),
+	        coachStateRevision:coachStateRevision,
+	        schemaVersion:COACH_PULSE_ARTIFACT_SCHEMA_VERSION,
+	        runtime:coachPulseRuntimeSource(),
+	        pulseRequestId:pulseReqId||0,
+	        pulseJobId:pulseJobKey,
+	        requestId:pulseReqId||0,
+	        cacheKey:pulseJobKey
+	      };
+	      var artifact=coachPulseFindArtifact(sessionId,sig,true);
+	      var cached=null;
+	      try{cached=JSON.parse(localStorage.getItem(pulseKey)||'null');}catch(e){}
       if(cached&&cached.text&&String(cached.text).indexOf('reps vs prior 3')>=0){
         cached=null;
         try{localStorage.removeItem(pulseKey);}catch(e){}
       }
-      var cachedDetailed=(artifact&&artifact.detailed&&artifact.detailed.html)?artifact.detailed
-        :((artifact&&artifact.lastKnownDetailed&&artifact.lastKnownDetailed.html)?artifact.lastKnownDetailed:null);
-      var cachedCompact=(artifact&&artifact.compact)?artifact.compact:null;
-      if(!cachedCompact&&cached&&cached.text){
-        cachedCompact={text:String(cached.text),html:String(cached.html||''),ts:parseInt(cached.ts,10)||0,sig:cached.sig||''};
-      }
-      // While a detailed refresh is pending, keep explicit loading state and block fallback render.
-      if(window._coachPulsePendingDetailed){
-        if(cachedDetailed&&cachedDetailed.html){
-          el.innerHTML=String(cachedDetailed.html)+'<div style="margin-top:6px;color:var(--muted);font-size:0.68rem;">Refreshing detailed Coach Pulse…</div>';
-        }else{
-          el.style.color='var(--muted)';
-          el.textContent='Refreshing detailed Coach Pulse…';
-        }
-      } else
-      // Prefer valid detailed artifact for this session across runtimes.
-      if(cachedDetailed&&cachedDetailed.html){
-        el.innerHTML=String(cachedDetailed.html);
-      } else
-      // Otherwise use compact cache when current signal matches.
-      if(cachedCompact&&((cachedCompact.sig&&cachedCompact.sig===sig)||((Date.now()-(cachedCompact.ts||0))<12*60*60*1000))){
-        if(cachedCompact.html)el.innerHTML=String(cachedCompact.html);
-        else if(cachedCompact.text)el.textContent=String(cachedCompact.text);
-      } else {
+	      var cachedDetailed=(artifact&&artifact.detailed&&artifact.detailed.html)?artifact.detailed
+	        :((artifact&&artifact.lastKnownDetailed&&artifact.lastKnownDetailed.html)?artifact.lastKnownDetailed:null);
+	      var lastValidDetailed=(artifact&&artifact.lastKnownDetailed&&artifact.lastKnownDetailed.html)?artifact.lastKnownDetailed:coachPulseFindLatestDetailed();
+	      var cachedCompact=(artifact&&artifact.compact)?artifact.compact:null;
+	      if(!cachedCompact&&cached&&cached.text){
+	        cachedCompact={text:String(cached.text),html:String(cached.html||''),ts:parseInt(cached.ts,10)||0,sig:cached.sig||''};
+	      }
+	      function structuredFallbackHtml(modeMsg){
+	        var improved=(progDelta!==null&&progDelta>0)?('Progress quality improved by '+progDelta+'% vs prior 3 exposures.'):
+	          ((missPct<=20&&lastSets>0)?'Session completion was mostly on target.':'Execution held without clear progression signal.');
+	        var stalled=(progDelta!==null&&progDelta<0)?('Quality dropped by '+Math.abs(progDelta)+'% vs prior exposures.'):
+	          (missPct>=35?('Missed-set rate was '+missPct+'%, so progression should hold.'):(worstSlot?('Primary limiter stayed in '+worstSlot+' slot.'):'No dominant limiter was detected.'));
+	        var confReason=(cctx&&cctx.coachConfidence&&Array.isArray(cctx.coachConfidence.reasons)&&cctx.coachConfidence.reasons.length)
+	          ?String(cctx.coachConfidence.reasons[0])
+	          :'Based on recent reps/targets and movement-slot continuity.';
+	        return ''
+	          +'<div style="font-size:0.62rem;color:var(--muted);letter-spacing:1px;font-weight:700;margin-bottom:4px;">COACH PULSE — STRUCTURED FALLBACK</div>'
+	          +'<div style="font-size:0.78rem;color:var(--text);font-weight:700;margin-bottom:4px;">'+escHtml((verdict&&verdict.verdict)?('Session verdict: '+verdict.verdict):'Session verdict: hold steady')+'</div>'
+	          +'<div style="font-size:0.72rem;color:var(--text2);margin-bottom:3px;">Main limiter: '+escHtml(String(mainLimiter||'Limiter not yet clear').replace(/^Limiter:\s*/i,'').replace(/\.\s*$/,''))+'</div>'
+	          +'<div style="font-size:0.72rem;color:var(--text2);margin-bottom:3px;">Progress signal: '+escHtml(String(progWord||'baseline building'))+'</div>'
+	          +'<div style="font-size:0.72rem;color:var(--green);margin-bottom:3px;">What improved: '+escHtml(improved)+'</div>'
+	          +'<div style="font-size:0.72rem;color:var(--orange);margin-bottom:3px;">What stalled: '+escHtml(stalled)+'</div>'
+	          +'<div style="font-size:0.72rem;color:var(--blue);margin-bottom:3px;">Next action: '+escHtml(String(nextAction||'Hold quality and repeat clean reps.').replace(/^Next:\s*/i,''))+'</div>'
+	          +'<div style="font-size:0.68rem;color:'+confCol+';">Confidence '+confBand.toUpperCase()+' '+confScore+'/100 — '+escHtml(confReason)+'</div>'
+	          +(modeMsg?('<div style="margin-top:6px;color:var(--orange);font-size:0.68rem;">'+escHtml(modeMsg)+' <button onclick="refreshCoachPulse()" style="background:none;border:none;color:var(--orange);text-decoration:underline;font-size:0.68rem;padding:0;cursor:pointer;">Retry detailed pulse</button></div>'):'');
+	      }
+	      // While a detailed refresh is pending, keep explicit loading state and block fallback render.
+	      if(window._coachPulsePendingDetailed){
+	        var pendingDetailed=(cachedDetailed&&cachedDetailed.html)?cachedDetailed:lastValidDetailed;
+	        if(pendingDetailed&&pendingDetailed.html){
+	          el.innerHTML=String(pendingDetailed.html)+'<div style="margin-top:6px;color:var(--muted);font-size:0.68rem;">Detailed Coach Pulse updating…</div>';
+	        }else{
+	          el.style.color='var(--muted)';
+	          el.textContent='Detailed Coach Pulse updating…';
+	        }
+	      } else
+	      // Prefer valid detailed artifact for this session across runtimes.
+	      if(cachedDetailed&&cachedDetailed.html){
+	        el.innerHTML=String(cachedDetailed.html);
+	      } else
+	      // Then prefer any last valid detailed artifact before compact fallback.
+	      if(lastValidDetailed&&lastValidDetailed.html){
+	        el.innerHTML=String(lastValidDetailed.html)+'<div style="margin-top:6px;color:var(--muted);font-size:0.68rem;">Showing saved detailed summary.</div>';
+	      } else
+	      // Otherwise use compact cache when current signal matches.
+	      if(cachedCompact&&((cachedCompact.sig&&cachedCompact.sig===sig)||((Date.now()-(cachedCompact.ts||0))<12*60*60*1000))){
+	        if(cachedCompact.html)el.innerHTML=String(cachedCompact.html);
+	        else if(cachedCompact.text)el.textContent=String(cachedCompact.text);
+	      } else {
         el.innerHTML=compactPulseHtml;
       }
-      coachPulsePersistCompact({pulseId:pulseId,sessionId:sessionId,sig:sig,text:lastLine+verdictLine+weekLine,html:compactPulseHtml});
+	      coachPulsePersistCompact({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,text:lastLine+verdictLine+weekLine,html:compactPulseHtml,coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	      if(!(cachedDetailed&&cachedDetailed.html)&&!(lastValidDetailed&&lastValidDetailed.html)){
+	        coachPulsePersistDetailedStatus({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,status:'compact_available',coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	      }
 
       // Optional AI refinement only when explicitly triggered after workout completion.
-      var runAiNow=!!window._coachPulseRunAiOnce;
-      if(!runAiNow)return;
-      window._coachPulseRunAiOnce=false;
-      var detailedRefresh=!!window._coachPulseDetailedRefresh;
-      window._coachPulseDetailedRefresh=false;
-      function coachPulseRelease(stuckMsg){
-        window._coachPulseAiBusy=false;
-        window._coachPulsePendingDetailed=false;
-        if(stuckMsg&&el){
-          if(pulseReqId&&pulseReqId!==_coachPulseActiveReqId)return;
-          el.style.color='var(--text2)';
-          if(detailedRefresh){
-            var savedDetailed=(cachedDetailed&&cachedDetailed.html)?cachedDetailed:coachPulseFindLatestDetailed();
-            if(savedDetailed&&savedDetailed.html){
-              el.innerHTML=String(savedDetailed.html)+'<div style="margin-top:6px;color:var(--orange);font-size:0.68rem;">'+escHtml(String(stuckMsg))+' <button onclick="refreshCoachPulse()" style="background:none;border:none;color:var(--orange);text-decoration:underline;font-size:0.68rem;padding:0;cursor:pointer;">Retry detailed pulse</button></div>';
-            }else{
-              el.innerHTML=compactPulseHtml+'<div style="margin-top:6px;color:var(--orange);font-size:0.68rem;">'+escHtml(String(stuckMsg))+' <button onclick="refreshCoachPulse()" style="background:none;border:none;color:var(--orange);text-decoration:underline;font-size:0.68rem;padding:0;cursor:pointer;">Retry detailed pulse</button></div>';
-            }
-          }else{
-            el.textContent=String(stuckMsg);
-          }
-        }
-      }
-      if(detailedRefresh){
-        el.style.color='var(--muted)';
-        el.textContent='Refreshing detailed Coach Pulse…';
-      }
-      if(typeof navigator!=='undefined'&&navigator.onLine===false){
-        coachPulseRelease('Coach Pulse is offline right now. Try again when connected.');
-        coachPulsePersistError({pulseId:pulseId,sessionId:sessionId,sig:sig,kind:'fetch_error',code:'offline',message:'offline'});
-        return;
-      }
+	      var runAiNow=!!window._coachPulseRunAiOnce;
+	      if(!runAiNow)return;
+	      window._coachPulseRunAiOnce=false;
+	      var detailedRefresh=!!window._coachPulseDetailedRefresh;
+	      window._coachPulseDetailedRefresh=false;
+	      var pulseStartedAt=Date.now();
+	      var pulseDone=false;
+	      var pulseWatchdog=null;
+	      function coachPulseRelease(stuckMsg){
+	        pulseDone=true;
+	        try{if(pulseWatchdog)clearTimeout(pulseWatchdog);}catch(_e){}
+	        window._coachPulseAiBusy=false;
+	        window._coachPulsePendingDetailed=false;
+	        try{delete _coachPulseDetailedJobs[pulseJobKey];}catch(_e){}
+	        if(stuckMsg&&el){
+	          if(pulseReqId&&pulseReqId!==_coachPulseActiveReqId)return;
+	          el.style.color='var(--text2)';
+	          if(detailedRefresh){
+	            var savedDetailed=(cachedDetailed&&cachedDetailed.html)?cachedDetailed:lastValidDetailed;
+	            if(savedDetailed&&savedDetailed.html){
+	              var timeoutish=/timed out|too long/i.test(String(stuckMsg||''));
+	              var line=timeoutish?'Refresh timed out. Showing last detailed pulse.':'Refresh failed. Showing last detailed pulse.';
+	              el.innerHTML=String(savedDetailed.html)+'<div style="margin-top:6px;color:var(--orange);font-size:0.68rem;">'+escHtml(line)+' <button onclick="refreshCoachPulse()" style="background:none;border:none;color:var(--orange);text-decoration:underline;font-size:0.68rem;padding:0;cursor:pointer;">Retry detailed pulse</button></div>';
+	              coachPulsePersistDetailedStatus({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,status:(timeoutish?'detailed_timeout_showing_previous':'detailed_failed_showing_fallback'),error:{code:'showing_last_valid',message:line,ts:Date.now()},coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	              wtLogEvent('coachpulse_showing_last_valid',Object.assign({},pulseMetaBase,{errorCode:timeoutish?'timeout':'refresh_failed'}));
+		            }else{
+		              var timeoutish2=/timed out|too long/i.test(String(stuckMsg||''));
+		              var line2=timeoutish2?'Refresh timed out. Showing structured fallback.':'Detailed Coach Pulse unavailable. Showing structured fallback.';
+		              el.innerHTML=structuredFallbackHtml(line2);
+		              coachPulsePersistDetailedStatus({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,status:'detailed_failed_showing_fallback',error:{code:'structured_fallback',message:line2,ts:Date.now()},coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+		              wtLogEvent('coachpulse_showing_deterministic_fallback',Object.assign({},pulseMetaBase,{errorCode:timeoutish2?'timeout':'refresh_failed'}));
+		              wtLogEvent('coachpulse_showing_structured_fallback',Object.assign({},pulseMetaBase,{errorCode:timeoutish2?'timeout':'refresh_failed'}));
+	            }
+	          }else{
+	            el.textContent=String(stuckMsg);
+	          }
+	        }
+	      }
+	      if(detailedRefresh){
+	        var keepDetailed=(cachedDetailed&&cachedDetailed.html)?cachedDetailed:lastValidDetailed;
+	        if(keepDetailed&&keepDetailed.html){
+	          el.innerHTML=String(keepDetailed.html)+'<div style="margin-top:6px;color:var(--muted);font-size:0.68rem;">Refreshing detailed Coach Pulse…</div>';
+	        }else{
+	          el.style.color='var(--muted)';
+	          el.textContent='Detailed Coach Pulse updating…';
+	        }
+	        coachPulsePersistDetailedStatus({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,status:'detailed_pending',coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	        wtLogEvent('coachpulse_detailed_started',Object.assign({},pulseMetaBase,{cacheHit:!!(cachedDetailed&&cachedDetailed.html),model:'gpt-5.5',maxCompletionTokens:900}));
+	      }
+	      if(typeof navigator!=='undefined'&&navigator.onLine===false){
+	        coachPulseRelease('Coach Pulse is offline right now. Try again when connected.');
+	        coachPulsePersistError({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,kind:'fetch_error',code:'offline',message:'offline',detailedStatus:detailedRefresh?'detailed_failed_showing_fallback':'compact_available',coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	        return;
+	      }
       if(!detailedRefresh&&cachedDetailed&&cachedDetailed.html){
         window._coachPulsePendingDetailed=false;
         el.innerHTML=String(cachedDetailed.html);
@@ -9098,11 +9567,30 @@ function tryLoadWorkout(){
         else el.textContent=String(cachedCompact.text);
         return;
       }
-      if(window._coachPulseAiBusy)return;
-      window._coachPulseAiBusy=true;
-      var pulseWatchdog=setTimeout(function(){
-        coachPulseRelease('Coach Pulse timed out. Tap refresh and try again.');
-      },detailedRefresh?50000:28000);
+	      if(detailedRefresh&&_coachPulseDetailedJobs[pulseJobKey]){
+	        coachPulsePersistDetailedStatus({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,status:'detailed_pending',coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	        if(el&&!(cachedDetailed&&cachedDetailed.html)&&!(lastValidDetailed&&lastValidDetailed.html)){
+	          el.style.color='var(--muted)';
+	          el.textContent='Detailed Coach Pulse updating…';
+	        }
+	        return;
+	      }
+	      if(window._coachPulseAiBusy){
+	        if(detailedRefresh&&el&&!(cachedDetailed&&cachedDetailed.html)&&!(lastValidDetailed&&lastValidDetailed.html)){
+	          el.style.color='var(--muted)';
+	          el.textContent='Detailed Coach Pulse updating…';
+	        }
+	        return;
+	      }
+	      window._coachPulseAiBusy=true;
+	      pulseWatchdog=setTimeout(function(){
+	        if(pulseDone)return;
+	        if(pulseReqId&&_coachPulseActiveReqId&&pulseReqId!==_coachPulseActiveReqId)return;
+	        wtLogEvent('coachpulse_detailed_timeout',Object.assign({},pulseMetaBase,{errorCode:'timeout',durationMs:Date.now()-pulseStartedAt}));
+	        wtLogEvent('coachpulse_detailed_backend_timeout',Object.assign({},pulseMetaBase,{errorCode:'timeout',durationMs:Date.now()-pulseStartedAt}));
+	        coachPulsePersistDetailedStatus({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,status:'detailed_timeout_showing_previous',error:{code:'timeout',message:'Coach refresh took too long.',ts:Date.now()},coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	        coachPulseRelease('Refresh timed out. Showing last detailed pulse.');
+	      },detailedRefresh?50000:28000);
       var perf=w.map(function(s){
         var t=_sessionPlanTypeFromWorkoutType(s.workoutType||'')||'Other';
         var hard=(s.exercises||[]).filter(function(ex){return String(ex.feel||'').toLowerCase()==='hard';}).length;
@@ -9154,42 +9642,46 @@ function tryLoadWorkout(){
           +'7-day stats: strength '+wStr+', HIIT '+wHiit+', hard-feel '+hardPct+'%, miss '+missPct+'%, progress '+progWord+'. '
           +'Session log: '+perf+'.');
       function coachPulseRunAttempt(attempt){
-        return aiCoachOpenAICall({
-          model:detailedRefresh?'gpt-5.5':'gpt-5.4-mini',
-          response_format:{type:'json_object'},
-          messages:[{role:'system',content:'Direct coach, no sugarcoating.'},{role:'user',content:p}],
-          max_completion_tokens:detailedRefresh?900:140
-        },detailedRefresh?42000:22000).then(function(r){
-        clearTimeout(pulseWatchdog);
-        window._coachPulseAiBusy=false;
-        var txt=((((r||{}).choices||[])[0]||{}).message||{}).content||'';
-        var parsed=aiCoachExtractJson(txt)||null;
-        if(!parsed){
-          if(detailedRefresh){
-            try{localStorage.setItem('wt_workout_coach_pulse_errors_v1',JSON.stringify({sig:sig,ts:Date.now(),error:'coachpulse_parse_failed',raw:String(txt||'').slice(0,600)}));}catch(e){}
-            wtLogEvent('coachpulse_parse_failed',{pulseId:pulseId,errorCode:'coachpulse_parse_failed',requestId:pulseReqId});
-            coachPulsePersistError({pulseId:pulseId,sessionId:sessionId,sig:sig,kind:'parse_error',code:'coachpulse_parse_failed',message:'Detailed coach refresh parse failed'});
-            coachPulseRelease('Detailed coach refresh failed. Showing saved summary.');
-            wtLogEvent('coachpulse_fallback_used',{pulseId:pulseId,errorCode:'coachpulse_parse_failed',requestId:pulseReqId});
-            return false;
-          }
+	        return aiCoachOpenAICall({
+	          model:detailedRefresh?'gpt-5.5':'gpt-5.4-mini',
+	          response_format:{type:'json_object'},
+	          messages:[{role:'system',content:'Direct coach, no sugarcoating.'},{role:'user',content:p}],
+	          max_completion_tokens:detailedRefresh?900:140
+	        },detailedRefresh?42000:22000).then(function(r){
+	        if(pulseDone)return false;
+	        if(pulseReqId&&_coachPulseActiveReqId&&pulseReqId!==_coachPulseActiveReqId)return false;
+	        clearTimeout(pulseWatchdog);
+	        window._coachPulseAiBusy=false;
+	        var txt=((((r||{}).choices||[])[0]||{}).message||{}).content||'';
+	        var parsed=aiCoachExtractJson(txt)||null;
+		        if(!parsed){
+		          if(detailedRefresh){
+		            try{localStorage.setItem('wt_workout_coach_pulse_errors_v1',JSON.stringify({sig:sig,ts:Date.now(),error:'coachpulse_parse_failed',raw:String(txt||'').slice(0,600)}));}catch(e){}
+		            wtLogEvent('coachpulse_parse_failed',Object.assign({},pulseMetaBase,{errorCode:'coachpulse_parse_failed'}));
+		            wtLogEvent('coachpulse_detailed_parse_failed',Object.assign({},pulseMetaBase,{errorCode:'coachpulse_parse_failed'}));
+		            wtLogEvent('coachpulse_detailed_validation_failed',Object.assign({},pulseMetaBase,{errorCode:'coachpulse_parse_failed'}));
+		            coachPulsePersistError({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,kind:'parse_error',code:'coachpulse_parse_failed',message:'Detailed coach refresh parse failed',detailedStatus:'detailed_failed_showing_fallback',coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+		            coachPulseRelease('Detailed coach refresh failed. Showing saved summary.');
+		            wtLogEvent('coachpulse_fallback_used',Object.assign({},pulseMetaBase,{errorCode:'coachpulse_parse_failed'}));
+		            return false;
+	          }
           // Fallback: show a concise plain-text summary instead of hard failing.
           var plain=String(txt||'').replace(/```json|```/gi,'').trim();
           if(plain){
             plain=plain.replace(/\s+/g,' ').slice(0,260);
-            el.style.color='var(--text2)';
-            el.textContent='Coach Pulse fallback: '+plain;
-            window._coachPulsePendingDetailed=false;
-            try{localStorage.setItem(pulseKey,JSON.stringify({sig:sig,text:el.textContent,ts:Date.now()}));}catch(e){}
-            coachPulsePersistCompact({pulseId:pulseId,sessionId:sessionId,sig:sig,text:el.textContent});
-            return;
-          }
-          coachPulsePersistError({pulseId:pulseId,sessionId:sessionId,sig:sig,kind:'parse_error',code:'coachpulse_parse_failed',message:'Coach pulse compact parse failed'});
-          coachPulseRelease('Coach Pulse had a parse hiccup. Tap refresh to retry.');
-          throw new Error('coachpulse_parse_failed');
-        }
-        if(detailedRefresh&&parsed.headline){
-          if(pulseReqId&&pulseReqId!==_coachPulseActiveReqId)return false;
+	            el.style.color='var(--text2)';
+	            el.textContent='Coach Pulse fallback: '+plain;
+	            window._coachPulsePendingDetailed=false;
+	            try{localStorage.setItem(pulseKey,JSON.stringify({sig:sig,text:el.textContent,ts:Date.now()}));}catch(e){}
+	            coachPulsePersistCompact({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,text:el.textContent,coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	            return;
+	          }
+	          coachPulsePersistError({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,kind:'parse_error',code:'coachpulse_parse_failed',message:'Coach pulse compact parse failed',detailedStatus:'compact_available',coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	          coachPulseRelease('Coach Pulse had a parse hiccup. Tap refresh to retry.');
+	          throw new Error('coachpulse_parse_failed');
+	        }
+	        if(detailedRefresh&&parsed.headline){
+	          if(pulseReqId&&pulseReqId!==_coachPulseActiveReqId)return false;
           var ef=Array.isArray(parsed.exercise_feedback)?parsed.exercise_feedback.slice(0,8):[];
           var nt=Array.isArray(parsed.next_targets)?parsed.next_targets.slice(0,6):[];
           var html='<div style="font-size:0.62rem;color:var(--muted);letter-spacing:1px;font-weight:700;margin-bottom:4px;">COACH PULSE — DETAILED</div>'
@@ -9214,54 +9706,78 @@ function tryLoadWorkout(){
           }
           if(parsed.bottom_line)html+='<div style="margin-top:6px;font-size:0.74rem;color:var(--text);font-weight:700;">Bottom line: '+escHtml(String(parsed.bottom_line))+'</div>';
           if(parsed.next_step)html+='<div style="margin-top:3px;font-size:0.72rem;color:var(--accent);">Next step: '+escHtml(String(parsed.next_step))+'</div>';
-          el.innerHTML=html;
-          window._coachPulsePendingDetailed=false;
-          try{localStorage.setItem(pulseKey,JSON.stringify({sig:sig,kind:'detailed',html:html,text:el.innerText,ts:Date.now()}));}catch(e){}
-          coachPulsePersistDetailed({pulseId:pulseId,sessionId:sessionId,sig:sig,html:html,text:el.innerText,model:'gpt-5.5'});
-          wtLogEvent('coachpulse_refresh_success',{pulseId:pulseId,requestId:pulseReqId,model:'gpt-5.5'});
-          return true;
-        }
-        if(!parsed.pulse){
-          coachPulsePersistError({pulseId:pulseId,sessionId:sessionId,sig:sig,kind:'parse_error',code:'coachpulse_empty_result',message:'Coach pulse returned empty payload'});
-          coachPulseRelease(detailedRefresh?'Coach response was empty. Showing saved summary.':'Coach Pulse returned an empty result. Tap refresh to retry.');
-          throw new Error('coachpulse_empty_result');
-        }
+	          el.innerHTML=html;
+	          window._coachPulsePendingDetailed=false;
+	          try{localStorage.setItem(pulseKey,JSON.stringify({sig:sig,kind:'detailed',html:html,text:el.innerText,ts:Date.now()}));}catch(e){}
+	          coachPulsePersistDetailed({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,html:html,text:el.innerText,model:'gpt-5.5',coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	          coachPulsePersistDetailedStatus({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,status:'detailed_available',coachStateRevision:coachStateRevision,detailedUpdatedAt:Date.now(),pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	          wtLogEvent('coachpulse_detailed_success',Object.assign({},pulseMetaBase,{model:'gpt-5.5',maxCompletionTokens:900,durationMs:Date.now()-pulseStartedAt,rawLength:String(txt||'').length}));
+	          wtLogEvent('coachpulse_refresh_success',Object.assign({},pulseMetaBase,{model:'gpt-5.5',maxCompletionTokens:900,durationMs:Date.now()-pulseStartedAt,rawLength:String(txt||'').length}));
+	          pulseDone=true;
+	          return true;
+	        }
+	        if(detailedRefresh&&!parsed.headline){
+	          wtLogEvent('coachpulse_detailed_validation_failed',Object.assign({},pulseMetaBase,{errorCode:'coachpulse_detailed_schema_invalid'}));
+	          wtLogEvent('coachpulse_detailed_schema_failed',Object.assign({},pulseMetaBase,{errorCode:'coachpulse_detailed_schema_invalid'}));
+	          coachPulsePersistError({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,kind:'parse_error',code:'coachpulse_detailed_schema_invalid',message:'Detailed coach refresh schema mismatch',detailedStatus:'detailed_failed_showing_fallback',coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	          coachPulseRelease('Detailed coach refresh failed. Showing saved summary.');
+	          return false;
+	        }
+	        if(!parsed.pulse){
+	          coachPulsePersistError({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,kind:'parse_error',code:'coachpulse_empty_result',message:'Coach pulse returned empty payload',detailedStatus:detailedRefresh?'detailed_failed_showing_fallback':'compact_available',coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	          coachPulseRelease(detailedRefresh?'Coach response was empty. Showing saved summary.':'Coach Pulse returned an empty result. Tap refresh to retry.');
+	          throw new Error('coachpulse_empty_result');
+	        }
         var finalText=lastLine+verdictLine+String(parsed.pulse)+(parsed.next?(' Next: '+parsed.next+'.'):'')+(parsed.risk?(' Risk: '+parsed.risk+'.'):'');
         if(pulseReqId&&pulseReqId!==_coachPulseActiveReqId)return false;
         el.textContent=finalText;
         window._coachPulsePendingDetailed=false;
         try{localStorage.setItem(pulseKey,JSON.stringify({sig:sig,text:finalText,ts:Date.now()}));}catch(e){}
-        coachPulsePersistCompact({pulseId:pulseId,sessionId:sessionId,sig:sig,text:finalText});
-        wtLogEvent('coachpulse_refresh_success',{pulseId:pulseId,requestId:pulseReqId,model:'gpt-5.4-mini'});
-        return true;
-      }).catch(function(err){
+	        coachPulsePersistCompact({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,text:finalText,coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	        wtLogEvent('coachpulse_refresh_success',Object.assign({},pulseMetaBase,{model:'gpt-5.4-mini',maxCompletionTokens:140,durationMs:Date.now()-pulseStartedAt,rawLength:String(txt||'').length}));
+	        pulseDone=true;
+	        return true;
+	      }).catch(function(err){
+	        if(pulseDone)return false;
+	        if(pulseReqId&&_coachPulseActiveReqId&&pulseReqId!==_coachPulseActiveReqId)return false;
         // Auto-retry transient failures up to 2 times so user usually taps once.
         var maxAutoRetries=2;
         if(attempt<maxAutoRetries){
           var waitMs=(attempt===0?700:1300);
           if(el){
-            el.style.color='var(--muted)';
-            el.textContent='Coach Pulse retrying… ('+(attempt+1)+'/'+maxAutoRetries+')';
+            coachSetPulseState('Coach Pulse retrying… ('+(attempt+1)+'/'+maxAutoRetries+')','var(--muted)',pulseReqId,{preserveRich:true,noteColor:'var(--muted)'});
           }
           return new Promise(function(res){setTimeout(res,waitMs);}).then(function(){
             return coachPulseRunAttempt(attempt+1);
           });
         }
-        clearTimeout(pulseWatchdog);
-        var rawErr=String((err&&err.message)||err||'');
-        var m=rawErr.indexOf('coachpulse_parse_failed')>=0?'Detailed coach refresh failed. Showing saved summary.':
-          rawErr.indexOf('coachpulse_empty_result')>=0?'Coach response was empty. Showing saved summary.':
-          rawErr.toLowerCase().indexOf('timeout')>=0?'Coach refresh took too long. Showing saved summary.':
-          aiCoachFriendlyApiError(err||'Coach Pulse request failed. Tap refresh to retry.');
-        coachPulsePersistError({pulseId:pulseId,sessionId:sessionId,sig:sig,kind:'fetch_error',code:rawErr,message:m});
-        wtLogEvent('coachpulse_fallback_used',{pulseId:pulseId,errorCode:rawErr,requestId:pulseReqId});
-        coachPulseRelease(m);
-        return false;
-      });
+	        clearTimeout(pulseWatchdog);
+	        var rawErr=String((err&&err.message)||err||'');
+	        if(detailedRefresh&&rawErr.toLowerCase().indexOf('timeout')>=0){
+	          wtLogEvent('coachpulse_detailed_timeout',Object.assign({},pulseMetaBase,{errorCode:'timeout',durationMs:Date.now()-pulseStartedAt}));
+	          if(/failed to fetch|network|abort|aborted/i.test(rawErr))wtLogEvent('coachpulse_detailed_fetch_timeout',Object.assign({},pulseMetaBase,{errorCode:'timeout',durationMs:Date.now()-pulseStartedAt}));
+	          else if(/model|completion/i.test(rawErr))wtLogEvent('coachpulse_detailed_model_timeout',Object.assign({},pulseMetaBase,{errorCode:'timeout',durationMs:Date.now()-pulseStartedAt}));
+	          else wtLogEvent('coachpulse_detailed_backend_timeout',Object.assign({},pulseMetaBase,{errorCode:'timeout',durationMs:Date.now()-pulseStartedAt}));
+	        }
+	        var m=rawErr.indexOf('coachpulse_parse_failed')>=0?'Detailed coach refresh failed. Showing saved summary.':
+	          rawErr.indexOf('coachpulse_empty_result')>=0?'Coach response was empty. Showing saved summary.':
+	          rawErr.toLowerCase().indexOf('timeout')>=0?'Refresh timed out. Showing last detailed pulse.':
+	          aiCoachFriendlyApiError(err||'Coach Pulse request failed. Tap refresh to retry.');
+	        coachPulsePersistError({pulseId:pulseId,sessionId:sessionId,sourceSessionId:sessionId,sig:sig,kind:'fetch_error',code:rawErr,message:m,detailedStatus:detailedRefresh?'detailed_failed_showing_fallback':'compact_available',coachStateRevision:coachStateRevision,pulseRequestId:pulseReqId||0,pulseJobId:pulseJobKey});
+	        wtLogEvent('coachpulse_fallback_used',Object.assign({},pulseMetaBase,{errorCode:rawErr}));
+	        coachPulseRelease(m);
+	        return false;
+	      });
       }
-      coachPulseRunAttempt(0);
-    }catch(e){}
-  }
+	      var pulsePromise=coachPulseRunAttempt(0);
+	      if(detailedRefresh){
+	        _coachPulseDetailedJobs[pulseJobKey]=pulsePromise;
+	        pulsePromise.finally(function(){
+	          try{delete _coachPulseDetailedJobs[pulseJobKey];}catch(_e){}
+	        });
+	      }
+	    }catch(e){}
+	  }
   function appendVerdictLine(base){
     try{
       var v=JSON.parse(localStorage.getItem(AI_LAST_VERDICT_KEY)||'null');
@@ -11987,10 +12503,10 @@ function initPlanPage(){
   try{calendarPlannerRulesFillUi();}catch(e){}
   try{
     var c=calendarCfgLoad();
-    if(c&&c.connected){
+    if(c&&calendarIsValidIcalUrl(c.icalUrl)){
       calendarRefreshPlan();
-      setTimeout(function(){calendarPlannerAutoRunMaybe();},700);
     }
+    setTimeout(function(){calendarPlannerAutoRunMaybe();},700);
   }catch(e){}
   loadWeekPlan();
 }
@@ -13481,11 +13997,41 @@ function trainerSubstitutionHints(){
   return hints.slice(0,4);
 }
 var _calendarWeekSummary=null;
+function calendarIsValidIcalUrl(u){
+  return /^https?:\/\/\S+/i.test(String(u||'').trim());
+}
+function calendarCfgNormalize(input){
+  var o=Object.assign({
+    connected:false,
+    status:'Not connected',
+    urlMask:'',
+    lastFetched:'',
+    rules:[],
+    icalUrl:'',
+    lastAutoRunWeek:'',
+    lastAutoRunAt:'',
+    lastAutoRunStatus:'',
+    lastAutoRunError:'',
+    lastPlannerDiagnostics:null
+  },input||{});
+  o.connected=!!o.connected;
+  o.status=String(o.status||'Not connected');
+  o.icalUrl=String(o.icalUrl||'').trim();
+  o.urlMask=String(o.urlMask||'').trim();
+  if(!o.urlMask&&o.icalUrl)o.urlMask=wtMaskUrl(o.icalUrl);
+  o.lastFetched=String(o.lastFetched||'');
+  o.lastAutoRunWeek=String(o.lastAutoRunWeek||'');
+  o.lastAutoRunAt=String(o.lastAutoRunAt||'');
+  o.lastAutoRunStatus=String(o.lastAutoRunStatus||'');
+  o.lastAutoRunError=String(o.lastAutoRunError||'');
+  return o;
+}
 function calendarCfgLoad(){
-  return safeLsJson(CAL_SYNC_CFG_KEY,{connected:false,status:'Not connected',urlMask:'',lastFetched:'',rules:[],icalUrl:''},CAL_SYNC_CFG_KEY)||{connected:false,status:'Not connected',urlMask:'',lastFetched:'',rules:[],icalUrl:''};
+  var raw=safeLsJson(CAL_SYNC_CFG_KEY,{connected:false,status:'Not connected',urlMask:'',lastFetched:'',rules:[],icalUrl:''},CAL_SYNC_CFG_KEY)||{connected:false,status:'Not connected',urlMask:'',lastFetched:'',rules:[],icalUrl:''};
+  return calendarCfgNormalize(raw);
 }
 function calendarCfgSave(cfg){
-  var val=JSON.stringify(cfg||{});
+  var val=JSON.stringify(calendarCfgNormalize(cfg||{}));
   try{localStorage.setItem(CAL_SYNC_CFG_KEY,val);}catch(e){}
   wtDB.set(CAL_SYNC_CFG_KEY,val);
 }
@@ -13522,8 +14068,7 @@ function calendarPlannerDefaultRules(){
     manualLocksWin:true,
     autoRunEnabled:true,
     autoApplyUnlockedDays:false,
-    autoShowProposalAfterRun:true,
-    lastAutoRunWeek:''
+    autoShowProposalAfterRun:true
   };
 }
 function calendarPlannerParseList(v){
@@ -13572,7 +14117,6 @@ function calendarPlannerRulesNormalize(input){
   o.forceLabelRules=(Array.isArray(o.forceLabelRules)?o.forceLabelRules:[]).map(function(r){
     return {phrase:String((r&&r.phrase)||'').trim(),label:String((r&&r.label)||'').trim().toUpperCase()};
   }).filter(function(r){return r.phrase&&(r.label==='HOME'||r.label==='HOTEL'||r.label==='HIIT'||r.label==='TRAVEL');});
-  o.lastAutoRunWeek=String(o.lastAutoRunWeek||'');
   return o;
 }
 function calendarPlannerToggleRules(forceOpen){
@@ -13626,8 +14170,7 @@ function calendarPlannerRulesSaveFromUi(){
     flightKeywords:gv('cpRuleFlightKeywords',''),
     layoverKeywords:gv('cpRuleLayoverKeywords',''),
     hotelKeywords:gv('cpRuleHotelKeywords',''),
-    forceLabelRules:prev.forceLabelRules||[],
-    lastAutoRunWeek:prev.lastAutoRunWeek||''
+    forceLabelRules:prev.forceLabelRules||[]
   });
   calendarRulesSave(next);
   calendarPlannerRulesFillUi();
@@ -13656,7 +14199,123 @@ function calendarStatusRender(msg){
   var cfg=calendarCfgLoad();
   var st=cfg.status||'Not connected';
   var when=cfg.lastFetched?new Date(cfg.lastFetched).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'Never';
-  el.innerHTML='Status: <strong>'+escHtml(st)+'</strong><br>Link: '+escHtml(cfg.urlMask||'not saved')+'<br>Last fetched: '+escHtml(when)+(msg?('<br>'+escHtml(msg)):'');
+  el.innerHTML='Status: <strong>'+escHtml(st)+'</strong><br>Link: '+escHtml(cfg.urlMask||wtMaskUrl(cfg.icalUrl||'')||'not saved')+'<br>Last fetched: '+escHtml(when)+(msg?('<br>'+escHtml(msg)):'');
+}
+function calendarEnsureConnectedAndFresh(opts){
+  opts=opts||{};
+  var weekStart=String(opts.weekStart||calendarWeekStartStr());
+  var shouldRefresh=(opts.refresh!==false);
+  var shouldFetchSummary=!!opts.fetchSummary;
+  var purpose=String(opts.purpose||'calendar');
+  var inputPlan=document.getElementById('calendarIcalUrlInput');
+  var inputConn=document.getElementById('connIcalUrlInput');
+  var typedPlan=String((inputPlan&&inputPlan.value)||'').trim();
+  var typedConn=String((inputConn&&inputConn.value)||'').trim();
+  var cfg=calendarCfgLoad();
+  var selectedUrl=calendarIsValidIcalUrl(cfg.icalUrl)?String(cfg.icalUrl).trim():'';
+  var connectedViaSavedUrl=false;
+  var fromTyped=false;
+  var fromDefault=false;
+  var refreshReconnectTried=false;
+  if(calendarIsValidIcalUrl(typedPlan)){selectedUrl=typedPlan;fromTyped=true;}
+  else if(calendarIsValidIcalUrl(typedConn)){selectedUrl=typedConn;fromTyped=true;}
+  if(!selectedUrl&&calendarIsValidIcalUrl(WT_PERSONAL_DEFAULTS&&WT_PERSONAL_DEFAULTS.calendarIcalUrl)){
+    selectedUrl=String(WT_PERSONAL_DEFAULTS.calendarIcalUrl||'').trim();
+    fromDefault=true;
+  }
+  if(!calendarIsValidIcalUrl(selectedUrl)){
+    return Promise.reject(new Error('missing_saved_ical_url'));
+  }
+  if(cfg.icalUrl!==selectedUrl){
+    cfg.icalUrl=selectedUrl;
+    cfg.urlMask=wtMaskUrl(selectedUrl);
+    calendarCfgSave(cfg);
+  }else if(!cfg.urlMask){
+    cfg.urlMask=wtMaskUrl(selectedUrl);
+    calendarCfgSave(cfg);
+  }
+  try{wtPrefillCalendarInputsFromCfg();}catch(e){}
+  function runConnectIfNeeded(){
+    var mustConnect=(!cfg.connected)||!!opts.forceReconnect;
+    if(!mustConnect)return Promise.resolve(null);
+    connectedViaSavedUrl=!fromTyped;
+    return wtBackendPost({
+      type:'calendarConnect',
+      icalUrl:selectedUrl,
+      timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'America/Los_Angeles',
+      _nonce:Date.now()
+    }).then(function(r){
+      if(!r||r.status!=='ok')throw new Error((r&&r.message)||'calendar_connect_failed');
+      cfg=calendarCfgLoad();
+      cfg.connected=true;
+      cfg.status='Connected';
+      cfg.icalUrl=selectedUrl;
+      cfg.urlMask=((r.connection&&r.connection.urlMask)||wtMaskUrl(selectedUrl)||'saved');
+      if(r.connection&&r.connection.lastFetched)cfg.lastFetched=r.connection.lastFetched;
+      calendarCfgSave(cfg);
+      return r;
+    });
+  }
+  function runRefreshIfNeeded(){
+    if(!shouldRefresh)return Promise.resolve(null);
+    cfg=calendarCfgLoad();
+    cfg.status='Refreshing';
+    calendarCfgSave(cfg);
+    return wtBackendPost({type:'calendarRefresh',_nonce:Date.now()}).then(function(r){
+      if(!r||r.status!=='ok')throw new Error((r&&r.message)||'calendar_refresh_failed');
+      cfg=calendarCfgLoad();
+      cfg.connected=true;
+      cfg.status='Connected';
+      cfg.icalUrl=selectedUrl;
+      if(r.connection&&r.connection.urlMask)cfg.urlMask=r.connection.urlMask;
+      cfg.lastFetched=(r.fetchedAt||new Date().toISOString());
+      calendarCfgSave(cfg);
+      return r;
+    }).catch(function(err){
+      var msg=String(err&&err.message||err||'calendar_refresh_failed');
+      if(!refreshReconnectTried&&/not[_\s-]?connected|connect|session|auth|expired|calendar_connect/i.test(msg)){
+        refreshReconnectTried=true;
+        cfg=calendarCfgLoad();
+        cfg.connected=false;
+        cfg.status='Reconnecting';
+        calendarCfgSave(cfg);
+        return runConnectIfNeeded().then(function(){return runRefreshIfNeeded();});
+      }
+      throw err;
+    });
+  }
+  function fetchSummaryIfNeeded(){
+    if(!shouldFetchSummary)return Promise.resolve(null);
+    return wtBackendPost({type:'calendarGetSummary',weekStart:weekStart,_nonce:Date.now()}).then(function(r){
+      if(!r||r.status!=='ok')throw new Error((r&&r.message)||'calendar_summary_failed');
+      var out=_calendarApplyRules_(r);
+      if(out&&Array.isArray(out.days)){
+        out.days=out.days.map(function(d){
+          var copy=Object.assign({},d||{});
+          var k=calendarDayDateKey(copy);
+          if(k)copy.date=k;
+          return copy;
+        });
+      }
+      return out;
+    });
+  }
+  return runConnectIfNeeded()
+    .then(function(){return runRefreshIfNeeded();})
+    .then(function(){return fetchSummaryIfNeeded();})
+    .then(function(summary){
+      return {
+        ok:true,
+        cfg:calendarCfgLoad(),
+        summary:summary||null,
+        weekStart:weekStart,
+        connectedViaSavedUrl:connectedViaSavedUrl,
+        usedDefaultUrl:fromDefault,
+        usedTypedInput:fromTyped,
+        source:(fromTyped?'typed_input':(fromDefault?'default_url':'saved_url')),
+        purpose:purpose
+      };
+    });
 }
 function calendarCurrentWeekRangeLocal(){
   var todayStr=localDateStr();
@@ -13713,34 +14372,38 @@ function calendarFilterSummaryToCurrentWeek(summary){
 function calendarConnectPlan(){
   var input=document.getElementById('calendarIcalUrlInput');
   var u=String((input&&input.value)||'').trim();
-  if(!u){
+  if(!calendarIsValidIcalUrl(u)){
+    var alt=document.getElementById('connIcalUrlInput');
+    u=String((alt&&alt.value)||'').trim();
+  }
+  if(!calendarIsValidIcalUrl(u)){
     var _cfg0=calendarCfgLoad();
     u=String((_cfg0&&_cfg0.icalUrl)||'').trim();
   }
-  if(!/^https?:\/\//i.test(u)){calendarStatusRender('Invalid calendar link.');return;}
+  if(!calendarIsValidIcalUrl(u)){calendarStatusRender('Invalid calendar link.');return;}
+  try{
+    var cfg0=calendarCfgLoad();
+    cfg0.icalUrl=u;
+    cfg0.urlMask=wtMaskUrl(u);
+    calendarCfgSave(cfg0);
+  }catch(e){}
   calendarStatusRender('Saving calendar link…');
-  wtBackendPost({type:'calendarConnect',icalUrl:u,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'America/Los_Angeles',_nonce:Date.now()})
-    .then(function(r){
-      if(!r||r.status!=='ok'){calendarStatusRender((r&&r.message)||'Connect failed');return;}
-      var cfg=calendarCfgLoad();
-      cfg.connected=true;
-      cfg.status='Connected';
-      cfg.urlMask=((r.connection&&r.connection.urlMask)||wtMaskUrl(u)||'saved');
-      cfg.icalUrl=u;
-      cfg.lastFetched=(r.connection&&r.connection.lastFetched)||'';
-      calendarCfgSave(cfg);
-      if(input)input.value='';
+  calendarEnsureConnectedAndFresh({refresh:false,purpose:'save_link'})
+    .then(function(){
       calendarStatusRender('Connected. Refresh to fetch events.');
       appToast('Calendar connected.','var(--green)');
     })
-    .catch(function(){calendarStatusRender('Calendar unavailable — using saved plan');});
+    .catch(function(err){
+      var m=String(err&&err.message||err||'Connect failed');
+      calendarStatusRender(m==='missing_saved_ical_url'?'Invalid calendar link.':'Calendar unavailable — using saved plan');
+    });
 }
 function calendarDisconnectPlan(){
   if(!confirm('Disconnect calendar sync? Current workout plan will stay unchanged.'))return;
   wtBackendPost({type:'calendarDisconnect',_nonce:Date.now()})
     .then(function(r){
       var cfg=calendarCfgLoad();
-      cfg.connected=false;cfg.status='Not connected';cfg.urlMask='';cfg.lastFetched='';
+      cfg.connected=false;cfg.status='Not connected';cfg.urlMask=wtMaskUrl(cfg.icalUrl||'');cfg.lastFetched='';
       calendarCfgSave(cfg);
       _calendarWeekSummary=null;
       calendarSummarySave(null);
@@ -13749,24 +14412,20 @@ function calendarDisconnectPlan(){
     }).catch(function(){calendarStatusRender('Disconnect failed');});
 }
 function calendarRefreshPlan(){
-  var cfg=calendarCfgLoad();
-  if(!cfg.connected){calendarStatusRender('Not connected. Paste iCal link first.');return;}
-  cfg.status='Refreshing';calendarCfgSave(cfg);calendarStatusRender('Refreshing…');
-  wtBackendPost({type:'calendarRefresh',_nonce:Date.now()})
-    .then(function(r){
-      if(!r||r.status!=='ok'){
-        cfg=calendarCfgLoad();cfg.status='Fetch failed';calendarCfgSave(cfg);
-        calendarStatusRender((r&&r.message)||'Fetch failed');
-        return;
-      }
-      cfg=calendarCfgLoad();
-      cfg.status='Connected';
-      cfg.lastFetched=(r.fetchedAt||new Date().toISOString());
-      if(r.connection&&r.connection.urlMask)cfg.urlMask=r.connection.urlMask;
-      calendarCfgSave(cfg);
+  calendarStatusRender('Refreshing…');
+  calendarEnsureConnectedAndFresh({refresh:true,purpose:'refresh_calendar'})
+    .then(function(){
       calendarStatusRender('Calendar refreshed.');
       appToast('Calendar refreshed.','var(--green)');
-    }).catch(function(){cfg=calendarCfgLoad();cfg.status='Fetch failed';calendarCfgSave(cfg);calendarStatusRender('Calendar unavailable — using saved plan');});
+    })
+    .catch(function(err){
+      var cfg=calendarCfgLoad();
+      cfg.status='Fetch failed';
+      calendarCfgSave(cfg);
+      var m=String(err&&err.message||err||'Fetch failed');
+      if(m==='missing_saved_ical_url')calendarStatusRender('No saved iCal URL. Paste link once to enable planner.');
+      else calendarStatusRender('Calendar unavailable — using saved plan');
+    });
 }
 function _calendarMapLabelToPlan_(lbl){
   var u=String(lbl||'').toUpperCase();
@@ -13987,6 +14646,17 @@ function calendarPlannerFetchSummary(weekStart){
     })
     .catch(function(){return null;});
 }
+function calendarPlannerComputeFinalDiff(rows){
+  var arr=Array.isArray(rows)?rows:[];
+  var changedCount=0,lockedCount=0,blockedByLockCount=0;
+  arr.forEach(function(r){
+    var changed=String((r&&r.proposed)||'')!==String((r&&r.current)||'');
+    if(changed)changedCount++;
+    if(r&&r.locked)lockedCount++;
+    if(r&&r.locked&&r.trace&&r.trace.lockBlocked)blockedByLockCount++;
+  });
+  return {changedCount:changedCount,lockedCount:lockedCount,blockedByLockCount:blockedByLockCount};
+}
 function calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules){
   var weekStart=(summary&&summary.weekStart)||calendarWeekStartStr();
   var days=calendarPlannerDateSpan(weekStart);
@@ -14001,36 +14671,43 @@ function calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules){
   var assigned={},analysisByDate={};
   days.forEach(function(ds){
     var d=byDate[ds]||{date:ds,real_events_used:[],ignored_events:[],flags:{}};
-    var curLabel=_calendarMapPlanToLabel_(_weekPlan[ds]||'');
+    var curLabel=_calendarMapPlanToLabel_(calendarPlannerExistingPlanForDate(ds)||_weekPlan[ds]||'');
     var locked=(!!(locks[ds]&&locks[ds].locked)&&rules.manualLocksWin);
     var dayAnalysis=calendarPlannerAnalyzeDay(d,rules);
     analysisByDate[ds]=dayAnalysis;
+    var recommended=String((d&&d.recommended_label)||'').toUpperCase();
+    var confidence=dayAnalysis.hardTravel?'high':(dayAnalysis.cleanOpen?'high':((dayAnalysis.rawEvents&&dayAnalysis.rawEvents.length)?'medium':'low'));
     var row={
       date:ds,
       current:curLabel||'',
       proposed:'',
       locked:locked,
-      confidence:dayAnalysis.hardTravel?'high':(dayAnalysis.cleanOpen?'high':'medium'),
+      confidence:confidence,
       calendarReason:dayAnalysis.reason,
       ruleReason:'',
       changed:false,
       trace:{
         rawEvents:dayAnalysis.rawEvents,
         ignoredEvents:dayAnalysis.ignoredEvents,
+        calendarClassification:recommended||'',
         detectedTravelBlocks:{earlyArrival:dayAnalysis.earlyArrival,overnightTravel:dayAnalysis.overnight,travelDominated:dayAnalysis.travelMinutes>=300},
         detectedLayoverBlocks:{awayDay:dayAnalysis.away,layoverDay:dayAnalysis.layover},
         usableWorkoutWindowMin:dayAnalysis.longestWindow,
         overriddenByLock:locked,
+        lockBlocked:(locked&&recommended&&recommended!==String(curLabel||'')),
+        keepCurrentReason:'',
         targetContribution:''
       }
     };
     if(locked){
       row.proposed=row.current;
       row.ruleReason='Manual lock preserved.';
+      row.trace.targetContribution='locked';
       assigned[ds]=row.proposed;
     } else if(dayAnalysis.hardTravel){
       row.proposed='TRAVEL';
       row.ruleReason='Hard TRAVEL day from arrival/travel-window rules.';
+      row.trace.targetContribution='travel_guardrail';
       assigned[ds]='TRAVEL';
     }
     rows.push(row);
@@ -14071,26 +14748,45 @@ function calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules){
     });
     return placed;
   }
-  var targetHome=Math.max(rules.minHome,rules.targetHome),targetHotel=Math.max(rules.minHotel,rules.targetHotel),targetHiit=Math.max(rules.minHiit,rules.targetHiit);
-  var homeNeed=Math.max(0,targetHome-count('HOME'));
-  var hotelNeed=Math.max(0,targetHotel-count('HOTEL'));
-  var hiitNeed=Math.max(0,targetHiit-count('HIIT'));
+  var targetHome=Math.max(0,parseInt(rules.targetHome,10)||0);
+  var targetHotel=Math.max(0,parseInt(rules.targetHotel,10)||0);
+  var targetHiit=Math.max(0,parseInt(rules.targetHiit,10)||0);
+  var minHome=Math.max(0,parseInt(rules.minHome,10)||0);
+  var minHotel=Math.max(0,parseInt(rules.minHotel,10)||0);
+  var minHiit=Math.max(0,parseInt(rules.minHiit,10)||0);
+  var plannedHomeTarget=Math.max(minHome,targetHome);
+  var plannedHotelTarget=Math.max(minHotel,targetHotel);
+  var plannedHiitTarget=Math.max(minHiit,targetHiit);
+  var homeNeed=Math.max(0,plannedHomeTarget-count('HOME'));
+  var hotelNeed=Math.max(0,plannedHotelTarget-count('HOTEL'));
+  var hiitNeed=Math.max(0,plannedHiitTarget-count('HIIT'));
+  var usedFallbackMinimums=false;
   fillLabel('HOME',homeNeed,'homeScore',rules.preferHomeOnCleanDays?'Protected clean day for HOME strength.':'Placed HOME strength by weekly target.');
   fillLabel('HOTEL',hotelNeed,'hotelScore',rules.preferHotelOnLayoverDays?'Placed HOTEL on away/layover day for weekly target.':'Placed HOTEL by weekly target.');
-  if(count('HOME')<rules.minHome||count('HOTEL')<rules.minHotel){
-    warnings.push('Ideal strength targets could not fully fit; minimum targets were prioritized.');
-    fillLabel('HOME',Math.max(0,rules.minHome-count('HOME')),'homeScore','Minimum HOME target fallback.');
-    fillLabel('HOTEL',Math.max(0,rules.minHotel-count('HOTEL')),'hotelScore','Minimum HOTEL target fallback.');
-  }
   fillLabel('HIIT',hiitNeed,'hiitScore','Placed HIIT in usable non-TRAVEL window.');
+  if(count('HOME')<minHome){
+    if(targetHome>minHome)usedFallbackMinimums=true;
+    fillLabel('HOME',Math.max(0,minHome-count('HOME')),'homeScore','Minimum HOME target fallback.');
+  }
+  if(count('HOTEL')<minHotel){
+    if(targetHotel>minHotel)usedFallbackMinimums=true;
+    fillLabel('HOTEL',Math.max(0,minHotel-count('HOTEL')),'hotelScore','Minimum HOTEL target fallback.');
+  }
+  if(count('HIIT')<minHiit){
+    if(targetHiit>minHiit)usedFallbackMinimums=true;
+    fillLabel('HIIT',Math.max(0,minHiit-count('HIIT')),'hiitScore','Minimum HIIT target fallback.');
+  }
   days.forEach(function(ds,idx){
     if(assigned[ds])return;
     var a=analysisByDate[ds],row=rows[idx];
     if(row.current&&(row.current==='HOME'||row.current==='HOTEL'||row.current==='HIIT'||row.current==='TRAVEL')){
-      if(row.current==='HIIT'||row.current==='TRAVEL' || (calendarPlannerIsStrengthLabel(row.current)&&canUseStrength(idx))){
+      var targetPressure=(count('HOME')<plannedHomeTarget)||(count('HOTEL')<plannedHotelTarget)||(count('HIIT')<plannedHiitTarget);
+      var ambiguous=(!a.rawEvents.length&&row.confidence==='low');
+      if(ambiguous&&!targetPressure&&(row.current==='HIIT'||row.current==='TRAVEL' || (calendarPlannerIsStrengthLabel(row.current)&&canUseStrength(idx)))){
         assigned[ds]=row.current;
         row.proposed=row.current;
         row.ruleReason='Kept current label on ambiguous day.';
+        row.trace.keepCurrentReason='ambiguous_low_confidence';
         row.trace.targetContribution='kept_current';
         return;
       }
@@ -14118,45 +14814,139 @@ function calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules){
       }
     }
   }
+  var finalHome=count('HOME'),finalHotel=count('HOTEL'),finalHiit=count('HIIT');
+  if(finalHome<targetHome||finalHotel<targetHotel||finalHiit<targetHiit||usedFallbackMinimums){
+    warnings.push('Ideal strength targets could not fully fit; minimum targets were prioritized.');
+  }
   rows.forEach(function(r){
     r.changed=(r.proposed!==r.current);
     if(r.locked)r.confidence='high';
     out[r.date]=_calendarMapLabelToPlan_(r.proposed||'TRAVEL');
   });
+  var diff=calendarPlannerComputeFinalDiff(rows);
   return {
     weekStart:weekStart,
     proposal:out,
     rows:rows,
     warnings:warnings,
-    changedCount:rows.filter(function(r){return r.changed;}).length,
-    lockedCount:rows.filter(function(r){return r.locked;}).length,
-    summaryDays:(summary&&summary.days||[]).length
+    changedCount:diff.changedCount,
+    lockedCount:diff.lockedCount,
+    blockedByLockCount:diff.blockedByLockCount,
+    summaryDays:(summary&&summary.days||[]).length,
+    targetHome:targetHome,
+    targetHotel:targetHotel,
+    targetHiit:targetHiit,
+    minHome:minHome,
+    minHotel:minHotel,
+    minHiit:minHiit,
+    finalHome:finalHome,
+    finalHotel:finalHotel,
+    finalHiit:finalHiit,
+    finalChangedCount:diff.changedCount,
+    usedFallbackMinimums:usedFallbackMinimums
   };
 }
 function calendarBuildWeekFromCalendar(opts){
   opts=opts||{};
-  var cfg=calendarCfgLoad();
-  if(!cfg.connected){calendarStatusRender('Not connected. Paste iCal link first.');return;}
   var rules=calendarRulesLoad();
   var weekStart=calendarWeekStartStr();
+  function saveAutoRunState(status,errMsg){
+    if(!opts.auto)return;
+    var cfg=calendarCfgLoad();
+    cfg.lastAutoRunWeek=weekStart;
+    cfg.lastAutoRunAt=new Date().toISOString();
+    cfg.lastAutoRunStatus=String(status||'');
+    cfg.lastAutoRunError=String(errMsg||'');
+    calendarCfgSave(cfg);
+  }
+  function cachedSummaryForWeek(ws){
+    var cached=calendarSummaryLoad();
+    if(!cached)return null;
+    var filtered=calendarFilterSummaryToCurrentWeek(cached);
+    if(filtered&&String(filtered.weekStart||'')===String(ws||''))return filtered;
+    return filtered||cached||null;
+  }
   calendarStatusRender(opts.auto?'Auto-building weekly proposal…':'Building recommendation…');
-  Promise.all([
-    calendarPlannerFetchSummary(weekStart),
-    calendarPlannerFetchSummary(nutShiftDate(weekStart,-7)),
-    calendarPlannerFetchSummary(nutShiftDate(weekStart,7))
-  ]).then(function(arr){
+  calendarEnsureConnectedAndFresh({refresh:true,fetchSummary:false,purpose:(opts.auto?'auto_run':'build_week'),weekStart:weekStart})
+    .then(function(conn){
+      var first=calendarPlannerFetchSummary(weekStart);
+      var prev=calendarPlannerFetchSummary(nutShiftDate(weekStart,-7));
+      var next=calendarPlannerFetchSummary(nutShiftDate(weekStart,7));
+      return Promise.all([first,prev,next]).then(function(arr){
+        return {arr:arr,conn:conn};
+      });
+    })
+    .then(function(payload){
+      var arr=payload.arr||[];
+      var conn=payload.conn||{};
       var summary=arr[0],prevSummary=arr[1],nextSummary=arr[2];
-      if(!summary){calendarStatusRender('Calendar unavailable — using saved plan');return;}
+      if(!summary){
+        summary=cachedSummaryForWeek(weekStart);
+      }
+      if(!summary){
+        saveAutoRunState('error','calendar_summary_unavailable');
+        calendarStatusRender('Calendar unavailable and no saved summary exists.');
+        if(!opts.auto)appToast('Calendar unavailable. Save/verify iCal URL and retry.','var(--orange)');
+        return;
+      }
       _calendarWeekSummary=summary;
       var built=calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules);
+      var diag={
+        weekStart:built.weekStart,
+        source:(opts.auto?'calendar_auto':'calendar_manual'),
+        parsedDays:built.summaryDays,
+        lockedCount:built.lockedCount,
+        finalChangedCount:built.finalChangedCount,
+        targetHome:built.targetHome,
+        targetHotel:built.targetHotel,
+        targetHiit:built.targetHiit,
+        finalHome:built.finalHome,
+        finalHotel:built.finalHotel,
+        finalHiit:built.finalHiit,
+        minHome:built.minHome,
+        minHotel:built.minHotel,
+        minHiit:built.minHiit,
+        warnings:(built.warnings||[]).slice(0),
+        usedFallbackMinimums:!!built.usedFallbackMinimums,
+        autoRun:!!opts.auto,
+        connectedViaSavedUrl:!!conn.connectedViaSavedUrl,
+        perDay:(built.rows||[]).map(function(r){
+          return {
+            date:r.date,
+            current:r.current,
+            proposed:r.proposed,
+            changed:!!r.changed,
+            locked:!!r.locked,
+            rawEvents:(r.trace&&r.trace.rawEvents)||[],
+            ignoredEvents:(r.trace&&r.trace.ignoredEvents)||[],
+            calendarClassification:(r.trace&&r.trace.calendarClassification)||'',
+            plannerRuleReason:r.ruleReason||'',
+            confidence:r.confidence||'',
+            targetContribution:(r.trace&&r.trace.targetContribution)||'',
+            keepCurrentReason:(r.trace&&r.trace.keepCurrentReason)||''
+          };
+        })
+      };
       try{
         var saved=Object.assign({},summary||{});
         saved.plannerTrace=(built&&built.rows)||[];
         saved.plannerWarnings=(built&&built.warnings)||[];
+        saved.plannerDiagnostics=diag;
         saved.generatedAt=new Date().toISOString();
         calendarSummarySave(saved);
+        var csave=calendarCfgLoad();
+        csave.lastPlannerDiagnostics=diag;
+        calendarCfgSave(csave);
       }catch(e){calendarSummarySave(summary);}
-      calendarStatusRender('Calendar proposal ready: '+built.changedCount+' change(s), '+built.lockedCount+' locked, '+built.summaryDays+' day(s) parsed.');
+      var statusLine='';
+      if(built.finalChangedCount===0&&built.blockedByLockCount>0){
+        statusLine='Calendar found changes, but all affected days are locked.';
+      }else if(built.finalChangedCount===0){
+        statusLine='No changes proposed; current week looks balanced.';
+      }else{
+        statusLine='Calendar proposal ready: '+built.finalChangedCount+' change(s), '+built.lockedCount+' locked, '+built.summaryDays+' day(s) parsed.';
+      }
+      calendarStatusRender(statusLine);
       _trainerProposal={
         weekStart:built.weekStart,
         proposal:built.proposal,
@@ -14165,15 +14955,23 @@ function calendarBuildWeekFromCalendar(opts){
         }),
         rows:built.rows,
         warnings:built.warnings,
+        changedCount:built.finalChangedCount,
+        lockedCount:built.lockedCount,
+        blockedByLockCount:built.blockedByLockCount,
+        targetHome:built.targetHome,targetHotel:built.targetHotel,targetHiit:built.targetHiit,
+        finalHome:built.finalHome,finalHotel:built.finalHotel,finalHiit:built.finalHiit,
+        minHome:built.minHome,minHotel:built.minHotel,minHiit:built.minHiit,
+        usedFallbackMinimums:!!built.usedFallbackMinimums,
+        diagnostics:diag,
         calendar:true,
         summary:summary,
         createdAt:Date.now(),
         source:(opts.auto?'calendar_auto':'calendar_manual')
       };
-      if(opts.auto&&rules.autoApplyUnlockedDays){
+      if(opts.auto&&rules.autoApplyUnlockedDays&&built.finalChangedCount>0){
         trainerApplyProposalUnlockedOnly();
         if(rules.autoShowProposalAfterRun)trainerRenderProposalSheet();
-        var rs=calendarRulesLoad();rs.lastAutoRunWeek=weekStart;calendarRulesSave(rs);
+        saveAutoRunState('ok','');
         appToast('Auto weekly planner applied to unlocked days.','var(--green)');
         return;
       }
@@ -14181,23 +14979,88 @@ function calendarBuildWeekFromCalendar(opts){
         trainerRenderProposalSheet();
       }
       if(opts.auto){
-        var rs2=calendarRulesLoad();rs2.lastAutoRunWeek=weekStart;calendarRulesSave(rs2);
-        appToast('Weekly calendar proposal ready.','var(--blue)');
+        saveAutoRunState('ok','');
+        appToast((built.finalChangedCount>0?'Weekly calendar proposal ready.':'Weekly calendar run complete (no changes).'),'var(--blue)');
       }else{
-        appToast('Calendar proposal ready: '+built.changedCount+' day(s) changed.','var(--blue)');
+        appToast((built.finalChangedCount>0?('Calendar proposal ready: '+built.finalChangedCount+' day(s) changed.'):'No calendar changes proposed.'),'var(--blue)');
       }
     })
-    .catch(function(){calendarStatusRender('Calendar unavailable — using saved plan');});
+    .catch(function(err){
+      var msg=String(err&&err.message||err||'Calendar unavailable');
+      var cached=cachedSummaryForWeek(weekStart);
+      if(cached){
+        _calendarWeekSummary=cached;
+        var builtCached=calendarPlannerBuildProposal(cached,null,null,rules);
+        _trainerProposal={
+          weekStart:builtCached.weekStart,
+          proposal:builtCached.proposal,
+          reasons:builtCached.rows.map(function(r){return r.date+': '+r.proposed+' — '+r.calendarReason+' '+r.ruleReason;}),
+          rows:builtCached.rows,
+          warnings:(builtCached.warnings||[]).concat(['Live refresh failed; using last saved calendar summary.']),
+          changedCount:builtCached.finalChangedCount,
+          lockedCount:builtCached.lockedCount,
+          blockedByLockCount:builtCached.blockedByLockCount,
+          targetHome:builtCached.targetHome,targetHotel:builtCached.targetHotel,targetHiit:builtCached.targetHiit,
+          finalHome:builtCached.finalHome,finalHotel:builtCached.finalHotel,finalHiit:builtCached.finalHiit,
+          minHome:builtCached.minHome,minHotel:builtCached.minHotel,minHiit:builtCached.minHiit,
+          usedFallbackMinimums:!!builtCached.usedFallbackMinimums,
+          calendar:true,
+          summary:cached,
+          createdAt:Date.now(),
+          source:(opts.auto?'calendar_auto_cached':'calendar_manual_cached')
+        };
+        calendarStatusRender('Calendar refresh failed. Showing proposal from last saved summary.');
+        if(!opts.auto||rules.autoShowProposalAfterRun)trainerRenderProposalSheet();
+        saveAutoRunState('error',msg);
+        if(!opts.auto)appToast('Live refresh failed; using saved calendar summary.','var(--orange)');
+        return;
+      }
+      if(msg==='missing_saved_ical_url'){
+        calendarStatusRender('No saved iCal URL. Paste your link once, then planner can auto-run.');
+      }else{
+        calendarStatusRender('Calendar unavailable — using saved plan');
+      }
+      saveAutoRunState('error',msg);
+      if(!opts.auto)appToast('Calendar planner failed: '+msg,'var(--orange)');
+    });
 }
 function calendarOpenRulesPrompt(){
   calendarPlannerToggleRules(true);
 }
+function calendarCopyPlannerDiagnostics(){
+  try{
+    var cfg=calendarCfgLoad();
+    var diag=(_trainerProposal&&_trainerProposal.diagnostics)||cfg.lastPlannerDiagnostics||null;
+    if(!diag){appToast('No planner diagnostics available yet.','var(--orange)');return;}
+    var txt=JSON.stringify(diag,null,2);
+    if(navigator&&navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(function(){
+        appToast('Planner diagnostics copied.','var(--green)');
+      }).catch(function(){
+        appToast('Could not copy diagnostics.','var(--orange)');
+      });
+      return;
+    }
+    appToast('Clipboard unavailable on this device.','var(--orange)');
+  }catch(e){
+    appToast('Could not copy diagnostics.','var(--orange)');
+  }
+}
 function calendarPlannerAutoRunMaybe(){
   try{
     var cfg=calendarCfgLoad(),rules=calendarRulesLoad(),weekStart=calendarWeekStartStr();
-    if(!cfg||!cfg.connected)return;
     if(!rules.autoRunEnabled)return;
-    if(String(rules.lastAutoRunWeek||'')===String(weekStart||''))return;
+    var hasSavedUrl=calendarIsValidIcalUrl(cfg&&cfg.icalUrl);
+    if(!hasSavedUrl){
+      if(calendarIsValidIcalUrl(WT_PERSONAL_DEFAULTS&&WT_PERSONAL_DEFAULTS.calendarIcalUrl)){
+        cfg.icalUrl=String(WT_PERSONAL_DEFAULTS.calendarIcalUrl||'').trim();
+        cfg.urlMask=wtMaskUrl(cfg.icalUrl);
+        calendarCfgSave(cfg);
+      }else{
+        return;
+      }
+    }
+    if(String((cfg&&cfg.lastAutoRunWeek)||'')===String(weekStart||'')&&String((cfg&&cfg.lastAutoRunStatus)||'')==='ok')return;
     calendarBuildWeekFromCalendar({auto:true});
   }catch(e){}
 }
@@ -14263,16 +15126,37 @@ function trainerBuildWeeklyProposal(){
 function trainerRenderProposalSheet(){
   var ov=document.getElementById('trainerProposalOverlay'),body=document.getElementById('trainerProposalBody');
   if(!ov||!body||!_trainerProposal)return;
-  var p=_trainerProposal.proposal,reasons=_trainerProposal.reasons||[],days=getWeekDates(_planWeekOffset||0),rows=_trainerProposal.rows||[];
+  var p=_trainerProposal.proposal,reasons=_trainerProposal.reasons||[],rows=_trainerProposal.rows||[];
+  var weekStart=String(_trainerProposal.weekStart||fmtDate(getWeekDates(_planWeekOffset||0)[0]));
+  var dayKeys=_trainerProposal.calendar?calendarPlannerDateSpan(weekStart):getWeekDates(_planWeekOffset||0).map(function(d){return fmtDate(d);});
+  var daySet={};dayKeys.forEach(function(ds){daySet[ds]=true;});
   reasons=reasons.filter(function(r){
     var m=String(r||'').match(/\b(\d{4}-\d{2}-\d{2})\b/);
     if(!m)return true;
-    return calendarDateInCurrentWeekLocal(m[1]);
+    return !!daySet[m[1]];
   });
   var mapRows={};rows.forEach(function(r){if(r&&r.date)mapRows[r.date]=r;});
-  body.innerHTML='<div style="font-size:0.68rem;color:var(--muted);margin-bottom:8px;">Schedule labels: HOME / HOTEL / HIIT / TRAVEL</div>'+
-    days.map(function(d){
-      var ds=fmtDate(d),oldv=_calendarMapPlanToLabel_(_weekPlan[ds]||'')||String(_weekPlan[ds]||'REST').toUpperCase(),nv=_calendarMapPlanToLabel_(p[ds]||_weekPlan[ds]||'')||oldv,chg=(oldv!==nv),row=mapRows[ds]||null;
+  var changedCount=(typeof _trainerProposal.changedCount==='number')?_trainerProposal.changedCount:(rows.filter(function(r){return r&&r.changed;}).length);
+  var blockedByLockCount=(typeof _trainerProposal.blockedByLockCount==='number')?_trainerProposal.blockedByLockCount:0;
+  var diag=_trainerProposal.diagnostics||null;
+  var summaryLine='Schedule labels: HOME / HOTEL / HIIT / TRAVEL';
+  if(_trainerProposal.calendar){
+    summaryLine='Calendar Proposal · '+changedCount+' change(s), '+(parseInt(_trainerProposal.lockedCount,10)||0)+' locked, week of '+weekStart+'.';
+  }
+  var countLine='';
+  if(_trainerProposal.calendar){
+    countLine='<div style="margin-top:6px;font-size:0.66rem;color:var(--text2);">Targets HOME/HOTEL/HIIT: '
+      +escHtml(String(_trainerProposal.targetHome||0))+'/'+escHtml(String(_trainerProposal.targetHotel||0))+'/'+escHtml(String(_trainerProposal.targetHiit||0))
+      +' · Final: '
+      +escHtml(String(_trainerProposal.finalHome||0))+'/'+escHtml(String(_trainerProposal.finalHotel||0))+'/'+escHtml(String(_trainerProposal.finalHiit||0))
+      +((_trainerProposal.usedFallbackMinimums)?' · minimum-target fallback used':'')
+      +'</div>';
+  }
+  body.innerHTML='<div style="font-size:0.68rem;color:var(--muted);margin-bottom:8px;">'+escHtml(summaryLine)+countLine+'</div>'+
+    dayKeys.map(function(ds){
+      var oldPlan=calendarPlannerExistingPlanForDate(ds)||_weekPlan[ds]||'';
+      var oldv=_calendarMapPlanToLabel_(oldPlan)||String(oldPlan||'REST').toUpperCase();
+      var nv=_calendarMapPlanToLabel_(p[ds]||oldPlan||'')||oldv,chg=(oldv!==nv),row=mapRows[ds]||null;
       var lockTxt=row&&row.locked?' · locked':'';
       var conf=row&&row.confidence?(' · '+String(row.confidence).toUpperCase()):'';
       var cal=row&&row.calendarReason?escHtml(row.calendarReason):'';
@@ -14285,8 +15169,51 @@ function trainerRenderProposalSheet(){
         '</div></div>';
     }).join('')+
     ((_trainerProposal.warnings&&_trainerProposal.warnings.length)?('<div style="margin-top:10px;font-size:0.67rem;color:var(--orange);line-height:1.45;">'+_trainerProposal.warnings.map(function(w){return '• '+escHtml(w);}).join('<br>')+'</div>'):'')+
-    '<div style="margin-top:10px;font-size:0.7rem;color:var(--text2);line-height:1.5;">'+(reasons.length?reasons.map(function(r){return '• '+escHtml(r);}).join('<br>'):'• No changes proposed; current week looks balanced.')+'</div>'+
+    (diag?(
+      '<details style="margin-top:10px;border:1px solid var(--border);border-radius:10px;padding:8px;background:var(--card2);">'+
+      '<summary style="cursor:pointer;font-size:0.68rem;color:var(--text2);font-weight:700;">Planner diagnostics</summary>'+
+      '<div style="margin-top:8px;"><button type="button" onclick="calendarCopyPlannerDiagnostics()" style="padding:6px 8px;background:var(--blue-dim);border:1px solid rgba(59,131,246,0.3);border-radius:8px;color:var(--blue);font-size:0.62rem;font-weight:700;cursor:pointer;">Copy diagnostics</button></div>'+
+      '<div style="margin-top:8px;font-size:0.64rem;color:var(--muted);line-height:1.45;">'+
+      'Week: '+escHtml(String(diag.weekStart||''))+
+      ' · Parsed: '+escHtml(String(diag.parsedDays||0))+
+      ' · Changed: '+escHtml(String(diag.finalChangedCount||0))+
+      ' · Locked: '+escHtml(String(diag.lockedCount||0))+
+      '<br>Targets H/H/H: '+escHtml(String(diag.targetHome||0))+'/'+escHtml(String(diag.targetHotel||0))+'/'+escHtml(String(diag.targetHiit||0))+
+      ' · Final: '+escHtml(String(diag.finalHome||0))+'/'+escHtml(String(diag.finalHotel||0))+'/'+escHtml(String(diag.finalHiit||0))+
+      (diag.usedFallbackMinimums?' · minimum fallback used':'')+
+      '</div>'+
+      '<div style="margin-top:8px;font-size:0.62rem;color:var(--muted);max-height:180px;overflow:auto;line-height:1.4;">'+
+      ((diag.perDay||[]).map(function(d){
+        return escHtml(String(d.date||''))+': '+escHtml(String(d.current||''))+' → '+escHtml(String(d.proposed||''))+
+          (d.changed?' [changed]':' [kept]')+
+          (d.locked?' [locked]':'')+
+          ' · '+escHtml(String(d.plannerRuleReason||''));
+      }).join('<br>')||'No day diagnostics captured.')+
+      '</div>'+
+      '</details>'
+    ):'')+
+    '<div style="margin-top:10px;font-size:0.7rem;color:var(--text2);line-height:1.5;">'+(
+      reasons.length
+        ?reasons.map(function(r){return '• '+escHtml(r);}).join('<br>')
+        :(changedCount>0
+          ?('• '+changedCount+' change(s) proposed. Review per-day rows above.')
+          :(changedCount===0&&blockedByLockCount>0
+            ?'• Calendar found changes, but all affected days are locked.'
+            :'• No changes proposed; current week looks balanced.'))
+    )+'</div>'+
     ((_trainerProposal.pending&&_trainerProposal.pending.length)?('<div style="margin-top:8px;font-size:0.66rem;color:var(--muted);">Pending: '+_trainerProposal.pending.map(escHtml).join(' · ')+'</div>'):'');
+  var applyBtn=document.getElementById('trainerApplyProposalBtn');
+  var applyUnlockedBtn=document.getElementById('trainerApplyProposalUnlockedBtn');
+  if(applyBtn){
+    applyBtn.textContent=(changedCount>0?('Apply proposed week ('+changedCount+')'):'No changes to apply');
+    if(changedCount>0){applyBtn.removeAttribute('disabled');applyBtn.style.opacity='';}
+    else{applyBtn.setAttribute('disabled','disabled');applyBtn.style.opacity='0.5';}
+  }
+  if(applyUnlockedBtn){
+    applyUnlockedBtn.textContent=(changedCount>0?'Apply only unlocked days':'Unlocked apply unavailable');
+    if(changedCount>0){applyUnlockedBtn.removeAttribute('disabled');applyUnlockedBtn.style.opacity='';}
+    else{applyUnlockedBtn.setAttribute('disabled','disabled');applyUnlockedBtn.style.opacity='0.5';}
+  }
   ov.style.display='flex';
 }
 function trainerCloseProposal(){
@@ -14301,16 +15228,26 @@ function trainerApplyProposalUnlockedOnly(){
 function trainerApplyProposalCore(unlockedOnly){
   if(!_trainerProposal||!_trainerProposal.proposal)return;
   var p=_trainerProposal.proposal;
+  var changedApplied=0;
   Object.keys(p).forEach(function(ds){
     if(unlockedOnly&&trainerDayLocked(ds))return;
     if(!unlockedOnly&&trainerDayLocked(ds)&&calendarRulesLoad().manualLocksWin)return;
-    _weekPlan[ds]=p[ds];
+    var before=String(_weekPlan[ds]||'');
+    var after=String(p[ds]||before);
+    if(before!==after)changedApplied++;
+    _weekPlan[ds]=after;
   });
+  if(changedApplied<=0){
+    trainerCloseProposal();
+    if((_trainerProposal&&_trainerProposal.blockedByLockCount||0)>0)appToast('Calendar found changes, but affected days are locked.','var(--orange)');
+    else appToast('No changes were applied.','var(--blue)');
+    return;
+  }
   trainerCloseProposal();
   renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
   saveWeekPlan();
   coachPushDecision({type:'apply_weekly_plan',weekStart:fmtDate(getWeekDates(_planWeekOffset||0)[0]),source:(_trainerProposal.coachUnified?'unified_coach':'trainer')});
-  appToast(unlockedOnly?'Applied proposal to unlocked days.':'Applied proposed week.','var(--green)');
+  appToast('Applied '+changedApplied+' calendar change'+(changedApplied===1?'':'s')+'.','var(--green)');
 }
 function trainerWeeklyReviewText(){
   var comp=trainerCompletionSummary();
