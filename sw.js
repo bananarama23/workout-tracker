@@ -1,4 +1,4 @@
-const SW_VERSION = 'wt-shell-v19-setup3';
+const SW_VERSION = 'wt-shell-v20-pwa-tap-unlock';
 const SHELL_CACHE = `wt-shell-${SW_VERSION}`;
 const OFFLINE_URLS = [
   './',
@@ -62,7 +62,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // App shell/static assets: cache-first
+  // HTML/navigation: network-first so old Home Screen shells cannot keep
+  // serving stale tap-guard code indefinitely. Offline still falls back cache.
+  if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
+    event.respondWith(
+      fetch(req).then((res) => {
+        const cpy = res.clone();
+        caches.open(SHELL_CACHE).then((cache) => cache.put(req, cpy)).catch(() => {});
+        return res;
+      }).catch(() => caches.match(req).then((hit) => hit || caches.match('./') || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Static assets: cache-first
   event.respondWith(
     caches.match(req).then((hit) => {
       if (hit) return hit;
