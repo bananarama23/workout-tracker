@@ -2525,8 +2525,8 @@ var WT_AUTH_OK_CACHE_KEY='wt_auth_ok_cache_v1';
 // Personal private defaults (Staticrypt deployment): first-load prefill only, never overwrite non-empty values.
 var WT_PERSONAL_DEFAULTS={
   appClientToken:'',
-  healthBridgeToken:'wt_health_2becd34dbfe3e70980517fce2e5aa49e0d40',
-  calendarIcalUrl:'https://calendar.google.com/calendar/ical/philksmith%40gmail.com/private-29f5f251620b2a780368620b891f7185/basic.ics'
+  healthBridgeToken:'',
+  calendarIcalUrl:''
 };
 var COACH_MEMORY_KEY='wt_coach_memory_v1';
 var COACH_DECISIONS_KEY='wt_coach_decisions_v1';
@@ -3705,8 +3705,8 @@ function appDoctorFlag(flag){
 function appDoctorDefaultState(){
   return {
     storage:{migrationVersion:MIGRATION_VERSION,lastLocalReadStatus:'unknown',lastLocalWriteStatus:'unknown'},
-    backend:{lastRoute:'',lastPingStatus:'unknown',lastPingTime:0,lastBackendError:'',lastDurationMs:0,lastRequestId:'',backendVersion:''},
-    sheet:{lastReadStatus:'unknown',lastReadTime:0,lastWriteStatus:'unknown',lastWriteTime:0,lastError:'',lastSyncedSessionId:''},
+    backend:{lastRoute:'',lastPingStatus:'unknown',lastPingTime:0,lastBackendError:'',lastDurationMs:0,lastRequestId:'',backendVersion:'',lastSyncArtifactsRouteUsed:'',lastSyncArtifactsStatus:'',lastSyncArtifactsRequestId:'',lastSyncArtifactsTime:0},
+    sheet:{lastReadStatus:'unknown',lastReadTime:0,lastWriteStatus:'unknown',lastWriteTime:0,lastError:'',lastSyncedSessionId:'',lastSyncArtifactsRoute:'',lastSyncArtifactsStatus:'',lastSyncArtifactsRequestId:'',lastSyncArtifactsTime:0,lastSyncArtifactsResults:[]},
     ai:{lastRoute:'',lastModel:'',lastStatus:'unknown',lastDurationMs:0,lastError:'',lastFinishReason:'',lastRawLength:0},
     queue:{currentRunningJob:'',pendingCount:0},
     bootstrap:{
@@ -6523,7 +6523,60 @@ function artifactQueueSessionById(sessionId,job){
 function artifactQueueSyncResultRows(res){
   var rows=(res&&res.data&&Array.isArray(res.data.results))?res.data.results:[];
   if(!rows.length&&Array.isArray(res&&res.results))rows=res.results;
-  return rows;
+  return Array.isArray(rows)?rows:[];
+}
+function artifactQueueSyncRowRetryable(row){
+  if(!row||typeof row!=='object')return true;
+  if(row.retryable===false)return false;
+  var code=String(row.errorCode||'').toLowerCase();
+  if(!code)return true;
+  if(code.indexOf('missing_')===0)return false;
+  if(code.indexOf('invalid_')===0)return false;
+  if(code==='artifact_type_unknown'||code==='schema_invalid'||code==='validation_error')return false;
+  return true;
+}
+function artifactQueueSyncFailureRowsForContract(list,errorCode,message){
+  return (Array.isArray(list)?list:[]).map(function(a){
+    return {
+      status:'error',
+      action:'failed',
+      artifactType:String((a&&a.artifactType)||'unknown'),
+      artifactId:String((a&&a.artifactId)||''),
+      planSlot:String((a&&a.planSlot)||''),
+      errorCode:String(errorCode||'sync_contract_invalid'),
+      message:String(message||'sync_contract_invalid'),
+      retryable:true
+    };
+  });
+}
+function artifactQueueSyncDoctorPatch(meta){
+  var m=meta&&typeof meta==='object'?meta:{};
+  var rows=Array.isArray(m.results)?m.results:[];
+  var compactRows=rows.slice(0,20).map(function(r){
+    return {
+      artifactType:String((r&&r.artifactType)||''),
+      artifactId:String((r&&r.artifactId)||''),
+      planSlot:String((r&&r.planSlot)||''),
+      status:String((r&&r.status)||'error'),
+      action:String((r&&r.action)||''),
+      errorCode:String((r&&r.errorCode)||''),
+      message:String((r&&r.message)||'')
+    };
+  });
+  var now=Date.now();
+  appDoctorPatchState('sheet',{
+    lastSyncArtifactsRoute:String(m.routeUsed||''),
+    lastSyncArtifactsStatus:String(m.status||'unknown'),
+    lastSyncArtifactsRequestId:String(m.requestId||''),
+    lastSyncArtifactsTime:now,
+    lastSyncArtifactsResults:compactRows
+  });
+  appDoctorPatchState('backend',{
+    lastSyncArtifactsRouteUsed:String(m.routeUsed||''),
+    lastSyncArtifactsStatus:String(m.status||'unknown'),
+    lastSyncArtifactsRequestId:String(m.requestId||''),
+    lastSyncArtifactsTime:now
+  });
 }
 function artifactQueueSyncArtifacts(artifacts,opts){
   var list=(Array.isArray(artifacts)?artifacts:[]).filter(Boolean);
@@ -6543,7 +6596,7 @@ function artifactQueueSyncArtifacts(artifacts,opts){
       };
     });
     wtLogEvent('phase7_fault_forced_sync_failure',{errorCode:forcedCode,failedCount:forcedRows.length});
-    return Promise.resolve({
+    var forcedRes={
       status:'error',
       errorCode:forcedCode,
       message:forcedCode+'_for_testing',
@@ -6551,7 +6604,14 @@ function artifactQueueSyncArtifacts(artifacts,opts){
       results:forcedRows,
       successCount:0,
       failedCount:forcedRows.length
+    };
+    artifactQueueSyncDoctorPatch({
+      routeUsed:'syncArtifacts',
+      status:'error',
+      requestId:forcedRes.requestId,
+      results:forcedRows
     });
+    return Promise.resolve(forcedRes);
   }
   var requestId='sync_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
   var timeoutMs=Math.max(15000,parseInt((opts&&opts.timeoutMs)||45000,10)||45000);
@@ -6562,11 +6622,60 @@ function artifactQueueSyncArtifacts(artifacts,opts){
     timeoutMs:timeoutMs,
     _nonce:Date.now()
   }).then(function(res){
+    var envelopeType=String((res&&res.type)||'');
+    var routeUsed=String((res&&res.data&&res.data.routeUsed)||envelopeType||'');
     var rows=artifactQueueSyncResultRows(res);
+    if(routeUsed!=='syncArtifacts'){
+      rows=artifactQueueSyncFailureRowsForContract(
+        list,
+        'sync_contract_route_mismatch',
+        'Expected syncArtifacts response envelope; got '+(routeUsed||'unknown_route')
+      );
+      var mismatch={
+        status:'error',
+        errorCode:'sync_contract_route_mismatch',
+        message:'sync_contract_route_mismatch',
+        requestId:String((res&&res.requestId)||requestId),
+        results:rows,
+        successCount:0,
+        failedCount:rows.length
+      };
+      artifactQueueSyncDoctorPatch({
+        routeUsed:routeUsed||envelopeType||'unknown_route',
+        status:'error',
+        requestId:mismatch.requestId,
+        results:rows
+      });
+      return mismatch;
+    }
+    if(!rows.length&&list.length){
+      var contractMsg='Missing per-artifact results from syncArtifacts response';
+      rows=artifactQueueSyncFailureRowsForContract(
+        list,
+        'sync_contract_missing_results',
+        contractMsg
+      );
+      var missingRows={
+        status:'error',
+        errorCode:'sync_contract_missing_results',
+        message:contractMsg,
+        requestId:String((res&&res.requestId)||requestId),
+        results:rows,
+        successCount:0,
+        failedCount:rows.length
+      };
+      artifactQueueSyncDoctorPatch({
+        routeUsed:'unknown_route_contract_fail',
+        status:'error',
+        requestId:missingRows.requestId,
+        results:rows
+      });
+      return missingRows;
+    }
     var failed=rows.filter(function(r){return String((r&&r.status)||'error')!=='ok';}).length;
     var okCount=rows.length-failed;
-    return {
-      status:String((res&&res.status)|| (failed>0?'error':'ok')),
+    var out={
+      status:String((res&&res.status)|| (failed>0?(okCount>0?'partial':'error'):'ok')),
       errorCode:String((res&&res.errorCode)||''),
       message:String((res&&res.message)||''),
       requestId:String((res&&res.requestId)||requestId),
@@ -6574,6 +6683,13 @@ function artifactQueueSyncArtifacts(artifacts,opts){
       successCount:Math.max(0,okCount),
       failedCount:Math.max(0,failed)
     };
+    artifactQueueSyncDoctorPatch({
+      routeUsed:'syncArtifacts',
+      status:out.status,
+      requestId:out.requestId,
+      results:rows
+    });
+    return out;
   });
 }
 function artifactQueueFindSyncResult(results,artifactType,artifactId,planSlot){
@@ -6613,6 +6729,9 @@ function artifactQueueSetSessionSyncState(sessionId,nextState,lastError){
   if(lastError)row.lastSyncError=String(lastError);
   recSession(row);
   workoutUpsertCache(row);
+  if(String(row.syncState||'')==='synced'){
+    appDoctorPatchState('sheet',{lastSyncedSessionId:String(row.sessionId||'')});
+  }
   return row;
 }
 function artifactQueueSetReviewSyncState(sessionId,nextState,lastError){
@@ -6671,7 +6790,11 @@ function artifactQueueSyncSessionJob(job){
   return artifactQueueSyncArtifacts([artifact],{timeoutMs:60000}).then(function(sync){
     var row=artifactQueueFindSyncResult(sync.results,'session',sd.sessionId,'');
     if(!row||String(row.status||'')!=='ok'){
-      throw new Error(artifactQueueSyncErr(row,sync.message||'sheet_sync_failed'));
+      throw {
+        retryable:artifactQueueSyncRowRetryable(row),
+        code:String((row&&row.errorCode)||'sheet_sync_failed'),
+        message:artifactQueueSyncErr(row,sync.message||'sheet_sync_failed')
+      };
     }
     var newest=artifactQueueSessionById(sd.sessionId,{payload:sd})||sd;
     newest.syncState='synced';
@@ -6685,14 +6808,16 @@ function artifactQueueSyncSessionJob(job){
     return {sessionId:newest.sessionId,artifactIds:[newest.sessionId]};
   }).catch(function(err){
     var newest=artifactQueueSessionById(sd.sessionId,{payload:sd})||sd;
-    newest.syncState='sync_failed_retryable';
+    var retryable=!(err&&err.retryable===false);
+    var failSyncState=retryable?'sync_failed_retryable':'sync_failed_final';
+    newest.syncState=failSyncState;
     newest._hasSynced=false;
     newest.updatedAt=wtNowIso();
     recSession(newest);workoutUpsertCache(newest);
-    workoutSetSyncStatus('Saved on this device — sheet retry pending','sync_failed_retryable');
-    setSyncBadges('cached','sync pending');
+    workoutSetSyncStatus(retryable?'Saved on this device — sheet retry pending':'Saved on this device — sheet sync failed',failSyncState);
+    setSyncBadges('cached',retryable?'sync pending':'sync failed');
     wtLogEvent('sheet_sync_failed',{sessionId:newest.sessionId,attempt:job.attempts,errorCode:String(err&&err.message||err||'sync_failed')});
-    throw {retryable:true,code:'sheet_sync_failed',message:String(err&&err.message||err||'sync_failed')};
+    throw {retryable:retryable,code:String((err&&err.code)||'sheet_sync_failed'),message:String(err&&err.message||err||'sync_failed')};
   });
 }
 function artifactQueueReviewTargetsPersist(sd,review){
@@ -6813,7 +6938,11 @@ function artifactQueueSyncReviewJob(job){
   return artifactQueueSyncArtifacts([artifact],{timeoutMs:40000}).then(function(sync){
     var row=artifactQueueFindSyncResult(sync.results,'post_workout_review',artifact.artifactId,'');
     if(!row||String(row.status||'')!=='ok'){
-      throw new Error(artifactQueueSyncErr(row,sync.message||'review_sync_failed'));
+      throw {
+        retryable:artifactQueueSyncRowRetryable(row),
+        code:String((row&&row.errorCode)||'review_sync_failed'),
+        message:artifactQueueSyncErr(row,sync.message||'review_sync_failed')
+      };
     }
     var newest=postWorkoutReviewLoad(sid)||review;
     newest.syncState='synced';
@@ -6823,11 +6952,12 @@ function artifactQueueSyncReviewJob(job){
     return {reviewId:newest.reviewId,artifactIds:[newest.reviewId]};
   }).catch(function(err){
     var newest=postWorkoutReviewLoad(sid)||review;
-    newest.syncState='sync_failed_retryable';
+    var retryable=!(err&&err.retryable===false);
+    newest.syncState=retryable?'sync_failed_retryable':'sync_failed_final';
     newest.updatedAt=wtNowIso();
     postWorkoutReviewSave(newest);
     wtLogEvent('post_review_sync_failed',{sessionId:sid,reviewId:newest.reviewId,errorCode:String(err&&err.message||err||'review_sync_failed')});
-    throw {retryable:true,code:'review_sync_failed',message:String(err&&err.message||err||'review_sync_failed')};
+    throw {retryable:retryable,code:String((err&&err.code)||'review_sync_failed'),message:String(err&&err.message||err||'review_sync_failed')};
   });
 }
 function artifactQueueUpdateCoachStateJob(job){
@@ -6878,7 +7008,11 @@ function artifactQueueSyncCoachStateJob(job){
   return artifactQueueSyncArtifacts([artifact],{timeoutMs:45000}).then(function(sync){
     var row=artifactQueueFindSyncResult(sync.results,'coach_state',artifact.artifactId,'');
     if(!row||String(row.status||'')!=='ok'){
-      throw new Error(artifactQueueSyncErr(row,sync.message||'coach_state_sync_failed'));
+      throw {
+        retryable:artifactQueueSyncRowRetryable(row),
+        code:String((row&&row.errorCode)||'coach_state_sync_failed'),
+        message:artifactQueueSyncErr(row,sync.message||'coach_state_sync_failed')
+      };
     }
     var newest=coachStateLoad();
     newest.syncState='synced';
@@ -6889,12 +7023,13 @@ function artifactQueueSyncCoachStateJob(job){
     return {coachStateRevision:newest.coachStateRevision,artifactIds:[newest.coachStateId]};
   }).catch(function(err){
     var newest=coachStateLoad();
-    newest.syncState='sync_failed_retryable';
+    var retryable=!(err&&err.retryable===false);
+    newest.syncState=retryable?'sync_failed_retryable':'sync_failed_final';
     newest.updatedAt=wtNowIso();
     newest.lastUpdatedAt=newest.updatedAt;
     newest=coachStateSave(newest);
     wtLogEvent('coach_state_sync_failed',{sessionId:newest.lastCompletedSessionId,coachStateRevision:newest.coachStateRevision,errorCode:String(err&&err.message||err||'coach_state_sync_failed')});
-    throw {retryable:true,code:'coach_state_sync_failed',message:String(err&&err.message||err||'coach_state_sync_failed')};
+    throw {retryable:retryable,code:String((err&&err.code)||'coach_state_sync_failed'),message:String(err&&err.message||err||'coach_state_sync_failed')};
   });
 }
 function artifactQueueAiGeneratePlanPromise(type,opts){
@@ -7233,7 +7368,12 @@ function artifactQueueSyncGeneratedPlanJob(job){
     artifacts.forEach(function(a){
       var row=artifactQueueFindSyncResult(sync.results,a.artifactType,a.artifactId,a.planSlot||'');
       if(!row||String(row.status||'')!=='ok'){
-        failures.push({artifact:a,error:artifactQueueSyncErr(row,sync.message||'artifact_sync_failed')});
+        failures.push({
+          artifact:a,
+          error:artifactQueueSyncErr(row,sync.message||'artifact_sync_failed'),
+          retryable:artifactQueueSyncRowRetryable(row),
+          errorCode:String((row&&row.errorCode)||'artifact_sync_failed')
+        });
         return;
       }
       var t=String(a.artifactType||'').toLowerCase();
@@ -7252,22 +7392,24 @@ function artifactQueueSyncGeneratedPlanJob(job){
     if(failures.length){
       failures.forEach(function(f){
         var t=String((f.artifact&&f.artifact.artifactType)||'').toLowerCase();
+        var failState=f.retryable===false?'sync_failed_final':'sync_failed_retryable';
         if(t==='generated_plan'){
-          generatedPlanMarkSyncState(f.artifact.artifactId,'sync_failed_retryable',f.error);
+          generatedPlanMarkSyncState(f.artifact.artifactId,failState,f.error);
         }else if(t==='session'){
-          artifactQueueSetSessionSyncState(f.artifact.artifactId,'sync_failed_retryable',f.error);
+          artifactQueueSetSessionSyncState(f.artifact.artifactId,failState,f.error);
         }else if(t==='post_workout_review'){
-          artifactQueueSetReviewSyncState(String((f.artifact.data&&f.artifact.data.sessionId)||sid||''),'sync_failed_retryable',f.error);
+          artifactQueueSetReviewSyncState(String((f.artifact.data&&f.artifact.data.sessionId)||sid||''),failState,f.error);
         }else if(t==='coach_state'){
-          artifactQueueSetCoachStateSyncState('sync_failed_retryable',f.error);
+          artifactQueueSetCoachStateSyncState(failState,f.error);
         }else if(t==='equipment_profile'){
-          artifactQueueSetEquipmentProfileSyncState('sync_failed_retryable',f.error);
+          artifactQueueSetEquipmentProfileSyncState(failState,f.error);
         }
       });
       var msg='generated_plan_sync_partial_failure:'+failures.map(function(f){
         return String((f.artifact&&f.artifact.artifactType)||'unknown')+'('+String((f.artifact&&f.artifact.artifactId)||'')+'): '+String(f.error||'failed');
       }).join(' | ');
-      throw {retryable:true,code:'generated_plan_sync_partial_failure',message:msg};
+      var hasRetryable=failures.some(function(f){return f.retryable!==false;});
+      throw {retryable:hasRetryable,code:'generated_plan_sync_partial_failure',message:msg};
     }
     var newest=generatedPlanFindById(plan.planId)||plan;
     wtLogEvent('generated_plan_sync_success',{
@@ -7279,10 +7421,12 @@ function artifactQueueSyncGeneratedPlanJob(job){
     });
     return {planId:newest.planId,artifactIds:artifacts.map(function(a){return String(a.artifactId||'');}).filter(Boolean)};
   }).catch(function(err){
-    generatedPlanMarkSyncState(plan.planId,'sync_failed_retryable',String(err&&err.message||err||'generated_plan_sync_failed'));
-    if(peerPlan&&peerPlan.planId)generatedPlanMarkSyncState(peerPlan.planId,'sync_failed_retryable',String(err&&err.message||err||'generated_plan_sync_failed'));
+    var retryable=!(err&&err.retryable===false);
+    var failState=retryable?'sync_failed_retryable':'sync_failed_final';
+    generatedPlanMarkSyncState(plan.planId,failState,String(err&&err.message||err||'generated_plan_sync_failed'));
+    if(peerPlan&&peerPlan.planId)generatedPlanMarkSyncState(peerPlan.planId,failState,String(err&&err.message||err||'generated_plan_sync_failed'));
     wtLogEvent('generated_plan_sync_failed',{sessionId:sid,sourceSessionId:sid,planId:plan.planId,targetType:generatedPlanTypeFromSlot(plan.planSlot),errorCode:String(err&&err.message||err||'generated_plan_sync_failed')});
-    throw {retryable:true,code:'generated_plan_sync_failed',message:String(err&&err.message||err||'generated_plan_sync_failed')};
+    throw {retryable:retryable,code:String((err&&err.code)||'generated_plan_sync_failed'),message:String(err&&err.message||err||'generated_plan_sync_failed')};
   });
 }
 function artifactQueueRunJob(job){
@@ -16936,6 +17080,81 @@ function appDoctorHomeHotelAudit(){
     risk_note:'legacy AI_WORKOUT cache remains for compatibility; generated_plan artifacts are canonical when present'
   };
 }
+function appDoctorWorkoutSaveAudit(){
+  var latest=appDoctorLatestSession();
+  var sid=String((latest&&latest.sessionId)||'');
+  var syncJob=sid?artifactQueueLatestJob('sync_session_to_sheet',sid):null;
+  return {
+    finishWorkout_local_first:true,
+    session_identity_fields:['sessionId','clientMutationId','sessionRevision'],
+    duplicate_prevention:'artifact_queue_idempotencyKey',
+    local_save_timing:'before_sheet_ai_generation',
+    sheet_sync_timing:'queued_non_blocking',
+    offline_behavior:'completed_local_plus_retryable_sync_jobs',
+    latest_sessionId:sid,
+    latest_session_sync_state:String((latest&&latest.syncState)||'unknown'),
+    latest_sync_job_status:String((syncJob&&syncJob.status)||''),
+    risks:[
+      'legacy_syncData_path_and_artifact_queue_path_both_exist_for_compatibility',
+      'session_note_updates_create_new_session_revision_and_sync_job'
+    ]
+  };
+}
+function appDoctorQueueAudit(){
+  var q=artifactQueueSummary();
+  var jobs=(artifactQueueLoadStore().jobs||[]);
+  return {
+    queue_store_key:ARTIFACT_QUEUE_KEY,
+    persistent_local_queue:true,
+    idb_mirror_enabled:typeof indexedDB!=='undefined',
+    resumable_after_reload:true,
+    pending_count:(q.pending||0)+(q.running||0)+(q.failed_retryable||0),
+    failed_retryable_count:(q.failed_retryable||0),
+    failed_final_count:(q.failed_final||0),
+    next_retry_time:appDoctorFmtTs(q.nextRetryAt||0),
+    stale_overwrite_guard:'session_freshness_and_plan_activation_checks',
+    current_running_job:String(_artifactQueueCurrentJob||''),
+    queue_job_types:Array.from(new Set(jobs.map(function(j){return String((j&&j.jobType)||'');}).filter(Boolean))).sort()
+  };
+}
+function appDoctorBackendAudit(){
+  var st=appDoctorLoadState();
+  var appStatus={};
+  try{appStatus=JSON.parse(localStorage.getItem(WT_APPSTATUS_CACHE_KEY)||'{}')||{};}catch(e){appStatus={};}
+  return {
+    backend_url_active:!!CLOUD_URL,
+    envelope_shape:'status/type/data/errorCode/message/durationMs/requestId',
+    syncArtifacts_route_expected:true,
+    getLatestTrainerState_route_expected:true,
+    auth_mode:'single_user_no_browser_token',
+    duplicate_helpers_in_gs:'appStatus/authTest/setApiKeys/setupTokensOnce consolidated to avoid route ambiguity',
+    last_backend_status:String((st.backend&&st.backend.lastPingStatus)||'unknown'),
+    backend_version_cached:String((st.backend&&st.backend.backendVersion)||appStatus.backend_version||'unknown')
+  };
+}
+function appDoctorPwaAudit(){
+  return {
+    runtime:appDoctorRuntimeLabel(),
+    standalone:wtIsStandalone(),
+    service_worker_version:String(WT_SW_VERSION||''),
+    cache_version:String(CACHE_VERSION||''),
+    no_sw_mode:!!WT_NO_SW_MODE,
+    online:!!navigator.onLine,
+    risk:'stale_pwa_shell_can_hold_old_logic_until_cache_refresh'
+  };
+}
+function appDoctorSecurityAudit(){
+  var hasDefaultHealthToken=!!(WT_PERSONAL_DEFAULTS&&String(WT_PERSONAL_DEFAULTS.healthBridgeToken||'').trim());
+  var hasDefaultCalendarUrl=!!(WT_PERSONAL_DEFAULTS&&String(WT_PERSONAL_DEFAULTS.calendarIcalUrl||'').trim());
+  return {
+    frontend_default_health_token_present:hasDefaultHealthToken,
+    frontend_default_calendar_url_present:hasDefaultCalendarUrl,
+    debug_report_redaction_enabled:true,
+    app_doctor_sensitive_key_redaction:true,
+    backend_keys_expected_in_script_properties:['OPENAI_API_KEY','GEMINI_API_KEY','ANTHROPIC_API_KEY','HEALTH_BRIDGE_TOKEN'],
+    note:'app_doctor_and_copy_report_redact_token_like_values'
+  };
+}
 function appDoctorPendingSheetWrites(){
   var workoutQ=0,nutQ=0;
   var reviewQ=0,coachQ=0,planQ=0,failed=0,nextRetry=0;
@@ -17073,6 +17292,10 @@ function appDoctorSnapshot(){
       last_backend_error:String((st.backend&&st.backend.lastBackendError)||''),
       last_backend_durationMs:parseInt((st.backend&&st.backend.lastDurationMs)||0,10)||0,
       last_backend_requestId:String((st.backend&&st.backend.lastRequestId)||''),
+      last_syncArtifacts_route_used:String((st.backend&&st.backend.lastSyncArtifactsRouteUsed)||''),
+      last_syncArtifacts_status:String((st.backend&&st.backend.lastSyncArtifactsStatus)||'unknown'),
+      last_syncArtifacts_requestId:String((st.backend&&st.backend.lastSyncArtifactsRequestId)||''),
+      last_syncArtifacts_time:appDoctorFmtTs(st.backend&&st.backend.lastSyncArtifactsTime),
       apps_script_backend_version:String((st.backend&&st.backend.backendVersion)||appStatus.backend_version||'unknown')
     },
     google_sheet:{
@@ -17083,7 +17306,12 @@ function appDoctorSnapshot(){
       last_sheet_error:String((st.sheet&&st.sheet.lastError)||''),
       pending_sheet_writes_count:queues.total,
       pending_sheet_writes_breakdown:queues,
-      last_synced_session_id:String((st.sheet&&st.sheet.lastSyncedSessionId)||'')
+      last_synced_session_id:String((st.sheet&&st.sheet.lastSyncedSessionId)||''),
+      last_syncArtifacts_route:String((st.sheet&&st.sheet.lastSyncArtifactsRoute)||''),
+      last_syncArtifacts_status:String((st.sheet&&st.sheet.lastSyncArtifactsStatus)||'unknown'),
+      last_syncArtifacts_requestId:String((st.sheet&&st.sheet.lastSyncArtifactsRequestId)||''),
+      last_syncArtifacts_time:appDoctorFmtTs(st.sheet&&st.sheet.lastSyncArtifactsTime),
+      last_syncArtifacts_results:Array.isArray(st.sheet&&st.sheet.lastSyncArtifactsResults)?st.sheet.lastSyncArtifactsResults:[]
     },
     ai:{
       last_ai_route:String((st.ai&&st.ai.lastRoute)||''),
@@ -17198,16 +17426,51 @@ function appDoctorSnapshot(){
     },
     feature_flags:flags,
     dependency_audit:{
+      workout_save_sync:appDoctorWorkoutSaveAudit(),
       coach_pulse:appDoctorCoachPulseAudit(),
       home_hotel_generation:appDoctorHomeHotelAudit(),
+      queue_background:appDoctorQueueAudit(),
+      backend_sheet:appDoctorBackendAudit(),
+      pwa_runtime:appDoctorPwaAudit(),
+      security:appDoctorSecurityAudit(),
       storage_sync_risk:'localStorage_and_IDB_dual_write_with_queue_retries_can_diverge_until_reconciled'
     }
   };
 }
+function appDoctorMaskSecretString(value){
+  var out=String(value||'');
+  out=out.replace(/(sk-ant-[A-Za-z0-9_\-]{6})[A-Za-z0-9_\-]+/g,'$1…REDACTED');
+  out=out.replace(/(sk-[A-Za-z0-9_\-]{6})[A-Za-z0-9_\-]+/g,'$1…REDACTED');
+  out=out.replace(/(AIza[0-9A-Za-z_\-]{4})[0-9A-Za-z_\-]+/g,'$1…REDACTED');
+  out=out.replace(/(wt_health_[a-f0-9]{6})[a-f0-9]+/gi,'$1…REDACTED');
+  out=out.replace(/(private-)[A-Za-z0-9]+/gi,'$1REDACTED');
+  out=out.replace(/(authorization\s*[:=]\s*bearer\s+)[A-Za-z0-9_\-\.]+/ig,'$1[REDACTED]');
+  return out;
+}
+function appDoctorSensitiveKey(key){
+  return /(token|secret|api[_-]?key|password|authorization|bridge[_-]?token)/i.test(String(key||''));
+}
+function appDoctorRedactValue(key,value){
+  if(value===undefined||value===null)return value;
+  if(typeof value==='string'){
+    if(appDoctorSensitiveKey(key))return '[REDACTED]';
+    return appDoctorMaskSecretString(value);
+  }
+  if(typeof value==='number'||typeof value==='boolean')return value;
+  if(Array.isArray(value))return value.map(function(v){return appDoctorRedactValue(key,v);});
+  if(typeof value==='object'){
+    var out={};
+    Object.keys(value).forEach(function(k){
+      out[k]=appDoctorRedactValue(k,value[k]);
+    });
+    return out;
+  }
+  return appDoctorMaskSecretString(String(value));
+}
 function appDoctorKvRows(obj){
   var out='';
   Object.keys(obj||{}).forEach(function(k){
-    var v=obj[k];
+    var v=appDoctorRedactValue(k,obj[k]);
     var txt=(typeof v==='string')?v:JSON.stringify(v);
     out+='<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid var(--border);"><div style="font-size:0.66rem;color:var(--muted);">'+escHtml(String(k))+'</div><div style="font-size:0.68rem;color:var(--text2);text-align:right;word-break:break-word;">'+escHtml(String(txt||''))+'</div></div>';
   });
@@ -19015,7 +19278,7 @@ function appDoctorCopyReport(){
     var tl=JSON.parse(localStorage.getItem(APP_DOCTOR_TEST_LAB_KEY)||'null');
     if(tl)rep.testLab=tl;
   }catch(e){}
-  var txt=JSON.stringify(rep,null,2);
+  var txt=JSON.stringify(appDoctorRedactValue('root',rep),null,2);
   if(navigator.clipboard&&navigator.clipboard.writeText){
     navigator.clipboard.writeText(txt).then(function(){appToast('Debug report copied.','var(--green)');}).catch(function(){appToast('Copy failed.','var(--orange)');});
   }else{
@@ -22110,7 +22373,11 @@ function calendarPlannerAnalyzeDay(day,rules){
   if(day&&day.flags&&day.flags.overnight_travel)overnight=true;
   if(day&&day.flags&&day.flags.late_departure)lateDeparture=true;
   var longestWindow=calendarPlannerFreeWindow(day);
-  var noUsableWindow=longestWindow<minWin;
+  var explicitWindowBlocked=!!(day&&day.window_blocked===true);
+  if((!longestWindow||longestWindow<=0)&&real.length===0&&!explicitWindowBlocked){
+    longestWindow=Math.max(minWin,180);
+  }
+  var noUsableWindow=explicitWindowBlocked?true:(longestWindow<minWin);
   var travelDominated=(travelMinutes>=300&&longestWindow<minWin)||(busyMinutes>=900&&longestWindow<minWin);
   var hardTravel=(earlyArrival||overnight||(travelDominated&&noUsableWindow));
   var cleanOpen=(!hardTravel&&!away&&!lateDeparture&&busyMinutes<=240&&longestWindow>=minWin&&real.length<=2);
@@ -22166,6 +22433,14 @@ function calendarPlannerFetchSummary(weekStart){
         var copy=Object.assign({},d||{});
         var k=calendarDayDateKey(copy);
         if(k)copy.date=k;
+        copy.real_events_used=Array.isArray(copy.real_events_used)?copy.real_events_used:[];
+        copy.ignored_events=Array.isArray(copy.ignored_events)?copy.ignored_events:[];
+        if(!Array.isArray(copy.free_windows)&&copy.real_events_used.length===0){
+          copy.free_windows=calendarPlannerDefaultOpenWindows(45);
+        }else if(!Array.isArray(copy.free_windows)){
+          copy.free_windows=[];
+        }
+        copy.parseStatus=String(copy.parseStatus||'ok');
         return copy;
       });
       return out;
@@ -22182,6 +22457,160 @@ function calendarPlannerComputeFinalDiff(rows){
     if(r&&r.locked&&r.trace&&r.trace.lockBlocked)blockedByLockCount++;
   });
   return {changedCount:changedCount,lockedCount:lockedCount,blockedByLockCount:blockedByLockCount};
+}
+function calendarPlannerDefaultOpenWindows(minWin){
+  var m=Math.max(15,parseInt(minWin||45,10)||45);
+  return [
+    {period:'morning',minutes:Math.max(m,150)},
+    {period:'afternoon_evening',minutes:Math.max(m,180)},
+    {period:'longest',minutes:Math.max(m,180)}
+  ];
+}
+function calendarValidateSummaryForPlanning(summary,weekStart){
+  var ws=String(weekStart||calendarCurrentWeekStartStr());
+  var expectedDates=calendarPlannerDateSpan(ws);
+  var expectedMap={};
+  expectedDates.forEach(function(ds){expectedMap[ds]=1;});
+  var out={
+    requestedWeekStart:ws,
+    returnedWeekStart:'',
+    summaryExists:!!summary,
+    summaryDaysLength:0,
+    expectedDaysLength:7,
+    parsedDays:0,
+    missingDates:expectedDates.slice(0),
+    validForPlanning:false,
+    validationError:'',
+    normalizedSummary:null
+  };
+  if(!summary||typeof summary!=='object'){
+    out.validationError='summary_missing';
+    return out;
+  }
+  var filtered=calendarFilterSummaryToWeek(summary,ws);
+  if(!filtered||typeof filtered!=='object'){
+    out.validationError='summary_filter_failed';
+    return out;
+  }
+  out.returnedWeekStart=String(filtered.weekStart||summary.weekStart||'');
+  if(!Array.isArray(filtered.days)){
+    out.validationError='summary_days_missing';
+    return out;
+  }
+  out.summaryDaysLength=filtered.days.length;
+  var byDate={};
+  filtered.days.forEach(function(day){
+    var d=Object.assign({},day||{});
+    var ds=calendarDayDateKey(d);
+    if(!ds||!expectedMap[ds]||byDate[ds])return;
+    d.date=ds;
+    d.real_events_used=Array.isArray(d.real_events_used)?d.real_events_used:[];
+    d.ignored_events=Array.isArray(d.ignored_events)?d.ignored_events:[];
+    if(!Array.isArray(d.free_windows)&&d.real_events_used.length===0){
+      d.free_windows=calendarPlannerDefaultOpenWindows(45);
+    }else if(!Array.isArray(d.free_windows)){
+      d.free_windows=[];
+    }
+    var parseStatus=String(d.parseStatus||'').toLowerCase();
+    var hasUsableMarker=Array.isArray(d.free_windows)||d.usable_window_minutes!==undefined||d.open_day===true;
+    if(parseStatus!=='ok'){
+      d.parseStatus=hasUsableMarker?'ok':'failed';
+    }else{
+      d.parseStatus='ok';
+    }
+    byDate[ds]=d;
+  });
+  out.missingDates=expectedDates.filter(function(ds){return !byDate[ds];});
+  out.parsedDays=expectedDates.reduce(function(acc,ds){
+    return acc+((byDate[ds]&&String(byDate[ds].parseStatus||'')==='ok')?1:0);
+  },0);
+  out.normalizedSummary={
+    weekStart:ws,
+    weekEnd:nutShiftDate(ws,6),
+    days:expectedDates.map(function(ds){return byDate[ds];}).filter(Boolean),
+    ignoredReminders:expectedDates.reduce(function(acc,ds){
+      var d=byDate[ds];
+      return acc+(parseInt(d&&d.ignored_count,10)||0);
+    },0)
+  };
+  if(out.parsedDays===0){
+    out.validationError='parsed_days_zero';
+    return out;
+  }
+  if(out.summaryDaysLength!==7){
+    out.validationError='days_length_not_7';
+    return out;
+  }
+  if(out.missingDates.length){
+    out.validationError='missing_dates';
+    return out;
+  }
+  if(out.returnedWeekStart&&String(out.returnedWeekStart)!==ws){
+    out.validationError='week_start_mismatch';
+    return out;
+  }
+  out.validForPlanning=true;
+  out.validationError='';
+  return out;
+}
+function calendarPlannerBuildPreservedProposal(weekStart,validation){
+  var ws=String(weekStart||calendarCurrentWeekStartStr());
+  var days=calendarPlannerDateSpan(ws);
+  var locks=trainerLocksLoad();
+  var proposal={},rows=[];
+  var missing=(validation&&Array.isArray(validation.missingDates))?validation.missingDates:[];
+  days.forEach(function(ds){
+    var curPlan=calendarPlannerExistingPlanForDate(ds)||_weekPlan[ds]||'';
+    var curLabel=_calendarMapPlanToLabel_(curPlan)||'';
+    var parseStatus=(missing.indexOf(ds)>=0)?'missing_day':'unavailable';
+    rows.push({
+      date:ds,
+      current:curLabel,
+      proposed:curLabel,
+      locked:!!(locks[ds]&&locks[ds].locked),
+      confidence:'low',
+      parseStatus:parseStatus,
+      calendarReason:'Calendar data unavailable for this day.',
+      ruleReason:(parseStatus==='missing_day'?'Missing calendar day; current plan preserved.':'Calendar data unavailable; current plan preserved.'),
+      changed:false,
+      trace:{
+        missingDay:(parseStatus==='missing_day'),
+        targetContribution:'preserved_current',
+        keepCurrentReason:'calendar_data_unavailable'
+      }
+    });
+    proposal[ds]=String(curPlan||'');
+  });
+  var diff=calendarPlannerComputeFinalDiff(rows);
+  var err=String((validation&&validation.validationError)||'calendar_data_unavailable');
+  var msg=(err==='parsed_days_zero')
+    ?'Calendar data unavailable for this week. Current plan preserved.'
+    :'Calendar data unavailable for this week. Current plan preserved.';
+  return {
+    weekStart:ws,
+    summary:(validation&&validation.normalizedSummary)||null,
+    proposal:proposal,
+    rows:rows,
+    warnings:[msg],
+    changedCount:0,
+    lockedCount:diff.lockedCount,
+    blockedByLockCount:0,
+    parsedDays:parseInt((validation&&validation.parsedDays)||0,10)||0,
+    targetHome:0,targetHotel:0,targetHiit:0,
+    finalHome:0,finalHotel:0,finalHiit:0,
+    minHome:0,minHotel:0,minHiit:0,
+    usedFallbackMinimums:false,
+    requestedWeekStart:ws,
+    returnedWeekStart:String((validation&&validation.returnedWeekStart)||''),
+    summaryExists:!!(validation&&validation.summaryExists),
+    summaryDaysLength:parseInt((validation&&validation.summaryDaysLength)||0,10)||0,
+    expectedDaysLength:7,
+    missingDates:missing.slice(0),
+    validForPlanning:false,
+    validationError:err,
+    optimizerRan:false,
+    currentPlanPreserved:true
+  };
 }
 function calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules,opts){
   opts=opts||{};
@@ -22200,35 +22629,72 @@ function calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules,opts
   var nextBoundary=nextOverride||_calendarMapPlanToLabel_(calendarPlannerExistingPlanForDate(nextMonday))||String((nextByDate[nextMonday]&&nextByDate[nextMonday].recommended_label)||'').toUpperCase();
   var assigned={},analysisByDate={};
   days.forEach(function(ds){
-    var d=byDate[ds]||{date:ds,real_events_used:[],ignored_events:[],flags:{}};
-    var curLabel=_calendarMapPlanToLabel_(calendarPlannerExistingPlanForDate(ds)||_weekPlan[ds]||'');
+    var hasDay=!!byDate[ds];
+    var d=hasDay?Object.assign({},byDate[ds]):null;
+    var curPlan=calendarPlannerExistingPlanForDate(ds)||_weekPlan[ds]||'';
+    var curLabel=_calendarMapPlanToLabel_(curPlan);
     var locked=(!!(locks[ds]&&locks[ds].locked)&&rules.manualLocksWin);
-    var dayAnalysis=calendarPlannerAnalyzeDay(d,rules);
-    analysisByDate[ds]=dayAnalysis;
-    var recommended=String((d&&d.recommended_label)||'').toUpperCase();
-    var confidence=dayAnalysis.hardTravel?'high':(dayAnalysis.cleanOpen?'high':((dayAnalysis.rawEvents&&dayAnalysis.rawEvents.length)?'medium':'low'));
+    var dayAnalysis=null;
+    var recommended='';
+    var confidence='low';
+    if(hasDay){
+      d.real_events_used=Array.isArray(d.real_events_used)?d.real_events_used:[];
+      d.ignored_events=Array.isArray(d.ignored_events)?d.ignored_events:[];
+      if(!Array.isArray(d.free_windows)&&d.real_events_used.length===0){
+        d.free_windows=calendarPlannerDefaultOpenWindows(rules&&rules.minWorkoutWindowMinutes);
+      }else if(!Array.isArray(d.free_windows)){
+        d.free_windows=[];
+      }
+      if(!d.parseStatus)d.parseStatus='ok';
+      dayAnalysis=calendarPlannerAnalyzeDay(d,rules);
+      analysisByDate[ds]=dayAnalysis;
+      recommended=String((d&&d.recommended_label)||'').toUpperCase();
+      confidence=dayAnalysis.hardTravel?'high':(dayAnalysis.cleanOpen?'high':((dayAnalysis.rawEvents&&dayAnalysis.rawEvents.length)?'medium':'low'));
+    }
     var row={
       date:ds,
       current:curLabel||'',
       proposed:'',
       locked:locked,
       confidence:confidence,
-      calendarReason:dayAnalysis.reason,
+      parseStatus:(hasDay?String((d&&d.parseStatus)||'ok'):'missing_day'),
+      calendarReason:(hasDay&&dayAnalysis?dayAnalysis.reason:'Calendar day missing from parsed summary.'),
       ruleReason:'',
       changed:false,
       trace:{
-        rawEvents:dayAnalysis.rawEvents,
-        ignoredEvents:dayAnalysis.ignoredEvents,
+        rawEvents:(hasDay&&dayAnalysis)?dayAnalysis.rawEvents:[],
+        ignoredEvents:(hasDay&&dayAnalysis)?dayAnalysis.ignoredEvents:[],
         calendarClassification:recommended||'',
-        detectedTravelBlocks:{earlyArrival:dayAnalysis.earlyArrival,overnightTravel:dayAnalysis.overnight,travelDominated:dayAnalysis.travelMinutes>=300},
-        detectedLayoverBlocks:{awayDay:dayAnalysis.away,layoverDay:dayAnalysis.layover},
-        usableWorkoutWindowMin:dayAnalysis.longestWindow,
+        detectedTravelBlocks:(hasDay&&dayAnalysis)?{earlyArrival:dayAnalysis.earlyArrival,overnightTravel:dayAnalysis.overnight,travelDominated:dayAnalysis.travelMinutes>=300}:{earlyArrival:false,overnightTravel:false,travelDominated:false},
+        detectedLayoverBlocks:(hasDay&&dayAnalysis)?{awayDay:dayAnalysis.away,layoverDay:dayAnalysis.layover}:{awayDay:false,layoverDay:false},
+        usableWorkoutWindowMin:(hasDay&&dayAnalysis)?dayAnalysis.longestWindow:0,
         overriddenByLock:locked,
         lockBlocked:(locked&&recommended&&recommended!==String(curLabel||'')),
         keepCurrentReason:'',
-        targetContribution:''
+        targetContribution:'',
+        missingDay:!hasDay
       }
     };
+    if(!hasDay){
+      row.proposed=row.current;
+      row.changed=false;
+      row.ruleReason='Missing calendar day; current plan preserved.';
+      row.trace.keepCurrentReason='missing_calendar_day';
+      row.trace.targetContribution='preserved_current';
+      assigned[ds]='__PRESERVED_MISSING_DAY__';
+      rows.push(row);
+      return;
+    }
+    if(String(row.parseStatus||'').toLowerCase()!=='ok'){
+      row.proposed=row.current;
+      row.changed=false;
+      row.ruleReason='Calendar day parse failed; current plan preserved.';
+      row.trace.keepCurrentReason='calendar_day_parse_failed';
+      row.trace.targetContribution='preserved_current';
+      assigned[ds]='__PRESERVED_PARSE_FAILED__';
+      rows.push(row);
+      return;
+    }
     if(locked){
       row.proposed=row.current;
       row.ruleReason='Manual lock preserved.';
@@ -22309,6 +22775,14 @@ function calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules,opts
   days.forEach(function(ds,idx){
     if(assigned[ds])return;
     var a=analysisByDate[ds],row=rows[idx];
+    if(!a){
+      assigned[ds]='__PRESERVED_ANALYSIS_UNAVAILABLE__';
+      row.proposed=row.current||'';
+      row.ruleReason='Missing calendar analysis; current plan preserved.';
+      row.trace.keepCurrentReason='analysis_unavailable';
+      row.trace.targetContribution='preserved_current';
+      return;
+    }
     if(row.current&&(row.current==='HOME'||row.current==='HOTEL'||row.current==='HIIT'||row.current==='TRAVEL')){
       var targetPressure=(count('HOME')<plannedHomeTarget)||(count('HOTEL')<plannedHotelTarget)||(count('HIIT')<plannedHiitTarget);
       var ambiguous=(!a.rawEvents.length&&row.confidence==='low');
@@ -22321,8 +22795,8 @@ function calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules,opts
         return;
       }
     }
-    if(a.hardTravel||a.noUsableWindow){
-      assigned[ds]='TRAVEL';row.proposed='TRAVEL';row.ruleReason='No usable workout window.';
+    if(a.hardTravel||(a.noUsableWindow&&((a.rawEvents&&a.rawEvents.length>0)||a.busyMinutes>0||a.travelMinutes>0))){
+      assigned[ds]='TRAVEL';row.proposed='TRAVEL';row.ruleReason='No usable workout window from parsed calendar events.';
       row.trace.targetContribution='travel_guardrail';return;
     }
     if(a.away&&count('HOTEL')<rules.targetHotel&&canUseStrength(idx)){
@@ -22351,7 +22825,11 @@ function calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules,opts
   rows.forEach(function(r){
     r.changed=(r.proposed!==r.current);
     if(r.locked)r.confidence='high';
-    out[r.date]=_calendarMapLabelToPlan_(r.proposed||'TRAVEL');
+    var mapped='';
+    if(r.proposed)mapped=_calendarMapLabelToPlan_(r.proposed);
+    else if(r.current)mapped=_calendarMapLabelToPlan_(r.current);
+    else mapped=String(calendarPlannerExistingPlanForDate(r.date)||_weekPlan[r.date]||'');
+    out[r.date]=String(mapped||'');
   });
   var diff=calendarPlannerComputeFinalDiff(rows);
   return {
@@ -22412,12 +22890,15 @@ function calendarBuildWeekProposalForStart(weekStart,opts){
   opts=opts||{};
   var ws=String(weekStart||calendarCurrentWeekStartStr());
   var rules=opts.rules||calendarRulesLoad();
-  var summary=opts.summary||calendarPlannerSummaryFromCacheByWeek(ws);
-  if(!summary)return null;
-  summary=calendarFilterSummaryToWeek(summary,ws);
+  var summaryRaw=opts.summary||calendarPlannerSummaryFromCacheByWeek(ws)||null;
+  var validation=calendarValidateSummaryForPlanning(summaryRaw,ws);
   var prevSummary=opts.prevSummary||calendarPlannerSummaryFromCacheByWeek(nutShiftDate(ws,-7))||null;
   var nextSummary=opts.nextSummary||calendarPlannerSummaryFromCacheByWeek(nutShiftDate(ws,7))||null;
-  var built=calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules,{boundaryOverrides:(opts.boundaryOverrides||{})});
+  if(!validation.validForPlanning){
+    return calendarPlannerBuildPreservedProposal(ws,validation);
+  }
+  var summary=validation.normalizedSummary||calendarFilterSummaryToWeek(summaryRaw,ws);
+  var built=calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules,{boundaryOverrides:(opts.boundaryOverrides||{}),validation:validation,optimizerEnabled:true});
   var now=fmtDate(new Date());
   if(ws===calendarCurrentWeekStartStr()){
     (built.rows||[]).forEach(function(r){
@@ -22448,11 +22929,21 @@ function calendarBuildWeekProposalForStart(weekStart,opts){
     changedCount:parseInt(built.finalChangedCount,10)||0,
     lockedCount:parseInt(built.lockedCount,10)||0,
     blockedByLockCount:parseInt(built.blockedByLockCount,10)||0,
-    parsedDays:parseInt(built.summaryDays,10)||0,
+    parsedDays:parseInt(validation.parsedDays,10)||0,
     targetHome:built.targetHome,targetHotel:built.targetHotel,targetHiit:built.targetHiit,
     finalHome:built.finalHome,finalHotel:built.finalHotel,finalHiit:built.finalHiit,
     minHome:built.minHome,minHotel:built.minHotel,minHiit:built.minHiit,
-    usedFallbackMinimums:!!built.usedFallbackMinimums
+    usedFallbackMinimums:!!built.usedFallbackMinimums,
+    requestedWeekStart:String(validation.requestedWeekStart||ws),
+    returnedWeekStart:String(validation.returnedWeekStart||ws),
+    summaryExists:!!validation.summaryExists,
+    summaryDaysLength:parseInt(validation.summaryDaysLength||0,10)||0,
+    expectedDaysLength:7,
+    missingDates:(validation.missingDates||[]).slice(0),
+    validForPlanning:true,
+    validationError:'',
+    optimizerRan:true,
+    currentPlanPreserved:false
   };
 }
 function calendarBuildPlanningHorizon(opts){
@@ -22490,31 +22981,28 @@ function calendarBuildPlanningHorizon(opts){
       var nextTriplet=payload.nextTriplet||{};
       if(!thisTriplet.summary)thisTriplet.summary=calendarPlannerSummaryFromCacheByWeek(thisWeekStart);
       if(!nextTriplet.summary)nextTriplet.summary=calendarPlannerSummaryFromCacheByWeek(nextWeekStart);
-      if(!thisTriplet.summary&&!nextTriplet.summary){
-        throw new Error('calendar_summary_unavailable');
-      }
-      var thisBuilt=thisTriplet.summary?calendarBuildWeekProposalForStart(thisWeekStart,{
+      var thisBuilt=calendarBuildWeekProposalForStart(thisWeekStart,{
         rules:rules,
         summary:thisTriplet.summary,
         prevSummary:thisTriplet.prevSummary,
         nextSummary:thisTriplet.nextSummary
-      }):null;
+      });
       var boundaryOverrides={};
-      if(thisBuilt&&thisBuilt.rows){
+      if(thisBuilt&&thisBuilt.rows&&thisBuilt.validForPlanning){
         thisBuilt.rows.forEach(function(r){
           if(r&&r.date&&r.proposed)boundaryOverrides[r.date]=String(r.proposed||'').toUpperCase();
         });
       }
-      var nextBuilt=nextTriplet.summary?calendarBuildWeekProposalForStart(nextWeekStart,{
+      var nextBuilt=calendarBuildWeekProposalForStart(nextWeekStart,{
         rules:rules,
         summary:nextTriplet.summary,
         prevSummary:nextTriplet.prevSummary||thisTriplet.summary||null,
         nextSummary:nextTriplet.nextSummary,
         boundaryOverrides:boundaryOverrides
-      }):null;
+      });
       var targetWeeksBuilt=[];
-      if(thisBuilt)targetWeeksBuilt.push(thisWeekStart);
-      if(nextBuilt)targetWeeksBuilt.push(nextWeekStart);
+      if(thisBuilt&&thisBuilt.optimizerRan)targetWeeksBuilt.push(thisWeekStart);
+      if(nextBuilt&&nextBuilt.optimizerRan)targetWeeksBuilt.push(nextWeekStart);
       var diag={
         source:sourceTag,
         autoRun:!!opts.auto,
@@ -22526,29 +23014,48 @@ function calendarBuildPlanningHorizon(opts){
         usedUiOffsetForPlanning:false,
         previousWeekUsedOnlyAsContext:true,
         thisWeek:{
-          weekStart:thisWeekStart,
-          parsedDays:thisBuilt?thisBuilt.parsedDays:0,
-          changedCount:thisBuilt?thisBuilt.changedCount:0,
-          lockedCount:thisBuilt?thisBuilt.lockedCount:0
+          requestedWeekStart:thisWeekStart,
+          returnedWeekStart:String((thisBuilt&&thisBuilt.returnedWeekStart)||''),
+          summaryExists:!!(thisBuilt&&thisBuilt.summaryExists),
+          summaryDaysLength:parseInt((thisBuilt&&thisBuilt.summaryDaysLength)||0,10)||0,
+          expectedDaysLength:7,
+          parsedDays:parseInt((thisBuilt&&thisBuilt.parsedDays)||0,10)||0,
+          missingDates:(thisBuilt&&thisBuilt.missingDates)?thisBuilt.missingDates.slice(0):[],
+          validForPlanning:!!(thisBuilt&&thisBuilt.validForPlanning),
+          validationError:String((thisBuilt&&thisBuilt.validationError)||''),
+          optimizerRan:!!(thisBuilt&&thisBuilt.optimizerRan),
+          changedCount:parseInt((thisBuilt&&thisBuilt.changedCount)||0,10)||0,
+          currentPlanPreserved:!!(thisBuilt&&thisBuilt.currentPlanPreserved)
         },
         nextWeek:{
-          weekStart:nextWeekStart,
-          parsedDays:nextBuilt?nextBuilt.parsedDays:0,
-          changedCount:nextBuilt?nextBuilt.changedCount:0,
-          lockedCount:nextBuilt?nextBuilt.lockedCount:0
+          requestedWeekStart:nextWeekStart,
+          returnedWeekStart:String((nextBuilt&&nextBuilt.returnedWeekStart)||''),
+          summaryExists:!!(nextBuilt&&nextBuilt.summaryExists),
+          summaryDaysLength:parseInt((nextBuilt&&nextBuilt.summaryDaysLength)||0,10)||0,
+          expectedDaysLength:7,
+          parsedDays:parseInt((nextBuilt&&nextBuilt.parsedDays)||0,10)||0,
+          missingDates:(nextBuilt&&nextBuilt.missingDates)?nextBuilt.missingDates.slice(0):[],
+          validForPlanning:!!(nextBuilt&&nextBuilt.validForPlanning),
+          validationError:String((nextBuilt&&nextBuilt.validationError)||''),
+          optimizerRan:!!(nextBuilt&&nextBuilt.optimizerRan),
+          changedCount:parseInt((nextBuilt&&nextBuilt.changedCount)||0,10)||0,
+          currentPlanPreserved:!!(nextBuilt&&nextBuilt.currentPlanPreserved)
         },
         warnings:[]
       };
-      var statusParts=['Calendar parsed this week and next week.'];
+      var thisValid=!!(thisBuilt&&thisBuilt.validForPlanning);
+      var nextValid=!!(nextBuilt&&nextBuilt.validForPlanning);
+      var horizonStatus='Calendar parsed this week and next week.';
+      if(thisValid&&!nextValid)horizonStatus='This week parsed. Next week calendar unavailable.';
+      else if(!thisValid&&nextValid)horizonStatus='Next week parsed. This week calendar unavailable.';
+      else if(!thisValid&&!nextValid)horizonStatus='Calendar could not parse this week or next week. Current plan preserved.';
+      var statusParts=[horizonStatus];
       statusParts.push('This week: '+(thisBuilt?thisBuilt.changedCount:0)+' changes, '+(thisBuilt?thisBuilt.lockedCount:0)+' locked, '+(thisBuilt?thisBuilt.parsedDays:0)+' days parsed.');
       statusParts.push('Next week: '+(nextBuilt?nextBuilt.changedCount:0)+' changes, '+(nextBuilt?nextBuilt.lockedCount:0)+' locked, '+(nextBuilt?nextBuilt.parsedDays:0)+' days parsed.');
       if(selectedOffsetAtRun===-1){
         statusParts.push('Last week is review-only and was not planned.');
       }
-      if(!thisBuilt||!nextBuilt){
-        var missing=(!thisBuilt?'this week':'next week');
-        statusParts.push('Live summary missing for '+missing+'; fallback data used where available.');
-      }
+      diag.horizonStatusText=horizonStatus;
       var mergedProposal={};
       var reasons=[];
       var warnings=[];
@@ -22563,7 +23070,7 @@ function calendarBuildPlanningHorizon(opts){
         });
       });
       diag.warnings=warnings.slice(0,12);
-      _calendarWeekSummary=thisTriplet.summary||nextTriplet.summary||null;
+      _calendarWeekSummary=(thisValid&&thisTriplet.summary)?thisTriplet.summary:((nextValid&&nextTriplet.summary)?nextTriplet.summary:null);
       _trainerProposal={
         horizon:true,
         calendar:true,
@@ -22799,7 +23306,7 @@ function trainerRenderProposalSheet(){
     var thisWeek=(_trainerProposal.weeks&&_trainerProposal.weeks.thisWeek)||null;
     var nextWeek=(_trainerProposal.weeks&&_trainerProposal.weeks.nextWeek)||null;
     var diag=_trainerProposal.diagnostics||null;
-    var statusLead='Calendar parsed this week and next week.';
+    var statusLead=String((diag&&diag.horizonStatusText)||'Calendar parsed this week and next week.');
     if((_planWeekOffset||0)===-1)statusLead+=' Last week is review-only and was not planned.';
     function weekSectionHtml(weekKey,label,b){
       if(!b){
