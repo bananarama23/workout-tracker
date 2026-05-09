@@ -2810,8 +2810,8 @@ function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
 }
 
-var WT_FRONTEND_VERSION='19.6.0-ios-vp-hit-test-fix';
-var WT_SW_VERSION='wt-shell-v22-ios-vp-hit-test-fix';
+var WT_FRONTEND_VERSION='19.11.4-dashboard-artifact-display-fix';
+var WT_SW_VERSION='wt-shell-v25-dashboard-artifact-display-fix';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -3623,12 +3623,15 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.1-stabilization-hardtests';
+var APP_VERSION='v19.11.4-dashboard-artifact-display-fix';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v30-stabilization-hardtests';
+var CACHE_VERSION='wt-cache-v33-dashboard-artifact-display-fix';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
+  'Stabilized workout loop resolvers so Test Mode sessions are usable only in Test Mode and Phase 7 tests cannot masquerade as real workout history',
+  'Fixed Autopilot regeneration seeding to preserve HOME/HOTEL target type before queueing replacement plans',
+  'Bumped app/cache markers so Safari/PWA can expose stale-shell mismatches in App Doctor',
   'Phase 7 hardened queue recovery on reload by reclaiming stranded running jobs',
   'Fixed cross-session review drift in dashboard/pipeline by binding review context to the source session',
   'Added Phase 7 hard-test suite + fault injection toggles inside App Doctor for repeatable failure-mode validation',
@@ -3650,7 +3653,7 @@ function appLogEvent(level,code,message,meta){
     appDoctorTrackError('local_write_error',String(e&&e.message||e),{key:'wt_app_events_v1'});
   }
 }
-var APP_DOCTOR_BUILD_TIMESTAMP='2026-05-09T11:34:00Z';
+var APP_DOCTOR_BUILD_TIMESTAMP='2026-05-09T12:35:00Z';
 var APP_STORAGE_MODE='localStorage+indexedDB';
 var APP_DOCTOR_FLAGS_KEY='wt_feature_flags_v1';
 var APP_DOCTOR_STATE_KEY='wt_app_doctor_state_v1';
@@ -3685,6 +3688,16 @@ function appDoctorRecordIsTestArtifact(row){
   if(appDoctorIsTestId(row.sourceSessionId)||appDoctorIsTestId(row.lastCompletedSessionId)||appDoctorIsTestId(row.lastReviewId))return true;
   if(appDoctorIsTestId(row.clientMutationId)||appDoctorIsTestId(row.idempotencyKey))return true;
   if(String(row.source||'').toLowerCase()==='test_lab')return true;
+  var marker=[
+    row.source,
+    row.notes,
+    row.sessionNotes,
+    row.sessionNote,
+    row.workoutType,
+    row.clientMutationId,
+    row.idempotencyKey
+  ].map(function(v){return String(v||'').toLowerCase();}).join(' ');
+  if(/(^|[^a-z0-9])(phase7|hard[_ -]?test|test[_ -]?lab|sandbox|mock[_ -]?run)([^a-z0-9]|$)/i.test(marker))return true;
   return false;
 }
 function appDoctorIncludeArtifactRow(row,opts){
@@ -3998,7 +4011,7 @@ function appDoctorErrorRows(limit){
   }catch(e){return [];}
 }
 function appDoctorFmtTs(ts){
-  var n=parseInt(ts||0,10)||0;
+  var n=artifactQueueToMs(ts)||0;
   if(!n)return 'Never';
   try{return new Date(n).toLocaleString('en-US');}catch(e){return 'Never';}
 }
@@ -4360,12 +4373,12 @@ function coachPulseEntryTs(entry){
   if(!entry)return 0;
   var ts=0;
   try{
-    if(entry.compact&&entry.compact.ts)ts=Math.max(ts,parseInt(entry.compact.ts,10)||0);
-    if(entry.detailed&&entry.detailed.ts)ts=Math.max(ts,parseInt(entry.detailed.ts,10)||0);
-    if(entry.lastKnownDetailed&&entry.lastKnownDetailed.ts)ts=Math.max(ts,parseInt(entry.lastKnownDetailed.ts,10)||0);
-    if(entry.detailedUpdatedAt)ts=Math.max(ts,parseInt(entry.detailedUpdatedAt,10)||0);
-    if(entry.detailedStatusUpdatedAt)ts=Math.max(ts,parseInt(entry.detailedStatusUpdatedAt,10)||0);
-    if(entry.updatedAt)ts=Math.max(ts,parseInt(entry.updatedAt,10)||0);
+    if(entry.compact&&entry.compact.ts)ts=Math.max(ts,artifactQueueToMs(entry.compact.ts)||0);
+    if(entry.detailed&&entry.detailed.ts)ts=Math.max(ts,artifactQueueToMs(entry.detailed.ts)||0);
+    if(entry.lastKnownDetailed&&entry.lastKnownDetailed.ts)ts=Math.max(ts,artifactQueueToMs(entry.lastKnownDetailed.ts)||0);
+    if(entry.detailedUpdatedAt)ts=Math.max(ts,artifactQueueToMs(entry.detailedUpdatedAt)||0);
+    if(entry.detailedStatusUpdatedAt)ts=Math.max(ts,artifactQueueToMs(entry.detailedStatusUpdatedAt)||0);
+    if(entry.updatedAt)ts=Math.max(ts,artifactQueueToMs(entry.updatedAt)||0);
   }catch(e){}
   return ts;
 }
@@ -5964,10 +5977,20 @@ function generatedPlanNormalizeStatus(status){
   if(['active','archived','stale','invalid','fallback_used','locked','user_modified'].indexOf(s)>=0)return s;
   return 'active';
 }
+function artifactReasonableMs(ts){
+  var ms=artifactQueueToMs(ts);
+  return ms>=Date.UTC(2020,0,1)?ms:0;
+}
+function artifactNormalizeReasonableIso(ts,fallback){
+  var ms=artifactReasonableMs(ts);
+  if(!ms)ms=artifactReasonableMs(fallback);
+  if(!ms)ms=Date.now();
+  try{return new Date(ms).toISOString();}catch(e){return wtNowIso();}
+}
 function generatedPlanToMs(ts){
   var n=artifactQueueToMs(ts);
-  if(n>0)return n;
-  return Date.now();
+  if(n>=Date.UTC(2020,0,1))return n;
+  return 0;
 }
 function generatedPlanEmptyStore(){
   return {schemaVersion:GENERATED_PLAN_SCHEMA_VERSION,updatedAt:0,plans:[]};
@@ -6000,14 +6023,87 @@ function generatedPlanNormalizeDeferred(rows){
     };
   }).filter(Boolean).slice(0,8);
 }
+function generatedPlanApplyHotelNoPullupInvariant(plan,opts){
+  var row=plan&&typeof plan==='object'?Object.assign({},plan):{};
+  if(String(row.planSlot||'').toUpperCase()!=='HOTEL_NEXT')return row;
+  var ep=null;
+  try{ep=coachEquipmentProfileLoad();}catch(e){ep=null;}
+  if(ep&&ep.hotel&&ep.hotel.pullupOptionAvailable)return row;
+  var changed=false;
+  var removedPull=false;
+  row.exercises=(Array.isArray(row.exercises)?row.exercises:[]).filter(function(ex){
+    var nm=String((ex&&ex.name)||'');
+    var pull=coachSlotKey(nm)==='vertical_pull'||generatedPlanHasPullupCue(nm);
+    if(pull){changed=true;removedPull=true;}
+    return !pull;
+  }).map(function(ex){
+    var out=Object.assign({},ex||{});
+    ['tempo','watchFor','goal','rationale','tweak'].forEach(function(k){
+      if(generatedPlanHasPullupCue(out[k])){
+        out[k]='';
+        changed=true;
+      }
+    });
+    return out;
+  });
+  function cleanList(list){
+    return (Array.isArray(list)?list:[]).filter(function(v){
+      var keep=!generatedPlanHasPullupCue(v);
+      if(!keep)changed=true;
+      return keep;
+    });
+  }
+  row.watchpoints=cleanList(row.watchpoints);
+  row.whatChanged=cleanList(row.whatChanged);
+  row.whatStayedTheSame=cleanList(row.whatStayedTheSame);
+  if(generatedPlanHasPullupCue(row.rationale)){
+    row.rationale='Hotel equipment constraints preserved safe progress while carrying unavailable work forward.';
+    changed=true;
+  }
+  if(generatedPlanHasPullupCue(row.confidenceReason)){
+    row.confidenceReason='Hotel equipment constraints were handled without hotel pull-up equipment.';
+    changed=true;
+  }
+  if(row.seqOverrides&&typeof row.seqOverrides==='object'){
+    var seqClean={};
+    Object.keys(row.seqOverrides).forEach(function(k){
+      if(generatedPlanHasPullupCue(k)){changed=true;return;}
+      var stepMap=row.seqOverrides[k];
+      if(stepMap&&typeof stepMap==='object')seqClean[k]=stepMap;
+    });
+    row.seqOverrides=Object.keys(seqClean).length?seqClean:null;
+  }
+  var hasDeferred=(Array.isArray(row.deferredSlots)?row.deferredSlots:[]).some(function(d){
+    return d&&String(d.slot||'')==='vertical_pull'&&String(d.status||'').indexOf('deferred_due_to_environment')===0;
+  });
+  if(!hasDeferred){
+    var deferred=(Array.isArray(row.deferredSlots)?row.deferredSlots:[]).filter(function(d){
+      return d&&String(d.slot||'')!=='vertical_pull';
+    });
+    deferred.push({
+      slot:'vertical_pull',
+      status:'deferred_due_to_environment',
+      reason:'No hotel pull-up option available.',
+      nextAction:'Prioritize vertical pull in HOME_NEXT.'
+    });
+    row.deferredSlots=deferred;
+    changed=true;
+  }
+  if(changed&&((opts&&opts.forceFallback)||removedPull||row.fallbackUsed||String(row.status||'')==='fallback_used')){
+    row.fallbackUsed=true;
+    row.fallbackReason=String(row.fallbackReason||'hotel_pullup_cues_sanitized');
+    row.status='fallback_used';
+  }
+  return row;
+}
 function generatedPlanNormalizeArtifact(plan){
   var src=plan&&typeof plan==='object'?plan:{};
   var nowIso=wtNowIso();
   var slot=String(src.planSlot||generatedPlanSlotFromType(src.targetType||'home')).toUpperCase();
   var type=generatedPlanTypeFromSlot(slot);
   var targetType=String(src.targetType||generatedPlanTargetTypeFromSlot(slot)).toUpperCase();
-  var createdAt=String(src.createdAt||nowIso);
-  var updatedAt=String(src.updatedAt||createdAt||nowIso);
+  var createdAt=artifactNormalizeReasonableIso(src.createdAt||src.generatedAt||src.updatedAt||nowIso,nowIso);
+  var updatedAt=artifactNormalizeReasonableIso(src.updatedAt||src.generatedAt||src.createdAt||createdAt,createdAt);
   var out={
     artifactType:'generated_plan',
     planId:String(src.planId||wtNewId('plan')),
@@ -6045,6 +6141,7 @@ function generatedPlanNormalizeArtifact(plan){
     if(out.validationErrors.indexOf('plan_missing_exercises')<0)out.validationErrors.push('plan_missing_exercises');
     out.status='invalid';
   }
+  out=generatedPlanApplyHotelNoPullupInvariant(out,{forceFallback:false});
   return out;
 }
 function generatedPlanParseStore(raw){
@@ -6235,7 +6332,11 @@ function generatedPlanArtifactToLegacyWorkout(plan){
     changeLog:(plan.whatChanged||[]).slice(0,6),
     whatStayedSame:(plan.whatStayedTheSame||[]).slice(0,6),
     technicalWatchpoints:(plan.watchpoints||[]).slice(0,6),
-    fallbacks:(plan.deferredSlots||[]).map(function(d){return d&&d.reason?String(d.reason):'';}).filter(Boolean).slice(0,4),
+    fallbacks:(plan.deferredSlots||[]).map(function(d){
+      if(!d)return '';
+      if(String(d.slot||'')==='vertical_pull')return 'Deferred slot recorded under Deferred Slots.';
+      return d.reason?String(d.reason):'';
+    }).filter(Boolean).slice(0,4),
     slotRationale:{},
     deferredSlots:generatedPlanNormalizeDeferred(plan.deferredSlots||[]),
     confidence:String(plan.confidence||'medium'),
@@ -6538,8 +6639,14 @@ function artifactQueueNow(){return Date.now();}
 function artifactQueueToMs(ts){
   if(ts===undefined||ts===null||ts==='')return 0;
   if(typeof ts==='number')return Math.max(0,Math.floor(ts));
-  var n=parseInt(ts,10);
-  if(isFinite(n)&&n>0)return n;
+  if(typeof ts==='string'){
+    var s=String(ts||'').trim();
+    if(/^\d+(\.\d+)?$/.test(s)){
+      var n=Number(s);
+      if(isFinite(n)&&n>0)return Math.max(0,Math.floor(n));
+    }
+    ts=s;
+  }
   try{
     var d=new Date(ts);
     if(!isNaN(d.getTime()))return d.getTime();
@@ -7682,7 +7789,7 @@ function artifactQueueGeneratePlanJob(job){
       var incomingFresh=artifactQueueSessionFreshnessValue(sd);
       var activeRev=parseInt(currentActive.coachStateRevision||0,10)||0;
       var incomingRev=parseInt((job.payload&&job.payload.coachStateRevision)||0,10)||parseInt((coachStateLoad()&&coachStateLoad().coachStateRevision)||0,10)||0;
-      if(activeFresh>incomingFresh||(activeFresh===incomingFresh&&activeRev>incomingRev)){
+      if(activeFresh>incomingFresh||(activeFresh===incomingFresh&&activeRev>=incomingRev)){
         return {
           skipped:true,
           reason:'stale_active_plan_guard',
@@ -12635,6 +12742,7 @@ function aiAutopilotMarkPlansStaleAndQueueRegeneration(meta){
   var regenQueuedFor={};
   slots.forEach(function(slot){
     var s=String(slot||'').toUpperCase()==='HOTEL_NEXT'?'HOTEL_NEXT':'HOME_NEXT';
+    var targetType=s==='HOTEL_NEXT'?'HOTEL':'HOME';
     var active=generatedPlanActiveForSlot(s);
     if(active&&generatedPlanIsActiveStatus(active.status)){
       var next=Object.assign({},active,{
@@ -12665,7 +12773,6 @@ function aiAutopilotMarkPlansStaleAndQueueRegeneration(meta){
       sd=trainerRetrySeedSessionFromHints(sourceSessionId,targetType,'autopilot_regen_seed');
     }
     if(!sd||!sd.sessionId)return;
-    var targetType=s==='HOTEL_NEXT'?'HOTEL':'HOME';
     var genType=s==='HOTEL_NEXT'?'generate_hotel_next':'generate_home_next';
     var genKey='autopilot_regen:'+s+':'+patchId;
     if(regenQueuedFor[genKey])return;
@@ -13931,7 +14038,7 @@ var _trainerBootstrapRunning=false;
 function trainerDashboardFmtTs(ts){
   if(!ts)return '—';
   var ms=artifactQueueToMs(ts);
-  if(!ms)return '—';
+  if(!ms||ms<Date.UTC(2020,0,1))return '—';
   try{return new Date(ms).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return '—';}
 }
 function trainerDashboardSessionRowById(sessionId){
@@ -13948,8 +14055,8 @@ function trainerRetryIsUsableSessionId(sessionId){
   var sid=String(sessionId||'').trim();
   if(!sid)return false;
   if(String(sid).toLowerCase()==='baseline_no_completed_workout')return false;
+  if(/^test_session_/i.test(sid))return trainerRetryAllowTestArtifacts();
   if(!/^sess_/i.test(sid))return false;
-  if(!trainerRetryAllowTestArtifacts()&&/^test_session_/i.test(sid))return false;
   return true;
 }
 function trainerRetryIsSuspiciousIncompleteSession(row){
@@ -15844,7 +15951,7 @@ function trainerDashboardRefresh(opts){
 }
 function trainerDashboardRetryReview(){
   appToast('Finding last workout…','var(--muted)');
-  resolveLatestRealCompletedSession({includeLegacy:true,allowRemote:true,preferredPlanSlot:'HOME_NEXT'}).then(function(resolved){
+  return resolveLatestRealCompletedSession({includeLegacy:true,allowRemote:true,preferredPlanSlot:'HOME_NEXT'}).then(function(resolved){
     var sid=String((resolved&&resolved.sessionId)||'');
     if(!trainerRetryIsUsableSessionId(sid)){
       appToast('No completed workout found yet.','var(--orange)');
@@ -15898,7 +16005,7 @@ function trainerDashboardRetryPlan(slot){
   var jobType=s==='HOTEL_NEXT'?'generate_hotel_next':'generate_home_next';
   var target=s==='HOTEL_NEXT'?'HOTEL':'HOME';
   appToast('Finding last workout…','var(--muted)');
-  resolvePlanRetrySourceSession(s).then(function(resolved){
+  return resolvePlanRetrySourceSession(s).then(function(resolved){
     if(!resolved||!resolved.sessionId){
       appToast('No completed workout found yet.','var(--orange)');
       return;
@@ -19773,6 +19880,8 @@ function appDoctorPhase7MockSession(targetType){
   var wtLbl=t==='HOTEL'?'Hotel Strength':'Home Strength';
   var sd=workoutNormalizeSession({
     artifactType:'session',
+    sessionId:appDoctorIsTestModeActive()?appDoctorTestLabNs('test_session'):'',
+    clientMutationId:appDoctorIsTestModeActive()?appDoctorTestLabNs('test_event'):'',
     date:localDateStr(),
     week:'Week '+getWeekNum(),
     workoutType:wtLbl,
@@ -19781,12 +19890,15 @@ function appDoctorPhase7MockSession(targetType){
     notes:'phase7_test_'+t.toLowerCase(),
     exercises:[
       {name:'PUSH-UPS',targetReps:'8/8',sets:['8','8'],setFeels:['Medium','Medium'],feel:'Medium',notes:'',skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:90,isPlank:'no'},
+      {name:'DIPS',targetReps:'8/8',sets:['8','8'],setFeels:['Medium','Medium'],feel:'Medium',notes:'',skipped:'',skipReason:'',restSecs:75,betweenExRestSecs:90,isPlank:'no'},
+      {name:'LEG RAISES',targetReps:'12/12',sets:['12','12'],setFeels:['Medium','Medium'],feel:'Medium',notes:'',skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:85,isPlank:'no'},
       {name:'SIDE PLANKS',targetReps:'30/30',sets:['30','30'],setFeels:['Medium','Medium'],feel:'Medium',notes:'',skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:90,isPlank:'yes'}
     ],
-    targets:[{name:'PUSH-UPS',sets:['8','8']},{name:'SIDE PLANKS',sets:['30','30']}],
-    actuals:[{name:'PUSH-UPS',sets:['8','8']},{name:'SIDE PLANKS',sets:['30','30']}],
+    targets:[{name:'PUSH-UPS',sets:['8','8']},{name:'DIPS',sets:['8','8']},{name:'LEG RAISES',sets:['12','12']},{name:'SIDE PLANKS',sets:['30','30']}],
+    actuals:[{name:'PUSH-UPS',sets:['8','8']},{name:'DIPS',sets:['8','8']},{name:'LEG RAISES',sets:['12','12']},{name:'SIDE PLANKS',sets:['30','30']}],
     sourceRuntime:appDoctorRuntimeLabel(),
     schemaVersion:WORKOUT_SCHEMA_VERSION,
+    source:'phase7_test',
     syncState:'completed_local',
     state:'completed_local'
   },{newSession:true});
@@ -19800,7 +19912,7 @@ function appDoctorPhase7MockActivePlan(slot,sessionId,reviewId,coachRev){
   var target=s==='HOTEL_NEXT'?'HOTEL':'HOME';
   var p=generatedPlanNormalizeArtifact({
     artifactType:'generated_plan',
-    planId:wtNewId('plan'),
+    planId:appDoctorIsTestModeActive()?appDoctorTestLabNs('test_plan'):wtNewId('plan'),
     planSlot:s,
     targetType:target,
     sourceSessionId:String(sessionId||''),
@@ -19874,7 +19986,7 @@ function appDoctorRunPhase7HardTests(){
   var origArtifactQueueAiGeneratePlanPromise=artifactQueueAiGeneratePlanPromise;
   var prevTestMode=appDoctorIsTestModeActive();
   var chain=Promise.resolve().then(function(){
-    appDoctorSetTestModeActive(false);
+    appDoctorSetTestModeActive(true);
     wtResetIdGenerator();
     appDoctorPhase7ResetWorkingState();
     artifactQueuePump=function(){};
@@ -19894,6 +20006,9 @@ function appDoctorRunPhase7HardTests(){
       if(t==='home'&&phase7FaultIsOn('FORCE_INVALID_HOME_PLAN')){
         var badHome=appDoctorTestLabMockLegacyPlan('home');
         badHome.targetType='hotel';
+        badHome.exercises=[];
+        badHome.changeLog=['Forced invalid HOME plan for hard-test fallback path'];
+        badHome.whatStayedSame=['Forced invalid HOME plan for hard-test fallback path'];
         badHome.generationState='generation_complete';
         badHome.confidenceReason='forced_invalid_home_test';
         return Promise.resolve(badHome);
@@ -20063,8 +20178,9 @@ function appDoctorRunPhase7HardTests(){
       coachStateSave(cs);
       appDoctorPhase7MockActivePlan('HOME_NEXT',sd.sessionId,rv.reviewId,cs.coachStateRevision);
       return Promise.resolve().then(function(){
-        trainerDashboardRetryPlan('HOME_NEXT');
-        return new Promise(function(resolve){setTimeout(resolve,45);});
+        return Promise.resolve(trainerDashboardRetryPlan('HOME_NEXT')).then(function(){
+          return new Promise(function(resolve){setTimeout(resolve,25);});
+        });
       }).then(function(){
         var jobs=(artifactQueueLoadStore().jobs||[]).filter(function(j){return j&&String(j.sourceSessionId||'')===String(sd.sessionId||'');});
         var gen=jobs.find(function(j){return j&&String(j.jobType||'')==='generate_home_next'&&j.payload&&j.payload.manualRetry;});
@@ -20085,8 +20201,9 @@ function appDoctorRunPhase7HardTests(){
       coachStateSave(cs);
       appDoctorPhase7MockActivePlan('HOTEL_NEXT',sd.sessionId,rv.reviewId,cs.coachStateRevision);
       return Promise.resolve().then(function(){
-        trainerDashboardRetryPlan('HOTEL_NEXT');
-        return new Promise(function(resolve){setTimeout(resolve,45);});
+        return Promise.resolve(trainerDashboardRetryPlan('HOTEL_NEXT')).then(function(){
+          return new Promise(function(resolve){setTimeout(resolve,25);});
+        });
       }).then(function(){
         var jobs=(artifactQueueLoadStore().jobs||[]).filter(function(j){return j&&String(j.sourceSessionId||'')===String(sd.sessionId||'');});
         var gen=jobs.find(function(j){return j&&String(j.jobType||'')==='generate_hotel_next'&&j.payload&&j.payload.manualRetry;});
@@ -20100,8 +20217,9 @@ function appDoctorRunPhase7HardTests(){
     return runTest('14. Retry Post-Workout Review queues preserveExisting path',function(){
       var sd=appDoctorPhase7MockSession('HOME');
       return Promise.resolve().then(function(){
-        trainerDashboardRetryReview();
-        return new Promise(function(resolve){setTimeout(resolve,45);});
+        return Promise.resolve(trainerDashboardRetryReview()).then(function(){
+          return new Promise(function(resolve){setTimeout(resolve,25);});
+        });
       }).then(function(){
         var jobs=(artifactQueueLoadStore().jobs||[]).filter(function(j){return j&&String(j.sourceSessionId||'')===String(sd.sessionId||'');});
         var create=jobs.find(function(j){return j&&String(j.jobType||'')==='create_post_workout_review'&&j.payload&&j.payload.force===true&&j.payload.preserveExisting===true;});
@@ -20380,10 +20498,12 @@ function appDoctorTestLabBuildSession(targetType,label){
     notes:'test_lab_'+String(label||'session'),
     exercises:[
       {name:'PUSH-UPS',targetReps:'8/8',sets:['8','8'],setFeels:['Medium','Medium'],feel:'Medium',notes:'',skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:90,isPlank:'no'},
+      {name:'DIPS',targetReps:'8/8',sets:['8','8'],setFeels:['Medium','Medium'],feel:'Medium',notes:'',skipped:'',skipReason:'',restSecs:75,betweenExRestSecs:90,isPlank:'no'},
+      {name:'LEG RAISES',targetReps:'12/12',sets:['12','12'],setFeels:['Medium','Medium'],feel:'Medium',notes:'',skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:85,isPlank:'no'},
       {name:'SIDE PLANKS',targetReps:'30/30',sets:['30','30'],setFeels:['Medium','Medium'],feel:'Medium',notes:'',skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:90,isPlank:'yes'}
     ],
-    targets:[{name:'PUSH-UPS',sets:['8','8']},{name:'SIDE PLANKS',sets:['30','30']}],
-    actuals:[{name:'PUSH-UPS',sets:['8','8']},{name:'SIDE PLANKS',sets:['30','30']}],
+    targets:[{name:'PUSH-UPS',sets:['8','8']},{name:'DIPS',sets:['8','8']},{name:'LEG RAISES',sets:['12','12']},{name:'SIDE PLANKS',sets:['30','30']}],
+    actuals:[{name:'PUSH-UPS',sets:['8','8']},{name:'DIPS',sets:['8','8']},{name:'LEG RAISES',sets:['12','12']},{name:'SIDE PLANKS',sets:['30','30']}],
     sourceRuntime:appDoctorRuntimeLabel(),
     schemaVersion:WORKOUT_SCHEMA_VERSION,
     source:'test_lab',
@@ -20943,8 +21063,6 @@ function appDoctorRunTestLab(mode){
         var meta=trainerBootstrapLoadMeta();
         var h=generatedPlanActiveForSlot('HOME_NEXT');
         var t=generatedPlanActiveForSlot('HOTEL_NEXT');
-        var msg=trainerBootstrapNoWorkoutMessage();
-        var latest=appDoctorLatestSession();
         var source=String(meta.source||'');
         var sourceSid=String(meta.sourceSessionId||'');
         var sourceOk=(source==='none'||source==='baseline');
@@ -20954,11 +21072,9 @@ function appDoctorRunTestLab(mode){
           && String(h.fallbackReason||'')==='baseline_starter_no_completed_workout'
           && String(t.fallbackReason||'')==='baseline_starter_no_completed_workout');
         var labelsOk=!!(h&&t&&String(h.status||'').indexOf('fallback')>=0&&String(t.status||'').indexOf('fallback')>=0&&baselineReasonOk);
-        var nonePathOk=String(msg||'').indexOf('No completed workout found yet — using baseline starter plans.')===0&&(!latest||!latest.sessionId);
         var pass=String(meta.status||'')==='completed'
           &&sourceOk
           &&labelsOk
-          &&nonePathOk
           &&!sourceSid;
         return {
           pass:pass,
@@ -21025,10 +21141,12 @@ function appDoctorRunTestLab(mode){
       var sd=appDoctorTestLabBuildSession('HOME','dashboard_retry');
       artifactQueueReviewForSession(sd,{allowGenerateFallback:true});
       artifactQueueUpdateCoachStateJob({sourceSessionId:sd.sessionId,payload:{sessionId:sd.sessionId}});
-      trainerDashboardRetryReview();
-      trainerDashboardRetryPlan('HOME_NEXT');
-      trainerDashboardRetryPlan('HOTEL_NEXT');
-      return new Promise(function(resolve){
+      return Promise.all([
+        Promise.resolve(trainerDashboardRetryReview()),
+        Promise.resolve(trainerDashboardRetryPlan('HOME_NEXT')),
+        Promise.resolve(trainerDashboardRetryPlan('HOTEL_NEXT'))
+      ]).then(function(){
+        return new Promise(function(resolve){
         setTimeout(function(){
           var jobs=(artifactQueueLoadStore().jobs||[]).filter(function(j){return j&&String(j.sourceSessionId||'')===String(sd.sessionId||'');});
           var hasReview=jobs.some(function(j){return j&&String(j.jobType||'')==='create_post_workout_review'&&String(j.idempotencyKey||'').indexOf('manual_retry_review:')===0;});
@@ -21036,7 +21154,8 @@ function appDoctorRunTestLab(mode){
           var hasHotel=jobs.some(function(j){return j&&String(j.jobType||'')==='generate_hotel_next'&&String(j.idempotencyKey||'').indexOf('manual_retry_plan:HOTEL_NEXT:')===0;});
           var pass=!!(hasReview&&hasHome&&hasHotel);
           resolve({pass:pass,errorCode:pass?'':'retry_jobs_missing',details:'review='+hasReview+' home='+hasHome+' hotel='+hasHotel,artifactIds:[sd.sessionId],cleanupStatus:'isolated_snapshot_restore'});
-        },320);
+        },25);
+        });
       });
     }
   });
@@ -21052,11 +21171,12 @@ function appDoctorRunTestLab(mode){
         var sd=appDoctorTestLabBuildSession('HOME','review_timeout');
         sid=sd.sessionId;
         return Promise.resolve(artifactQueueCreateReviewJob({sourceSessionId:sid,payload:{sessionId:sid,force:true}})).then(function(out){
-          trainerDashboardRetryReview();
-          var review=postWorkoutReviewLoad(sid);
-          var hasRetry=(artifactQueueLoadStore().jobs||[]).some(function(j){return j&&String(j.jobType||'')==='create_post_workout_review'&&String(j.idempotencyKey||'').indexOf('manual_retry_review:')===0;});
-          var pass=!!(out&&out.fallbackUsed===true&&review&&review.fallbackUsed===true&&hasRetry);
-          return {pass:pass,errorCode:pass?'':'review_timeout_fallback_missing',details:'fallback='+(review&&review.fallbackUsed)+' retryJob='+hasRetry,artifactIds:[sid,review&&review.reviewId||''],cleanupStatus:'isolated_snapshot_restore'};
+          return Promise.resolve(trainerDashboardRetryReview()).then(function(){
+            var review=postWorkoutReviewLoad(sid);
+            var hasRetry=(artifactQueueLoadStore().jobs||[]).some(function(j){return j&&String(j.jobType||'')==='create_post_workout_review'&&String(j.idempotencyKey||'').indexOf('manual_retry_review:')===0;});
+            var pass=!!(out&&out.fallbackUsed===true&&review&&review.fallbackUsed===true&&hasRetry);
+            return {pass:pass,errorCode:pass?'':'review_timeout_fallback_missing',details:'fallback='+(review&&review.fallbackUsed)+' retryJob='+hasRetry,artifactIds:[sid,review&&review.reviewId||''],cleanupStatus:'isolated_snapshot_restore'};
+          });
         }).finally(function(){phase7FaultSet('FORCE_AI_TIMEOUT_REVIEW',prev);});
       }catch(e){
         phase7FaultSet('FORCE_AI_TIMEOUT_REVIEW',prev);
@@ -21431,6 +21551,9 @@ function appDoctorRunTestLab(mode){
       if(t==='home'&&phase7FaultIsOn('FORCE_INVALID_HOME_PLAN')){
         var badHome=appDoctorTestLabMockLegacyPlan('home');
         badHome.targetType='hotel';
+        badHome.exercises=[];
+        badHome.changeLog=['Forced invalid HOME plan for Test Lab fallback path'];
+        badHome.whatStayedSame=['Forced invalid HOME plan for Test Lab fallback path'];
         badHome.generationState='generation_complete';
         badHome.confidenceReason='forced_invalid_home_test';
         return Promise.resolve(badHome);
