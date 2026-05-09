@@ -2810,8 +2810,8 @@ function aiBackendStatusTest(){
   return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
 }
 
-var WT_FRONTEND_VERSION='19.11.4-dashboard-artifact-display-fix';
-var WT_SW_VERSION='wt-shell-v25-dashboard-artifact-display-fix';
+var WT_FRONTEND_VERSION='19.11.9-queue-recovery-stabilization';
+var WT_SW_VERSION='wt-shell-v30-queue-recovery-stabilization';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -3623,10 +3623,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.4-dashboard-artifact-display-fix';
+var APP_VERSION='v19.11.9-queue-recovery-stabilization';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v33-dashboard-artifact-display-fix';
+var CACHE_VERSION='wt-cache-v38-queue-recovery-stabilization';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Stabilized workout loop resolvers so Test Mode sessions are usable only in Test Mode and Phase 7 tests cannot masquerade as real workout history',
@@ -3653,7 +3653,7 @@ function appLogEvent(level,code,message,meta){
     appDoctorTrackError('local_write_error',String(e&&e.message||e),{key:'wt_app_events_v1'});
   }
 }
-var APP_DOCTOR_BUILD_TIMESTAMP='2026-05-09T12:35:00Z';
+var APP_DOCTOR_BUILD_TIMESTAMP='2026-05-09T14:05:00Z';
 var APP_STORAGE_MODE='localStorage+indexedDB';
 var APP_DOCTOR_FLAGS_KEY='wt_feature_flags_v1';
 var APP_DOCTOR_STATE_KEY='wt_app_doctor_state_v1';
@@ -4025,6 +4025,23 @@ function appDoctorRuntimeLabel(){
   }catch(e){}
   return 'Browser';
 }
+function wtReleaseJsonpCallback(cbName,scriptId,ttlMs){
+  var name=String(cbName||'');
+  if(!name)return;
+  var noop=function(){};
+  try{window[name]=noop;}catch(e){}
+  try{
+    var s=scriptId?document.getElementById(scriptId):null;
+    if(s&&s.parentNode)s.parentNode.removeChild(s);
+  }catch(e){}
+  setTimeout(function(){
+    try{
+      if(window[name]===noop)delete window[name];
+    }catch(e){
+      try{if(window[name]===noop)window[name]=undefined;}catch(_e){}
+    }
+  },Math.max(10000,parseInt(ttlMs||60000,10)||60000));
+}
 function appDoctorUserAgentSummary(){
   try{
     var ua=String(navigator.userAgent||'');
@@ -4168,7 +4185,7 @@ function getSheetSessions(cb){
   setSyncBadges('syncing');
   var cbName='wt_sess_'+Date.now();
   window[cbName]=function(result){
-    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
     _fetchInProgress=false;
     if(result&&result.sessions&&result.sessions.length){
       _sheetSessions=result.sessions;saveCache(result.sessions);setSyncBadges('live');
@@ -4186,6 +4203,7 @@ function getSheetSessions(cb){
   var script=document.createElement('script');script.id='s_'+cbName;
   script.src=CLOUD_URL+'?type=getHistory&callback='+cbName;
   script.onerror=function(){
+    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
     _fetchInProgress=false;
     var c=loadCache();
     if(c){_sheetSessions=c.sessions;setSyncBadges('cached',cacheAgeStr(c.ts));}
@@ -4198,7 +4216,7 @@ function getSheetSessions(cb){
   document.head.appendChild(script);
   setTimeout(function(){
     if(!window[cbName])return;
-    window[cbName]=null;_fetchInProgress=false;
+    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);_fetchInProgress=false;
     var c=loadCache();
     if(c){_sheetSessions=c.sessions;setSyncBadges('cached',cacheAgeStr(c.ts));}
     else{_sheetSessions=[];setSyncBadges('offline');}
@@ -6136,6 +6154,21 @@ function generatedPlanNormalizeArtifact(plan){
     cacheKey:String(src.cacheKey||('plan_cache_'+slot+'_'+String(src.sourceSessionId||'none')+'_'+String(src.reviewId||'none'))),
     seqOverrides:(src.seqOverrides&&typeof src.seqOverrides==='object')?normalizeSeqOverrides(src.seqOverrides):null
   };
+  var fallbackSignal=[
+    out.source,
+    out.status,
+    out.fallbackReason,
+    src.generationState
+  ].map(function(v){return String(v||'').toLowerCase();}).join(' ');
+  if(
+    out.fallbackUsed
+    || fallbackSignal.indexOf('fallback')>=0
+    || fallbackSignal.indexOf('baseline_starter')>=0
+    || fallbackSignal.indexOf('bootstrap_missing_or_stale_plan')>=0
+  ){
+    out.fallbackUsed=true;
+    if(out.status==='active')out.status='fallback_used';
+  }
   if(!out.exercises.length){
     out.validationStatus='invalid';
     if(out.validationErrors.indexOf('plan_missing_exercises')<0)out.validationErrors.push('plan_missing_exercises');
@@ -6275,6 +6308,33 @@ function generatedPlanArchiveActiveForSlot(slot,newPlanId,store){
   });
   return st;
 }
+function generatedPlanActivationFreshness(plan){
+  if(!plan||typeof plan!=='object')return 0;
+  var sid=String(plan.sourceSessionId||'');
+  var session=null;
+  try{if(sid)session=artifactQueueSessionById(sid,{payload:{sessionId:sid}});}catch(e){session=null;}
+  if(session)return artifactQueueSessionFreshnessValue(session);
+  var ms=artifactQueueToMs(plan.updatedAt||plan.createdAt||0);
+  var rev=Math.max(0,parseInt(plan.revision||0,10)||0);
+  return ms?((ms*1000)+rev):rev;
+}
+function generatedPlanShouldKeepCurrentActive(incoming,current){
+  if(!incoming||!current)return false;
+  if(String(incoming.planSlot||'').toUpperCase()!==String(current.planSlot||'').toUpperCase())return false;
+  if(String(incoming.planId||'')&&String(incoming.planId||'')===String(current.planId||''))return false;
+  var incomingSid=String(incoming.sourceSessionId||'');
+  var currentSid=String(current.sourceSessionId||'');
+  var incomingFresh=generatedPlanActivationFreshness(incoming);
+  var currentFresh=generatedPlanActivationFreshness(current);
+  var incomingCoach=parseInt(incoming.coachStateRevision||0,10)||0;
+  var currentCoach=parseInt(current.coachStateRevision||0,10)||0;
+  var incomingGenerated=artifactQueueToMs(incoming.updatedAt||incoming.createdAt||0);
+  var currentGenerated=artifactQueueToMs(current.updatedAt||current.createdAt||0);
+  if(currentSid&&incomingSid&&currentSid!==incomingSid&&currentFresh>incomingFresh)return true;
+  if(currentFresh===incomingFresh&&currentCoach>incomingCoach)return true;
+  if(currentFresh===incomingFresh&&currentCoach===incomingCoach&&currentGenerated>incomingGenerated)return true;
+  return false;
+}
 function generatedPlanUpsert(plan,opts){
   var normalized=generatedPlanNormalizeArtifact(plan||{});
   var st=generatedPlanLoadStore();
@@ -6288,6 +6348,33 @@ function generatedPlanUpsert(plan,opts){
     st.plans.push(normalized);
   }
   if(opts&&opts.activate){
+    var currentActive=(st.plans||[]).filter(function(p){
+      return p
+        && String(p.planSlot||'').toUpperCase()===String(normalized.planSlot||'').toUpperCase()
+        && String(p.planId||'')!==String(normalized.planId||'')
+        && generatedPlanIsActiveStatus(p.status);
+    }).sort(function(a,b){
+      return generatedPlanActivationFreshness(b)-generatedPlanActivationFreshness(a)
+        || generatedPlanToMs(b.updatedAt||b.createdAt)-generatedPlanToMs(a.updatedAt||a.createdAt);
+    })[0]||null;
+    if(currentActive&&generatedPlanShouldKeepCurrentActive(normalized,currentActive)&&!(opts&&opts.allowStaleActivate)){
+      normalized.status='stale';
+      normalized.updatedAt=wtNowIso();
+      normalized.revision=Math.max(1,parseInt(normalized.revision||1,10)||1)+1;
+      var staleIdx=(st.plans||[]).findIndex(function(p){return p&&String(p.planId||'')===String(normalized.planId||'');});
+      if(staleIdx>=0)st.plans[staleIdx]=normalized;
+      else st.plans.push(normalized);
+      generatedPlanSaveStore(st);
+      wtLogEvent('generation_stale_activation_blocked',{
+        sessionId:String(normalized.sourceSessionId||''),
+        sourceSessionId:String(normalized.sourceSessionId||''),
+        planId:String(normalized.planId||''),
+        cacheKey:String(normalized.cacheKey||''),
+        targetType:generatedPlanTypeFromSlot(normalized.planSlot),
+        errorCode:'stale_active_plan_guard'
+      });
+      return Object.assign({},currentActive,{keptCurrent:true,skipped:true,reason:'stale_active_plan_guard'});
+    }
     st=generatedPlanArchiveActiveForSlot(normalized.planSlot,normalized.planId,st);
     normalized.status=normalized.fallbackUsed?'fallback_used':'active';
     normalized.updatedAt=wtNowIso();
@@ -6847,6 +6934,7 @@ function artifactQueueBoot(){
   _artifactQueueBooted=true;
   artifactQueueLoadStore();
   artifactQueueRecoverRunningJobs('boot');
+  artifactQueueReconcilePendingJobs('boot');
   artifactQueueTouchState();
   artifactQueueHydrateFromIdb().then(function(){artifactQueuePump(true);});
   window.addEventListener('online',function(){try{artifactQueuePump(true);}catch(e){}});
@@ -6858,7 +6946,7 @@ function artifactQueueFindByIdempotency(idempotencyKey,store){
     var j=jobs[i];
     if(!j)continue;
     if(String(j.idempotencyKey||'')!==String(idempotencyKey))continue;
-    if(j.status==='cancelled')continue;
+    if(j.status==='cancelled'||j.status==='failed_final')continue;
     return j;
   }
   return null;
@@ -6874,6 +6962,45 @@ function artifactQueueGenerationJobSignature(job){
   var cacheKey=String(payload.cacheKey||'');
   return [jt,slot,sid,cacheKey||'no_cache'].join('|');
 }
+function artifactQueueJobIsOpen(job){
+  var st=String((job&&job.status)||'pending');
+  return st==='pending'||st==='running'||st==='failed_retryable';
+}
+function artifactQueueJobSlot(job){
+  var jt=String((job&&job.jobType)||'');
+  var payload=(job&&job.payload&&typeof job.payload==='object')?job.payload:{};
+  var slot=String(payload.planSlot||'').toUpperCase();
+  if(slot==='HOME_NEXT'||slot==='HOTEL_NEXT')return slot;
+  if(jt==='generate_hotel_next')return 'HOTEL_NEXT';
+  if(jt==='generate_home_next')return 'HOME_NEXT';
+  return '';
+}
+function artifactQueueJobSessionId(job){
+  var payload=(job&&job.payload&&typeof job.payload==='object')?job.payload:{};
+  return String((job&&job.sourceSessionId)||payload.sessionId||'');
+}
+function artifactQueueGeneralJobSignature(job){
+  if(!job||typeof job!=='object')return '';
+  var jt=String(job.jobType||'');
+  var payload=(job.payload&&typeof job.payload==='object')?job.payload:{};
+  var idKey=String(job.idempotencyKey||'');
+  if(jt==='generate_home_next'||jt==='generate_hotel_next')return artifactQueueGenerationJobSignature(job);
+  // Manual retries intentionally stay distinct so the user's explicit retry is not swallowed.
+  if(payload.manualRetry||idKey.indexOf('manual_retry')>=0)return '';
+  var sid=artifactQueueJobSessionId(job);
+  if(jt==='sync_generated_plan'){
+    var slot=artifactQueueJobSlot(job)||'HOME_NEXT';
+    var pid=String(payload.planId||'');
+    return [jt,slot,sid,pid||'active_plan'].join('|');
+  }
+  if(jt==='update_coach_state'||jt==='sync_coach_state'||jt==='create_post_workout_review'||jt==='sync_post_workout_review'){
+    return [jt,sid,String(payload.bootstrap?'bootstrap':'normal')].join('|');
+  }
+  if(jt==='sync_session_to_sheet'){
+    return [jt,sid,String(payload.sessionRevision||payload.revision||'1')].join('|');
+  }
+  return '';
+}
 function artifactQueueFindOpenGenerationDuplicate(job,store){
   var sig=artifactQueueGenerationJobSignature(job);
   if(!sig)return null;
@@ -6884,6 +7011,35 @@ function artifactQueueFindOpenGenerationDuplicate(job,store){
     var st=String(row.status||'');
     if(st==='succeeded'||st==='failed_final'||st==='cancelled')continue;
     if(artifactQueueGenerationJobSignature(row)!==sig)continue;
+    return row;
+  }
+  return null;
+}
+function artifactQueueFindOpenGenerationForSlotSession(slot,sessionId,store){
+  var target=String(slot||'').toUpperCase();
+  var sid=String(sessionId||'');
+  var jobs=(store&&store.jobs)||artifactQueueLoadStore().jobs||[];
+  for(var i=jobs.length-1;i>=0;i--){
+    var row=jobs[i];
+    if(!row||!artifactQueueJobIsOpen(row))continue;
+    if(artifactQueueJobSlot(row)!==target)continue;
+    var jt=String(row.jobType||'');
+    if(jt!=='generate_home_next'&&jt!=='generate_hotel_next')continue;
+    if(sid&&artifactQueueJobSessionId(row)!==sid)continue;
+    return row;
+  }
+  return null;
+}
+function artifactQueueFindOpenPlanSyncForSlotSession(slot,sessionId,store){
+  var target=String(slot||'').toUpperCase();
+  var sid=String(sessionId||'');
+  var jobs=(store&&store.jobs)||artifactQueueLoadStore().jobs||[];
+  for(var i=jobs.length-1;i>=0;i--){
+    var row=jobs[i];
+    if(!row||!artifactQueueJobIsOpen(row))continue;
+    if(String(row.jobType||'')!=='sync_generated_plan')continue;
+    if(artifactQueueJobSlot(row)!==target)continue;
+    if(sid&&artifactQueueJobSessionId(row)!==sid)continue;
     return row;
   }
   return null;
@@ -6922,6 +7078,75 @@ function artifactQueueCollapseDuplicateGenerationJobs(store,reason){
     });
   }
   return removed;
+}
+function artifactQueueReconcilePendingJobs(reason){
+  var st=artifactQueueLoadStore();
+  var jobs=Array.isArray(st.jobs)?st.jobs:[];
+  if(!jobs.length)return 0;
+  var now=artifactQueueNow();
+  var dirty=false;
+  var changed=0;
+  artifactQueueDropTestJobsIfNeeded(st,String(reason||'reconcile'));
+  jobs=Array.isArray(st.jobs)?st.jobs:[];
+  var seen={};
+  jobs.forEach(function(j){
+    if(!j||!artifactQueueJobIsOpen(j))return;
+    var sig=artifactQueueGeneralJobSignature(j);
+    if(!sig)return;
+    if(!seen[sig]){
+      seen[sig]=j;
+      return;
+    }
+    var keep=seen[sig];
+    var drop=j;
+    if(String(j.status||'')==='running'&&String(keep.status||'')!=='running'){
+      drop=keep;
+      seen[sig]=j;
+    }else if(String(keep.status||'')!=='running'&&artifactQueueToMs(j.createdAt)<artifactQueueToMs(keep.createdAt)){
+      drop=keep;
+      seen[sig]=j;
+    }
+    if(drop&&artifactQueueJobIsOpen(drop)){
+      drop.status='cancelled';
+      drop.updatedAt=now;
+      drop.lastError='duplicate_queue_job_reconciled';
+      dirty=true;
+      changed++;
+    }
+  });
+  jobs.forEach(function(j){
+    if(!j||!artifactQueueJobIsOpen(j))return;
+    if(String(j.jobType||'')!=='sync_generated_plan')return;
+    var payload=(j.payload&&typeof j.payload==='object')?j.payload:{};
+    var slot=artifactQueueJobSlot(j)||'HOME_NEXT';
+    var sid=artifactQueueJobSessionId(j);
+    var planId=String(payload.planId||'');
+    var plan=planId?generatedPlanFindById(planId):generatedPlanActiveForSlot(slot);
+    if(plan&&plan.planId)return;
+    var gen=artifactQueueFindOpenGenerationForSlotSession(slot,sid,st);
+    if(gen)return;
+    j.status='cancelled';
+    j.updatedAt=now;
+    j.lastError='sync_generated_plan_without_plan_cancelled';
+    dirty=true;
+    changed++;
+  });
+  jobs.forEach(function(j){
+    if(!j||!artifactQueueJobIsOpen(j))return;
+    if(String(j.status||'')==='pending'&&!artifactQueueToMs(j.nextRunAt)){
+      j.nextRunAt=now;
+      j.updatedAt=now;
+      dirty=true;
+    }
+  });
+  if(dirty){
+    artifactQueueSaveStore(st);
+    wtLogEvent('artifact_queue_reconciled_pending_jobs',{
+      errorCode:String(reason||'queue_reconcile'),
+      attempt:changed
+    });
+  }
+  return changed;
 }
 function artifactQueueEnqueue(job){
   artifactQueueBoot();
@@ -7785,7 +8010,8 @@ function artifactQueueGeneratePlanJob(job){
     var activeSid=String(currentActive.sourceSessionId||'');
     if(activeSid&&activeSid!==sd.sessionId&&trainerRetryIsUsableSessionId(activeSid)){
       var activeSession=artifactQueueSessionById(activeSid,{payload:{sessionId:activeSid}});
-      var activeFresh=activeSession?artifactQueueSessionFreshnessValue(activeSession):artifactQueueToMs(currentActive.updatedAt||currentActive.createdAt||0);
+      var activePlanMs=artifactQueueToMs(currentActive.updatedAt||currentActive.createdAt||0);
+      var activeFresh=activeSession?artifactQueueSessionFreshnessValue(activeSession):(activePlanMs?activePlanMs*1000:0);
       var incomingFresh=artifactQueueSessionFreshnessValue(sd);
       var activeRev=parseInt(currentActive.coachStateRevision||0,10)||0;
       var incomingRev=parseInt((job.payload&&job.payload.coachStateRevision)||0,10)||parseInt((coachStateLoad()&&coachStateLoad().coachStateRevision)||0,10)||0;
@@ -7987,6 +8213,19 @@ function artifactQueueGeneratePlanJob(job){
           errorCode:checked.validation.errors.join('|'),
           durationMs:Date.now()-started
         });
+        var stopHomeLoop=(String(type||'').toLowerCase()==='home')&&(checked.validation.errors||[]).some(function(code){
+          var c=String(code||'');
+          return c==='plan_missing_exercises'
+            || c==='missing_exercises'
+            || c==='legacy_conversion_failed'
+            || c==='plan_slot_target_mismatch'
+            || c==='plan_type_mismatch'
+            || c==='strict_validation_failed';
+        });
+        if(stopHomeLoop){
+          var keptHome=keepCurrent('home_invalid_schema_fallback');
+          return keptHome||runFallback('home_invalid_schema_fallback',{validationErrors:(checked.validation.errors||[]).slice(0,12)});
+        }
         var stopHotelLoop=(String(type||'').toLowerCase()==='hotel')&&(checked.validation.errors||[]).some(function(code){
           var c=String(code||'');
           return c==='hotel_pullup_cues_without_pullup_option'
@@ -8074,7 +8313,17 @@ function artifactQueueSyncGeneratedPlanJob(job){
   var slot=String((job.payload&&job.payload.planSlot)||'').toUpperCase();
   var planId=String((job.payload&&job.payload.planId)||'');
   var plan=planId?generatedPlanFindById(planId):generatedPlanActiveForSlot(slot||'HOME_NEXT');
-  if(!plan)throw {retryable:true,code:'generated_plan_missing',message:'generated_plan_missing'};
+  if(!plan){
+    var openGen=artifactQueueFindOpenGenerationForSlotSession(slot||'HOME_NEXT',sid,artifactQueueLoadStore());
+    if(openGen)throw {retryable:true,code:'generated_plan_missing',message:'generated_plan_missing'};
+    wtLogEvent('generated_plan_sync_skipped_missing_plan',{
+      sessionId:sid,
+      sourceSessionId:sid,
+      targetType:generatedPlanTypeFromSlot(slot||'HOME_NEXT'),
+      errorCode:'generated_plan_missing_no_open_generation'
+    });
+    return {skipped:true,reason:'generated_plan_missing_no_open_generation',artifactIds:[]};
+  }
   if(!sid&&plan&&plan.sourceSessionId)sid=String(plan.sourceSessionId||'');
   if(sid&&plan.sourceSessionId&&String(plan.sourceSessionId)!==sid){
     return {skipped:true,reason:'stale_session',artifactIds:[plan.planId]};
@@ -8269,6 +8518,7 @@ function artifactQueueRunJob(job){
 function artifactQueuePump(force){
   artifactQueueBoot();
   if(_artifactQueueRunning)return;
+  try{artifactQueueReconcilePendingJobs('pump');}catch(e){}
   var store=artifactQueueLoadStore();
   var next=artifactQueuePickNext(store);
   if(!next){
@@ -8279,6 +8529,12 @@ function artifactQueuePump(force){
         attempt:recovered
       });
       artifactQueueSchedule(80);
+      return;
+    }
+    var seeded=false;
+    try{seeded=trainerEnsureMissingPlansQueued('queue_idle_missing_plans');}catch(e){seeded=false;}
+    if(seeded){
+      artifactQueueSchedule(120);
       return;
     }
     _artifactQueueCurrentJob='';
@@ -8631,8 +8887,7 @@ function syncData(payload,msgId){
       var cbName='wt_cb_'+Date.now()+'_'+n;
       var done=false;
       function cleanup(){
-        window[cbName]=null;
-        var s=document.getElementById('wts_'+cbName);if(s&&s.parentNode)s.parentNode.removeChild(s);
+        wtReleaseJsonpCallback(cbName,'wts_'+cbName,60000);
       }
       window[cbName]=function(result){
         if(done)return;done=true;cleanup();
@@ -14061,6 +14316,7 @@ function trainerRetryIsUsableSessionId(sessionId){
 }
 function trainerRetryIsSuspiciousIncompleteSession(row){
   if(!row||typeof row!=='object')return false;
+  if(appDoctorRecordIsTestArtifact(row))return true;
   var wt=String(row.workoutType||row.type||row.workout||'').toLowerCase();
   var isStrength=(wt.indexOf('home')>=0||wt.indexOf('hotel')>=0||wt.indexOf('strength')>=0);
   if(!isStrength)return false;
@@ -14076,6 +14332,33 @@ function trainerRetryIsSuspiciousIncompleteSession(row){
   });
   var uniqueCount=Object.keys(unique).length;
   return (uniqueCount>0&&uniqueCount<=2&&ex.length<=2);
+}
+function trainerSessionQuality(row){
+  var ex=Array.isArray(row&&row.exercises)?row.exercises:[];
+  var names={},slots={},sets=0;
+  ex.forEach(function(item){
+    var name=String((item&&((item.name||item.exercise||'')))||'').trim().toUpperCase();
+    if(name)names[name]=1;
+    var slot=coachSlotKey(name);
+    if(slot&&slot!=='other')slots[slot]=1;
+    if(Array.isArray(item&&item.sets))sets+=item.sets.length;
+    else if(Array.isArray(item&&item.repTargets))sets+=item.repTargets.length;
+    else if(item&&item.targetReps)sets+=String(item.targetReps||'').split('/').filter(Boolean).length;
+  });
+  return {exerciseCount:Object.keys(names).length,slotCount:Object.keys(slots).length,setCount:sets};
+}
+function trainerRetryShouldPreferLocalCandidate(local,backend){
+  if(!local)return false;
+  if(appDoctorRecordIsTestArtifact(local)||trainerRetryIsSuspiciousIncompleteSession(local))return false;
+  if(!backend)return true;
+  var lq=trainerSessionQuality(local), bq=trainerSessionQuality(backend);
+  var thinLocal=(lq.exerciseCount<=2||lq.slotCount<=2||lq.setCount<=4);
+  var fullBackend=(bq.exerciseCount>=3||bq.slotCount>=3||bq.setCount>=6);
+  if(thinLocal&&fullBackend)return false;
+  var lm=artifactQueueToMs((local&&local.completedAt)||(local&&local.updatedAt)||(local&&local.date)||0);
+  var bm=artifactQueueToMs((backend&&backend.completedAt)||(backend&&backend.updatedAt)||(backend&&backend.date)||0);
+  if(bm&&lm&&bm>lm)return false;
+  return true;
 }
 function trainerRetryNormalizeSessionCandidate(raw,sourceTag,forceTargetType){
   if(!raw||typeof raw!=='object')return null;
@@ -14346,19 +14629,18 @@ function resolveLatestRealCompletedSessionSync(opts){
       error:''
     };
   }
+  var completedSid=String(_completedSessionId||'').trim();
+  if(trainerRetryIsUsableSessionId(completedSid)){
+    note('session:completed_session_id:'+completedSid);
+    var completed=done(trainerResolveSessionFromIdSync(completedSid,forcedTarget),'local_completed',completedSid);
+    if(completed)return completed;
+  }
   var localCandidates=(trainerBootstrapCollectLocalCandidates()||[]).filter(Boolean).sort(function(a,b){
     return trainerBootstrapScoreCandidate(b)-trainerBootstrapScoreCandidate(a);
   });
   var localUsable=localCandidates.filter(function(row){return trainerRetryIsUsableSessionId(row&&row.sessionId);});
   var localPreferred=localUsable.find(function(row){return !trainerRetryIsSuspiciousIncompleteSession(row);})||null;
   var localSuspicious=localUsable.length?localUsable[0]:null;
-  if(localPreferred){
-    note('session:local_artifact');
-    var first=done(localPreferred,'local');
-    if(first)return first;
-  }else if(localSuspicious){
-    note('session:local_suspicious_deferred');
-  }else note('session:none');
   var cachedRemoteCandidates=trainerCachedSessionCandidates(forcedTarget).sort(function(a,b){
     return trainerBootstrapScoreCandidate(b)-trainerBootstrapScoreCandidate(a);
   });
@@ -14366,6 +14648,15 @@ function resolveLatestRealCompletedSessionSync(opts){
     return trainerRetryIsUsableSessionId(row&&row.sessionId)&&String((row&&row._backendSourceTag)||'')==='backend_sessions_tab';
   });
   var backendSessionsTab=backendSessionsRows.find(function(row){return !trainerRetryIsSuspiciousIncompleteSession(row);})||(backendSessionsRows[0]||null);
+  if(localPreferred&&trainerRetryShouldPreferLocalCandidate(localPreferred,backendSessionsTab)){
+    note('session:local_artifact');
+    var first=done(localPreferred,'local');
+    if(first)return first;
+  }else if(localPreferred&&backendSessionsTab){
+    note('session:local_deferred_for_backend_sessions_tab:'+String(localPreferred.sessionId||''));
+  }else if(localSuspicious){
+    note('session:local_suspicious_deferred');
+  }else note('session:none');
   if(backendSessionsTab){
     note('backend_sessions_tab:'+String(backendSessionsTab.sessionId||''));
     var fromBackendSessions=done(backendSessionsTab,'backend_sessions_tab');
@@ -14794,6 +15085,151 @@ function trainerEnsureHotelPlanSourceConsistency(){
   });
   artifactQueuePump(true);
   return true;
+}
+function trainerPlanNeedsRecovery(plan,slot,sessionId){
+  if(!plan||!plan.planId)return true;
+  var status=String(plan.status||'').toLowerCase();
+  var validation=String(plan.validationStatus||'').toLowerCase();
+  if(status==='invalid'||validation.indexOf('invalid')>=0)return true;
+  var sid=String(sessionId||'');
+  var planSid=String(plan.sourceSessionId||'');
+  if(trainerRetryIsUsableSessionId(sid)){
+    if(planSid.toLowerCase()==='baseline_no_completed_workout')return true;
+    if(String(plan.cacheKey||'').toLowerCase().indexOf('baseline_no_completed_workout')>=0)return true;
+  }
+  return false;
+}
+function trainerEnsureMissingPlansQueued(reason){
+  if(appDoctorIsTestModeActive())return false;
+  var resolved=null;
+  try{resolved=resolveLatestRealCompletedSessionSync({includeLegacy:true});}catch(e){resolved=null;}
+  var sid=String((resolved&&resolved.sessionId)||'');
+  if(!trainerRetryIsUsableSessionId(sid))return false;
+  var session=(resolved&&resolved.session)||workoutFindLocal(sid)||trainerRetrySeedSessionFromHints(sid,'HOME','missing_plan_recovery');
+  if(session){
+    try{trainerRetryPersistSessionCandidate(session);}catch(e){}
+  }
+  var store=artifactQueueLoadStore();
+  var now=artifactQueueNow();
+  var coach=coachStateLoad();
+  var review=postWorkoutReviewLoad(sid);
+  var reviewId=String((review&&review.reviewId)||'');
+  var needsCoach=!coach
+    || String((coach&&coach.lastCompletedSessionId)||'')!==sid
+    || (reviewId&&String((coach&&coach.lastReviewId)||'')!==reviewId);
+  var rev=Math.max(0,parseInt((coach&&coach.coachStateRevision)||0,10)||0);
+  var equipmentProfile=coachEquipmentProfileLoad();
+  var equipHash=String((equipmentProfile&&equipmentProfile.equipmentProfileHash)||coachEquipmentProfileHash());
+  var slots=[
+    {slot:'HOME_NEXT',target:'HOME',jobType:'generate_home_next',active:generatedPlanActiveForSlot('HOME_NEXT')},
+    {slot:'HOTEL_NEXT',target:'HOTEL',jobType:'generate_hotel_next',active:generatedPlanActiveForSlot('HOTEL_NEXT')}
+  ].filter(function(item){return trainerPlanNeedsRecovery(item.active,item.slot,sid);});
+  if(!slots.length)return false;
+  var queued=false;
+  var coachDeps=[];
+  if(needsCoach){
+    var existingCoach=artifactQueueFindByIdempotency('missing_plan:update_coach:'+sid,store);
+    var updateCoach=existingCoach&&artifactQueueJobIsOpen(existingCoach)?existingCoach:artifactQueueEnqueue({
+      jobType:'update_coach_state',
+      status:'pending',
+      createdAt:now,
+      updatedAt:now,
+      attempts:0,
+      maxAttempts:3,
+      nextRunAt:now,
+      dependsOn:[],
+      idempotencyKey:'missing_plan:update_coach:'+sid,
+      sourceSessionId:sid,
+      artifactIds:[],
+      payload:{sessionId:sid,missingPlanRecovery:true,reason:String(reason||'missing_plan_recovery')},
+      lastError:'',
+      lastDurationMs:0
+    });
+    if(updateCoach&&updateCoach.jobId)coachDeps.push(updateCoach.jobId);
+    if(updateCoach&&!existingCoach)queued=true;
+    if(updateCoach&&updateCoach.jobId&&!artifactQueueFindByIdempotency('missing_plan:sync_coach:'+sid,artifactQueueLoadStore())){
+      artifactQueueEnqueue({
+        jobType:'sync_coach_state',
+        status:'pending',
+        createdAt:now,
+        updatedAt:now,
+        attempts:0,
+        maxAttempts:6,
+        nextRunAt:now,
+        dependsOn:[updateCoach.jobId],
+        idempotencyKey:'missing_plan:sync_coach:'+sid,
+        sourceSessionId:sid,
+        artifactIds:[],
+        payload:{sessionId:sid,missingPlanRecovery:true,reason:String(reason||'missing_plan_recovery')},
+        lastError:'',
+        lastDurationMs:0
+      });
+      queued=true;
+    }
+  }
+  slots.forEach(function(item){
+    var latestStore=artifactQueueLoadStore();
+    var openGen=artifactQueueFindOpenGenerationForSlotSession(item.slot,sid,latestStore);
+    var openSync=artifactQueueFindOpenPlanSyncForSlotSession(item.slot,sid,latestStore);
+    var gen=openGen;
+    if(!gen){
+      gen=artifactQueueEnqueue({
+        jobType:item.jobType,
+        status:'pending',
+        createdAt:now,
+        updatedAt:now,
+        attempts:0,
+        maxAttempts:6,
+        nextRunAt:now,
+        dependsOn:coachDeps,
+        idempotencyKey:'missing_plan:'+item.slot+':generate:'+sid+':'+String(Math.floor(now/(5*60*1000))),
+        sourceSessionId:sid,
+        artifactIds:[],
+        payload:{
+          sessionId:sid,
+          planSlot:item.slot,
+          targetType:item.target,
+          preserveCurrentOnFailure:true,
+          missingPlanRecovery:true,
+          reason:String(reason||'missing_plan_recovery'),
+          coachStateRevision:rev,
+          equipmentProfileHash:equipHash
+        },
+        lastError:'',
+        lastDurationMs:0
+      });
+      queued=true;
+    }
+    if(gen&&gen.jobId&&!openSync){
+      artifactQueueEnqueue({
+        jobType:'sync_generated_plan',
+        status:'pending',
+        createdAt:now,
+        updatedAt:now,
+        attempts:0,
+        maxAttempts:6,
+        nextRunAt:now,
+        dependsOn:[gen.jobId],
+        idempotencyKey:'missing_plan:'+item.slot+':sync_generated_plan:'+sid+':'+String(gen.jobId||Math.floor(now/(5*60*1000))),
+        sourceSessionId:sid,
+        artifactIds:[],
+        payload:{sessionId:sid,planSlot:item.slot,missingPlanRecovery:true,reason:String(reason||'missing_plan_recovery')},
+        lastError:'',
+        lastDurationMs:0
+      });
+      queued=true;
+    }
+  });
+  if(queued){
+    appDoctorPatchState('trainer_state',{latestSessionChosenFrom:String((resolved&&resolved.source)||'local'),latestSessionChosenId:sid});
+    wtLogEvent('missing_active_plans_recovery_queued',{
+      sessionId:sid,
+      sourceSessionId:sid,
+      errorCode:String(reason||'missing_plan_recovery'),
+      attempt:slots.length
+    });
+  }
+  return queued;
 }
 function trainerDashboardArtifactIsNewer(remote,local){
   if(!remote)return false;
@@ -15928,8 +16364,7 @@ function trainerDashboardRemoteSync(opts){
     // Compatibility fallback: old backend path.
     var cb='wt_dash_state_'+Date.now();
     window[cb]=function(legacy){
-      window[cb]=null;
-      var s=document.getElementById('s_'+cb);if(s&&s.parentNode)s.parentNode.removeChild(s);
+      wtReleaseJsonpCallback(cb,'s_'+cb,60000);
       if(legacy&&legacy.status==='ok'&&legacy.state&&trainerDashboardMergeRemoteState(legacy.state)){
         trainerDashboardRender(trainerDashboardBuildSnapshot());
       }
@@ -15937,7 +16372,7 @@ function trainerDashboardRemoteSync(opts){
     var sc=document.createElement('script');
     sc.id='s_'+cb;
     sc.src=CLOUD_URL+'?type=getAppState&callback='+cb;
-    sc.onerror=function(){window[cb]=null;};
+    sc.onerror=function(){wtReleaseJsonpCallback(cb,'s_'+cb,60000);};
     document.head.appendChild(sc);
   }).catch(function(){
     _trainerDashboardRemoteSyncInFlight=false;
@@ -15947,11 +16382,23 @@ function trainerDashboardRefresh(opts){
   var o=opts&&typeof opts==='object'?opts:{};
   trainerDashboardRender(trainerDashboardBuildSnapshot());
   try{trainerEnsureHotelPlanSourceConsistency();}catch(e){}
+  try{trainerEnsureMissingPlansQueued('dashboard_refresh');}catch(e){}
   if(o.background!==false)trainerDashboardRemoteSync({force:!!o.forceRemote});
 }
 function trainerDashboardRetryReview(){
   appToast('Finding last workout…','var(--muted)');
-  return resolveLatestRealCompletedSession({includeLegacy:true,allowRemote:true,preferredPlanSlot:'HOME_NEXT'}).then(function(resolved){
+  var immediate=null;
+  try{immediate=resolveLatestRealCompletedSessionSync({includeLegacy:true,forceTargetType:'HOME'});}catch(_e){immediate=null;}
+  if(appDoctorIsTestModeActive()&&trainerRetryIsUsableSessionId(_completedSessionId)){
+    try{
+      var direct=trainerResolveSessionFromIdSync(_completedSessionId,'HOME');
+      if(direct)immediate={session:direct,sessionId:String(direct.sessionId||_completedSessionId),source:'local_completed',from:'local_sync',steps:['session:completed_session_id:'+String(_completedSessionId)],error:''};
+    }catch(_directErr){}
+  }
+  var sourcePromise=(immediate&&trainerRetryIsUsableSessionId(immediate.sessionId))
+    ?Promise.resolve(immediate)
+    :resolveLatestRealCompletedSession({includeLegacy:true,allowRemote:true,preferredPlanSlot:'HOME_NEXT'});
+  return sourcePromise.then(function(resolved){
     var sid=String((resolved&&resolved.sessionId)||'');
     if(!trainerRetryIsUsableSessionId(sid)){
       appToast('No completed workout found yet.','var(--orange)');
@@ -16222,6 +16669,7 @@ function trainerDashboardOpenPlanDetail(slot){
 function startActivePlan(slot){
   var s=String(slot||'HOME_NEXT').toUpperCase()==='HOTEL_NEXT'?'HOTEL_NEXT':'HOME_NEXT';
   var type=generatedPlanTypeFromSlot(s);
+  var allowTestArtifacts=trainerRetryAllowTestArtifacts();
   function realSessionForStart(){
     var c=resolveLatestRealCompletedSessionSync({includeLegacy:true,forceTargetType:generatedPlanTargetTypeFromSlot(s)});
     return trainerRetryIsUsableSessionId(c&&c.sessionId);
@@ -16237,8 +16685,8 @@ function startActivePlan(slot){
     return !!(plan
       && generatedPlanIsActiveStatus(plan.status)
       && String(plan.validationStatus||'').toLowerCase().indexOf('invalid')<0
-      && !appDoctorIsTestId(plan.planId)
-      && !appDoctorIsTestId(plan.sourceSessionId)
+      && (allowTestArtifacts||!appDoctorIsTestId(plan.planId))
+      && (allowTestArtifacts||!appDoctorIsTestId(plan.sourceSessionId))
       && !(baselinePlan(plan)&&realSessionForStart()));
   }
   function openUsableLocal(){
@@ -16899,7 +17347,7 @@ function tryLoadWorkout(){
   document.getElementById('hotelLoadedBadge').classList.add('hidden');
   var cbName='wt_load_'+Date.now();
   window[cbName]=function(result){
-    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
     if(result&&result.status==='ok'&&result.exercises&&result.exercises.length){
       sheetWorkout=result;
       var wt=(result.workoutType||'').toLowerCase();
@@ -16931,6 +17379,7 @@ function tryLoadWorkout(){
   var url=CLOUD_URL+'?type=getWorkout&callback='+cbName;
   var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
   script.onerror=function(){
+    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
     sheetWorkout=null;
     var aiw3=aiWorkoutLoad()||{};
     var aiParts3=[];
@@ -20213,10 +20662,11 @@ function appDoctorRunPhase7HardTests(){
       });
     });
   });
-  chain=chain.then(function(){
-    return runTest('14. Retry Post-Workout Review queues preserveExisting path',function(){
-      var sd=appDoctorPhase7MockSession('HOME');
-      return Promise.resolve().then(function(){
+	  chain=chain.then(function(){
+	    return runTest('14. Retry Post-Workout Review queues preserveExisting path',function(){
+	      var sd=appDoctorPhase7MockSession('HOME');
+	      artifactQueueReviewForSession(sd,{allowGenerateFallback:true});
+	      return Promise.resolve().then(function(){
         return Promise.resolve(trainerDashboardRetryReview()).then(function(){
           return new Promise(function(resolve){setTimeout(resolve,25);});
         });
@@ -21066,12 +21516,17 @@ function appDoctorRunTestLab(mode){
         var source=String(meta.source||'');
         var sourceSid=String(meta.sourceSessionId||'');
         var sourceOk=(source==='none'||source==='baseline');
-        var baselineReasonOk=!!(h&&t
-          && String(h.sourceSessionId||'')==='baseline_no_completed_workout'
-          && String(t.sourceSessionId||'')==='baseline_no_completed_workout'
-          && String(h.fallbackReason||'')==='baseline_starter_no_completed_workout'
-          && String(t.fallbackReason||'')==='baseline_starter_no_completed_workout');
-        var labelsOk=!!(h&&t&&String(h.status||'').indexOf('fallback')>=0&&String(t.status||'').indexOf('fallback')>=0&&baselineReasonOk);
+	        var baselineReasonOk=!!(h&&t
+	          && String(h.sourceSessionId||'')==='baseline_no_completed_workout'
+	          && String(t.sourceSessionId||'')==='baseline_no_completed_workout'
+	          && String(h.fallbackReason||'')==='baseline_starter_no_completed_workout'
+	          && String(t.fallbackReason||'')==='baseline_starter_no_completed_workout');
+	        function baselineLabeled(p){
+	          var status=String((p&&p.status)||'').toLowerCase();
+	          var source=String((p&&p.source)||'').toLowerCase();
+	          return !!(p&&(p.fallbackUsed===true||status.indexOf('fallback')>=0||source==='fallback'||source==='baseline_starter'));
+	        }
+	        var labelsOk=!!(h&&t&&baselineLabeled(h)&&baselineLabeled(t)&&baselineReasonOk);
         var pass=String(meta.status||'')==='completed'
           &&sourceOk
           &&labelsOk
@@ -22358,7 +22813,7 @@ function initEditTab(){
   document.getElementById('editSessionContent').innerHTML='<div style="color:var(--muted);font-size:0.85rem;padding:20px 0;text-align:center;">Loading sessions...</div>';
   var cbName='wt_edit_'+Date.now();
   window[cbName]=function(result){
-    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
     if(el){el.textContent='Synced (tap to refresh)';el.style.color='var(--muted)';}
     if(result&&result.sessions&&result.sessions.length){
       var dates=[],seen={};
@@ -22382,9 +22837,9 @@ function initEditTab(){
   };
   var script=document.createElement('script');script.id='s_'+cbName;
   script.src=CLOUD_URL+'?type=getHistory&callback='+cbName;
-  script.onerror=function(){if(el){el.textContent='Failed (tap to retry)';el.style.color='var(--red)';}};
+  script.onerror=function(){wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);if(el){el.textContent='Failed (tap to retry)';el.style.color='var(--red)';}};
   document.head.appendChild(script);
-  setTimeout(function(){if(window[cbName]){window[cbName]=null;if(el){el.textContent='Timed out (tap to retry)';el.style.color='var(--red)';}}},5000);
+  setTimeout(function(){if(window[cbName]){wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);if(el){el.textContent='Timed out (tap to retry)';el.style.color='var(--red)';}}},5000);
 }
 
 function loadEditSession(date){if(!date)return;loadEditSessionFromData(date,window._editSessions||[]);}
@@ -22718,7 +23173,7 @@ function switchPlanWeek(offset){
     _weekPlan={};renderPlanGrid(days,today); // render empty immediately
     var cbW='wt_planw_'+Date.now();
     window[cbW]=function(result){
-      window[cbW]=null;var s=document.getElementById('s_'+cbW);if(s)s.parentNode.removeChild(s);
+      wtReleaseJsonpCallback(cbW,'s_'+cbW,60000);
       var planData=result&&result.plan?result.plan:{};
       _allWeekPlans[monKey]=planData;
       if(offset===0){_cachedPlan=JSON.parse(JSON.stringify(planData));savePlanCache(planData);}
@@ -22728,7 +23183,7 @@ function switchPlanWeek(offset){
     };
     var sc=document.createElement('script');sc.id='s_'+cbW;
     sc.src=CLOUD_URL+'?type=getWeekPlan&weekOffset='+offset+'&callback='+cbW;
-    sc.onerror=function(){window[cbW]=null;};
+    sc.onerror=function(){wtReleaseJsonpCallback(cbW,'s_'+cbW,60000);};
     document.head.appendChild(sc);
   }
 }
@@ -22800,7 +23255,7 @@ function loadWeekPlan(){
   }
   var cbP='wt_plan_'+Date.now();
   window[cbP]=function(result){
-    window[cbP]=null;var s=document.getElementById('s_'+cbP);if(s)s.parentNode.removeChild(s);
+    wtReleaseJsonpCallback(cbP,'s_'+cbP,60000);
     var planData=result&&result.plan?result.plan:{};
     savePlanCache(planData);
     _populateAllWeekPlans(planData); // split flat plan into per-week cache
@@ -22822,11 +23277,12 @@ function loadWeekPlan(){
   var script=document.createElement('script');script.id='s_'+cbP;
   script.src=CLOUD_URL+'?type=getWeekPlan&callback='+cbP;
   script.onerror=function(){
+    wtReleaseJsonpCallback(cbP,'s_'+cbP,60000);
     if(!pc){var pd=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=pd;_cachedPlan=pd;
     renderPlanGrid(getWeekDates(_planWeekOffset),today);updateTodayCard(today);}
   };
   document.head.appendChild(script);
-  setTimeout(function(){if(!window[cbP])return;window[cbP]=null;
+  setTimeout(function(){if(!window[cbP])return;wtReleaseJsonpCallback(cbP,'s_'+cbP,60000);
     if(!pc){var pd=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=pd;_cachedPlan=pd;
     renderPlanGrid(getWeekDates(_planWeekOffset),today);updateTodayCard(today);}
   },5000);
@@ -26566,7 +27022,7 @@ function loadTodayPlan(){
   }
   var cbName='wt_tp_'+Date.now();
   window[cbName]=function(result){
-    window[cbName]=null;var s=document.getElementById('s_'+cbName);if(s)s.parentNode.removeChild(s);
+    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
     var rawPlan=(result&&result.plan)?result.plan:{};
     _cachedPlan=JSON.parse(JSON.stringify(rawPlan));
     savePlanCache(rawPlan);
@@ -26575,9 +27031,9 @@ function loadTodayPlan(){
   };
   var script=document.createElement('script');script.id='s_'+cbName;
   script.src=CLOUD_URL+'?type=getWeekPlan&callback='+cbName;
-  script.onerror=function(){var plan=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=plan;updateTodayCard(today);};
+  script.onerror=function(){wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);var plan=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=plan;updateTodayCard(today);};
   document.head.appendChild(script);
-  setTimeout(function(){if(window[cbName]){window[cbName]=null;var plan=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=plan;updateTodayCard(today);}},5000);
+  setTimeout(function(){if(window[cbName]){wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);var plan=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=plan;updateTodayCard(today);}},5000);
 }
 
 // ─── PROGRESS ─────────────────────────────────────────────────────
