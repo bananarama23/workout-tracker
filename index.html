@@ -2453,6 +2453,38 @@ var wtDB=(function(){
       });
     }).catch(function(){return false;});
   }
+  function keys(){
+    return open().then(function(db){
+      return new Promise(function(res){
+        try{
+          var os=db.transaction(ST,'readonly').objectStore(ST);
+          if(os.getAllKeys){
+            var r=os.getAllKeys();
+            r.onsuccess=function(){res(Array.isArray(r.result)?r.result.map(String):[]);};
+            r.onerror=function(){res([]);};
+            return;
+          }
+          var out=[];
+          var c=os.openCursor();
+          c.onsuccess=function(e){
+            var cur=e.target.result;
+            if(cur){out.push(String(cur.key));cur.continue();}
+            else res(out);
+          };
+          c.onerror=function(){res(out);};
+        }catch(e){res([]);}
+      });
+    }).catch(function(){return [];});
+  }
+  function clear(){
+    return open().then(function(db){
+      return new Promise(function(res){
+        var r=db.transaction(ST,'readwrite').objectStore(ST).clear();
+        r.onsuccess=function(){res(true);};
+        r.onerror=function(){res(false);};
+      });
+    }).catch(function(){return false;});
+  }
   function migrate(){
     var KEYS=['wt_hist_v3','wt_sheet_cache','wt_plan_cache','wt_goals_v1',
       'wt_bw_cache_v1','wt_nut_entries_v1','wt_foods_v2','wt_nut_targets',
@@ -2497,7 +2529,7 @@ var wtDB=(function(){
     ops.push(get('wt_sheet_cache').then(function(raw){if(!raw)return;try{var o=JSON.parse(raw);if(o&&o.sessions){o.sessions=o.sessions.filter(function(s){return s.date>=cutStr;});return set('wt_sheet_cache',JSON.stringify(o));}}catch(e){}}));
     return Promise.all(ops);
   }
-  return{get:get,set:set,del:del,migrate:migrate,usage:usage,trim:trim};
+  return{get:get,set:set,del:del,keys:keys,clear:clear,migrate:migrate,usage:usage,trim:trim};
 })();
 // ────────────────────────────────────────────────────
 
@@ -3595,8 +3627,115 @@ var APP_DOCTOR_STATE_KEY='wt_app_doctor_state_v1';
 var APP_DOCTOR_SELF_TEST_KEY='wt_app_doctor_self_test_v1';
 var APP_DOCTOR_PHASE7_TEST_KEY='wt_app_doctor_phase7_test_v1';
 var APP_DOCTOR_TEST_LAB_KEY='wt_app_doctor_test_lab_v1';
+var APP_DOCTOR_TEST_MODE_KEY='wt_app_doctor_test_mode_v1';
+var APP_DOCTOR_TEST_SNAPSHOT_KEY='wt_app_doctor_test_snapshot_v1';
+var APP_DOCTOR_TEST_RESTORE_STATUS_KEY='wt_app_doctor_test_restore_status_v1';
 var APP_DOCTOR_ERROR_LOG_KEY='wt_app_doctor_errors_v1';
 var PHASE7_FAULTS_KEY='wt_phase7_faults_v1';
+var _appDoctorTestModeActive=(function(){
+  try{return localStorage.getItem(APP_DOCTOR_TEST_MODE_KEY)==='1';}catch(e){return false;}
+})();
+function appDoctorIsTestModeActive(){
+  return _appDoctorTestModeActive===true;
+}
+function appDoctorSetTestModeActive(on){
+  _appDoctorTestModeActive=!!on;
+  try{
+    if(_appDoctorTestModeActive)localStorage.setItem(APP_DOCTOR_TEST_MODE_KEY,'1');
+    else localStorage.removeItem(APP_DOCTOR_TEST_MODE_KEY);
+  }catch(e){}
+  return _appDoctorTestModeActive;
+}
+function appDoctorIsTestId(v){
+  return /^test_(session|review|plan|coachstate|event)_/i.test(String(v||''));
+}
+function appDoctorRecordIsTestArtifact(row){
+  if(!row||typeof row!=='object')return false;
+  if(appDoctorIsTestId(row.sessionId)||appDoctorIsTestId(row.reviewId)||appDoctorIsTestId(row.planId)||appDoctorIsTestId(row.coachStateId)||appDoctorIsTestId(row.id))return true;
+  if(appDoctorIsTestId(row.sourceSessionId)||appDoctorIsTestId(row.lastCompletedSessionId)||appDoctorIsTestId(row.lastReviewId))return true;
+  if(appDoctorIsTestId(row.clientMutationId)||appDoctorIsTestId(row.idempotencyKey))return true;
+  if(String(row.source||'').toLowerCase()==='test_lab')return true;
+  return false;
+}
+function appDoctorIncludeArtifactRow(row,opts){
+  var includeTest=!!(opts&&opts.includeTest);
+  if(includeTest)return true;
+  return !appDoctorRecordIsTestArtifact(row);
+}
+function appDoctorTestArtifactSummary(){
+  var out={
+    testModeActive:appDoctorIsTestModeActive(),
+    testArtifactsPresent:false,
+    testArtifactsCount:0,
+    contaminatedRealState:false,
+    activeRealSessionId:'',
+    activeRealHomePlanId:'',
+    activeRealHotelPlanId:'',
+    activeTestSessionId:'',
+    activeTestHomePlanId:'',
+    activeTestHotelPlanId:'',
+    realQueueJobs:0,
+    testQueueJobs:0
+  };
+  try{
+    var sessions=((_cachedSessions||[]).slice());
+    sessions.forEach(function(s){
+      var isTest=appDoctorRecordIsTestArtifact(s);
+      if(isTest){
+        out.testArtifactsCount++;
+        out.testArtifactsPresent=true;
+        if(!out.activeTestSessionId)out.activeTestSessionId=String((s&&s.sessionId)||'');
+      }else if(!out.activeRealSessionId){
+        out.activeRealSessionId=String((s&&s.sessionId)||'');
+      }
+    });
+  }catch(e){}
+  try{
+    var allReviews=postWorkoutReviewsLoad();
+    Object.keys(allReviews||{}).forEach(function(k){
+      var r=allReviews[k];
+      if(appDoctorRecordIsTestArtifact(r)){
+        out.testArtifactsCount++;
+        out.testArtifactsPresent=true;
+      }
+    });
+  }catch(e){}
+  try{
+    var plans=generatedPlanAll({includeTest:true});
+    plans.forEach(function(p){
+      var isTest=appDoctorRecordIsTestArtifact(p);
+      if(isTest){
+        out.testArtifactsCount++;
+        out.testArtifactsPresent=true;
+        if(String((p&&p.planSlot)||'').toUpperCase()==='HOME_NEXT'&&!out.activeTestHomePlanId)out.activeTestHomePlanId=String((p&&p.planId)||'');
+        if(String((p&&p.planSlot)||'').toUpperCase()==='HOTEL_NEXT'&&!out.activeTestHotelPlanId)out.activeTestHotelPlanId=String((p&&p.planId)||'');
+      }else{
+        if(String((p&&p.planSlot)||'').toUpperCase()==='HOME_NEXT'&&!out.activeRealHomePlanId&&generatedPlanIsActiveStatus(p.status))out.activeRealHomePlanId=String((p&&p.planId)||'');
+        if(String((p&&p.planSlot)||'').toUpperCase()==='HOTEL_NEXT'&&!out.activeRealHotelPlanId&&generatedPlanIsActiveStatus(p.status))out.activeRealHotelPlanId=String((p&&p.planId)||'');
+      }
+    });
+  }catch(e){}
+  try{
+    var cs=coachStateLoad({includeTest:true});
+    if(appDoctorRecordIsTestArtifact(cs))out.testArtifactsPresent=true;
+  }catch(e){}
+  try{
+    var jobs=(artifactQueueLoadStore().jobs||[]);
+    jobs.forEach(function(j){
+      if(appDoctorRecordIsTestArtifact(j)||(j&&j.payload&&appDoctorRecordIsTestArtifact(j.payload)))out.testQueueJobs++;
+      else out.realQueueJobs++;
+    });
+  }catch(e){}
+  try{
+    var activeSession=String((_completedSessionId||''));
+    var activeHome=generatedPlanActiveForSlot('HOME_NEXT',{includeTest:true});
+    var activeHotel=generatedPlanActiveForSlot('HOTEL_NEXT',{includeTest:true});
+    if(appDoctorIsTestId(activeSession)||appDoctorRecordIsTestArtifact(activeHome)||appDoctorRecordIsTestArtifact(activeHotel)){
+      out.contaminatedRealState=!appDoctorIsTestModeActive();
+    }
+  }catch(e){}
+  return out;
+}
 function phase7FaultDefaults(){
   return {
     FORCE_SYNC_FAILURE:false,
@@ -4018,6 +4157,7 @@ function coachNormalizeDate(v){
 }
 function coachIsValidWorkout(s){
   if(!s)return false;
+  if(!appDoctorIsTestModeActive()&&!appDoctorIncludeArtifactRow(s,{includeTest:false}))return false;
   if(!coachNormalizeDate(s.date||s.workoutDate||s.normalizedWorkoutDate||s.timestamp))return false;
   var t=String(s.workoutType||s.type||s.workout||s.label||'').toLowerCase();
   if(!t)return false;
@@ -5394,7 +5534,10 @@ function postWorkoutReviewLoad(sessionId){
 }
 function postWorkoutReviewLatest(){
   var all=postWorkoutReviewsLoad();
-  var rows=Object.keys(all).map(function(k){return all[k];}).filter(Boolean);
+  var includeTest=appDoctorIsTestModeActive();
+  var rows=Object.keys(all).map(function(k){return all[k];}).filter(Boolean).filter(function(r){
+    return appDoctorIncludeArtifactRow(r,{includeTest:includeTest});
+  });
   rows.sort(function(a,b){return (b.createdAt||'').localeCompare(a.createdAt||'');});
   return rows[0]||null;
 }
@@ -5899,24 +6042,30 @@ function generatedPlanSaveStore(store){
   appStateSave();
   return st;
 }
-function generatedPlanAll(){
+function generatedPlanAll(opts){
+  var o=opts&&typeof opts==='object'?opts:{};
+  var includeTest=(o.includeTest===true)||appDoctorIsTestModeActive();
   var st=generatedPlanLoadStore();
-  return (st.plans||[]).slice().sort(function(a,b){
+  return (st.plans||[]).filter(function(p){return appDoctorIncludeArtifactRow(p,{includeTest:includeTest});}).sort(function(a,b){
     return generatedPlanToMs(b.updatedAt||b.createdAt)-generatedPlanToMs(a.updatedAt||a.createdAt);
   });
 }
-function generatedPlanFindById(planId){
+function generatedPlanFindById(planId,opts){
+  var o=opts&&typeof opts==='object'?opts:{};
+  var includeTest=(o.includeTest===true)||appDoctorIsTestModeActive();
   var id=String(planId||'');
   if(!id)return null;
-  var rows=generatedPlanAll();
+  var rows=generatedPlanAll({includeTest:includeTest});
   for(var i=0;i<rows.length;i++){
     if(String(rows[i].planId||'')===id)return rows[i];
   }
   return null;
 }
-function generatedPlanActiveForSlot(slot){
+function generatedPlanActiveForSlot(slot,opts){
+  var o=opts&&typeof opts==='object'?opts:{};
+  var includeTest=(o.includeTest===true)||appDoctorIsTestModeActive();
   var target=String(slot||'HOME_NEXT').toUpperCase();
-  var rows=generatedPlanAll().filter(function(p){return p&&String(p.planSlot||'').toUpperCase()===target;});
+  var rows=generatedPlanAll({includeTest:includeTest}).filter(function(p){return p&&String(p.planSlot||'').toUpperCase()===target;});
   for(var i=0;i<rows.length;i++){
     if(generatedPlanIsActiveStatus(rows[i].status))return rows[i];
   }
@@ -6315,6 +6464,14 @@ function artifactQueueLoadStore(){
   if(!_artifactQueueMem)_artifactQueueMem=artifactQueueReadLocal();
   if(!_artifactQueueMem||typeof _artifactQueueMem!=='object')_artifactQueueMem=artifactQueueEmptyStore();
   if(!Array.isArray(_artifactQueueMem.jobs))_artifactQueueMem.jobs=[];
+  if(!appDoctorIsTestModeActive()){
+    var before=_artifactQueueMem.jobs.length;
+    _artifactQueueMem.jobs=_artifactQueueMem.jobs.filter(function(j){return !artifactQueueIsTestJob(j);});
+    if(_artifactQueueMem.jobs.length!==before){
+      _artifactQueueMem.updatedAt=artifactQueueNow();
+      artifactQueueWriteLocal(_artifactQueueMem);
+    }
+  }
   return _artifactQueueMem;
 }
 function artifactQueueSaveStore(store){
@@ -6449,6 +6606,33 @@ function artifactQueueBackoffMs(attempts){
 function artifactQueueNeedsNetwork(jobType){
   return /^sync_/.test(String(jobType||''));
 }
+function artifactQueueIsTestJob(job){
+  if(!job||typeof job!=='object')return false;
+  if(appDoctorRecordIsTestArtifact(job))return true;
+  if(job.payload&&typeof job.payload==='object'&&appDoctorRecordIsTestArtifact(job.payload))return true;
+  return false;
+}
+function artifactQueueDropTestJobsIfNeeded(store,reason){
+  if(appDoctorIsTestModeActive())return 0;
+  var st=store&&typeof store==='object'?store:artifactQueueLoadStore();
+  var jobs=Array.isArray(st.jobs)?st.jobs:[];
+  if(!jobs.length)return 0;
+  var keep=[],removed=0;
+  jobs.forEach(function(j){
+    if(artifactQueueIsTestJob(j)){removed++;return;}
+    keep.push(j);
+  });
+  if(!removed)return 0;
+  st.jobs=keep;
+  st.updatedAt=artifactQueueNow();
+  _artifactQueueMem=st;
+  artifactQueueWriteLocal(st);
+  wtLogEvent('artifact_queue_dropped_test_namespace_jobs',{
+    errorCode:String(reason||'normal_mode_drop'),
+    removedCount:removed
+  });
+  return removed;
+}
 function artifactQueueSessionFreshnessValue(sd){
   if(!sd||typeof sd!=='object')return 0;
   var t=artifactQueueToMs(sd.completedAt)||artifactQueueToMs(sd.updatedAt)||artifactQueueToMs(sd.createdAt)||artifactQueueToMs(sd.date)||0;
@@ -6470,6 +6654,7 @@ function artifactQueueDepsReady(job,jobs){
 }
 function artifactQueuePickNext(store){
   var st=store||artifactQueueLoadStore();
+  artifactQueueDropTestJobsIfNeeded(st,'pick_next');
   var jobs=Array.isArray(st.jobs)?st.jobs:[];
   var now=artifactQueueNow();
   var dirty=false;
@@ -7054,12 +7239,19 @@ function artifactQueueAiGeneratePlanPromise(type,opts){
   }
   return new Promise(function(resolve,reject){
     try{
+      var genOpts=Object.assign({},o,{
+        queueMode:true,
+        deferActivation:true,
+        suppressLegacyCacheWrite:true,
+        suppressDisplayLog:true,
+        suppressUiStatus:true
+      });
       aiCoachGenerate(t,function(result,err){
         if(err)return reject(new Error(String(err||'generation_failed')));
         var row=result&&result[t]?result[t]:null;
         if(!row)return reject(new Error('generated_plan_missing_payload'));
         resolve(row);
-      },o);
+      },genOpts);
     }catch(e){
       reject(e);
     }
@@ -7118,7 +7310,15 @@ function artifactQueueGeneratePlanJob(job){
     return generatedPlanBuildArtifactFromLegacy(legacy,type,Object.assign({},meta,m||{}));
   }
   function activateAndPersist(candidate){
-    var activated=generatedPlanUpsert(candidate,{activate:true});
+    var gate=artifactQueueValidateGeneratedCandidate(candidate,type,ctx);
+    if(!gate.validation.ok){
+      throw {
+        retryable:false,
+        code:'validation_failed_pre_activation',
+        message:String((gate.validation.errors||[]).join('|')||'validation_failed_pre_activation')
+      };
+    }
+    var activated=generatedPlanUpsert(gate.plan,{activate:true});
     generatedPlanApplyToLegacyCache(activated);
     wtLogEvent('generation_saved',{
       sessionId:sd.sessionId,
@@ -7177,16 +7377,28 @@ function artifactQueueGeneratePlanJob(job){
     },extra||{}));
     var validated=artifactQueueValidateGeneratedCandidate(fallbackArtifact,type,ctx);
     if(!validated.validation.ok){
-      // Fallback should still be usable; keep errors visible but do not block activation.
-      validated.plan.validationStatus='fallback_relaxed';
-      validated.plan.validationErrors=validated.validation.errors.slice(0,12);
-      validated.plan.status='fallback_used';
-    }else{
-      validated.plan.status='fallback_used';
+      wtLogEvent('generation_fallback_validation_failed',{
+        sessionId:sd.sessionId,
+        sourceSessionId:sd.sessionId,
+        targetType:type,
+        requestedTargetType:type,
+        errorCode:String((validated.validation.errors||[]).join('|')||'fallback_validation_failed')
+      });
+      var keptAfterFallbackFail=keepCurrent('fallback_validation_failed');
+      if(keptAfterFallbackFail)return keptAfterFallbackFail;
+      throw {
+        retryable:false,
+        code:'fallback_validation_failed',
+        message:String((validated.validation.errors||[]).join('|')||'fallback_validation_failed')
+      };
     }
+    validated.plan.status='fallback_used';
     return activateAndPersist(validated.plan);
   }
   if(Object.keys(_aiGenerationJobs||{}).length&&navigator.onLine){
+    if(appDoctorIsTestModeActive()){
+      return keepCurrent('ai_generation_busy_test_mode')||runFallback('ai_generation_busy_test_mode');
+    }
     throw {retryable:true,code:'ai_generation_busy',message:'ai_generation_busy'};
   }
   if(!appDoctorFlag('USE_AUTONOMOUS_PLAN_BANK')){
@@ -7236,6 +7448,7 @@ function artifactQueueGeneratePlanJob(job){
     });
     return result;
   }).catch(function(err){
+    if(err&&err.code==='fallback_validation_failed')throw err;
     wtLogEvent('generation_failed',{
       sessionId:sd.sessionId,
       sourceSessionId:sd.sessionId,
@@ -7431,6 +7644,9 @@ function artifactQueueSyncGeneratedPlanJob(job){
 }
 function artifactQueueRunJob(job){
   if(!job||!job.jobType)return Promise.reject({retryable:false,code:'job_missing_type',message:'job_missing_type'});
+  if(!appDoctorIsTestModeActive()&&artifactQueueIsTestJob(job)){
+    return Promise.resolve({skipped:true,reason:'test_namespace_ignored',artifactIds:[]});
+  }
   if(job.jobType==='sync_session_to_sheet')return artifactQueueSyncSessionJob(job);
   if(job.jobType==='create_post_workout_review')return artifactQueueCreateReviewJob(job);
   if(job.jobType==='sync_post_workout_review')return artifactQueueSyncReviewJob(job);
@@ -8485,10 +8701,15 @@ function coachStateNormalizeArtifactState(st){
   out.syncState=String(out.syncState||'completed_local');
   return out;
 }
-function coachStateLoad(){
+function coachStateLoad(opts){
+  var o=opts&&typeof opts==='object'?opts:{};
+  var includeTest=(o.includeTest===true)||appDoctorIsTestModeActive();
   try{
     var v=JSON.parse(localStorage.getItem(COACH_STATE_KEY)||'null');
-    if(v&&typeof v==='object')return coachStateNormalizeArtifactState(v);
+    if(v&&typeof v==='object'){
+      var out=coachStateNormalizeArtifactState(v);
+      if(includeTest||!appDoctorRecordIsTestArtifact(out))return out;
+    }
   }catch(e){}
   return coachStateNormalizeArtifactState(coachStateDefault());
 }
@@ -10759,6 +10980,10 @@ function aiCoachSetGenerationState(msg){
 function aiCoachGenerate(type,onDone,opts){
   opts=opts||{};
   type=String(type||'home').toLowerCase();
+  var queueMode=!!opts.queueMode||!!opts.deferActivation;
+  var suppressUiStatus=!!opts.suppressUiStatus||queueMode;
+  var suppressLegacyCacheWrite=!!opts.suppressLegacyCacheWrite||queueMode;
+  var suppressDisplayLog=!!opts.suppressDisplayLog||queueMode;
   var reqId=opts.requestId||(++_aiCoachGenerateReqId);
   _aiCoachGenerateActiveId=reqId;
   if(opts.regenerationCorrection!==undefined)window._aiCoachRegenerationCorrection=!!opts.regenerationCorrection;
@@ -10779,7 +11004,7 @@ function aiCoachGenerate(type,onDone,opts){
   };
   wtLogEvent('generation_requested',genMetaBase);
   if(!opts.latestReady&&_aiGenerationJobs[generationKey]){
-    aiCoachSetGenerationState('Generation already running…');
+    if(!suppressUiStatus)aiCoachSetGenerationState('Generation already running…');
     _aiCoachGenerateActiveId=_aiGenerationJobs[generationKey].requestId;
     _aiGenerationJobs[generationKey].callbacks.push({onDone:onDone,requestId:_aiGenerationJobs[generationKey].requestId});
     wtLogEvent('generation_cache_hit',Object.assign({},genMetaBase,{cacheHit:true,errorCode:'inflight_job_reused'}));
@@ -10805,22 +11030,45 @@ function aiCoachGenerate(type,onDone,opts){
     wtLogEvent('generation_discarded_invalid',Object.assign({},genMetaBase,{errorCode:String(reason||'stale_response_ignored')}));
   }
   if(!opts.latestReady){
-    aiCoachSetGenerateButtonsDisabled(true);
-    aiCoachSetGenerationState('Reading recent workouts…');
+    if(!suppressUiStatus){
+      aiCoachSetGenerateButtonsDisabled(true);
+      aiCoachSetGenerationState('Reading recent workouts…');
+    }
     wtLogEvent('generation_latest_context_started',Object.assign({},genMetaBase));
     _sheetSessions=null;
     _coachLatestPromise=null;
     var p=coachEnsureLatestThen(null,{preferSheet:true,force:true,phase:'Reading recent workouts…'}).then(function(res){
       if(reqId!==_aiCoachGenerateActiveId){discardStaleResponse('latest_context_stale_response');return;}
       wtLogEvent('generation_latest_context_finished',Object.assign({},genMetaBase,{cacheHit:!!(res&&res.fallback)}));
-      if(res&&res.fallback)aiCoachSetGenerationState('Sheet is slow; using most recent synced workout…');
-      else aiCoachSetGenerationState('Applying progression rules…');
-      return aiCoachGenerate(type,onDone,{latestReady:true,requestId:reqId,regenerationCorrection:opts.regenerationCorrection,generationKey:generationKey});
+      if(!suppressUiStatus){
+        if(res&&res.fallback)aiCoachSetGenerationState('Sheet is slow; using most recent synced workout…');
+        else aiCoachSetGenerationState('Applying progression rules…');
+      }
+      return aiCoachGenerate(type,onDone,{
+        latestReady:true,
+        requestId:reqId,
+        regenerationCorrection:opts.regenerationCorrection,
+        generationKey:generationKey,
+        queueMode:queueMode,
+        deferActivation:!!opts.deferActivation,
+        suppressLegacyCacheWrite:suppressLegacyCacheWrite,
+        suppressDisplayLog:suppressDisplayLog,
+        suppressUiStatus:suppressUiStatus
+      });
     }).catch(function(){
       if(reqId!==_aiCoachGenerateActiveId){discardStaleResponse('latest_context_error_stale_response');return;}
-      aiCoachSetGenerationState('Could not verify sheet; using local coach context…');
+      if(!suppressUiStatus)aiCoachSetGenerationState('Could not verify sheet; using local coach context…');
       wtLogEvent('generation_latest_context_finished',Object.assign({},genMetaBase,{errorCode:'latest_context_failed'}));
-      return aiCoachGenerate(type,onDone,{latestReady:true,requestId:reqId,generationKey:generationKey});
+      return aiCoachGenerate(type,onDone,{
+        latestReady:true,
+        requestId:reqId,
+        generationKey:generationKey,
+        queueMode:queueMode,
+        deferActivation:!!opts.deferActivation,
+        suppressLegacyCacheWrite:suppressLegacyCacheWrite,
+        suppressDisplayLog:suppressDisplayLog,
+        suppressUiStatus:suppressUiStatus
+      });
     });
     _aiGenerationJobs[generationKey].promise=p;
     return p;
@@ -10860,7 +11108,7 @@ function aiCoachGenerate(type,onDone,opts){
   }
   function finalize(plan){
     if(reqId!==_aiCoachGenerateActiveId){discardStaleResponse('finalize_stale_response');return;}
-    aiCoachSetGenerationState('Finalizing coach plan…');
+    if(!suppressUiStatus)aiCoachSetGenerationState('Finalizing coach plan…');
     var strictFinal=aiCoachStrictGenerationValidation(plan,type,ctx);
     if(!strictFinal.ok){
       wtLogEvent('generation_discarded_invalid',Object.assign({},genMetaBase,{actualPlanType:String(strictFinal.actualPlanType||''),errorCode:String(strictFinal.errorCode||'validation_failed')}));
@@ -10890,18 +11138,22 @@ function aiCoachGenerate(type,onDone,opts){
       if(debtLine&&plan.changeLog.indexOf(debtLine)<0)plan.changeLog.unshift(debtLine);
       plan.changeLog=plan.changeLog.slice(0,4);
     }
-    _aiWorkout[type]=plan;
-    aiWorkoutSaveOne(type,plan);
-    aiPendingTargetsMarkConsumed(type);
-    var _fp=aiProfileLoad();
-    if(_fp.feedbackScore||_fp.feedbackBottleneck){_fp.feedbackScore=null;_fp.feedbackBottleneck=null;aiProfileSave(_fp);}
+    if(!suppressLegacyCacheWrite){
+      _aiWorkout[type]=plan;
+      aiWorkoutSaveOne(type,plan);
+      aiPendingTargetsMarkConsumed(type);
+      var _fp=aiProfileLoad();
+      if(_fp.feedbackScore||_fp.feedbackBottleneck){_fp.feedbackScore=null;_fp.feedbackBottleneck=null;aiProfileSave(_fp);}
+    }
     var out={};out[type]=plan;
-    aiCoachSetGenerateButtonsDisabled(false);
+    if(!suppressUiStatus)aiCoachSetGenerateButtonsDisabled(false);
     window._aiCoachRegenerationCorrection=false;
     aiCoachSetGenerationPersistedState(plan.generationState,{generationId:generationId,planId:plan.planId,targetType:type,requestId:reqId});
     wtLogEvent(plan.generationState==='generation_fallback_used'?'generation_fallback_used':'generation_success',Object.assign({},genMetaBase,{planId:plan.planId,actualPlanType:String(plan.targetType||''),targetType:type,fallbackUsed:plan.generationState==='generation_fallback_used'}));
-    wtLogEvent('generation_displayed',Object.assign({},genMetaBase,{planId:plan.planId,actualPlanType:String(plan.targetType||''),targetType:type}));
-    wtLogEvent('generation_saved',Object.assign({},genMetaBase,{planId:plan.planId,actualPlanType:String(plan.targetType||''),targetType:type}));
+    if(!suppressDisplayLog){
+      wtLogEvent('generation_displayed',Object.assign({},genMetaBase,{planId:plan.planId,actualPlanType:String(plan.targetType||''),targetType:type}));
+      wtLogEvent('generation_saved',Object.assign({},genMetaBase,{planId:plan.planId,actualPlanType:String(plan.targetType||''),targetType:type}));
+    }
     deliver(out,null);
   }
   function runModel(model,maxTokens,timeoutMs,promptText){
@@ -10929,7 +11181,7 @@ function aiCoachGenerate(type,onDone,opts){
         var json=aiCoachExtractJson(content);
         if(!json){
           if(!retriedJson){
-            aiCoachSetGenerationState('Invalid coach JSON, retrying once…');
+            if(!suppressUiStatus)aiCoachSetGenerationState('Invalid coach JSON, retrying once…');
             return once(true,usedRepair);
           }
           throw new Error('invalid_coach_json');
@@ -10938,7 +11190,7 @@ function aiCoachGenerate(type,onDone,opts){
         if(normalized.ok)return normalized;
         if(!usedRepair){
           wtLogEvent('generation_repair_attempted',Object.assign({},genMetaBase,{errorCode:String(normalized.validationError||'validation_failed'),actualPlanType:String(normalized.actualPlanType||'')}));
-          aiCoachSetGenerationState('Repairing invalid workout plan…');
+          if(!suppressUiStatus)aiCoachSetGenerationState('Repairing invalid workout plan…');
           return once(false,true);
         }
         throw new Error('plan_validation_failed:'+String(normalized.validationError||'validation_failed'));
@@ -10966,15 +11218,15 @@ function aiCoachGenerate(type,onDone,opts){
     fb.confidenceReason=String(msg||'auto_continue_fallback').slice(0,240);
     fb.generationState='generation_fallback_used';
     aiCoachSetGenerationPersistedState('generation_fallback_used',{generationId:generationId,targetType:type,requestId:reqId});
-    aiCoachSetGenerationState('Generation is taking too long. Using safe fallback plan.');
+    if(!suppressUiStatus)aiCoachSetGenerationState('Generation is taking too long. Using safe fallback plan.');
     finalize(fb);
   }
 
-  aiCoachSetGenerationState('Generating next workout…');
+  if(!suppressUiStatus)aiCoachSetGenerationState('Generating next workout…');
   runModelPlan('gpt-5.4-mini',1900,55000).then(function(p1){
     if(!shouldEscalate(p1)){aiCoachRouteLog('generate:mini_accept',{type:type,confidence:p1.plan.confidence});finalize(p1.plan);return null;}
     aiCoachRouteLog('generate:escalate_to_main',{type:type,confidence:p1.plan.confidence,ctxBand:(ctx.coachConfidence||{}).band});
-    aiCoachSetGenerationState('Applying progression rules…');
+    if(!suppressUiStatus)aiCoachSetGenerationState('Applying progression rules…');
     return runModelPlan('gpt-5.5',2400,65000).then(function(p2){
       aiCoachRouteLog('generate:main_accept',{type:type,confidence:p2.plan.confidence});
       finalize(p2.plan);
@@ -10988,7 +11240,7 @@ function aiCoachGenerate(type,onDone,opts){
   }).catch(function(e){
     // Auto-continue in app: never leave pre/post workout generation dead-ended.
     aiCoachRouteLog('generate:fallback_after_error',{type:type,error:String((e&&e.message)||'')});
-    aiCoachSetGenerationState('Regenerate failed, retrying with safe fallback…');
+    if(!suppressUiStatus)aiCoachSetGenerationState('Regenerate failed, retrying with safe fallback…');
     finalizeWithFallback(aiCoachFriendlyApiError((e&&e.message)||'Network error reaching OpenAI.'));
   });
 }
@@ -13666,6 +13918,7 @@ function trainerBootstrapScoreCandidate(s){
 }
 function trainerBootstrapNormalizeCandidate(raw,source){
   if(!raw||typeof raw!=='object')return null;
+  if(!appDoctorIsTestModeActive()&&!appDoctorIncludeArtifactRow(raw,{includeTest:false}))return null;
   if(!coachIsValidWorkout(raw))return null;
   var target=trainerBootstrapInferTargetType(raw);
   if(target!=='HOME'&&target!=='HOTEL')return null;
@@ -16964,18 +17217,20 @@ function wtDiagEnsureLauncher(){
 }
 function appDoctorLatestSession(){
   try{
-    var all=((_cachedSessions||[]).slice()).filter(coachIsValidWorkout).sort(function(a,b){return coachWorkoutSortValue(a)<coachWorkoutSortValue(b)?1:-1;});
+    var includeTest=appDoctorIsTestModeActive();
+    var all=((_cachedSessions||[]).slice()).filter(coachIsValidWorkout).filter(function(s){return appDoctorIncludeArtifactRow(s,{includeTest:includeTest});}).sort(function(a,b){return coachWorkoutSortValue(a)<coachWorkoutSortValue(b)?1:-1;});
     if(!all.length){
       var c=loadCache();
-      all=(c&&Array.isArray(c.sessions)?c.sessions:[]).filter(coachIsValidWorkout).sort(function(a,b){return coachWorkoutSortValue(a)<coachWorkoutSortValue(b)?1:-1;});
+      all=(c&&Array.isArray(c.sessions)?c.sessions:[]).filter(coachIsValidWorkout).filter(function(s){return appDoctorIncludeArtifactRow(s,{includeTest:includeTest});}).sort(function(a,b){return coachWorkoutSortValue(a)<coachWorkoutSortValue(b)?1:-1;});
     }
     return all[0]||null;
   }catch(e){return null;}
 }
 function appDoctorLatestReview(){
   try{
+    var includeTest=appDoctorIsTestModeActive();
     var all=postWorkoutReviewsLoad();
-    var rows=Object.keys(all||{}).map(function(k){return all[k];}).filter(Boolean);
+    var rows=Object.keys(all||{}).map(function(k){return all[k];}).filter(Boolean).filter(function(r){return appDoctorIncludeArtifactRow(r,{includeTest:includeTest});});
     rows.sort(function(a,b){
       var bt=artifactQueueToMs((b&&b.updatedAt)||((b&&b.createdAt)||0));
       var at=artifactQueueToMs((a&&a.updatedAt)||((a&&a.createdAt)||0));
@@ -16985,7 +17240,7 @@ function appDoctorLatestReview(){
   }catch(e){return null;}
 }
 function appDoctorCoachState(){
-  try{return coachStateLoad?coachStateLoad():null;}catch(e){return null;}
+  try{return coachStateLoad?coachStateLoad({includeTest:appDoctorIsTestModeActive()}):null;}catch(e){return null;}
 }
 function appDoctorPlanSummary(type){
   try{
@@ -17236,7 +17491,9 @@ function appDoctorSnapshot(){
   try{appStatus=JSON.parse(localStorage.getItem(WT_APPSTATUS_CACHE_KEY)||'{}')||{};}catch(e){appStatus={};}
   var queues=appDoctorPendingSheetWrites();
   var queueSum=artifactQueueSummary();
-  var latestSessionId=String((_completedSessionId||(latest&&(latest.sessionId||''))||''));
+  var completedSeed=String((_completedSessionId||''));
+  if(!appDoctorIsTestModeActive()&&appDoctorIsTestId(completedSeed))completedSeed='';
+  var latestSessionId=String((completedSeed||(latest&&(latest.sessionId||''))||''));
   var sessionSyncJob=artifactQueueLatestJob('sync_session_to_sheet',latestSessionId)||artifactQueueLatestJob('sync_session_to_sheet','');
   var reviewCreateJob=artifactQueueLatestJob('create_post_workout_review',latestSessionId)||artifactQueueLatestJob('create_post_workout_review','');
   var reviewSyncJob=artifactQueueLatestJob('sync_post_workout_review',latestSessionId)||artifactQueueLatestJob('sync_post_workout_review','');
@@ -17399,12 +17656,17 @@ function appDoctorSnapshot(){
         active_fault_injections:active.length?active.join(', '):'none'
       };
     })(),
-    test_lab:(function(){
-      var rep=null;
-      try{rep=JSON.parse(localStorage.getItem(APP_DOCTOR_TEST_LAB_KEY)||'null');}catch(e){rep=null;}
-      var active=phase7FaultsActiveList();
-      var categories=(rep&&rep.categories)||{};
-      return {
+	    test_lab:(function(){
+	      var rep=null;
+	      try{rep=JSON.parse(localStorage.getItem(APP_DOCTOR_TEST_LAB_KEY)||'null');}catch(e){rep=null;}
+	      var restoreMeta=null;
+	      try{restoreMeta=JSON.parse(localStorage.getItem(APP_DOCTOR_TEST_RESTORE_STATUS_KEY)||'null');}catch(e){restoreMeta=null;}
+	      var snapshotPresent=false;
+	      try{snapshotPresent=!!localStorage.getItem(APP_DOCTOR_TEST_SNAPSHOT_KEY);}catch(e){snapshotPresent=false;}
+	      var active=phase7FaultsActiveList();
+	      var categories=(rep&&rep.categories)||{};
+	      var contam=appDoctorTestArtifactSummary();
+	      return {
         last_run:appDoctorFmtTs(rep&&rep.ts),
         mode:String((rep&&rep.mode)||''),
         total:parseInt((rep&&rep.total)||0,10)||0,
@@ -17415,9 +17677,25 @@ function appDoctorSnapshot(){
           var c=categories[k]||{};
           return (parseInt(c.failed||0,10)||0)>0;
         }).join(', ')||'none',
-        active_fault_toggles:active.length?active.join(', '):'none'
-      };
-    })(),
+        active_fault_toggles:active.length?active.join(', '):'none',
+        test_mode_active:contam.testModeActive,
+        test_artifacts_present:contam.testArtifactsPresent,
+        test_artifacts_count:contam.testArtifactsCount,
+        contaminated_real_state:contam.contaminatedRealState,
+        active_real_sessionId:contam.activeRealSessionId,
+        active_real_HOME_planId:contam.activeRealHomePlanId,
+        active_real_HOTEL_planId:contam.activeRealHotelPlanId,
+        active_test_sessionId:contam.activeTestSessionId,
+	        active_test_HOME_planId:contam.activeTestHomePlanId,
+	        active_test_HOTEL_planId:contam.activeTestHotelPlanId,
+	        queue_jobs_real:contam.realQueueJobs,
+	        queue_jobs_test:contam.testQueueJobs,
+	        restore_snapshot_available:snapshotPresent,
+	        last_restore_status:String((restoreMeta&&restoreMeta.status)||''),
+	        last_restore_time:appDoctorFmtTs((restoreMeta&&restoreMeta.ts)||0),
+	        last_restore_message:String((restoreMeta&&restoreMeta.message)||'')
+	      };
+	    })(),
     versions:{
       APP_VERSION:APP_VERSION,
       SCHEMA_VERSION:SCHEMA_VERSION,
@@ -17615,6 +17893,209 @@ function appDoctorPhase7StorageRestore(snapshot){
     });
   }catch(e){}
 }
+function appDoctorTestLabGlobalsSnapshot(){
+  return {
+    _cachedSessions:appDoctorTestLabClone(_cachedSessions||[]),
+    _sheetSessions:appDoctorTestLabClone(_sheetSessions||[]),
+    _completedSessionId:_completedSessionId,
+    _goals:appDoctorTestLabClone(_goals||{}),
+    _aiCoachMode:String(_aiCoachMode||''),
+    _aiCoachLastAutoPatch:appDoctorTestLabClone(_aiCoachLastAutoPatch||null),
+    _artifactQueueMem:appDoctorTestLabClone(_artifactQueueMem),
+    _artifactQueueBooted:!!_artifactQueueBooted,
+    _artifactQueueRunning:!!_artifactQueueRunning,
+    _artifactQueueCurrentJob:String(_artifactQueueCurrentJob||''),
+    _trainerDashboardLastSnapshot:appDoctorTestLabClone(_trainerDashboardLastSnapshot||null),
+    _trainerDashboardRemoteSyncInFlight:!!_trainerDashboardRemoteSyncInFlight,
+    _trainerDashboardLastRemoteSyncTs:parseInt(_trainerDashboardLastRemoteSyncTs||0,10)||0
+  };
+}
+function appDoctorTestLabGlobalsRestore(globalsSnap){
+  var g=globalsSnap&&typeof globalsSnap==='object'?globalsSnap:{};
+  _cachedSessions=appDoctorTestLabClone(g._cachedSessions||[]);
+  _sheetSessions=appDoctorTestLabClone(g._sheetSessions||[]);
+  _completedSessionId=g._completedSessionId||null;
+  _goals=appDoctorTestLabClone(g._goals||_goals||{});
+  _aiCoachMode=String(g._aiCoachMode||'');
+  _aiCoachLastAutoPatch=appDoctorTestLabClone(g._aiCoachLastAutoPatch||null);
+  _artifactQueueMem=appDoctorTestLabClone(g._artifactQueueMem);
+  _artifactQueueBooted=!!g._artifactQueueBooted;
+  _artifactQueueRunning=!!g._artifactQueueRunning;
+  _artifactQueueCurrentJob=String(g._artifactQueueCurrentJob||'');
+  _trainerDashboardLastSnapshot=appDoctorTestLabClone(g._trainerDashboardLastSnapshot||null);
+  _trainerDashboardRemoteSyncInFlight=!!g._trainerDashboardRemoteSyncInFlight;
+  _trainerDashboardLastRemoteSyncTs=parseInt(g._trainerDashboardLastRemoteSyncTs||0,10)||0;
+}
+function appDoctorTestLabCaptureIdbSnapshot(){
+  if(typeof wtDB==='undefined'||!wtDB||typeof wtDB.keys!=='function')return Promise.resolve({});
+  return wtDB.keys().then(function(keys){
+    keys=Array.isArray(keys)?keys:[];
+    if(!keys.length)return {};
+    var out={};
+    return Promise.all(keys.map(function(k){
+      return wtDB.get(k).then(function(v){
+        if(v!==undefined&&v!==null)out[String(k)]=v;
+      }).catch(function(){});
+    })).then(function(){return out;});
+  }).catch(function(){return {};});
+}
+function appDoctorTestLabRestoreIdbSnapshot(idbSnap){
+  if(typeof wtDB==='undefined'||!wtDB)return Promise.resolve(false);
+  var snap=idbSnap&&typeof idbSnap==='object'?idbSnap:{};
+  var keys=Object.keys(snap);
+  function repopulate(){
+    if(!keys.length)return Promise.resolve(true);
+    return Promise.all(keys.map(function(k){
+      return wtDB.set(k,snap[k]).catch(function(){return false;});
+    })).then(function(){return true;});
+  }
+  if(typeof wtDB.clear==='function'){
+    return wtDB.clear().then(function(){return repopulate();}).catch(function(){return repopulate();});
+  }
+  return repopulate();
+}
+function appDoctorTestLabSnapshotCaptureAsync(){
+  var snap={
+    ts:Date.now(),
+    localStorage:appDoctorPhase7StorageSnapshot(),
+    globals:appDoctorTestLabGlobalsSnapshot(),
+    idb:{}
+  };
+  return appDoctorTestLabCaptureIdbSnapshot().then(function(idbSnap){
+    snap.idb=idbSnap||{};
+    return snap;
+  }).catch(function(){
+    snap.idb={};
+    return snap;
+  });
+}
+function appDoctorTestLabSnapshotPersistAsync(snapshot){
+  var snap=snapshot&&typeof snapshot==='object'?snapshot:{};
+  var raw='';
+  try{raw=JSON.stringify(snap);}catch(e){raw='';}
+  if(!raw)return Promise.resolve(false);
+  try{localStorage.setItem(APP_DOCTOR_TEST_SNAPSHOT_KEY,raw);}catch(e){}
+  if(typeof wtDB!=='undefined'&&wtDB&&typeof wtDB.set==='function'){
+    return wtDB.set(APP_DOCTOR_TEST_SNAPSHOT_KEY,raw).then(function(){return true;}).catch(function(){return true;});
+  }
+  return Promise.resolve(true);
+}
+function appDoctorTestLabSnapshotLoadAsync(){
+  var localRaw='';
+  try{localRaw=localStorage.getItem(APP_DOCTOR_TEST_SNAPSHOT_KEY)||'';}catch(e){localRaw='';}
+  if(localRaw){
+    try{return Promise.resolve(JSON.parse(localRaw));}catch(e){}
+  }
+  if(typeof wtDB!=='undefined'&&wtDB&&typeof wtDB.get==='function'){
+    return wtDB.get(APP_DOCTOR_TEST_SNAPSHOT_KEY).then(function(raw){
+      if(!raw)return null;
+      try{return JSON.parse(raw);}catch(e){return null;}
+    }).catch(function(){return null;});
+  }
+  return Promise.resolve(null);
+}
+function appDoctorTestLabRestoreFromSnapshotAsync(snapshot,opts){
+  var o=opts&&typeof opts==='object'?opts:{};
+  var snap=snapshot&&typeof snapshot==='object'?snapshot:null;
+  if(!snap)return Promise.resolve(false);
+  if(_artifactQueueTimer)clearTimeout(_artifactQueueTimer);
+  _artifactQueueTimer=null;
+  appDoctorPhase7StorageRestore(snap.localStorage||{});
+  return appDoctorTestLabRestoreIdbSnapshot(snap.idb||{}).then(function(){
+    appDoctorTestLabGlobalsRestore(snap.globals||{});
+    appDoctorSetTestModeActive(false);
+    if(o.clearSavedSnapshot){
+      try{localStorage.removeItem(APP_DOCTOR_TEST_SNAPSHOT_KEY);}catch(e){}
+      try{wtDB.del(APP_DOCTOR_TEST_SNAPSHOT_KEY);}catch(e){}
+    }
+    try{artifactQueueBoot();}catch(e){}
+	    try{artifactQueuePump(true);}catch(e){}
+	    try{trainerDashboardRefresh({background:true});}catch(e){}
+	    try{
+	      localStorage.setItem(APP_DOCTOR_TEST_RESTORE_STATUS_KEY,JSON.stringify({
+	        status:'ok',
+	        ts:Date.now(),
+	        message:'restore_completed'
+	      }));
+	    }catch(e){}
+	    return true;
+	  }).catch(function(){
+	    appDoctorSetTestModeActive(false);
+	    try{
+	      localStorage.setItem(APP_DOCTOR_TEST_RESTORE_STATUS_KEY,JSON.stringify({
+	        status:'error',
+	        ts:Date.now(),
+	        message:'restore_failed'
+	      }));
+	    }catch(e){}
+	    return false;
+	  });
+}
+function appDoctorTestLabPurgeTestArtifactsBestEffort(){
+  try{
+    _cachedSessions=(_cachedSessions||[]).filter(function(s){return appDoctorIncludeArtifactRow(s,{includeTest:false});});
+    saveCache(_cachedSessions||[]);
+  }catch(e){}
+  try{
+    var reviews=postWorkoutReviewsLoad();
+    var nextReviews={};
+    Object.keys(reviews||{}).forEach(function(k){
+      var r=reviews[k];
+      if(appDoctorIncludeArtifactRow(r,{includeTest:false}))nextReviews[k]=r;
+    });
+    postWorkoutReviewsSave(nextReviews);
+  }catch(e){}
+  try{
+    var plans=generatedPlanLoadStore();
+    plans.plans=(plans.plans||[]).filter(function(p){return appDoctorIncludeArtifactRow(p,{includeTest:false});});
+    generatedPlanSaveStore(plans);
+  }catch(e){}
+  try{
+    var q=artifactQueueLoadStore();
+    q.jobs=(q.jobs||[]).filter(function(j){return !artifactQueueIsTestJob(j);});
+    artifactQueueSaveStore(q);
+  }catch(e){}
+  try{
+    var cs=coachStateLoad({includeTest:true});
+    if(appDoctorRecordIsTestArtifact(cs))coachStateSave(coachStateDefault());
+  }catch(e){}
+  try{
+    if(appDoctorIsTestId(_completedSessionId))_completedSessionId='';
+  }catch(e){}
+}
+function appDoctorTestLabRestoreRealState(){
+  return appDoctorTestLabSnapshotLoadAsync().then(function(snap){
+    if(!snap){
+      appDoctorSetTestModeActive(false);
+      appDoctorTestLabPurgeTestArtifactsBestEffort();
+	      try{
+	        localStorage.setItem(APP_DOCTOR_TEST_RESTORE_STATUS_KEY,JSON.stringify({
+	          status:'warning',
+	          ts:Date.now(),
+	          message:'snapshot_missing_test_mode_cleared'
+	        }));
+	      }catch(e){}
+	      appToast('No Test Lab snapshot found. Cleared test mode only.','var(--orange)');
+	      return false;
+	    }
+    return appDoctorTestLabRestoreFromSnapshotAsync(snap,{clearSavedSnapshot:true}).then(function(ok){
+      appDoctorRender();
+      appToast(ok?'Restored real state from Test Lab snapshot.':'Restore attempted with warnings.','var(--green)');
+      return ok;
+    });
+	  }).catch(function(e){
+	    appDoctorSetTestModeActive(false);
+	    try{
+	      localStorage.setItem(APP_DOCTOR_TEST_RESTORE_STATUS_KEY,JSON.stringify({
+	        status:'error',
+	        ts:Date.now(),
+	        message:String(e&&e.message||e||'restore_failed')
+	      }));
+	    }catch(_e){}
+	    appToast('Restore failed: '+String(e&&e.message||e||'error'),'var(--orange)');
+	    return false;
+	  });
+}
 function appDoctorPhase7Clone(v){
   try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}
 }
@@ -17631,6 +18112,9 @@ function appDoctorPhase7ResetWorkingState(){
   _artifactQueueMem=artifactQueueEmptyStore();
   _artifactQueueBooted=false;
   _artifactQueueRunning=false;
+  _aiGenerationJobs={};
+  _aiCoachGenerateActiveId=0;
+  _aiCoachGeneratingBusy=false;
   if(_artifactQueueTimer)clearTimeout(_artifactQueueTimer);
   _artifactQueueTimer=null;
   _artifactQueueCurrentJob='';
@@ -17638,6 +18122,35 @@ function appDoctorPhase7ResetWorkingState(){
   generatedPlanSaveStore(generatedPlanEmptyStore());
   postWorkoutReviewsSave({});
   phase7FaultsSave(phase7FaultDefaults());
+}
+function appDoctorTestLabResetWorkspaceAsync(){
+  appDoctorSetTestModeActive(true);
+  appDoctorPhase7ResetWorkingState();
+  var keys=[
+    HIST_KEY,
+    CACHE_KEY,
+    WORKOUT_SYNC_QUEUE_KEY,
+    POST_WORKOUT_REVIEW_KEY,
+    GENERATED_PLAN_STORE_KEY,
+    COACH_STATE_KEY,
+    EQUIPMENT_PROFILE_KEY,
+    ARTIFACT_QUEUE_KEY,
+    AI_WORKOUT_KEY,
+    TRAINER_BOOTSTRAP_KEY,
+    TRAINER_NOTIFICATION_KEY
+  ];
+  keys.forEach(function(k){
+    try{localStorage.removeItem(k);}catch(e){}
+  });
+  try{localStorage.removeItem(CACHE_KEY);}catch(e){}
+  try{localStorage.setItem(HIST_KEY,'{}');}catch(e){}
+  try{localStorage.setItem(POST_WORKOUT_REVIEW_KEY,'{}');}catch(e){}
+  try{localStorage.setItem(ARTIFACT_QUEUE_KEY,JSON.stringify(artifactQueueEmptyStore()));}catch(e){}
+  try{localStorage.setItem(GENERATED_PLAN_STORE_KEY,JSON.stringify(generatedPlanEmptyStore()));}catch(e){}
+  if(typeof wtDB==='undefined'||!wtDB||typeof wtDB.del!=='function')return Promise.resolve(true);
+  return Promise.all(keys.map(function(k){
+    return wtDB.del(k).catch(function(){return false;});
+  })).then(function(){return true;}).catch(function(){return true;});
 }
 function appDoctorPhase7MockSession(targetType){
   var t=String(targetType||'HOME').toUpperCase()==='HOTEL'?'HOTEL':'HOME';
@@ -18252,26 +18765,109 @@ function appDoctorTestLabCopyReport(){
     appToast('Clipboard unavailable.','var(--orange)');
   }
 }
+function appDoctorTestLabPreflight(){
+  var blockers=[];
+  try{
+    var q=artifactQueueSummary();
+    var pending=(parseInt(q.pending||0,10)||0)+(parseInt(q.running||0,10)||0)+(parseInt(q.failed_retryable||0,10)||0);
+    if(pending>0)blockers.push('queue_pending:'+pending);
+  }catch(e){}
+  try{
+    if(_artifactQueueRunning||String(_artifactQueueCurrentJob||''))blockers.push('queue_running:'+String(_artifactQueueCurrentJob||'unknown_job'));
+  }catch(e){}
+  try{
+    var inflight=Object.keys(_aiGenerationJobs||{}).length;
+    if(inflight>0)blockers.push('ai_generation_inflight:'+inflight);
+  }catch(e){}
+  try{
+    if(_aiCoachGeneratingBusy)blockers.push('ai_ui_generation_busy');
+  }catch(e){}
+  try{
+    if(_trainerBootstrapRunning)blockers.push('bootstrap_running');
+  }catch(e){}
+  try{
+    if(_trainerDashboardRemoteSyncInFlight)blockers.push('dashboard_remote_sync');
+  }catch(e){}
+  try{
+    if(window._coachPulseAiBusy)blockers.push('coach_pulse_ai_busy');
+  }catch(e){}
+  return {blocked:blockers.length>0,blockers:blockers};
+}
+function appDoctorTestLabMockLegacyPlan(type){
+  var t=String(type||'home').toLowerCase()==='hotel'?'hotel':'home';
+  var ep=coachEquipmentProfileLoad();
+  var canHotelPull=!!(ep&&ep.hotel&&ep.hotel.pullupOptionAvailable);
+  var canHomePull=!!(ep&&ep.home&&ep.home.pullupBarAvailable);
+  var baseExercises=(t==='home'
+    ?[
+      {name:'PUSH-UPS',repTargets:[9,9],withinSetRestSecs:60,betweenExRestSecs:90,tweak:'Add one rep per set',watchFor:'Brace and full lockout',goal:'Rep progression',rationale:'Progress within rep range',isPlank:false},
+      (canHomePull?{name:'PULL-UPS',repTargets:[5,5],withinSetRestSecs:90,betweenExRestSecs:120,tweak:'Control the eccentric',watchFor:'No kipping',goal:'Vertical pull exposure',rationale:'Address vertical pull debt',isPlank:false}:{name:'AUSTRALIAN PULL-UPS',repTargets:[8,8],withinSetRestSecs:75,betweenExRestSecs:90,tweak:'Pause at top',watchFor:'Scap retraction',goal:'Horizontal pull exposure',rationale:'No home pull-up bar',isPlank:false}),
+      {name:'SIDE PLANKS',repTargets:[35,35],withinSetRestSecs:45,betweenExRestSecs:75,tweak:'Long exhale',watchFor:'Hips stacked',goal:'Lateral core control',rationale:'Maintain core slot',isPlank:true}
+    ]
+    :[
+      {name:'PUSH-UPS',repTargets:[10,10],withinSetRestSecs:55,betweenExRestSecs:85,tweak:'Smooth tempo',watchFor:'Elbows at 45 degrees',goal:'Hotel push progression',rationale:'Portable progression',isPlank:false},
+      {name:'SPLIT SQUATS',repTargets:[10,10],withinSetRestSecs:60,betweenExRestSecs:90,tweak:'Knee tracks toes',watchFor:'Full depth',goal:'Lower-body maintenance',rationale:'No equipment dependency',isPlank:false},
+      {name:'SIDE PLANKS',repTargets:[30,30],withinSetRestSecs:45,betweenExRestSecs:75,tweak:'Long exhale',watchFor:'Hips stacked',goal:'Lateral core',rationale:'Core continuity',isPlank:true}
+    ]);
+  var deferred=(t==='hotel'&&!canHotelPull)?[{slot:'vertical_pull',status:'deferred_due_to_environment',reason:'No hotel pull-up option available.',nextAction:'Prioritize vertical pull in HOME_NEXT.'}]:[];
+  return {
+    coachingTitle:(t==='hotel'?'HOTEL NEXT SESSION':'HOME NEXT SESSION'),
+    coachingIntro:(t==='hotel'?'Hotel constraints detected; keep progression moving safely.':'Progress home slots with conservative, specific changes.'),
+    bottomLine:(t==='hotel'?'Useful hotel session despite equipment limits.':'Progress reps first before adding complexity.'),
+    nonNegotiables:['Clean reps','No pain chasing','Respect rest'],
+    estimatedMins:(t==='hotel'?32:38),
+    changeLog:['Rep-first progression applied','Preserved key movement slots'],
+    whatStayedSame:['Core and push continuity'],
+    technicalWatchpoints:['Keep form quality above speed'],
+    fallbacks:['Use nearest available variation'],
+    deferredSlots:deferred,
+    confidence:'medium',
+    confidenceReason:'test_lab_mock_plan',
+    riskFlags:['test_lab_mock'],
+    exercises:baseExercises,
+    generationState:'generation_complete'
+  };
+}
 function appDoctorRunTestLab(mode){
   var targetMode=String(mode||'all');
   var rowsEl=document.getElementById('appDoctorTestLabRows');
   if(rowsEl)rowsEl.innerHTML='<div style="font-size:0.66rem;color:var(--muted);">Running Test Lab ('+escHtml(targetMode)+')…</div>';
   var startedAt=Date.now();
   var results=[];
+  var busyState=appDoctorTestLabPreflight();
+  var forcedReadOnly=false;
+  var destructiveMode=(targetMode==='all'||targetMode==='storage'||targetMode==='pipeline'||targetMode==='ai_failure'||targetMode==='validation');
+  if(busyState.blocked&&destructiveMode){
+    forcedReadOnly=true;
+    targetMode='readonly';
+    if(rowsEl){
+      rowsEl.innerHTML='<div style="font-size:0.66rem;color:var(--orange);margin-bottom:6px;">Test Lab blocked: app is busy.</div>'
+        +'<div style="font-size:0.62rem;color:var(--muted);margin-bottom:6px;">Blocking jobs: '+escHtml(busyState.blockers.join(', '))+'</div>'
+        +'<div style="font-size:0.62rem;color:var(--muted);">Running read-only tests only.</div>';
+    }
+    appToast('Test Lab blocked: app is busy. Running read-only tests only.','var(--orange)');
+  }
   function includeCategory(category){
     if(targetMode==='all')return true;
     if(targetMode==='storage')return category==='storage';
     if(targetMode==='backend')return category==='backend_sheet';
     if(targetMode==='pipeline')return category==='trainer_pipeline'||category==='dashboard'||category==='autopilot';
-    if(targetMode==='ai_failure')return category==='ai_failure';
-    if(targetMode==='validation')return category==='home_hotel_validation';
-    if(targetMode==='pwa')return category==='pwa_cache';
-    return true;
-  }
+	    if(targetMode==='ai_failure')return category==='ai_failure';
+	    if(targetMode==='validation')return category==='home_hotel_validation';
+	    if(targetMode==='pwa')return category==='pwa_cache';
+	    if(targetMode==='readonly')return true;
+	    return true;
+	  }
   function runCase(def){
     if(!def||!includeCategory(def.category))return Promise.resolve();
+    if(targetMode==='readonly'&&def.readOnly!==true)return Promise.resolve();
     var started=Date.now();
-    return Promise.resolve().then(function(){return def.fn();}).then(function(info){
+    return Promise.resolve().then(function(){
+      if(def.readOnly===true)return true;
+      return appDoctorTestLabResetWorkspaceAsync();
+    }).then(function(){
+      return def.fn();
+    }).then(function(info){
       var i=info&&typeof info==='object'?info:{};
       results.push({
         test:String(def.name||'test'),
@@ -18297,21 +18893,9 @@ function appDoctorRunTestLab(mode){
     });
   }
   var lsSnap=appDoctorPhase7StorageSnapshot();
-  var globalsSnap={
-    _cachedSessions:appDoctorTestLabClone(_cachedSessions||[]),
-    _sheetSessions:appDoctorTestLabClone(_sheetSessions||[]),
-    _completedSessionId:_completedSessionId,
-    _goals:appDoctorTestLabClone(_goals||{}),
-    _aiCoachMode:String(_aiCoachMode||''),
-    _aiCoachLastAutoPatch:appDoctorTestLabClone(_aiCoachLastAutoPatch||null),
-    _artifactQueueMem:appDoctorTestLabClone(_artifactQueueMem),
-    _artifactQueueBooted:!!_artifactQueueBooted,
-    _artifactQueueRunning:!!_artifactQueueRunning,
-    _artifactQueueCurrentJob:String(_artifactQueueCurrentJob||''),
-    _trainerDashboardLastSnapshot:appDoctorTestLabClone(_trainerDashboardLastSnapshot||null),
-    _trainerDashboardRemoteSyncInFlight:!!_trainerDashboardRemoteSyncInFlight,
-    _trainerDashboardLastRemoteSyncTs:parseInt(_trainerDashboardLastRemoteSyncTs||0,10)||0
-  };
+  var globalsSnap=appDoctorTestLabGlobalsSnapshot();
+  var idbSnap=null;
+  var persistedSnapshot={localStorage:lsSnap,globals:globalsSnap,idb:{}};
   var savedFaults=phase7FaultsLoad();
   var origPump=artifactQueuePump;
   var origToast=appToast;
@@ -18320,6 +18904,7 @@ function appDoctorRunTestLab(mode){
   var origWtDbDel=wtDB.del;
   var origWtBackendPost=wtBackendPost;
   var origAiOpenAICall=aiCoachOpenAICall;
+  var origArtifactQueueAiGeneratePlanPromise=artifactQueueAiGeneratePlanPromise;
   var origRemoteSync=trainerDashboardRemoteSync;
   var origWtNewId=wtNewId;
   var cases=[];
@@ -18434,6 +19019,7 @@ function appDoctorRunTestLab(mode){
 
   cases.push({
     category:'backend_sheet',
+    readOnly:true,
     name:'Backend/Sheet: backend ping envelope',
     fn:function(){
       return wtBackendPost({type:'appStatus',requestId:appDoctorTestLabNs('test_event'),_nonce:Date.now(),timeoutMs:18000}).then(function(r){
@@ -18446,6 +19032,7 @@ function appDoctorRunTestLab(mode){
   });
   cases.push({
     category:'backend_sheet',
+    readOnly:true,
     name:'Backend/Sheet: sheet read (safe)',
     fn:function(){
       return wtBackendPost({type:'getRecentWorkouts',limit:1,requestId:appDoctorTestLabNs('test_event'),_nonce:Date.now(),timeoutMs:22000}).then(function(r){
@@ -18493,8 +19080,10 @@ function appDoctorRunTestLab(mode){
         var rows=Array.isArray(sync.results)?sync.results:[];
         var okRow=rows.find(function(r){return r&&String(r.artifactType||'')==='app_event';});
         var badRow=rows.find(function(r){return r&&String(r.artifactType||'')==='unknown_test_artifact';});
-        var pass=String(sync.status||'')==='error'&&!!okRow&&String(okRow.status||'')==='ok'&&!!badRow&&String(badRow.status||'')==='error';
-        return {pass:pass,errorCode:pass?'':'partial_failure_not_reported',details:'status='+(sync.status||'')+' failed='+(sync.failedCount||0),artifactIds:[okId,badId],cleanupStatus:'server_namespaced_event_retained'};
+        var statusOk=(String(sync.status||'')==='partial'||String(sync.status||'')==='error');
+        var retryableOk=!!(badRow&&badRow.retryable!==false);
+        var pass=statusOk&&!!okRow&&String(okRow.status||'')==='ok'&&!!badRow&&String(badRow.status||'')==='error'&&retryableOk&&parseInt(sync.failedCount||0,10)>=1;
+        return {pass:pass,errorCode:pass?'':'partial_failure_not_reported',details:'status='+(sync.status||'')+' failed='+(sync.failedCount||0)+' retryable='+(badRow&&badRow.retryable),artifactIds:[okId,badId],cleanupStatus:'server_namespaced_event_retained'};
       }).catch(function(e){
         return {pass:false,errorCode:'partial_failure_exception',details:String(e&&e.message||e),artifactIds:[okId,badId],cleanupStatus:'server_namespaced_event_retained'};
       });
@@ -18982,6 +19571,7 @@ function appDoctorRunTestLab(mode){
 
   cases.push({
     category:'pwa_cache',
+    readOnly:true,
     name:'PWA/Cache: runtime + standalone diagnostics',
     fn:function(){
       var rt=appDoctorRuntimeLabel();
@@ -18992,6 +19582,7 @@ function appDoctorRunTestLab(mode){
   });
   cases.push({
     category:'pwa_cache',
+    readOnly:true,
     name:'PWA/Cache: service worker + cache version visibility',
     fn:function(){
       var sw=String(WT_SW_VERSION||'');
@@ -19002,6 +19593,7 @@ function appDoctorRunTestLab(mode){
   });
   cases.push({
     category:'pwa_cache',
+    readOnly:true,
     name:'PWA/Cache: cache API diagnostics',
     fn:function(){
       if(!('caches' in window))return {pass:false,errorCode:'cache_api_unavailable',details:'window.caches not available',artifactIds:[],cleanupStatus:'not_supported'};
@@ -19076,8 +19668,18 @@ function appDoctorRunTestLab(mode){
     }
   });
 
-  var chain=Promise.resolve().then(function(){
-    appDoctorPhase7ResetWorkingState();
+  var chain=appDoctorTestLabCaptureIdbSnapshot().then(function(idb){
+    idbSnap=idb||{};
+    persistedSnapshot={localStorage:lsSnap,globals:globalsSnap,idb:idbSnap};
+    return appDoctorTestLabSnapshotPersistAsync(persistedSnapshot);
+  }).catch(function(){
+    idbSnap={};
+    persistedSnapshot={localStorage:lsSnap,globals:globalsSnap,idb:{}};
+    return appDoctorTestLabSnapshotPersistAsync(persistedSnapshot);
+  }).then(function(){
+    appDoctorSetTestModeActive(true);
+    return appDoctorTestLabResetWorkspaceAsync();
+  }).then(function(){
     phase7FaultsSave(savedFaults);
     artifactQueuePump=function(){};
     trainerDashboardRemoteSync=function(){};
@@ -19089,6 +19691,43 @@ function appDoctorRunTestLab(mode){
       if(p.indexOf('coach_state')===0||p.indexOf('coach')===0)return appDoctorTestLabNs('test_coachstate');
       if(p.indexOf('plan')===0)return appDoctorTestLabNs('test_plan');
       return appDoctorTestLabNs('test_event');
+    };
+    artifactQueueAiGeneratePlanPromise=function(type,opts){
+      var t=String(type||'home').toLowerCase()==='hotel'?'hotel':'home';
+      if(phase7FaultIsOn('FORCE_AI_TIMEOUT_PLAN')){
+        wtLogEvent('phase7_fault_forced_plan_timeout',{targetType:t,errorCode:'FORCE_AI_TIMEOUT_PLAN'});
+        return Promise.reject(new Error('forced_ai_timeout_plan'));
+      }
+      if((t==='home'&&phase7FaultIsOn('FORCE_FALLBACK_HOME_PLAN'))||(t==='hotel'&&phase7FaultIsOn('FORCE_FALLBACK_HOTEL_PLAN'))){
+        wtLogEvent('phase7_fault_forced_plan_fallback',{targetType:t,errorCode:(t==='home'?'FORCE_FALLBACK_HOME_PLAN':'FORCE_FALLBACK_HOTEL_PLAN')});
+        return Promise.reject(new Error('forced_plan_generation_failure'));
+      }
+      if(t==='home'&&phase7FaultIsOn('FORCE_INVALID_HOME_PLAN')){
+        var badHome=appDoctorTestLabMockLegacyPlan('home');
+        badHome.targetType='hotel';
+        badHome.generationState='generation_complete';
+        badHome.confidenceReason='forced_invalid_home_test';
+        return Promise.resolve(badHome);
+      }
+      if(t==='hotel'&&phase7FaultIsOn('FORCE_INVALID_HOTEL_PLAN')){
+        var badHotel=appDoctorTestLabMockLegacyPlan('hotel');
+        badHotel.exercises=(badHotel.exercises||[]).concat([{
+          name:'PULL-UPS',
+          repTargets:[6,6],
+          withinSetRestSecs:90,
+          betweenExRestSecs:120,
+          tweak:'Pull-up tempo focus',
+          watchFor:'Pull-up bar stability',
+          goal:'Vertical pull exposure',
+          rationale:'Forced invalid hotel pull-up cue',
+          isPlank:false
+        }]);
+        badHotel.technicalWatchpoints=(badHotel.technicalWatchpoints||[]).concat(['Pull-up cue should be rejected when unavailable']);
+        badHotel.generationState='generation_complete';
+        badHotel.confidenceReason='forced_invalid_hotel_test';
+        return Promise.resolve(badHotel);
+      }
+      return Promise.resolve(appDoctorTestLabMockLegacyPlan(t));
     };
     _trainerDashboardRemoteSyncInFlight=false;
     _trainerDashboardLastRemoteSyncTs=0;
@@ -19108,7 +19747,7 @@ function appDoctorRunTestLab(mode){
       cleanupStatus:'failed'
     });
   }).then(function(){
-    try{
+    var restorePromise=Promise.resolve().then(function(){
       if(_artifactQueueTimer)clearTimeout(_artifactQueueTimer);
       artifactQueuePump=origPump;
       trainerDashboardRemoteSync=origRemoteSync;
@@ -19118,22 +19757,26 @@ function appDoctorRunTestLab(mode){
       wtDB.del=origWtDbDel;
       wtBackendPost=origWtBackendPost;
       aiCoachOpenAICall=origAiOpenAICall;
+      artifactQueueAiGeneratePlanPromise=origArtifactQueueAiGeneratePlanPromise;
       wtNewId=origWtNewId;
-      appDoctorPhase7StorageRestore(lsSnap);
-      _cachedSessions=appDoctorTestLabClone(globalsSnap._cachedSessions||[]);
-      _sheetSessions=appDoctorTestLabClone(globalsSnap._sheetSessions||[]);
-      _completedSessionId=globalsSnap._completedSessionId||null;
-      _goals=appDoctorTestLabClone(globalsSnap._goals||_goals||{});
-      _aiCoachMode=String(globalsSnap._aiCoachMode||'');
-      _aiCoachLastAutoPatch=appDoctorTestLabClone(globalsSnap._aiCoachLastAutoPatch||null);
-      _artifactQueueMem=appDoctorTestLabClone(globalsSnap._artifactQueueMem);
-      _artifactQueueBooted=!!globalsSnap._artifactQueueBooted;
-      _artifactQueueRunning=!!globalsSnap._artifactQueueRunning;
-      _artifactQueueCurrentJob=String(globalsSnap._artifactQueueCurrentJob||'');
-      _trainerDashboardLastSnapshot=appDoctorTestLabClone(globalsSnap._trainerDashboardLastSnapshot||null);
-      _trainerDashboardRemoteSyncInFlight=!!globalsSnap._trainerDashboardRemoteSyncInFlight;
-      _trainerDashboardLastRemoteSyncTs=parseInt(globalsSnap._trainerDashboardLastRemoteSyncTs||0,10)||0;
       phase7FaultsSave(savedFaults);
+      return appDoctorTestLabRestoreFromSnapshotAsync(persistedSnapshot,{clearSavedSnapshot:false});
+    }).catch(function(){return false;});
+    return restorePromise.then(function(restored){
+    results=results.map(function(r){
+      if(!r||typeof r!=='object')return r;
+      var c=String(r.cleanupStatus||'');
+      if(c==='isolated_snapshot_pending'){
+        r.cleanupStatus=restored?'restored_snapshot':'restore_failed';
+      }
+      return r;
+    });
+    try{
+      localStorage.setItem(APP_DOCTOR_TEST_RESTORE_STATUS_KEY,JSON.stringify({
+        status:restored?'ok':'error',
+        ts:Date.now(),
+        message:restored?'test_lab_restore_completed':'test_lab_restore_failed'
+      }));
     }catch(e){}
     var categories={};
     results.forEach(function(r){
@@ -19145,11 +19788,13 @@ function appDoctorRunTestLab(mode){
     });
     var report={
       ts:Date.now(),
-      mode:targetMode,
+      mode:targetMode+(forcedReadOnly?'_forced_readonly':''),
       durationMs:Date.now()-startedAt,
       total:results.length,
       passed:results.filter(function(r){return r.pass;}).length,
       failed:results.filter(function(r){return !r.pass;}).length,
+      blockedByBusy:busyState.blocked,
+      blockers:busyState.blockers||[],
       categories:categories,
       results:results
     };
@@ -19158,6 +19803,7 @@ function appDoctorRunTestLab(mode){
     appDoctorRender();
     appToast(report.failed?('Test Lab: '+report.failed+' failed'):('Test Lab: all passed'),'var(--text2)');
     return report;
+    });
   });
 }
 function appDoctorRender(){
@@ -19235,7 +19881,7 @@ function appDoctorOpen(){
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-family:Bebas Neue,sans-serif;font-size:1.06rem;letter-spacing:2px;">APP DOCTOR (PHASE 9 + TEST LAB)</div><button type="button" class="close-x-btn" onclick="appDoctorClose()" style="background:var(--card);border:1px solid var(--border2);color:var(--text2);width:30px;height:30px;border-radius:50%;font-size:1rem;">×</button></div>'
       +'<div style="display:flex;gap:8px;margin-bottom:8px;"><button type="button" onclick="appDoctorRender()" class="log-btn" style="flex:1;">Refresh</button><button type="button" onclick="appDoctorRunSelfTest()" class="log-btn" style="flex:1;">Run App Self-Test</button><button type="button" onclick="appDoctorCopyReport()" class="log-btn" style="flex:1;">Copy Debug Report</button></div>'
       +'<div style="display:flex;gap:8px;margin-bottom:8px;"><button type="button" onclick="appDoctorRunPhase7HardTests()" class="log-btn" style="flex:1;">Run Phase 7 Hard Tests</button><button type="button" onclick="appDoctorClearPhase7Faults()" class="log-btn" style="flex:1;">Clear Test Faults</button></div>'
-      +'<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;"><button type="button" onclick="appDoctorRunTestLab(\'all\')" class="log-btn" style="flex:1 1 45%;">Run All Tests</button><button type="button" onclick="appDoctorRunTestLab(\'storage\')" class="log-btn" style="flex:1 1 45%;">Run Storage Tests</button><button type="button" onclick="appDoctorRunTestLab(\'backend\')" class="log-btn" style="flex:1 1 45%;">Run Backend/Sheet Tests</button><button type="button" onclick="appDoctorRunTestLab(\'pipeline\')" class="log-btn" style="flex:1 1 45%;">Run Trainer Pipeline Tests</button><button type="button" onclick="appDoctorRunTestLab(\'ai_failure\')" class="log-btn" style="flex:1 1 45%;">Run AI Failure Simulation</button><button type="button" onclick="appDoctorRunTestLab(\'validation\')" class="log-btn" style="flex:1 1 45%;">Run HOME/HOTEL Validation Tests</button><button type="button" onclick="appDoctorRunTestLab(\'pwa\')" class="log-btn" style="flex:1 1 45%;">Run PWA/Cache Diagnostics</button><button type="button" onclick="appDoctorTestLabCopyReport()" class="log-btn" style="flex:1 1 45%;">Copy Test Report</button></div>'
+      +'<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;"><button type="button" onclick="appDoctorRunTestLab(\'all\')" class="log-btn" style="flex:1 1 45%;">Run All Tests</button><button type="button" onclick="appDoctorRunTestLab(\'storage\')" class="log-btn" style="flex:1 1 45%;">Run Storage Tests</button><button type="button" onclick="appDoctorRunTestLab(\'backend\')" class="log-btn" style="flex:1 1 45%;">Run Backend/Sheet Tests</button><button type="button" onclick="appDoctorRunTestLab(\'pipeline\')" class="log-btn" style="flex:1 1 45%;">Run Trainer Pipeline Tests</button><button type="button" onclick="appDoctorRunTestLab(\'ai_failure\')" class="log-btn" style="flex:1 1 45%;">Run AI Failure Simulation</button><button type="button" onclick="appDoctorRunTestLab(\'validation\')" class="log-btn" style="flex:1 1 45%;">Run HOME/HOTEL Validation Tests</button><button type="button" onclick="appDoctorRunTestLab(\'pwa\')" class="log-btn" style="flex:1 1 45%;">Run PWA/Cache Diagnostics</button><button type="button" onclick="appDoctorRunTestLab(\'readonly\')" class="log-btn" style="flex:1 1 45%;">Run Read-Only Tests</button><button type="button" onclick="appDoctorTestLabCopyReport()" class="log-btn" style="flex:1 1 45%;">Copy Test Report</button><button type="button" onclick="appDoctorTestLabRestoreRealState()" class="log-btn" style="flex:1 1 45%;">Clear Test Artifacts / Restore Real State</button></div>'
       +'<div style="font-size:0.62rem;color:var(--muted);margin-bottom:8px;">Observability + local-first queue + generated-plan artifact status. Legacy workout and Autopilot flows remain intact.</div>'
       +'<div style="font-size:0.65rem;color:var(--muted);font-weight:700;letter-spacing:1px;">RUNTIME</div><div id="appDoctorRuntimeRows" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px;margin-top:4px;"></div>'
       +'<div style="font-size:0.65rem;color:var(--muted);font-weight:700;letter-spacing:1px;margin-top:10px;">STORAGE</div><div id="appDoctorStorageRows" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px;margin-top:4px;"></div>'
