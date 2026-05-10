@@ -2566,7 +2566,8 @@ var WT_AUTH_OK_CACHE_KEY='wt_auth_ok_cache_v1';
 var WT_PERSONAL_DEFAULTS={
   appClientToken:'',
   healthBridgeToken:'',
-  calendarIcalUrl:''
+  calendarIcalUrl:'',
+  aiProxyUrl:'https://broken-surf-4390.philksmith.workers.dev'
 };
 var COACH_MEMORY_KEY='wt_coach_memory_v1';
 var COACH_DECISIONS_KEY='wt_coach_decisions_v1';
@@ -2842,7 +2843,11 @@ function wtAiProxyBaseUrl(){
       return q;
     }
   }catch(e){}
-  try{return wtAiProxyNormalizeUrl(localStorage.getItem(WT_AI_PROXY_URL_KEY)||'');}catch(e2){return '';}
+  try{
+    var saved=wtAiProxyNormalizeUrl(localStorage.getItem(WT_AI_PROXY_URL_KEY)||'');
+    if(saved)return saved;
+  }catch(e2){}
+  try{return wtAiProxyNormalizeUrl((WT_PERSONAL_DEFAULTS&&WT_PERSONAL_DEFAULTS.aiProxyUrl)||'');}catch(e3){return '';}
 }
 function wtAiProxyNormalizeUrl(url){
   var s=String(url||'').trim();
@@ -3238,6 +3243,10 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	  if(!plan||!plan.planId)return null;
 	  return wtTrainerCloudCacheArtifact('generated_plan',plan.planId,plan,plan.planSlot,plan.revision||1);
 	}
+	function wtTrainerCloudCacheSessionArtifact(session){
+	  if(!session||!session.sessionId)return null;
+	  return wtTrainerCloudCacheArtifact('session',session.sessionId,session,'',session.sessionRevision||session.revision||1);
+	}
 	function wtTrainerCloudCacheCoachStateArtifact(state){
 	  if(!state)return null;
 	  var id=String(state.coachStateId||('coach_state_'+String(state.coachStateRevision||0)));
@@ -3307,6 +3316,7 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	  var o=opts&&typeof opts==='object'?opts:{};
 	  var sid=String(o.sourceSessionId||'');
 	  var artifacts=[];
+	  try{artifacts.push(wtTrainerCloudCacheSessionArtifact(o.session||null));}catch(e){}
 	  try{artifacts.push(wtTrainerCloudCachePlanArtifact(o.plan||null));}catch(e){}
 	  try{artifacts.push(wtTrainerCloudCachePlanArtifact(o.peerPlan||null));}catch(e){}
 	  try{artifacts.push(wtTrainerCloudCacheCoachStateArtifact(o.coachState||coachStateLoad()));}catch(e){}
@@ -3511,8 +3521,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-		var WT_FRONTEND_VERSION='19.11.53-week-strength-raw-count';
-		var WT_SW_VERSION='wt-shell-v73-week-strength-raw-count';
+		var WT_FRONTEND_VERSION='19.11.55-trainer-d1-freshness';
+		var WT_SW_VERSION='wt-shell-v75-trainer-d1-freshness';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4383,12 +4393,15 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.53-week-strength-raw-count';
+var APP_VERSION='v19.11.55-trainer-d1-freshness';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v82-week-strength-raw-count';
+var CACHE_VERSION='wt-cache-v84-trainer-d1-freshness';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
+  'Fresh installs now know the configured Cloudflare helper URL by default; if the helper is unavailable the app still falls back to Apps Script',
+  'Trainer D1 cache now receives the latest local dashboard snapshot, including the source workout session, so Cloudflare can catch up before Sheets fallback',
+  'Trainer dashboard plan retries now rebuild from the latest completed workout before considering an older active fallback plan, while keeping the fallback startable as a backup',
   'Weekly goal tracker now shows actual completed strength days such as 3/2 instead of capping the display at the target',
   'Nutrition typed-food and meal-item macro lookups now use a local plus Cloudflare D1 cache before asking AI again; live logging and Sheets backup stay unchanged',
   'Cloudflare AI proxy now exposes OpenAI, Gemini, and Claude provider routes; Claude nutrition comparison tries Cloudflare first and falls back to Apps Script',
@@ -9058,6 +9071,7 @@ function artifactQueueUpdateCoachStateJob(job){
 	  var out={coachStateRevision:state.coachStateRevision,artifactIds:[state.coachStateId],reviewId:state.lastReviewId};
 	  return wtTrainerCloudCacheSaveTrainerSnapshot({
 	    sourceSessionId:sd.sessionId,
+	    session:sd,
 	    coachState:state,
 	    review:review,
 	    equipmentProfile:equipmentProfile,
@@ -16485,6 +16499,7 @@ function editDoneSession(){
 var _trainerDashboardLastSnapshot=null;
 var _trainerDashboardRemoteSyncInFlight=false;
 var _trainerDashboardLastRemoteSyncTs=0;
+var _trainerDashboardLastCloudSnapshotSaveTs=0;
 var _trainerBootstrapPromise=null;
 var _trainerBootstrapRunning=false;
 function trainerDashboardFmtTs(ts){
@@ -17023,6 +17038,7 @@ async function resolvePlanRetrySourceSession(planSlot){
   var slot=String(planSlot||'HOME_NEXT').toUpperCase()==='HOTEL_NEXT'?'HOTEL_NEXT':'HOME_NEXT';
   var forcedTarget=generatedPlanTargetTypeFromSlot(slot);
   var diag={slot:slot,steps:[],chosenFrom:'none',sessionId:'',error:''};
+  var preferredLatestSid='';
   var remoteCandidates=null;
   async function remoteList(){
     if(remoteCandidates!==null)return remoteCandidates;
@@ -17072,17 +17088,20 @@ async function resolvePlanRetrySourceSession(planSlot){
     return null;
   }
   try{
-    var active=generatedPlanActiveForSlot(slot,{includeTest:trainerRetryAllowTestArtifacts()});
-    if(active&&active.sourceSessionId){
-      note('active_plan:source='+String(active.sourceSessionId||''));
-      var fromActive=await chooseBySessionId(active.sourceSessionId,'active_plan');
-      if(fromActive){trainerRetryDiagnosticsPatch(slot,diag);return fromActive;}
+    var canonical=resolveLatestRealCompletedSessionSync({forceTargetType:forcedTarget,includeLegacy:true});
+    if(canonical&&canonical.sessionId){
+      preferredLatestSid=String(canonical.sessionId||'');
+      note('canonical:'+String(canonical.source||'session')+':'+preferredLatestSid);
+      var canonicalSource=String(canonical.source||'canonical');
+      var canonicalPicked=canonical.session?choose(canonical.session,canonicalSource):await chooseBySessionId(preferredLatestSid,canonicalSource);
+      if(canonicalPicked){trainerRetryDiagnosticsPatch(slot,diag);return canonicalPicked;}
     }else{
-      note('active_plan:none');
+      note('canonical:none');
     }
     var review=appDoctorLatestReview();
     var reviewSid=String((review&&(review.sessionId||review.sourceSessionId))||'');
     if(reviewSid){
+      if(!preferredLatestSid)preferredLatestSid=reviewSid;
       note('review:source='+reviewSid);
       var fromReview=await chooseBySessionId(reviewSid,'review');
       if(fromReview){trainerRetryDiagnosticsPatch(slot,diag);return fromReview;}
@@ -17098,14 +17117,21 @@ async function resolvePlanRetrySourceSession(planSlot){
     }else{
       note('bootstrap:none');
     }
-    var canonical=resolveLatestRealCompletedSessionSync({forceTargetType:forcedTarget,includeLegacy:true});
-    if(canonical&&canonical.sessionId){
-      note('canonical:'+String(canonical.source||'session')+':'+String(canonical.sessionId||''));
-      var canonicalSource=String(canonical.source||'canonical');
-      var canonicalPicked=canonical.session?choose(canonical.session,canonicalSource):await chooseBySessionId(canonical.sessionId,canonicalSource);
-      if(canonicalPicked){trainerRetryDiagnosticsPatch(slot,diag);return canonicalPicked;}
+    var active=generatedPlanActiveForSlot(slot,{includeTest:trainerRetryAllowTestArtifacts()});
+    if(active&&active.sourceSessionId){
+      var activeSid=String(active.sourceSessionId||'');
+      var activeStatus=String(active.status||'').toLowerCase();
+      if(preferredLatestSid&&activeSid!==preferredLatestSid){
+        note('active_plan:older_source='+activeSid+':latest='+preferredLatestSid);
+      }else if(activeStatus==='stale'){
+        note('active_plan:stale_source='+activeSid);
+      }else{
+        note('active_plan:source='+activeSid);
+        var fromActive=await chooseBySessionId(activeSid,'active_plan');
+        if(fromActive){trainerRetryDiagnosticsPatch(slot,diag);return fromActive;}
+      }
     }else{
-      note('canonical:none');
+      note('active_plan:none');
     }
     var remoteCandidatesReady=await remoteList();
     var remoteUsable=(remoteCandidatesReady||[]).filter(function(row){
@@ -17313,11 +17339,15 @@ function trainerPlanNeedsRecovery(plan,slot,sessionId){
   var status=String(plan.status||'').toLowerCase();
   var validation=String(plan.validationStatus||'').toLowerCase();
   if(status==='invalid'||validation.indexOf('invalid')>=0)return true;
+  if(status==='locked'||status==='user_modified')return false;
+  if(status==='stale')return true;
   var sid=String(sessionId||'');
   var planSid=String(plan.sourceSessionId||'');
   if(trainerRetryIsUsableSessionId(sid)){
     if(planSid.toLowerCase()==='baseline_no_completed_workout')return true;
     if(String(plan.cacheKey||'').toLowerCase().indexOf('baseline_no_completed_workout')>=0)return true;
+    if(!trainerRetryIsUsableSessionId(planSid))return true;
+    if(planSid!==sid)return true;
   }
   return false;
 }
@@ -17636,6 +17666,13 @@ function trainerDashboardBuildSnapshot(){
       (latestSessionId&&String(plan.sourceSessionId||'')!==latestSessionId)||
       String(plan.status||'').toLowerCase()==='stale'
     ));
+    var staleReason='';
+    if(stale&&plan){
+      var latestLabel=latestSession?String(latestSession.date||trainerDashboardFmtTs(latestSession.completedAt||latestSession.updatedAt)):'the latest workout';
+      staleReason=(latestSessionId&&String(plan.sourceSessionId||'')!==latestSessionId)
+        ? 'Kept as backup: this plan was built from an older workout. Retry AI rebuilds from '+latestLabel+'.'
+        : 'Kept as backup: this plan has been marked stale. Retry AI rebuilds from the latest workout.';
+    }
     var fallback=!!(plan&&(plan.fallbackUsed||String(plan.status||'')==='fallback_used'));
     var failed=!!(job&&String(job.status||'')==='failed_final');
     var pending=!!(job&&['pending','running','failed_retryable'].indexOf(String(job.status||''))>=0);
@@ -17651,6 +17688,7 @@ function trainerDashboardBuildSnapshot(){
       plan:plan,
       stale:stale,
       fallback:fallback,
+      staleReason:staleReason,
       failed:failed,
       pending:pending,
       valid:valid,
@@ -17736,6 +17774,7 @@ function trainerDashboardPlanSummaryHtml(planState){
   var statusLine=planState.primary+(planState.stale?' / stale':'');
   var syncLine=String(planState.syncState||'unknown');
   if(syncLine==='local_only')syncLine='local only';
+  var freshnessNote=String(planState.staleReason||'')||(planState.fallback?'Fallback kept as a safe backup because AI generation did not return a usable plan.':'');
   return ''
     +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;"><div style="font-size:0.68rem;color:var(--text);font-weight:800;">'+escHtml(title)+'</div>'+trainerDashboardStatusChip(statusLine)+'</div>'
     +'<div style="font-size:0.66rem;color:var(--text2);line-height:1.55;">Generated: '+escHtml(plan?trainerDashboardFmtTs(plan.updatedAt||plan.createdAt):'—')+'</div>'
@@ -17743,6 +17782,7 @@ function trainerDashboardPlanSummaryHtml(planState){
     +'<div style="font-size:0.66rem;color:var(--text2);line-height:1.55;">Main focus: '+escHtml(focus||'—')+'</div>'
     +'<div style="font-size:0.65rem;color:var(--muted);line-height:1.55;">Source: '+escHtml(sourceLabel)+' · Sync: '+escHtml(syncLine)+(planState.fallback?' · fallback':'')+'</div>'
     +(deferredVertical?('<div style="font-size:0.65rem;color:var(--orange);line-height:1.45;">'+escHtml(deferredVertical)+'</div>'):'')
+    +(freshnessNote?('<div style="font-size:0.65rem;color:var(--yellow);line-height:1.45;margin-top:3px;">'+escHtml(freshnessNote)+'</div>'):'')
     +'<div style="font-size:0.64rem;color:var(--muted);line-height:1.45;margin-top:3px;">Trained: '+escHtml(slotSummary.trained)+' · Deferred: '+escHtml(slotSummary.deferred)+'</div>'
     +'<div style="display:flex;gap:6px;margin-top:8px;">'
       +'<button type="button" onclick="startActivePlan(\''+escHtml(planState.slot)+'\')" style="flex:1;padding:7px 8px;background:var(--accent-dim);border:1px solid rgba(200,255,0,0.35);border-radius:8px;color:var(--accent);font-size:0.64rem;font-weight:700;cursor:pointer;">'+escHtml(startLabel)+'</button>'
@@ -19062,9 +19102,11 @@ function trainerDashboardRemoteSync(opts){
     _trainerDashboardRemoteSyncInFlight=false;
     if(!result)return;
     if(result&&result.status==='ok'&&result.data){
-      if(trainerDashboardMergeLatestTrainerState(result.data)){
+      var merged=trainerDashboardMergeLatestTrainerState(result.data);
+      if(merged){
         trainerDashboardRender(trainerDashboardBuildSnapshot());
       }
+      try{trainerDashboardSaveLocalSnapshotToCloud(merged?'dashboard_remote_merge':'dashboard_remote_check');}catch(_saveErr){}
       return;
     }
     // Compatibility fallback: old backend path.
@@ -19073,6 +19115,7 @@ function trainerDashboardRemoteSync(opts){
       wtReleaseJsonpCallback(cb,'s_'+cb,60000);
       if(legacy&&legacy.status==='ok'&&legacy.state&&trainerDashboardMergeRemoteState(legacy.state)){
         trainerDashboardRender(trainerDashboardBuildSnapshot());
+        try{trainerDashboardSaveLocalSnapshotToCloud('dashboard_legacy_merge');}catch(_saveErr){}
       }
     };
     var sc=document.createElement('script');
@@ -19084,12 +19127,55 @@ function trainerDashboardRemoteSync(opts){
     _trainerDashboardRemoteSyncInFlight=false;
   });
 }
+function trainerDashboardSaveLocalSnapshotToCloud(reason){
+  if(appDoctorIsTestModeActive())return Promise.resolve({status:'skipped',reason:'test_mode'});
+  if(!navigator.onLine||!wtTrainerCloudCacheAvailable())return Promise.resolve({status:'skipped',reason:'cloud_cache_unavailable'});
+  var now=Date.now();
+  if(now-_trainerDashboardLastCloudSnapshotSaveTs<45000)return Promise.resolve({status:'skipped',reason:'throttled'});
+  var latest=null;
+  try{latest=appDoctorLatestSession()||null;}catch(e){latest=null;}
+  var sid=String((latest&&latest.sessionId)||'');
+  if(!trainerRetryIsUsableSessionId(sid))return Promise.resolve({status:'skipped',reason:'no_latest_session'});
+  _trainerDashboardLastCloudSnapshotSaveTs=now;
+  var review=null;
+  try{review=postWorkoutReviewLoad(sid)||appDoctorLatestReview()||null;}catch(e){review=null;}
+  var home=null,hotel=null,coach=null,equipment=null;
+  try{home=generatedPlanActiveForSlot('HOME_NEXT')||null;}catch(e){}
+  try{hotel=generatedPlanActiveForSlot('HOTEL_NEXT')||null;}catch(e){}
+  try{coach=coachStateLoad()||null;}catch(e){}
+  try{equipment=coachEquipmentProfileLoad()||null;}catch(e){}
+  return wtTrainerCloudCacheSaveTrainerSnapshot({
+    sourceSessionId:sid,
+    session:latest,
+    review:review,
+    coachState:coach,
+    equipmentProfile:equipment,
+    plan:home,
+    peerPlan:hotel,
+    timeoutMs:10000
+  }).then(function(res){
+    appDoctorPatchState('trainer_state',{
+      lastTrainerD1SnapshotPushAt:Date.now(),
+      lastTrainerD1SnapshotPushSource:String(reason||'dashboard_refresh'),
+      lastTrainerD1SnapshotSessionId:sid,
+      lastTrainerD1SnapshotStatus:String((res&&res.status)||'ok')
+    });
+    return res;
+  }).catch(function(err){
+    appDoctorPatchState('trainer_state',{
+      lastTrainerD1SnapshotPushError:String(err&&err.message||err||'trainer_d1_snapshot_failed'),
+      lastTrainerD1SnapshotSessionId:sid
+    });
+    return {status:'error',message:String(err&&err.message||err||'trainer_d1_snapshot_failed')};
+  });
+}
 function trainerDashboardRefresh(opts){
   var o=opts&&typeof opts==='object'?opts:{};
   trainerDashboardRender(trainerDashboardBuildSnapshot());
   try{trainerEnsureHotelPlanSourceConsistency();}catch(e){}
   try{trainerEnsureMissingReviewQueued('dashboard_refresh');}catch(e){}
   try{trainerEnsureMissingPlansQueued('dashboard_refresh');}catch(e){}
+  try{trainerDashboardSaveLocalSnapshotToCloud('dashboard_refresh');}catch(e){}
   if(o.background!==false)trainerDashboardRemoteSync({force:!!o.forceRemote});
 }
 function trainerDashboardRetryReview(){
@@ -22830,7 +22916,8 @@ function appDoctorTestLabGlobalsSnapshot(){
     _artifactQueueCurrentJob:String(_artifactQueueCurrentJob||''),
     _trainerDashboardLastSnapshot:appDoctorTestLabClone(_trainerDashboardLastSnapshot||null),
     _trainerDashboardRemoteSyncInFlight:!!_trainerDashboardRemoteSyncInFlight,
-    _trainerDashboardLastRemoteSyncTs:parseInt(_trainerDashboardLastRemoteSyncTs||0,10)||0
+    _trainerDashboardLastRemoteSyncTs:parseInt(_trainerDashboardLastRemoteSyncTs||0,10)||0,
+    _trainerDashboardLastCloudSnapshotSaveTs:parseInt(_trainerDashboardLastCloudSnapshotSaveTs||0,10)||0
   };
 }
 function appDoctorTestLabGlobalsRestore(globalsSnap){
@@ -22848,6 +22935,7 @@ function appDoctorTestLabGlobalsRestore(globalsSnap){
   _trainerDashboardLastSnapshot=appDoctorTestLabClone(g._trainerDashboardLastSnapshot||null);
   _trainerDashboardRemoteSyncInFlight=!!g._trainerDashboardRemoteSyncInFlight;
   _trainerDashboardLastRemoteSyncTs=parseInt(g._trainerDashboardLastRemoteSyncTs||0,10)||0;
+  _trainerDashboardLastCloudSnapshotSaveTs=parseInt(g._trainerDashboardLastCloudSnapshotSaveTs||0,10)||0;
 }
 function appDoctorTestLabCaptureIdbSnapshot(){
   if(typeof wtDB==='undefined'||!wtDB||typeof wtDB.keys!=='function')return Promise.resolve({});
@@ -36389,7 +36477,7 @@ function connResetConnectionDefaults(){
 }
 
 function connAiProxyAllowedOriginsText(){
-  return 'https://bananarama23.github.io,http://127.0.0.1:8765,http://localhost:8765,http://127.0.0.1:8777,http://localhost:8777,http://127.0.0.1:8778,http://localhost:8778,null';
+  return 'https://bananarama23.github.io,http://127.0.0.1:8765,http://localhost:8765,null,https://broken-surf-4390.philksmith.workers.dev';
 }
 function connAiProxyAppEnableUrl(){
   var base='https://bananarama23.github.io/workout-tracker/';
