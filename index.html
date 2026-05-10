@@ -2970,8 +2970,104 @@ function wtAiProxyPost(path,payload,timeoutMs){
       lastDurationMs:Date.now()-started
     });
     throw err;
-  });
-}
+	  });
+	}
+	function wtTrainerCloudCacheAvailable(){return wtAiProxyConfigured();}
+	function wtTrainerCloudCachePatch(status,extra){
+	  try{
+	    appDoctorPatchState('trainer_cloud_cache',Object.assign({
+	      configured:wtTrainerCloudCacheAvailable(),
+	      url:wtAiProxyRedactedUrl(),
+	      lastStatus:String(status||'unknown'),
+	      lastTime:Date.now()
+	    },extra||{}));
+	  }catch(e){}
+	}
+	function wtTrainerCloudCacheLoad(opts){
+	  var o=opts&&typeof opts==='object'?opts:{};
+	  if(!wtTrainerCloudCacheAvailable())return Promise.resolve(null);
+	  wtTrainerCloudCachePatch('loading',{lastError:''});
+	  return wtAiProxyPost('/v1/trainer-cache/get',{
+	    planSlot:String(o.planSlot||''),
+	    sourceSessionId:String(o.sourceSessionId||''),
+	    includePayload:true
+	  },parseInt(o.timeoutMs,10)||12000).then(function(res){
+	    if(!res||res.status!=='ok')throw new Error((res&&(res.message||res.errorCode))||'trainer_cache_load_failed');
+	    var data=(res&&res.data&&typeof res.data==='object')?res.data:null;
+	    if(!data||data.d1Configured===false){
+	      wtTrainerCloudCachePatch('not_configured',{d1Configured:false,lastError:''});
+	      return null;
+	    }
+	    wtTrainerCloudCachePatch('ok',{d1Configured:true,lastError:'',lastDurationMs:res.durationMs||0});
+	    return data;
+	  }).catch(function(err){
+	    wtTrainerCloudCachePatch('error',{lastError:String(err&&err.message||err||'trainer_cache_load_failed')});
+	    return null;
+	  });
+	}
+	function wtTrainerCloudCacheArtifact(type,id,data,slot,revision){
+	  if(!type||!id||!data)return null;
+	  return {
+	    artifactType:String(type||''),
+	    artifactId:String(id||''),
+	    planSlot:String(slot||'').toUpperCase(),
+	    revision:Math.max(1,parseInt(revision||1,10)||1),
+	    data:data
+	  };
+	}
+	function wtTrainerCloudCachePlanArtifact(plan){
+	  if(!plan||!plan.planId)return null;
+	  return wtTrainerCloudCacheArtifact('generated_plan',plan.planId,plan,plan.planSlot,plan.revision||1);
+	}
+	function wtTrainerCloudCacheCoachStateArtifact(state){
+	  if(!state)return null;
+	  var id=String(state.coachStateId||('coach_state_'+String(state.coachStateRevision||0)));
+	  return wtTrainerCloudCacheArtifact('coach_state',id,state,'',state.coachStateRevision||1);
+	}
+	function wtTrainerCloudCacheReviewArtifact(review){
+	  if(!review)return null;
+	  var id=String(review.reviewId||review.sessionId||'');
+	  return wtTrainerCloudCacheArtifact('post_workout_review',id,review,'',review.revision||1);
+	}
+	function wtTrainerCloudCacheEquipmentArtifact(profile){
+	  if(!profile)return null;
+	  var id=String(profile.equipmentProfileId||profile.equipmentProfileHash||'');
+	  return id?wtTrainerCloudCacheArtifact('equipment_profile',id,profile,'',profile.revision||1):null;
+	}
+	function wtTrainerCloudCacheSaveArtifacts(artifacts,opts){
+	  var list=(Array.isArray(artifacts)?artifacts:[]).filter(Boolean);
+	  var o=opts&&typeof opts==='object'?opts:{};
+	  if(!list.length)return Promise.resolve({status:'ok',skipped:true});
+	  if(!wtTrainerCloudCacheAvailable())return Promise.resolve({status:'ok',skipped:true,reason:'ai_proxy_not_configured'});
+	  wtTrainerCloudCachePatch('saving',{lastError:''});
+	  return wtAiProxyPost('/v1/trainer-cache/upsert',{
+	    artifacts:list,
+	    sourceSessionId:String(o.sourceSessionId||'')
+	  },parseInt(o.timeoutMs,10)||12000).then(function(res){
+	    if(!res||res.status==='error')throw new Error((res&&(res.message||res.errorCode))||'trainer_cache_save_failed');
+	    wtTrainerCloudCachePatch(res.d1Configured===false?'not_configured':'ok',{
+	      d1Configured:res.d1Configured!==false,
+	      lastError:'',
+	      lastDurationMs:res.durationMs||0,
+	      lastSavedArtifacts:list.length
+	    });
+	    return res;
+	  }).catch(function(err){
+	    wtTrainerCloudCachePatch('error',{lastError:String(err&&err.message||err||'trainer_cache_save_failed')});
+	    return {status:'error',message:String(err&&err.message||err||'trainer_cache_save_failed')};
+	  });
+	}
+	function wtTrainerCloudCacheSaveTrainerSnapshot(opts){
+	  var o=opts&&typeof opts==='object'?opts:{};
+	  var sid=String(o.sourceSessionId||'');
+	  var artifacts=[];
+	  try{artifacts.push(wtTrainerCloudCachePlanArtifact(o.plan||null));}catch(e){}
+	  try{artifacts.push(wtTrainerCloudCachePlanArtifact(o.peerPlan||null));}catch(e){}
+	  try{artifacts.push(wtTrainerCloudCacheCoachStateArtifact(o.coachState||coachStateLoad()));}catch(e){}
+	  try{artifacts.push(wtTrainerCloudCacheReviewArtifact(o.review||(sid?postWorkoutReviewLoad(sid):null)));}catch(e){}
+	  try{artifacts.push(wtTrainerCloudCacheEquipmentArtifact(o.equipmentProfile||coachEquipmentProfileLoad()));}catch(e){}
+	  return wtTrainerCloudCacheSaveArtifacts(artifacts,{sourceSessionId:sid,timeoutMs:o.timeoutMs||12000});
+	}
 function wtBackendVersionAtLeast_(actual,minimum){
   function nums(v){
     var m=String(v||'').match(/v?(\d+)\.(\d+)\.(\d+)/i);
@@ -8532,11 +8628,18 @@ function artifactQueueUpdateCoachStateJob(job){
   state.equipmentProfileHash=String((equipmentProfile&&equipmentProfile.equipmentProfileHash)||coachEquipmentProfileHash());
   state.updatedAt=wtNowIso();
   state.lastUpdatedAt=state.updatedAt;
-  state.syncState='sync_pending';
-  state=coachStateSave(state);
-  wtLogEvent('coach_state_updated',{sessionId:sd.sessionId,reviewId:state.lastReviewId,coachStateRevision:state.coachStateRevision});
-  return {coachStateRevision:state.coachStateRevision,artifactIds:[state.coachStateId],reviewId:state.lastReviewId};
-}
+	  state.syncState='sync_pending';
+	  state=coachStateSave(state);
+	  wtLogEvent('coach_state_updated',{sessionId:sd.sessionId,reviewId:state.lastReviewId,coachStateRevision:state.coachStateRevision});
+	  var out={coachStateRevision:state.coachStateRevision,artifactIds:[state.coachStateId],reviewId:state.lastReviewId};
+	  return wtTrainerCloudCacheSaveTrainerSnapshot({
+	    sourceSessionId:sd.sessionId,
+	    coachState:state,
+	    review:review,
+	    equipmentProfile:equipmentProfile,
+	    timeoutMs:10000
+	  }).then(function(){return out;});
+	}
 function artifactQueueSyncCoachStateJob(job){
   var state=coachStateLoad();
   if(!state)throw {retryable:true,code:'coach_state_missing',message:'coach_state_missing'};
@@ -8758,15 +8861,23 @@ function artifactQueueGeneratePlanJob(job){
       fallbackUsed:!!activated.fallbackUsed,
       confidence:activated.confidence
     });
-    return {
-      planId:activated.planId,
-      reviewId:activated.reviewId,
-      slot:activated.planSlot,
-      fallbackUsed:!!activated.fallbackUsed,
-      validationStatus:activated.validationStatus,
-      artifactIds:[activated.planId]
-    };
-  }
+	    var out={
+	      planId:activated.planId,
+	      reviewId:activated.reviewId,
+	      slot:activated.planSlot,
+	      fallbackUsed:!!activated.fallbackUsed,
+	      validationStatus:activated.validationStatus,
+	      artifactIds:[activated.planId]
+	    };
+	    return wtTrainerCloudCacheSaveTrainerSnapshot({
+	      sourceSessionId:sd.sessionId,
+	      plan:activated,
+	      coachState:coachStateLoad(),
+	      review:review,
+	      equipmentProfile:equipmentProfile,
+	      timeoutMs:10000
+	    }).then(function(){return out;});
+	  }
   function keepCurrent(reason){
     if(!preserveCurrentOnFailure||!currentActive||!generatedPlanIsActiveStatus(currentActive.status)){
       return null;
@@ -8838,14 +8949,22 @@ function artifactQueueGeneratePlanJob(job){
           requestedTargetType:type,
           errorCode:String((relaxedPlan.validationErrors||[]).join('|')||'hotel_fallback_relaxed')
         });
-        return {
-          planId:relaxedActivated.planId,
-          reviewId:relaxedActivated.reviewId,
-          slot:relaxedActivated.planSlot,
-          fallbackUsed:true,
-          validationStatus:relaxedActivated.validationStatus,
-          artifactIds:[relaxedActivated.planId]
-        };
+	        var relaxedOut={
+	          planId:relaxedActivated.planId,
+	          reviewId:relaxedActivated.reviewId,
+	          slot:relaxedActivated.planSlot,
+	          fallbackUsed:true,
+	          validationStatus:relaxedActivated.validationStatus,
+	          artifactIds:[relaxedActivated.planId]
+	        };
+	        return wtTrainerCloudCacheSaveTrainerSnapshot({
+	          sourceSessionId:sd.sessionId,
+	          plan:relaxedActivated,
+	          coachState:coachStateLoad(),
+	          review:review,
+	          equipmentProfile:equipmentProfile,
+	          timeoutMs:10000
+	        }).then(function(){return relaxedOut;});
       }
       wtLogEvent('generation_fallback_validation_failed',{
         sessionId:sd.sessionId,
@@ -8973,14 +9092,22 @@ function artifactQueueGeneratePlanJob(job){
           requestedTargetType:type,
           errorCode:String(err&&err.message||'fallback_validation_failed')
         });
-        return {
-          planId:forcedActivated.planId,
-          reviewId:forcedActivated.reviewId,
-          slot:forcedActivated.planSlot,
-          fallbackUsed:true,
-          validationStatus:forcedActivated.validationStatus,
-          artifactIds:[forcedActivated.planId]
-        };
+	        var forcedOut={
+	          planId:forcedActivated.planId,
+	          reviewId:forcedActivated.reviewId,
+	          slot:forcedActivated.planSlot,
+	          fallbackUsed:true,
+	          validationStatus:forcedActivated.validationStatus,
+	          artifactIds:[forcedActivated.planId]
+	        };
+	        return wtTrainerCloudCacheSaveTrainerSnapshot({
+	          sourceSessionId:sd.sessionId,
+	          plan:forcedActivated,
+	          coachState:coachStateLoad(),
+	          review:review,
+	          equipmentProfile:equipmentProfile,
+	          timeoutMs:10000
+	        }).then(function(){return forcedOut;});
       }catch(_hotelForceErr){}
     }
     if(err&&err.code==='fallback_validation_failed')throw err;
@@ -9132,7 +9259,8 @@ function artifactQueueSyncGeneratedPlanJob(job){
     throw {retryable:true,code:'generated_plan_sync_payload_empty',message:'generated_plan_sync_payload_empty'};
   }
 
-  return artifactQueueSyncArtifacts(artifacts,{timeoutMs:65000}).then(function(sync){
+	  return wtTrainerCloudCacheSaveArtifacts(artifacts,{sourceSessionId:sid,timeoutMs:10000}).then(function(){
+	    return artifactQueueSyncArtifacts(artifacts,{timeoutMs:65000}).then(function(sync){
     var failures=[];
     artifacts.forEach(function(a){
       var row=artifactQueueFindSyncResult(sync.results,a.artifactType,a.artifactId,a.planSlot||'');
@@ -9196,8 +9324,9 @@ function artifactQueueSyncGeneratedPlanJob(job){
     if(peerPlan&&peerPlan.planId)generatedPlanMarkSyncState(peerPlan.planId,failState,String(err&&err.message||err||'generated_plan_sync_failed'));
     wtLogEvent('generated_plan_sync_failed',{sessionId:sid,sourceSessionId:sid,planId:plan.planId,targetType:generatedPlanTypeFromSlot(plan.planSlot),errorCode:String(err&&err.message||err||'generated_plan_sync_failed')});
     throw {retryable:retryable,code:String((err&&err.code)||'generated_plan_sync_failed'),message:String(err&&err.message||err||'generated_plan_sync_failed')};
-  });
-}
+	    });
+	  });
+	}
 function artifactQueueRunJob(job){
   if(!job||!job.jobType)return Promise.reject({retryable:false,code:'job_missing_type',message:'job_missing_type'});
   if(!appDoctorIsTestModeActive()&&artifactQueueIsTestJob(job)){
@@ -18283,20 +18412,27 @@ function trainerBootstrapRun(opts){
   return _trainerBootstrapPromise;
 }
 function trainerDashboardRemoteSync(opts){
-  if(!navigator.onLine||!CLOUD_URL)return;
+  if(!navigator.onLine||(!CLOUD_URL&&!wtTrainerCloudCacheAvailable()))return;
   if(_trainerDashboardRemoteSyncInFlight)return;
   opts=opts||{};
   var now=Date.now();
   if(!opts.force&&now-_trainerDashboardLastRemoteSyncTs<18000)return;
   _trainerDashboardRemoteSyncInFlight=true;
   _trainerDashboardLastRemoteSyncTs=now;
-  wtBackendPost({
+  wtTrainerCloudCacheLoad({timeoutMs:12000}).then(function(cloudState){
+    if(cloudState&&trainerDashboardMergeLatestTrainerState(cloudState)){
+      trainerDashboardRender(trainerDashboardBuildSnapshot());
+    }
+    if(!CLOUD_URL)return null;
+    return wtBackendPost({
     type:'getLatestTrainerState',
     requestId:'dash_'+Date.now().toString(36),
     timeoutMs:30000,
     _nonce:Date.now()
+    });
   }).then(function(result){
     _trainerDashboardRemoteSyncInFlight=false;
+    if(!result)return;
     if(result&&result.status==='ok'&&result.data){
       if(trainerDashboardMergeLatestTrainerState(result.data)){
         trainerDashboardRender(trainerDashboardBuildSnapshot());
@@ -18641,17 +18777,22 @@ function startActivePlan(slot){
     aiPreWorkoutOpen(type);
     return true;
   }
-  if(openUsableLocal()){
-    return;
-  }
-  appToast('Checking saved '+type.toUpperCase()+' plan…','var(--muted)');
-  var remoteCheck=(navigator.onLine&&CLOUD_URL)
-    ?wtBackendPost({type:'getLatestTrainerState',requestId:'start_'+s+'_'+Date.now().toString(36),timeoutMs:26000,_nonce:Date.now()}).then(function(res){
-      var data=(res&&res.data&&typeof res.data==='object')?res.data:null;
-      if(data)trainerDashboardMergeLatestTrainerState(data);
-      return true;
-    }).catch(function(){return false;})
-    :Promise.resolve(false);
+	  if(openUsableLocal()){
+	    return;
+	  }
+	  appToast('Checking saved '+type.toUpperCase()+' plan…','var(--muted)');
+	  var remoteCheck=(navigator.onLine&&(wtTrainerCloudCacheAvailable()||CLOUD_URL))
+	    ?wtTrainerCloudCacheLoad({planSlot:s,timeoutMs:10000}).then(function(cloudState){
+	      if(cloudState)trainerDashboardMergeLatestTrainerState(cloudState);
+	      if(openUsableLocal())return true;
+	      if(!CLOUD_URL)return false;
+	      return wtBackendPost({type:'getLatestTrainerState',requestId:'start_'+s+'_'+Date.now().toString(36),timeoutMs:26000,_nonce:Date.now()}).then(function(res){
+	        var data=(res&&res.data&&typeof res.data==='object')?res.data:null;
+	        if(data)trainerDashboardMergeLatestTrainerState(data);
+	        return true;
+	      });
+	    }).catch(function(){return false;})
+	    :Promise.resolve(false);
   remoteCheck.then(function(){
     if(openUsableLocal())return;
     resolvePlanRetrySourceSession(s).then(function(resolved){
