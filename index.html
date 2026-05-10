@@ -3314,6 +3314,113 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	  try{artifacts.push(wtTrainerCloudCacheEquipmentArtifact(o.equipmentProfile||coachEquipmentProfileLoad()));}catch(e){}
 	  return wtTrainerCloudCacheSaveArtifacts(artifacts,{sourceSessionId:sid,timeoutMs:o.timeoutMs||12000});
 	}
+	var WT_NUTRITION_LOOKUP_CACHE_LOCAL_KEY='wt_nutrition_lookup_cache_v1';
+	var WT_NUTRITION_LOOKUP_CACHE_SCHEMA_VERSION=1;
+	var WT_NUTRITION_LOOKUP_CACHE_MAX=160;
+	function nutLookupCacheNormalizeText(value){
+	  return String(value||'').toLowerCase().replace(/['"]/g,'').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ').slice(0,240);
+	}
+	function nutLookupCacheKey(type,query,context){
+	  var t=nutLookupCacheNormalizeText(type||'food_lookup')||'food_lookup';
+	  var q=nutLookupCacheNormalizeText(query||'');
+	  var c=nutLookupCacheNormalizeText(context||'');
+	  return q?[t,q,c].join('|').slice(0,320):'';
+	}
+	function nutLookupCacheLocalLoad(){
+	  try{
+	    var raw=localStorage.getItem(WT_NUTRITION_LOOKUP_CACHE_LOCAL_KEY);
+	    if(!raw)return {schemaVersion:WT_NUTRITION_LOOKUP_CACHE_SCHEMA_VERSION,updatedAt:0,items:{}};
+	    var src=JSON.parse(raw||'{}');
+	    if(!src||typeof src!=='object')return {schemaVersion:WT_NUTRITION_LOOKUP_CACHE_SCHEMA_VERSION,updatedAt:0,items:{}};
+	    return {schemaVersion:WT_NUTRITION_LOOKUP_CACHE_SCHEMA_VERSION,updatedAt:parseInt(src.updatedAt||0,10)||0,items:(src.items&&typeof src.items==='object')?src.items:{}};
+	  }catch(e){return {schemaVersion:WT_NUTRITION_LOOKUP_CACHE_SCHEMA_VERSION,updatedAt:0,items:{}};}
+	}
+	function nutLookupCacheLocalSave(store){
+	  var st=store&&typeof store==='object'?store:{items:{}};
+	  st.schemaVersion=WT_NUTRITION_LOOKUP_CACHE_SCHEMA_VERSION;
+	  st.items=(st.items&&typeof st.items==='object')?st.items:{};
+	  var keys=Object.keys(st.items);
+	  if(keys.length>WT_NUTRITION_LOOKUP_CACHE_MAX){
+	    keys.sort(function(a,b){return (parseInt((st.items[b]&&st.items[b].updatedAt)||0,10)||0)-(parseInt((st.items[a]&&st.items[a].updatedAt)||0,10)||0);});
+	    keys.slice(WT_NUTRITION_LOOKUP_CACHE_MAX).forEach(function(k){delete st.items[k];});
+	  }
+	  st.updatedAt=Date.now();
+	  try{localStorage.setItem(WT_NUTRITION_LOOKUP_CACHE_LOCAL_KEY,JSON.stringify(st));}catch(e){}
+	  return st;
+	}
+	function nutLookupCacheLocalGet(type,query,context,maxAgeDays){
+	  var key=nutLookupCacheKey(type,query,context);
+	  if(!key)return null;
+	  var st=nutLookupCacheLocalLoad();
+	  var row=st.items[key];
+	  if(!row||!row.data)return null;
+	  var ageMs=Date.now()-(parseInt(row.updatedAt||0,10)||0);
+	  var maxMs=Math.max(1,parseInt(maxAgeDays||60,10)||60)*86400000;
+	  if(ageMs>maxMs)return null;
+	  row.hits=(parseInt(row.hits||0,10)||0)+1;
+	  st.items[key]=row;
+	  nutLookupCacheLocalSave(st);
+	  return {cacheKey:key,cacheHit:'local',source:String(row.source||'local'),data:row.data};
+	}
+	function nutLookupCacheLocalPut(type,query,context,data,source,maxAgeDays){
+	  var key=nutLookupCacheKey(type,query,context);
+	  if(!key||!data)return null;
+	  var st=nutLookupCacheLocalLoad();
+	  st.items[key]={cacheKey:key,lookupType:String(type||'food_lookup'),query:String(query||''),context:String(context||''),source:String(source||'ai_lookup'),updatedAt:Date.now(),maxAgeDays:Math.max(1,parseInt(maxAgeDays||60,10)||60),hits:0,data:data};
+	  nutLookupCacheLocalSave(st);
+	  return st.items[key];
+	}
+	function nutLookupCacheGet(type,query,context,opts){
+	  var o=opts&&typeof opts==='object'?opts:{};
+	  var maxAgeDays=Math.max(1,parseInt(o.maxAgeDays||60,10)||60);
+	  var local=nutLookupCacheLocalGet(type,query,context,maxAgeDays);
+	  if(local&&!o.skipLocal)return Promise.resolve(local);
+	  if(!wtAiProxyConfigured()||wtNetworkOffline())return Promise.resolve(null);
+	  return wtAiProxyPost('/v1/nutrition-cache/get',{
+	    lookupType:String(type||'food_lookup'),
+	    query:String(query||''),
+	    context:String(context||''),
+	    cacheKey:nutLookupCacheKey(type,query,context),
+	    maxAgeDays:maxAgeDays
+	  },parseInt(o.timeoutMs||9000,10)||9000).then(function(res){
+	    var row=res&&res.hit&&res.data?res.data:null;
+	    var data=row&&row.data?row.data:null;
+	    if(!data)return null;
+	    nutLookupCacheLocalPut(type,query,context,data,row.source||'cloudflare_d1',maxAgeDays);
+	    return {cacheKey:String(row.cacheKey||''),cacheHit:'cloudflare_d1',source:String(row.source||'cloudflare_d1'),data:data};
+	  }).catch(function(){return null;});
+	}
+	function nutLookupCachePut(type,query,context,data,source,opts){
+	  var o=opts&&typeof opts==='object'?opts:{};
+	  var maxAgeDays=Math.max(1,parseInt(o.maxAgeDays||60,10)||60);
+	  nutLookupCacheLocalPut(type,query,context,data,source,maxAgeDays);
+	  if(!wtAiProxyConfigured()||wtNetworkOffline())return Promise.resolve({status:'skipped'});
+	  return wtAiProxyPost('/v1/nutrition-cache/upsert',{
+	    lookupType:String(type||'food_lookup'),
+	    query:String(query||''),
+	    context:String(context||''),
+	    cacheKey:nutLookupCacheKey(type,query,context),
+	    data:data,
+	    source:String(source||'ai_lookup'),
+	    maxAgeDays:maxAgeDays
+	  },parseInt(o.timeoutMs||10000,10)||10000).catch(function(err){
+	    appLogEvent('warn','nutrition.d1_lookup_cache_upsert_failed','Nutrition lookup cache save failed; continuing without cache.',{message:String(err&&err.message||err||'')});
+	    return {status:'queued_local_only'};
+	  });
+	}
+	function nutAiNutritionLookup(query,promptText,timeoutMs,maxTokens){
+	  return aiCoachOpenAICall({
+	    model:'gpt-5.4-mini',
+	    response_format:{type:'json_object'},
+	    messages:[{role:'user',content:promptText}],
+	    max_completion_tokens:maxTokens||260
+	  },timeoutMs||45000).then(function(data){
+	    var text=data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content||'';
+	    var parsed=aiCoachExtractJson(text);
+	    if(!parsed)throw new Error('parse failed');
+	    return nutNormalizeNutritionObject(parsed,query);
+	  });
+	}
 function wtBackendVersionAtLeast_(actual,minimum){
   function nums(v){
     var m=String(v||'').match(/v?(\d+)\.(\d+)\.(\d+)/i);
@@ -3368,7 +3475,8 @@ function aiBackendStatusFromProxyHealth(res){
       openai_responses_api:providers.openai,
       gemini_proxy:providers.gemini,
       anthropic_proxy:providers.anthropic,
-      d1_trainer_cache:!!(res&&res.d1Configured&&res.trainerCacheRoutes)
+      d1_trainer_cache:!!(res&&res.d1Configured&&res.trainerCacheRoutes),
+      d1_nutrition_lookup_cache:!!(res&&res.d1Configured&&res.nutritionCacheRoutes)
     },
     proxy:res||{}
   };
@@ -3389,6 +3497,7 @@ function aiBackendStatusTest(){
           lastDurationMs:parseInt(res.durationMs||0,10)||0,
           d1Configured:!!res.d1Configured,
           trainerCacheRoutes:!!res.trainerCacheRoutes,
+          nutritionCacheRoutes:!!res.nutritionCacheRoutes,
           openaiConfigured:!!res.openaiConfigured,
           geminiConfigured:!!res.geminiConfigured,
           anthropicConfigured:!!res.anthropicConfigured,
@@ -3402,8 +3511,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-		var WT_FRONTEND_VERSION='19.11.51-cloudflare-provider-gateway';
-		var WT_SW_VERSION='wt-shell-v71-cloudflare-provider-gateway';
+		var WT_FRONTEND_VERSION='19.11.53-week-strength-raw-count';
+		var WT_SW_VERSION='wt-shell-v73-week-strength-raw-count';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4274,12 +4383,14 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.51-cloudflare-provider-gateway';
+var APP_VERSION='v19.11.53-week-strength-raw-count';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v80-cloudflare-provider-gateway';
+var CACHE_VERSION='wt-cache-v82-week-strength-raw-count';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
+  'Weekly goal tracker now shows actual completed strength days such as 3/2 instead of capping the display at the target',
+  'Nutrition typed-food and meal-item macro lookups now use a local plus Cloudflare D1 cache before asking AI again; live logging and Sheets backup stay unchanged',
   'Cloudflare AI proxy now exposes OpenAI, Gemini, and Claude provider routes; Claude nutrition comparison tries Cloudflare first and falls back to Apps Script',
   'HOME/HOTEL plan generation and post-workout review generation now try Cloudflare background Responses first, then fall back to the existing synchronous Cloudflare/Apps Script route if background fails',
   'ChatGPT workout imports now match synonym exercise names back to the app canonical HOME/HOTEL exercises so voice cues use the saved working words while reps, rest, tempo, and goals can still change',
@@ -26264,19 +26375,23 @@ function debounceSavePlan(){
 function updateWeekGoalBar(days){
   var strDone=0,hiitEffort=0,hiitDuration=0;
   var STR_GOAL=_goals.strGoal,EFFORT_GOAL=_goals.effortGoal,DUR_GOAL=_goals.durGoal;
+  var strDaysSeen={};
   days.forEach(function(d){
     var ds=fmtDate(d);
     (_cachedSessions||[]).forEach(function(s){
       if(s.date!==ds)return;
       var wt=s.workoutType||'';
-      if(wt.indexOf('Strength')>=0)strDone++;
+      if(wt.indexOf('Strength')>=0){
+        if(strDaysSeen[ds])return;
+        strDaysSeen[ds]=true;
+        strDone++;
+      }
       else if(isHIIT(wt)){
         hiitEffort+=parseInt(s.effort)||0;
         hiitDuration+=parseInt(s.duration)||0;
       }
     });
   });
-  strDone=Math.min(strDone,STR_GOAL);
   var effortCapped=Math.min(hiitEffort,EFFORT_GOAL);
   var durCapped=Math.min(hiitDuration,DUR_GOAL);
 
@@ -36295,9 +36410,10 @@ function connAiProxyRenderStatus(){
 	  var err=String(st.lastError||'');
 	  if(configured){
 	    var d1=(st.d1Configured===true&&st.trainerCacheRoutes===true)?' · D1 trainer cache: ready':'';
+	    var ncache=(st.d1Configured===true&&st.nutritionCacheRoutes===true)?' · Nutrition lookup cache: ready':'';
 	    function pstat(key){return Object.prototype.hasOwnProperty.call(st,key)?(st[key]?'ready':'missing'):'unknown';}
 	    var providers=' · OpenAI: '+pstat('openaiConfigured')+' · Gemini: '+pstat('geminiConfigured')+' · Claude: '+pstat('anthropicConfigured');
-	    status.innerHTML='AI Proxy: <strong style="color:var(--green);">configured</strong> · '+escHtml(wtAiProxyRedactedUrl())+providers+d1+' · Last status: '+escHtml(last)+(err?' · Error: '+escHtml(err):'');
+	    status.innerHTML='AI Proxy: <strong style="color:var(--green);">configured</strong> · '+escHtml(wtAiProxyRedactedUrl())+providers+d1+ncache+' · Last status: '+escHtml(last)+(err?' · Error: '+escHtml(err):'');
 	  }else{
     status.innerHTML='AI Proxy: <strong style="color:var(--muted);">not configured</strong> · App is using Apps Script AI routes.';
   }
@@ -36335,6 +36451,7 @@ function connAiProxyTest(enableOnSuccess){
 	    var origins=!!(res&&res.allowedOriginsConfigured);
 	    var d1=!!(res&&res.d1Configured);
 	    var trainerRoutes=!!(res&&res.trainerCacheRoutes);
+	    var nutritionRoutes=!!(res&&res.nutritionCacheRoutes);
 	    var providerRoutes=!!(res&&res.providerRoutes);
 	    var originAllowed=(res&&res.requestOriginAllowed)!==false;
 	    var ready=!!(ok&&openai&&origins&&originAllowed);
@@ -36354,13 +36471,14 @@ function connAiProxyTest(enableOnSuccess){
 	        lastDurationMs:parseInt(res.durationMs||0,10)||0,
 	        d1Configured:d1,
 	        trainerCacheRoutes:trainerRoutes,
+	        nutritionCacheRoutes:nutritionRoutes,
 	        openaiConfigured:openai,
 	        geminiConfigured:gemini,
 	        anthropicConfigured:anthropic,
 	        providerRoutes:providerRoutes
 	      });
 	      if(status){
-	        status.innerHTML='AI Proxy: <strong style="color:'+(ready?'var(--green)':'var(--orange)')+';">'+(ready?(enableOnSuccess?'ready':'test passed, tap Test + Enable to save'):'Worker reachable, setup incomplete')+'</strong> · '+escHtml(url)+' · OpenAI: '+(openai?'ready':'missing')+' · Gemini: '+(gemini?'ready':'missing')+' · Claude: '+(anthropic?'ready':'missing')+' · provider routes: '+(providerRoutes?'ready':'not reported')+' · D1 trainer cache: '+(d1&&trainerRoutes?'ready':'not active')+(errMsg?' · '+escHtml(errMsg):'');
+	        status.innerHTML='AI Proxy: <strong style="color:'+(ready?'var(--green)':'var(--orange)')+';">'+(ready?(enableOnSuccess?'ready':'test passed, tap Test + Enable to save'):'Worker reachable, setup incomplete')+'</strong> · '+escHtml(url)+' · OpenAI: '+(openai?'ready':'missing')+' · Gemini: '+(gemini?'ready':'missing')+' · Claude: '+(anthropic?'ready':'missing')+' · provider routes: '+(providerRoutes?'ready':'not reported')+' · D1 trainer cache: '+(d1&&trainerRoutes?'ready':'not active')+' · Nutrition lookup cache: '+(d1&&nutritionRoutes?'ready':'not active')+(errMsg?' · '+escHtml(errMsg):'');
 	      }
       appToast(ready?(enableOnSuccess?'AI proxy is ready.':'AI proxy test passed.'):'Worker reachable, but setup is incomplete.',ready?'var(--green)':'var(--orange)');
       try{connSetupLog('AI proxy health response',res);}catch(e){}
@@ -37817,27 +37935,21 @@ function nutTypeGeminiSearch(){
     }
   }
 
-  if(statusEl){statusEl.textContent='Checking AI backend…';statusEl.style.color='var(--muted)';}
+  if(statusEl){statusEl.textContent='Checking nutrition cache…';statusEl.style.color='var(--muted)';}
   var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (not 100g). Return ONLY JSON: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}';
-  wtBackendPost({
-    type:'aiOpenAIChat',
-    payload:{
-      model:'gpt-5.4-mini',
-      response_format:{type:'json_object'},
-      messages:[{role:'user',content:promptText}],
-      max_completion_tokens:260
-    },
-    timeoutMs:45000
-  })
-  .then(function(data){
-    if(!data||data.status!=='ok')throw new Error((data&&data.message)||'AI backend unavailable');
-    var text=(data.data&&data.data.choices&&data.data.choices[0]&&data.data.choices[0].message&&data.data.choices[0].message.content)||'';
-    var parsed=aiCoachExtractJson(text);
+  nutLookupCacheGet('typed_food_lookup',q,'',{maxAgeDays:90}).then(function(hit){
+    if(hit&&hit.data)return {parsed:nutNormalizeNutritionObject(hit.data,q),cacheHit:hit.cacheHit};
+    if(statusEl){statusEl.textContent='Checking AI backend…';statusEl.style.color='var(--muted)';}
+    return nutAiNutritionLookup(q,promptText,45000,260).then(function(parsed){
+      nutLookupCachePut('typed_food_lookup',q,'',parsed,'openai_food_lookup',{maxAgeDays:90});
+      return {parsed:parsed,cacheHit:''};
+    });
+  }).then(function(out){
+    var parsed=out&&out.parsed?out.parsed:null;
     if(!parsed)throw new Error('parse failed');
-    parsed=nutNormalizeNutritionObject(parsed,q);
     var outer=document.getElementById('nutScanStatus');if(outer){outer.style.display='none';outer.innerHTML='';}
     nutFillFromScan(parsed,null);
-    var msg=document.getElementById('nutFoodFormMsg');if(msg){msg.textContent='✓ '+(parsed.name||q)+' — check values then save';msg.style.color='var(--green)';}
+    var msg=document.getElementById('nutFoodFormMsg');if(msg){msg.textContent='✓ '+(parsed.name||q)+(out.cacheHit?' from cache':'')+' — check values then save';msg.style.color='var(--green)';}
   })
   .catch(function(){
     if(statusEl){statusEl.textContent='AI lookup unavailable — create manually or scan photo.';statusEl.style.color='var(--orange)';}
@@ -38510,26 +38622,22 @@ function nutAddInlineGemini(){
     }
   }
 
-  nutAddInlineStatus('Checking AI backend…','var(--muted)');
+  nutAddInlineStatus('Checking nutrition cache…','var(--muted)');
   var promptText='Give me the nutrition info for: "'+q+'". Use a natural serving size (not 100g). Return ONLY JSON: {"name":"food name","serving":number,"unit":"g or ml or piece or cup","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}';
-  wtBackendPost({
-    type:'aiOpenAIChat',
-    payload:{
-      model:'gpt-5.4-mini',
-      response_format:{type:'json_object'},
-      messages:[{role:'user',content:promptText}],
-      max_completion_tokens:260
-    },
-    timeoutMs:45000
+  nutLookupCacheGet('typed_food_lookup',q,'',{maxAgeDays:90}).then(function(hit){
+    if(hit&&hit.data)return {food:nutNormalizeNutritionObject(hit.data,q),cacheHit:hit.cacheHit};
+    nutAddInlineStatus('Checking AI backend…','var(--muted)');
+    return nutAiNutritionLookup(q,promptText,45000,260).then(function(food){
+      nutLookupCachePut('typed_food_lookup',q,'',food,'openai_food_lookup',{maxAgeDays:90});
+      return {food:food,cacheHit:''};
+    });
   })
-  .then(function(data){
-    if(!data||data.status!=='ok')throw new Error((data&&data.message)||'AI backend unavailable');
-    var text=(data.data&&data.data.choices&&data.data.choices[0]&&data.data.choices[0].message&&data.data.choices[0].message.content)||'';
-    if(!text){nutAddInlineStatus('No result — try a clearer description','var(--orange)');return;}
-    var food=aiCoachExtractJson(text);
+  .then(function(out){
+    var food=out&&out.food?out.food:null;
     if(!food){nutAddInlineStatus('No usable JSON — try a clearer description','var(--orange)');return;}
     food=nutNormalizeNutritionObject(food,q);
     if(!food.name)food.name=q;
+    if(out.cacheHit)nutAddInlineStatus('Found in nutrition cache','var(--green)');
     nutAddInlineFinish(food);
   })
   .catch(function(){nutAddInlineStatus('AI lookup unavailable — create manually or scan photo.','var(--orange)');});
@@ -40947,18 +41055,23 @@ function nutMealScanRefetch(id){
     '- Starbucks ref: Iced Chai Grande=200kcal/7P/42C/3F. Lavender Cold Foam=100kcal/1P/8C/8F/5satF.\n'+
     'Return ONLY a JSON object, no markdown: {"calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}\n'+
     'All numbers. Sodium in mg. No zeros unless truly zero.';
-  aiCoachOpenAICall({model:'gpt-5.4-mini',response_format:{type:'json_object'},messages:[{role:'user',content:sysInstr+'\n\nMacros for one serving of "'+newName+'".'+geoCtx}],max_completion_tokens:220},45000).then(function(data){
-    var text=data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
-    if(text){text=text.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-      var s=text.indexOf('{'),e=text.lastIndexOf('}');
-      if(s>=0&&e>s){try{var d=nutNormalizeNutritionObject(JSON.parse(text.slice(s,e+1)),it.name);
-        it.cal=Math.round(parseFloat(d.calories)||0);it.prot=Math.round((parseFloat(d.protein)||0)*10)/10;
-        it.carb=Math.round((parseFloat(d.carbs)||0)*10)/10;it.fat=Math.round((parseFloat(d.fat)||0)*10)/10;
-        it.fib=Math.round((parseFloat(d.fibre)||0)*10)/10;it.sat=Math.round((parseFloat(d.satFat)||0)*10)/10;
-        it.sod=Math.round(parseFloat(d.sodium)||0);it.confidence='medium';
-        // mark as edited so it auto-saves to foods on log
-        it._edited=true;
-        }catch(e2){}}}
+  var prompt=sysInstr+'\n\nMacros for one serving of "'+newName+'".'+geoCtx;
+  nutLookupCacheGet('meal_item_macro_lookup',newName,geoCtx,{maxAgeDays:90}).then(function(hit){
+    if(hit&&hit.data)return {data:nutNormalizeNutritionObject(hit.data,it.name),cacheHit:hit.cacheHit};
+    return nutAiNutritionLookup(newName,prompt,45000,220).then(function(d){
+      nutLookupCachePut('meal_item_macro_lookup',newName,geoCtx,d,'openai_macro_refetch',{maxAgeDays:90});
+      return {data:d,cacheHit:''};
+    });
+  }).then(function(out){
+    var d=out&&out.data?nutNormalizeNutritionObject(out.data,it.name):null;
+    if(d){
+      it.cal=Math.round(parseFloat(d.calories)||0);it.prot=Math.round((parseFloat(d.protein)||0)*10)/10;
+      it.carb=Math.round((parseFloat(d.carbs)||0)*10)/10;it.fat=Math.round((parseFloat(d.fat)||0)*10)/10;
+      it.fib=Math.round((parseFloat(d.fibre)||0)*10)/10;it.sat=Math.round((parseFloat(d.satFat)||0)*10)/10;
+      it.sod=Math.round(parseFloat(d.sodium)||0);it.confidence=out.cacheHit?'high':'medium';
+      // mark as edited so it auto-saves to foods on log
+      it._edited=true;
+    }
     nutMealScanRender();
   }).catch(function(){nutMealScanRender();});
 }
