@@ -2653,9 +2653,9 @@ function wtEnsureBackendAuthReady(opts){
   wtAuthCacheSet(true,'auth-not-required');
   return Promise.resolve({status:'ok',message:'Backend auth not required'});
 }
-function wtIsTransientError_(err){
-  var m=String((err&&err.message)||err||'').toLowerCase();
-  return (
+	function wtIsTransientError_(err){
+	  var m=String((err&&err.message)||err||'').toLowerCase();
+	  return (
     m.indexOf('timeout')>=0||
     m.indexOf('network')>=0||
     m.indexOf('failed to fetch')>=0||
@@ -2663,9 +2663,12 @@ function wtIsTransientError_(err){
     m.indexOf('503')>=0||
     m.indexOf('502')>=0||
     m.indexOf('504')>=0||
-    m.indexOf('429')>=0
-  );
-}
+	    m.indexOf('429')>=0
+	  );
+	}
+	function wtNetworkOffline(){
+	  try{return typeof navigator!=='undefined' && navigator.onLine===false;}catch(e){return false;}
+	}
 function wtFetchJsonWithRetry_(url,fetchOpts,retryCfg){
   var cfg=Object.assign({tries:3,timeoutMs:30000,baseDelayMs:350},retryCfg||{});
   function oneAttempt(attempt){
@@ -2973,22 +2976,238 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	  });
 	}
 	function wtTrainerCloudCacheAvailable(){return wtAiProxyConfigured();}
-	function wtTrainerCloudCachePatch(status,extra){
-	  try{
-	    appDoctorPatchState('trainer_cloud_cache',Object.assign({
-	      configured:wtTrainerCloudCacheAvailable(),
-	      url:wtAiProxyRedactedUrl(),
+		function wtTrainerCloudCachePatch(status,extra){
+		  try{
+		    appDoctorPatchState('trainer_cloud_cache',Object.assign({
+		      configured:wtTrainerCloudCacheAvailable(),
+		      url:wtAiProxyRedactedUrl(),
 	      lastStatus:String(status||'unknown'),
 	      lastTime:Date.now()
-	    },extra||{}));
-	  }catch(e){}
-	}
-	function wtTrainerCloudCacheLoad(opts){
-	  var o=opts&&typeof opts==='object'?opts:{};
-	  if(!wtTrainerCloudCacheAvailable())return Promise.resolve(null);
-	  wtTrainerCloudCachePatch('loading',{lastError:''});
-	  return wtAiProxyPost('/v1/trainer-cache/get',{
-	    planSlot:String(o.planSlot||''),
+		    },extra||{}));
+		  }catch(e){}
+		}
+		var WT_TRAINER_CLOUD_CACHE_QUEUE_KEY='wt_trainer_cloud_cache_queue_v1';
+		var WT_TRAINER_CLOUD_CACHE_QUEUE_SCHEMA_VERSION=1;
+		var WT_TRAINER_CLOUD_CACHE_QUEUE_MAX=300;
+		var _wtTrainerCloudCacheFlushTimer=null;
+		var _wtTrainerCloudCacheFlushInFlight=false;
+		var _wtTrainerCloudCacheBooted=false;
+		function wtTrainerCloudCacheArtifactKey(artifact){
+		  if(!artifact||typeof artifact!=='object')return '';
+		  var payload=artifact.data&&typeof artifact.data==='object'?artifact.data:(artifact.payload&&typeof artifact.payload==='object'?artifact.payload:{});
+		  var type=String(artifact.artifactType||artifact.type||payload.artifactType||'').toLowerCase();
+		  var id=String(artifact.artifactId||payload.planId||payload.coachStateId||payload.reviewId||payload.equipmentProfileId||payload.equipmentProfileHash||payload.sessionId||'');
+		  var slot=String(artifact.planSlot||payload.planSlot||'').toUpperCase();
+		  return type+'|'+id+'|'+slot;
+		}
+		function wtTrainerCloudCacheQueueEmpty(){
+		  return {schemaVersion:WT_TRAINER_CLOUD_CACHE_QUEUE_SCHEMA_VERSION,updatedAt:0,items:[]};
+		}
+		function wtTrainerCloudCacheQueueLoad(){
+		  try{
+		    var raw=localStorage.getItem(WT_TRAINER_CLOUD_CACHE_QUEUE_KEY);
+		    if(!raw)return wtTrainerCloudCacheQueueEmpty();
+		    var src=JSON.parse(raw||'{}');
+		    if(!src||typeof src!=='object')return wtTrainerCloudCacheQueueEmpty();
+		    var items=Array.isArray(src.items)?src.items:[];
+		    items=items.filter(function(row){
+		      return row&&row.artifact&&wtTrainerCloudCacheArtifactKey(row.artifact);
+		    }).map(function(row){
+		      var now=Date.now();
+		      return {
+		        cacheId:String(row.cacheId||wtNewId('cloud_cache')),
+		        key:String(row.key||wtTrainerCloudCacheArtifactKey(row.artifact)),
+		        artifact:row.artifact,
+		        sourceSessionId:String(row.sourceSessionId||''),
+		        createdAt:parseInt(row.createdAt||now,10)||now,
+		        updatedAt:parseInt(row.updatedAt||row.createdAt||now,10)||now,
+		        attempts:Math.max(0,parseInt(row.attempts||0,10)||0),
+		        nextRunAt:Math.max(0,parseInt(row.nextRunAt||0,10)||0),
+		        lastError:String(row.lastError||'')
+		      };
+		    });
+		    return {schemaVersion:WT_TRAINER_CLOUD_CACHE_QUEUE_SCHEMA_VERSION,updatedAt:parseInt(src.updatedAt||0,10)||0,items:items};
+		  }catch(e){
+		    return wtTrainerCloudCacheQueueEmpty();
+		  }
+		}
+		function wtTrainerCloudCacheQueueSave(store){
+		  var st=store&&typeof store==='object'?store:wtTrainerCloudCacheQueueEmpty();
+		  st.schemaVersion=WT_TRAINER_CLOUD_CACHE_QUEUE_SCHEMA_VERSION;
+		  st.items=Array.isArray(st.items)?st.items:[];
+		  if(st.items.length>WT_TRAINER_CLOUD_CACHE_QUEUE_MAX){
+		    st.items=st.items.sort(function(a,b){return (parseInt(b.updatedAt||0,10)||0)-(parseInt(a.updatedAt||0,10)||0);}).slice(0,WT_TRAINER_CLOUD_CACHE_QUEUE_MAX);
+		  }
+		  st.updatedAt=Date.now();
+		  var txt=JSON.stringify(st);
+		  try{localStorage.setItem(WT_TRAINER_CLOUD_CACHE_QUEUE_KEY,txt);}catch(e){}
+		  try{wtDB.set(WT_TRAINER_CLOUD_CACHE_QUEUE_KEY,txt).catch(function(){});}catch(e){}
+		  wtTrainerCloudCachePatch('queued',{
+		    queuedCount:st.items.length,
+		    nextRetryAt:(st.items||[]).reduce(function(best,row){
+		      var n=parseInt((row&&row.nextRunAt)||0,10)||0;
+		      if(!n)return best;
+		      return !best||n<best?n:best;
+		    },0)
+		  });
+		  return st;
+		}
+		function wtTrainerCloudCacheQueueRemoveArtifacts(artifacts){
+		  var keys={};
+		  (Array.isArray(artifacts)?artifacts:[]).forEach(function(a){
+		    var k=wtTrainerCloudCacheArtifactKey(a);
+		    if(k)keys[k]=1;
+		  });
+		  if(!Object.keys(keys).length)return;
+		  var st=wtTrainerCloudCacheQueueLoad();
+		  var before=st.items.length;
+		  st.items=st.items.filter(function(row){return !keys[String(row.key||wtTrainerCloudCacheArtifactKey(row.artifact))];});
+		  if(st.items.length!==before)wtTrainerCloudCacheQueueSave(st);
+		}
+		function wtTrainerCloudCacheQueuePush(artifacts,opts){
+		  var list=(Array.isArray(artifacts)?artifacts:[]).filter(Boolean);
+		  if(!list.length)return {queuedCount:0,totalQueued:wtTrainerCloudCacheQueueLoad().items.length};
+		  var o=opts&&typeof opts==='object'?opts:{};
+		  var st=wtTrainerCloudCacheQueueLoad();
+		  var sourceSessionId=String(o.sourceSessionId||'');
+		  var now=Date.now();
+		  var incomingKeys={};
+		  list.forEach(function(a){
+		    var key=wtTrainerCloudCacheArtifactKey(a);
+		    if(key)incomingKeys[key]=1;
+		  });
+		  st.items=st.items.filter(function(row){return !incomingKeys[String(row.key||wtTrainerCloudCacheArtifactKey(row.artifact))];});
+		  list.forEach(function(a){
+		    var key=wtTrainerCloudCacheArtifactKey(a);
+		    if(!key)return;
+		    st.items.push({
+		      cacheId:wtNewId('cloud_cache'),
+		      key:key,
+		      artifact:a,
+		      sourceSessionId:sourceSessionId,
+		      createdAt:now,
+		      updatedAt:now,
+		      attempts:0,
+		      nextRunAt:now+Math.max(250,parseInt(o.delayMs||0,10)||0),
+		      lastError:String(o.lastError||'')
+		    });
+		  });
+		  wtTrainerCloudCacheQueueSave(st);
+		  wtTrainerCloudCacheScheduleFlush(Math.max(650,parseInt(o.delayMs||1500,10)||1500));
+		  return {queuedCount:Object.keys(incomingKeys).length,totalQueued:st.items.length};
+		}
+		function wtTrainerCloudCacheBackoffMs(attempts){
+		  var a=Math.max(1,parseInt(attempts||1,10)||1);
+		  return Math.min(20*60*1000,Math.max(1500,Math.round(1500*Math.pow(2,Math.min(7,a-1)))));
+		}
+		function wtTrainerCloudCacheFindResult(results,artifact){
+		  var rows=Array.isArray(results)?results:[];
+		  var key=wtTrainerCloudCacheArtifactKey(artifact);
+		  return rows.find(function(r){
+		    return wtTrainerCloudCacheArtifactKey(r)===key;
+		  })||null;
+		}
+		function wtTrainerCloudCacheScheduleFlush(delayMs){
+		  if(_wtTrainerCloudCacheFlushTimer)clearTimeout(_wtTrainerCloudCacheFlushTimer);
+		  _wtTrainerCloudCacheFlushTimer=setTimeout(function(){
+		    _wtTrainerCloudCacheFlushTimer=null;
+		    wtTrainerCloudCacheFlush(false);
+		  },Math.max(250,parseInt(delayMs||1500,10)||1500));
+		}
+		function wtTrainerCloudCacheFlush(force){
+		  if(_wtTrainerCloudCacheFlushInFlight)return Promise.resolve({status:'skipped',reason:'in_flight'});
+		  if(!wtTrainerCloudCacheAvailable())return Promise.resolve({status:'skipped',reason:'ai_proxy_not_configured'});
+		  if(wtNetworkOffline())return Promise.resolve({status:'skipped',reason:'offline'});
+		  var st=wtTrainerCloudCacheQueueLoad();
+		  var now=Date.now();
+		  var due=st.items.filter(function(row){
+		    return row&&(force||((parseInt(row.nextRunAt||0,10)||0)<=now))&&(parseInt(row.attempts||0,10)||0)<8;
+		  }).slice(0,25);
+		  if(!due.length){
+		    wtTrainerCloudCachePatch('ok',{queuedCount:st.items.length});
+		    return Promise.resolve({status:'ok',skipped:true,queuedCount:st.items.length});
+		  }
+		  due.forEach(function(row){row.attempts=(parseInt(row.attempts||0,10)||0)+1;row.updatedAt=now;});
+		  wtTrainerCloudCacheQueueSave(st);
+		  _wtTrainerCloudCacheFlushInFlight=true;
+		  wtTrainerCloudCachePatch('flushing',{queuedCount:st.items.length,lastError:''});
+		  var artifacts=due.map(function(row){return row.artifact;}).filter(Boolean);
+		  var sourceSessionId=due.map(function(row){return String(row.sourceSessionId||'');}).filter(Boolean).filter(function(v,i,a){return a.indexOf(v)===i;});
+		  return wtAiProxyPost('/v1/trainer-cache/upsert',{
+		    artifacts:artifacts,
+		    sourceSessionId:sourceSessionId.length===1?sourceSessionId[0]:''
+		  },15000).then(function(res){
+		    var latest=wtTrainerCloudCacheQueueLoad();
+		    var okKeys={};
+		    if(res&&res.d1Configured!==false&&res.status!=='error'){
+		      if(Array.isArray(res.results)&&res.results.length){
+		        artifacts.forEach(function(a){
+		          var row=wtTrainerCloudCacheFindResult(res.results,a);
+		          if(row&&String(row.status||'')==='ok')okKeys[wtTrainerCloudCacheArtifactKey(a)]=1;
+		        });
+		      }else{
+		        artifacts.forEach(function(a){okKeys[wtTrainerCloudCacheArtifactKey(a)]=1;});
+		      }
+		    }
+		    latest.items=latest.items.map(function(row){
+		      if(!due.some(function(d){return d.cacheId===row.cacheId;}))return row;
+		      var k=String(row.key||wtTrainerCloudCacheArtifactKey(row.artifact));
+		      if(okKeys[k])return null;
+		      row.lastError=String((res&&(res.message||res.errorCode))||'trainer_cache_flush_partial');
+		      row.nextRunAt=Date.now()+wtTrainerCloudCacheBackoffMs(row.attempts);
+		      row.updatedAt=Date.now();
+		      return row;
+		    }).filter(Boolean);
+		    wtTrainerCloudCacheQueueSave(latest);
+		    wtTrainerCloudCachePatch('ok',{
+		      d1Configured:res&&res.d1Configured!==false,
+		      queuedCount:latest.items.length,
+		      lastFlushedArtifacts:Object.keys(okKeys).length,
+		      lastDurationMs:res&&res.durationMs||0,
+		      lastError:''
+		    });
+		    if(latest.items.length)wtTrainerCloudCacheScheduleFlush(wtTrainerCloudCacheBackoffMs(1));
+		    return Object.assign({queuedCount:latest.items.length},res||{status:'ok'});
+		  }).catch(function(err){
+		    var latest=wtTrainerCloudCacheQueueLoad();
+		    var dueIds={};
+		    due.forEach(function(row){dueIds[row.cacheId]=1;});
+		    latest.items=latest.items.map(function(row){
+		      if(!dueIds[row.cacheId])return row;
+		      row.lastError=String(err&&err.message||err||'trainer_cache_flush_failed');
+		      row.nextRunAt=Date.now()+wtTrainerCloudCacheBackoffMs(row.attempts);
+		      row.updatedAt=Date.now();
+		      return row;
+		    });
+		    wtTrainerCloudCacheQueueSave(latest);
+		    wtTrainerCloudCachePatch('queued',{
+		      queuedCount:latest.items.length,
+		      lastError:String(err&&err.message||err||'trainer_cache_flush_failed')
+		    });
+		    wtTrainerCloudCacheScheduleFlush(wtTrainerCloudCacheBackoffMs(1));
+		    return {status:'queued',queuedCount:latest.items.length,message:String(err&&err.message||err||'trainer_cache_flush_failed')};
+		  }).finally(function(){
+		    _wtTrainerCloudCacheFlushInFlight=false;
+		  });
+		}
+		function wtTrainerCloudCacheBoot(){
+		  if(_wtTrainerCloudCacheBooted)return;
+		  _wtTrainerCloudCacheBooted=true;
+		  var st=wtTrainerCloudCacheQueueLoad();
+		  wtTrainerCloudCachePatch(st.items.length?'queued':'idle',{queuedCount:st.items.length});
+		  window.addEventListener('online',function(){try{wtTrainerCloudCacheFlush(true);}catch(e){}});
+		  setTimeout(function(){try{wtTrainerCloudCacheFlush(false);}catch(e){}},2200);
+		}
+		function wtTrainerCloudCacheLoad(opts){
+		  var o=opts&&typeof opts==='object'?opts:{};
+		  if(!wtTrainerCloudCacheAvailable())return Promise.resolve(null);
+		  if(wtNetworkOffline()){
+		    wtTrainerCloudCachePatch('offline',{lastError:'',queuedCount:wtTrainerCloudCacheQueueLoad().items.length});
+		    return Promise.resolve(null);
+		  }
+		  wtTrainerCloudCachePatch('loading',{lastError:''});
+		  return wtAiProxyPost('/v1/trainer-cache/get',{
+		    planSlot:String(o.planSlot||''),
 	    sourceSessionId:String(o.sourceSessionId||''),
 	    includePayload:true
 	  },parseInt(o.timeoutMs,10)||12000).then(function(res){
@@ -3034,29 +3253,56 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	  var id=String(profile.equipmentProfileId||profile.equipmentProfileHash||'');
 	  return id?wtTrainerCloudCacheArtifact('equipment_profile',id,profile,'',profile.revision||1):null;
 	}
-	function wtTrainerCloudCacheSaveArtifacts(artifacts,opts){
-	  var list=(Array.isArray(artifacts)?artifacts:[]).filter(Boolean);
-	  var o=opts&&typeof opts==='object'?opts:{};
-	  if(!list.length)return Promise.resolve({status:'ok',skipped:true});
-	  if(!wtTrainerCloudCacheAvailable())return Promise.resolve({status:'ok',skipped:true,reason:'ai_proxy_not_configured'});
-	  wtTrainerCloudCachePatch('saving',{lastError:''});
-	  return wtAiProxyPost('/v1/trainer-cache/upsert',{
-	    artifacts:list,
-	    sourceSessionId:String(o.sourceSessionId||'')
-	  },parseInt(o.timeoutMs,10)||12000).then(function(res){
-	    if(!res||res.status==='error')throw new Error((res&&(res.message||res.errorCode))||'trainer_cache_save_failed');
-	    wtTrainerCloudCachePatch(res.d1Configured===false?'not_configured':'ok',{
-	      d1Configured:res.d1Configured!==false,
-	      lastError:'',
-	      lastDurationMs:res.durationMs||0,
-	      lastSavedArtifacts:list.length
-	    });
-	    return res;
-	  }).catch(function(err){
-	    wtTrainerCloudCachePatch('error',{lastError:String(err&&err.message||err||'trainer_cache_save_failed')});
-	    return {status:'error',message:String(err&&err.message||err||'trainer_cache_save_failed')};
-	  });
-	}
+		function wtTrainerCloudCacheSaveArtifacts(artifacts,opts){
+		  var list=(Array.isArray(artifacts)?artifacts:[]).filter(Boolean);
+		  var o=opts&&typeof opts==='object'?opts:{};
+		  if(!list.length)return Promise.resolve({status:'ok',skipped:true});
+		  if(!wtTrainerCloudCacheAvailable())return Promise.resolve({status:'ok',skipped:true,reason:'ai_proxy_not_configured'});
+		  if(wtNetworkOffline()){
+		    var queuedOffline=wtTrainerCloudCacheQueuePush(list,{sourceSessionId:o.sourceSessionId,lastError:'offline',delayMs:1200});
+		    wtTrainerCloudCachePatch('queued_offline',{queuedCount:queuedOffline.totalQueued,lastError:'offline'});
+		    return Promise.resolve({status:'queued',offline:true,queuedCount:queuedOffline.totalQueued});
+		  }
+		  wtTrainerCloudCachePatch('saving',{lastError:''});
+		  return wtAiProxyPost('/v1/trainer-cache/upsert',{
+		    artifacts:list,
+		    sourceSessionId:String(o.sourceSessionId||'')
+		  },parseInt(o.timeoutMs,10)||12000).then(function(res){
+		    if(!res||res.status==='error')throw new Error((res&&(res.message||res.errorCode))||'trainer_cache_save_failed');
+		    var failedArtifacts=[];
+		    if(Array.isArray(res.results)&&res.results.length){
+		      list.forEach(function(a){
+		        var row=wtTrainerCloudCacheFindResult(res.results,a);
+		        if(!row||String(row.status||'')!=='ok')failedArtifacts.push(a);
+		      });
+		    }
+		    var savedArtifacts=list.filter(function(a){return failedArtifacts.indexOf(a)<0;});
+		    if(savedArtifacts.length)wtTrainerCloudCacheQueueRemoveArtifacts(savedArtifacts);
+		    if(failedArtifacts.length){
+		      var queuedPartial=wtTrainerCloudCacheQueuePush(failedArtifacts,{sourceSessionId:o.sourceSessionId,lastError:'trainer_cache_partial_failure',delayMs:2500});
+		      wtTrainerCloudCachePatch('queued_partial',{
+		        d1Configured:res.d1Configured!==false,
+		        queuedCount:queuedPartial.totalQueued,
+		        lastError:'trainer_cache_partial_failure',
+		        lastDurationMs:res.durationMs||0,
+		        lastSavedArtifacts:savedArtifacts.length
+		      });
+		      return Object.assign({},res,{queuedCount:queuedPartial.totalQueued});
+		    }
+		    wtTrainerCloudCachePatch(res.d1Configured===false?'not_configured':'ok',{
+		      d1Configured:res.d1Configured!==false,
+		      lastError:'',
+		      lastDurationMs:res.durationMs||0,
+		      lastSavedArtifacts:list.length,
+		      queuedCount:wtTrainerCloudCacheQueueLoad().items.length
+		    });
+		    return res;
+		  }).catch(function(err){
+		    var queued=wtTrainerCloudCacheQueuePush(list,{sourceSessionId:o.sourceSessionId,lastError:String(err&&err.message||err||'trainer_cache_save_failed'),delayMs:2500});
+		    wtTrainerCloudCachePatch('queued',{queuedCount:queued.totalQueued,lastError:String(err&&err.message||err||'trainer_cache_save_failed')});
+		    return {status:'queued',queuedCount:queued.totalQueued,message:String(err&&err.message||err||'trainer_cache_save_failed')};
+		  });
+		}
 	function wtTrainerCloudCacheSaveTrainerSnapshot(opts){
 	  var o=opts&&typeof opts==='object'?opts:{};
 	  var sid=String(o.sourceSessionId||'');
@@ -3105,12 +3351,59 @@ function wtNutritionImageRouteDeploymentMessage(){
     ?'AI proxy image route failed; Apps Script fallback also unavailable.'
     :'Backend image route is not deployed yet. Use the free AI proxy or deploy the latest Apps Script.';
 }
+function aiBackendStatusFromProxyHealth(res){
+  var providers={
+    openai:!!(res&&res.openaiConfigured),
+    gemini:!!(res&&res.geminiConfigured),
+    anthropic:!!(res&&res.anthropicConfigured)
+  };
+  var scanAvailable=providers.openai||providers.gemini||providers.anthropic;
+  return {
+    status:(res&&res.status==='ok')?'ok':'error',
+    source:'cloudflare_ai_proxy',
+    scanAvailable:scanAvailable,
+    providers:providers,
+    features:{
+      ai_scan:scanAvailable,
+      openai_responses_api:providers.openai,
+      gemini_proxy:providers.gemini,
+      anthropic_proxy:providers.anthropic,
+      d1_trainer_cache:!!(res&&res.d1Configured&&res.trainerCacheRoutes)
+    },
+    proxy:res||{}
+  };
+}
 function aiBackendStatusTest(){
-  return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
+  function fallback(){
+    return wtBackendPost({type:'aiBackendStatus',_nonce:Date.now()}).catch(function(){return {status:'error'};});
+  }
+  if(wtAiProxyConfigured()&&navigator.onLine){
+    return wtAiProxyHealth('',12000).then(function(res){
+      if(res&&res.status==='ok'){
+        appDoctorPatchState('ai_proxy',{
+          configured:true,
+          url:wtAiProxyRedactedUrl(),
+          lastRoute:'/health',
+          lastStatus:'ok',
+          lastError:'',
+          lastDurationMs:parseInt(res.durationMs||0,10)||0,
+          d1Configured:!!res.d1Configured,
+          trainerCacheRoutes:!!res.trainerCacheRoutes,
+          openaiConfigured:!!res.openaiConfigured,
+          geminiConfigured:!!res.geminiConfigured,
+          anthropicConfigured:!!res.anthropicConfigured,
+          providerRoutes:!!res.providerRoutes
+        });
+        return aiBackendStatusFromProxyHealth(res);
+      }
+      return fallback();
+    }).catch(function(){return fallback();});
+  }
+  return fallback();
 }
 
-var WT_FRONTEND_VERSION='19.11.47-staticrypt-tap-hardening';
-var WT_SW_VERSION='wt-shell-v67-staticrypt-tap-hardening';
+		var WT_FRONTEND_VERSION='19.11.51-cloudflare-provider-gateway';
+		var WT_SW_VERSION='wt-shell-v71-cloudflare-provider-gateway';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -3741,9 +4034,13 @@ function wtIsIosStandalone(){
     return isiOS&&wtIsStandalone();
   }catch(e){return false;}
 }
-function wtPendingSyncCount(){
-  try{var q=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');return Array.isArray(q)?q.length:0;}catch(e){return 0;}
-}
+	function wtPendingSyncCount(){
+	  var total=0;
+	  try{var q=JSON.parse(localStorage.getItem(NUT_SYNC_QUEUE_KEY)||'[]');total+=Array.isArray(q)?q.length:0;}catch(e){}
+	  try{var aq=artifactQueueSummary();total+=(parseInt(aq.pending||0,10)||0)+(parseInt(aq.running||0,10)||0)+(parseInt(aq.failed_retryable||0,10)||0);}catch(e){}
+	  try{var cq=wtTrainerCloudCacheQueueLoad();total+=Array.isArray(cq.items)?cq.items.length:0;}catch(e){}
+	  return total;
+	}
 function wtLastSyncStamp(){
   try{var ts=parseInt(localStorage.getItem(NUT_SYNC_LAST_SUCCESS_KEY)||'0',10)||0;return ts?new Date(ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'Never';}catch(e){return 'Never';}
 }
@@ -3839,13 +4136,15 @@ function wtMaybeShowInstallHint(){
   actions.push({label:'Dismiss',fn:'wtDismissInstallHint()'});
   wtShowPwaBanner('note',msg,actions);
 }
-function wtOnNetworkBack(){
-  if(_wtResumeRetryTimer)clearTimeout(_wtResumeRetryTimer);
-  _wtResumeRetryTimer=setTimeout(function(){
-    try{nutQueueFlush();}catch(e){}
-    try{if(currentPage==='nutrition')nutBadge('live','Back online · syncing queued changes…');}catch(e){}
-  },900);
-}
+	function wtOnNetworkBack(){
+	  if(_wtResumeRetryTimer)clearTimeout(_wtResumeRetryTimer);
+	  _wtResumeRetryTimer=setTimeout(function(){
+	    try{nutQueueFlush();}catch(e){}
+	    try{wtTrainerCloudCacheFlush(true);}catch(e){}
+	    try{artifactQueuePump(true);}catch(e){}
+	    try{if(currentPage==='nutrition')nutBadge('live','Back online · syncing queued changes…');}catch(e){}
+	  },900);
+	}
 function wtPwaDiagData(){
   var st={};
   try{st=JSON.parse(localStorage.getItem(WT_APPSTATUS_CACHE_KEY)||'{}')||{};}catch(e){}
@@ -3975,12 +4274,16 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.47-staticrypt-tap-hardening';
+var APP_VERSION='v19.11.51-cloudflare-provider-gateway';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v76-staticrypt-tap-hardening';
+var CACHE_VERSION='wt-cache-v80-cloudflare-provider-gateway';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
+  'Cloudflare AI proxy now exposes OpenAI, Gemini, and Claude provider routes; Claude nutrition comparison tries Cloudflare first and falls back to Apps Script',
+  'HOME/HOTEL plan generation and post-workout review generation now try Cloudflare background Responses first, then fall back to the existing synchronous Cloudflare/Apps Script route if background fails',
+  'ChatGPT workout imports now match synonym exercise names back to the app canonical HOME/HOTEL exercises so voice cues use the saved working words while reps, rest, tempo, and goals can still change',
+  'Cloudflare D1 trainer cache is now the fast path for sessions, reviews, coach state, equipment, and generated HOME/HOTEL plans, with a local offline retry queue and Google Sheets still used as backup',
   'Nutrition photo uploads now adapt image size to the active route: Apps-Script-safe JPEGs by default, richer images when the optional AI proxy is configured',
   'Nutrition photo scans now detect when the deployed Apps Script is missing the OpenAI image-file route and report that as a backend deployment issue',
   'Lose It screenshot import now uses the same high-quality OpenAI file-upload image route as meal photo scanning, with Apps Script/proxy fallback safety',
@@ -8422,13 +8725,15 @@ function artifactQueueSyncSessionJob(job){
   recSession(sd);workoutUpsertCache(sd);
   workoutSetSyncStatus('Syncing workout…','sync_pending');
   var started=Date.now();
-  var artifact={
-    artifactType:'session',
-    artifactId:String(sd.sessionId||''),
-    revision:Math.max(1,parseInt(sd.sessionRevision||1,10)||1),
-    data:sd
-  };
-  return artifactQueueSyncArtifacts([artifact],{timeoutMs:60000}).then(function(sync){
+	  var artifact={
+	    artifactType:'session',
+	    artifactId:String(sd.sessionId||''),
+	    revision:Math.max(1,parseInt(sd.sessionRevision||1,10)||1),
+	    data:sd
+	  };
+	  return wtTrainerCloudCacheSaveArtifacts([artifact],{sourceSessionId:sd.sessionId,timeoutMs:10000}).then(function(){
+	    return artifactQueueSyncArtifacts([artifact],{timeoutMs:60000});
+	  }).then(function(sync){
     var row=artifactQueueFindSyncResult(sync.results,'session',sd.sessionId,'');
     if(!row||String(row.status||'')!=='ok'){
       throw {
@@ -8443,10 +8748,13 @@ function artifactQueueSyncSessionJob(job){
     newest.updatedAt=wtNowIso();
     recSession(newest);workoutUpsertCache(newest);
     workoutSetSyncStatus('Saved to sheet','synced');
-    setSyncBadges('live');
-    wtLogEvent('sheet_sync_success',{sessionId:newest.sessionId,attempt:job.attempts,durationMs:Date.now()-started});
-    appDoctorPatchState('sheet',{lastSyncedSessionId:String(newest.sessionId||'')});
-    return {sessionId:newest.sessionId,artifactIds:[newest.sessionId]};
+	    setSyncBadges('live');
+	    wtLogEvent('sheet_sync_success',{sessionId:newest.sessionId,attempt:job.attempts,durationMs:Date.now()-started});
+	    appDoctorPatchState('sheet',{lastSyncedSessionId:String(newest.sessionId||'')});
+	    var syncedArtifact=Object.assign({},artifact,{data:newest,revision:Math.max(1,parseInt(newest.sessionRevision||1,10)||1)});
+	    return wtTrainerCloudCacheSaveArtifacts([syncedArtifact],{sourceSessionId:newest.sessionId,timeoutMs:10000}).then(function(){
+	      return {sessionId:newest.sessionId,artifactIds:[newest.sessionId]};
+	    });
   }).catch(function(err){
     var newest=artifactQueueSessionById(sd.sessionId,{payload:sd})||sd;
     var retryable=!(err&&err.retryable===false);
@@ -8540,12 +8848,12 @@ function artifactQueueCreateReviewJob(job){
   var model='gpt-4o-mini';
   try{model=aiCoachTaskModel('post_review',aiCoachBuildContext())||model;}catch(e){}
   var prompt=postWorkoutReviewPrompt(sd,base,facts);
-  return aiCoachOpenAICall({
+  return aiCoachOpenAIBackgroundCall({
     model:model,
     response_format:{type:'json_object'},
     messages:[{role:'system',content:'Objective strength coach. Use facts first. JSON only.'},{role:'user',content:prompt}],
     max_completion_tokens:700
-  },26000).then(function(r){
+  },26000,{task:'post_workout_review',maxWaitMs:45000}).then(function(r){
     var txt=((((r||{}).choices||[])[0]||{}).message||{}).content||'';
     var parsed=aiCoachExtractJson(txt);
     if(!parsed)throw new Error('post_review_parse_failed');
@@ -8574,13 +8882,15 @@ function artifactQueueSyncReviewJob(job){
   if(!review)throw {retryable:true,code:'review_missing',message:'review_missing'};
   review.syncState='sync_pending';
   postWorkoutReviewSave(review);
-  var artifact={
-    artifactType:'post_workout_review',
-    artifactId:String(review.reviewId||sid),
-    revision:Math.max(1,parseInt(review.revision||1,10)||1),
-    data:review
-  };
-  return artifactQueueSyncArtifacts([artifact],{timeoutMs:40000}).then(function(sync){
+	  var artifact={
+	    artifactType:'post_workout_review',
+	    artifactId:String(review.reviewId||sid),
+	    revision:Math.max(1,parseInt(review.revision||1,10)||1),
+	    data:review
+	  };
+	  return wtTrainerCloudCacheSaveArtifacts([artifact],{sourceSessionId:sid,timeoutMs:10000}).then(function(){
+	    return artifactQueueSyncArtifacts([artifact],{timeoutMs:40000});
+	  }).then(function(sync){
     var row=artifactQueueFindSyncResult(sync.results,'post_workout_review',artifact.artifactId,'');
     if(!row||String(row.status||'')!=='ok'){
       throw {
@@ -8592,9 +8902,12 @@ function artifactQueueSyncReviewJob(job){
     var newest=postWorkoutReviewLoad(sid)||review;
     newest.syncState='synced';
     newest.updatedAt=wtNowIso();
-    postWorkoutReviewSave(newest);
-    wtLogEvent('post_review_sync_success',{sessionId:sid,reviewId:newest.reviewId});
-    return {reviewId:newest.reviewId,artifactIds:[newest.reviewId]};
+	    postWorkoutReviewSave(newest);
+	    wtLogEvent('post_review_sync_success',{sessionId:sid,reviewId:newest.reviewId});
+	    var syncedArtifact=Object.assign({},artifact,{data:newest,revision:Math.max(1,parseInt(newest.revision||1,10)||1)});
+	    return wtTrainerCloudCacheSaveArtifacts([syncedArtifact],{sourceSessionId:sid,timeoutMs:10000}).then(function(){
+	      return {reviewId:newest.reviewId,artifactIds:[newest.reviewId]};
+	    });
   }).catch(function(err){
     var newest=postWorkoutReviewLoad(sid)||review;
     var retryable=!(err&&err.retryable===false);
@@ -8651,13 +8964,18 @@ function artifactQueueSyncCoachStateJob(job){
   state.updatedAt=wtNowIso();
   state.lastUpdatedAt=state.updatedAt;
   state=coachStateSave(state);
-  var artifact={
-    artifactType:'coach_state',
-    artifactId:String(state.coachStateId||''),
-    revision:Math.max(1,parseInt(state.coachStateRevision||1,10)||1),
-    data:state
-  };
-  return artifactQueueSyncArtifacts([artifact],{timeoutMs:45000}).then(function(sync){
+	  var artifact={
+	    artifactType:'coach_state',
+	    artifactId:String(state.coachStateId||''),
+	    revision:Math.max(1,parseInt(state.coachStateRevision||1,10)||1),
+	    data:state
+	  };
+	  var equipmentProfile=coachEquipmentProfileLoad();
+	  var cloudArtifacts=[artifact];
+	  try{cloudArtifacts.push(wtTrainerCloudCacheEquipmentArtifact(equipmentProfile));}catch(e){}
+	  return wtTrainerCloudCacheSaveArtifacts(cloudArtifacts,{sourceSessionId:sid||state.lastCompletedSessionId||'',timeoutMs:10000}).then(function(){
+	    return artifactQueueSyncArtifacts([artifact],{timeoutMs:45000});
+	  }).then(function(sync){
     var row=artifactQueueFindSyncResult(sync.results,'coach_state',artifact.artifactId,'');
     if(!row||String(row.status||'')!=='ok'){
       throw {
@@ -8670,9 +8988,12 @@ function artifactQueueSyncCoachStateJob(job){
     newest.syncState='synced';
     newest.updatedAt=wtNowIso();
     newest.lastUpdatedAt=newest.updatedAt;
-    newest=coachStateSave(newest);
-    wtLogEvent('coach_state_sync_success',{sessionId:newest.lastCompletedSessionId,coachStateRevision:newest.coachStateRevision});
-    return {coachStateRevision:newest.coachStateRevision,artifactIds:[newest.coachStateId]};
+	    newest=coachStateSave(newest);
+	    wtLogEvent('coach_state_sync_success',{sessionId:newest.lastCompletedSessionId,coachStateRevision:newest.coachStateRevision});
+	    var syncedArtifact=Object.assign({},artifact,{data:newest,revision:Math.max(1,parseInt(newest.coachStateRevision||1,10)||1)});
+	    return wtTrainerCloudCacheSaveArtifacts([syncedArtifact],{sourceSessionId:sid||newest.lastCompletedSessionId||'',timeoutMs:10000}).then(function(){
+	      return {coachStateRevision:newest.coachStateRevision,artifactIds:[newest.coachStateId]};
+	    });
   }).catch(function(err){
     var newest=coachStateLoad();
     var retryable=!(err&&err.retryable===false);
@@ -9273,19 +9594,20 @@ function artifactQueueSyncGeneratedPlanJob(job){
         });
         return;
       }
-      var t=String(a.artifactType||'').toLowerCase();
-      if(t==='generated_plan'){
-        generatedPlanMarkSyncState(a.artifactId,'synced');
-      }else if(t==='session'){
-        artifactQueueSetSessionSyncState(a.artifactId,'synced','');
-      }else if(t==='post_workout_review'){
-        artifactQueueSetReviewSyncState(String((a.data&&a.data.sessionId)||sid||''),'synced','');
-      }else if(t==='coach_state'){
-        artifactQueueSetCoachStateSyncState('synced','');
-      }else if(t==='equipment_profile'){
-        artifactQueueSetEquipmentProfileSyncState('synced','');
-      }
-    });
+	      var t=String(a.artifactType||'').toLowerCase();
+	      if(t==='generated_plan'){
+	        generatedPlanMarkSyncState(a.artifactId,'synced');
+	        a.data=generatedPlanFindById(a.artifactId)||a.data;
+	      }else if(t==='session'){
+	        a.data=artifactQueueSetSessionSyncState(a.artifactId,'synced','')||a.data;
+	      }else if(t==='post_workout_review'){
+	        a.data=artifactQueueSetReviewSyncState(String((a.data&&a.data.sessionId)||sid||''),'synced','')||a.data;
+	      }else if(t==='coach_state'){
+	        a.data=artifactQueueSetCoachStateSyncState('synced','')||a.data;
+	      }else if(t==='equipment_profile'){
+	        a.data=artifactQueueSetEquipmentProfileSyncState('synced','')||a.data;
+	      }
+	    });
     if(failures.length){
       failures.forEach(function(f){
         var t=String((f.artifact&&f.artifact.artifactType)||'').toLowerCase();
@@ -9309,15 +9631,16 @@ function artifactQueueSyncGeneratedPlanJob(job){
       throw {retryable:hasRetryable,code:'generated_plan_sync_partial_failure',message:msg};
     }
     var newest=generatedPlanFindById(plan.planId)||plan;
-    wtLogEvent('generated_plan_sync_success',{
-      sessionId:sid,
-      sourceSessionId:sid,
-      planId:newest.planId,
-      targetType:generatedPlanTypeFromSlot(newest.planSlot),
-      syncedArtifacts:artifacts.length
-    });
-    return {planId:newest.planId,artifactIds:artifacts.map(function(a){return String(a.artifactId||'');}).filter(Boolean)};
-  }).catch(function(err){
+	    wtLogEvent('generated_plan_sync_success',{
+	      sessionId:sid,
+	      sourceSessionId:sid,
+	      planId:newest.planId,
+	      targetType:generatedPlanTypeFromSlot(newest.planSlot),
+	      syncedArtifacts:artifacts.length
+	    });
+	    var out={planId:newest.planId,artifactIds:artifacts.map(function(a){return String(a.artifactId||'');}).filter(Boolean)};
+	    return wtTrainerCloudCacheSaveArtifacts(artifacts,{sourceSessionId:sid,timeoutMs:10000}).then(function(){return out;});
+	  }).catch(function(err){
     var retryable=!(err&&err.retryable===false);
     var failState=retryable?'sync_failed_retryable':'sync_failed_final';
     generatedPlanMarkSyncState(plan.planId,failState,String(err&&err.message||err||'generated_plan_sync_failed'));
@@ -10118,10 +10441,113 @@ var hotelEx=[
   {name:'SINGLE-LEG GLUTE BRIDGES',sets:2,reps:'15/15',rc:[15,15],rest:45,
    form:'1 sec up \u2022 1 sec squeeze \u2022 Full extension',watch:null,tweak:null,isPlank:false,
    seq:[{t:'r'},{t:'v',l:'Up',n:550},{t:'b',bc:1,n:550},{t:'v',l:'Squeeze',n:220},{t:'b',bc:1,n:220},{t:'v',l:'Down',n:300}]},
-  {name:'SIDE PLANKS',sets:2,reps:'60 sec/side',rc:[60,60],rest:30,
-   form:'Hips high \u2022 Straight body \u2022 Top arm + leg raised',
-   watch:'Start LEFT side first',tweak:'Left side first',isPlank:true,seq:null}
-];
+	  {name:'SIDE PLANKS',sets:2,reps:'60 sec/side',rc:[60,60],rest:30,
+	   form:'Hips high \u2022 Straight body \u2022 Top arm + leg raised',
+	   watch:'Start LEFT side first',tweak:'Left side first',isPlank:true,seq:null}
+	];
+
+function workoutExerciseNameComparable(name){
+  return String(name||'')
+    .toUpperCase()
+    .replace(/[\u2010-\u2015\u2212]/g,'-')
+    .replace(/[^A-Z0-9]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function workoutExerciseNameToken(raw){
+  return String(raw||'')
+    .toLowerCase()
+    .replace(/\*\*/g,' ')
+    .replace(/[“”]/g,'"')
+    .replace(/[‘’]/g,"'")
+    .replace(/[\u2010-\u2015\u2212]/g,'-')
+    .replace(/&/g,' and ')
+    .replace(/\b(new target|progression|upgrade|personal record|workout|exercise|movement|slot)\b/g,' ')
+    .replace(/\b(pr|pb)\b/g,' ')
+    .replace(/[^a-z0-9]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function workoutFindBuiltinExerciseInList(name,list){
+  var want=workoutExerciseNameComparable(name);
+  if(!want)return null;
+  for(var i=0;i<(list||[]).length;i++){
+    var ex=list[i];
+    if(workoutExerciseNameComparable(ex&&ex.name)===want)return ex;
+  }
+  return null;
+}
+function workoutFindBuiltinExerciseByName(name,type){
+  var primary=String(type||'home').toLowerCase()==='hotel'?hotelEx:homeEx;
+  var secondary=String(type||'home').toLowerCase()==='hotel'?homeEx:hotelEx;
+  return workoutFindBuiltinExerciseInList(name,primary)||workoutFindBuiltinExerciseInList(name,secondary);
+}
+function workoutCanonicalPickName(candidates,type){
+  var primary=String(type||'home').toLowerCase()==='hotel'?hotelEx:homeEx;
+  var secondary=String(type||'home').toLowerCase()==='hotel'?homeEx:hotelEx;
+  var pools=[primary,secondary];
+  for(var pi=0;pi<pools.length;pi++){
+    for(var ci=0;ci<(candidates||[]).length;ci++){
+      var found=workoutFindBuiltinExerciseInList(candidates[ci],pools[pi]);
+      if(found)return found.name;
+    }
+  }
+  return (candidates&&candidates.length)?String(candidates[0]||'').toUpperCase().trim():'';
+}
+function workoutCanonicalExerciseMatch(raw,type){
+  var original=String(raw||'').replace(/\*\*/g,'').trim();
+  var cleaned=original
+    .replace(/\b(new target|progression|upgrade|personal record)\b/gi,' ')
+    .replace(/\b(pr|pb)\b/gi,' ')
+    .replace(/^\d+[\).\s-]*/,'')
+    .trim();
+  var direct=workoutFindBuiltinExerciseByName(cleaned,type);
+  if(direct){
+    return {
+      name:direct.name,
+      builtin:direct,
+      matched:true,
+      canonicalized:workoutExerciseNameComparable(cleaned)!==workoutExerciseNameComparable(direct.name),
+      sourceName:original
+    };
+  }
+  var norm=workoutExerciseNameToken(cleaned);
+  var rules=[
+    {names:['AUSTRALIAN PULL-UPS'],tokens:['australian pull','aussie pull','aussie row','inverted row','bodyweight row','body weight row','table row','low row','horizontal row','supine row']},
+    {names:['SUPINATED PULL-UPS','PULL-UPS'],tokens:['supinated pull','supinated pullup','chin up','chinup','chin ups','underhand pull','under hand pull']},
+    {names:['PULL-UPS'],tokens:['pull-up ladder','pull up ladder','pull ups','pull up','pull-ups','pull-up','pullups','pullup','strict pull']},
+    {names:['CLOSE-GRIP PUSH-UPS'],tokens:['close-grip push','close grip push','close grip pu','narrow push','diamond push','tricep push','triceps push','push ups','push up','push-ups','push-up','pushups','pushup','press ups','press up','pike push','archer push']},
+    {names:['DIPS'],tokens:['tricep dip','triceps dip','bench dip','chair dip','dip']},
+    {names:['LEG RAISES'],tokens:['leg raise','leg raises','hanging knee','hanging leg','knee raise','knee raises','reverse crunch']},
+    {names:['SINGLE-LEG GLUTE BRIDGES'],tokens:['single-leg glute','single leg glute','single-leg bridge','single leg bridge','sl glute','glute bridge','glute bridges','hip bridge','hip thrust']},
+    {names:['SIDE PLANKS'],tokens:['side plank','side planks','side plank hold','side-plank']},
+    {names:['HOLLOW BODY HOLD'],tokens:['hollow body','hollow hold']},
+    {names:['HIIT'],tokens:['hiit','interval']},
+    {names:['WALK'],tokens:['walk']}
+  ];
+  for(var ri=0;ri<rules.length;ri++){
+    for(var ti=0;ti<rules[ri].tokens.length;ti++){
+      var tok=workoutExerciseNameToken(rules[ri].tokens[ti]);
+      if(tok&&norm.indexOf(tok)>=0){
+        var picked=workoutCanonicalPickName(rules[ri].names,type);
+        var builtin=workoutFindBuiltinExerciseByName(picked,type);
+        return {
+          name:picked||cleaned.toUpperCase(),
+          builtin:builtin,
+          matched:!!builtin,
+          canonicalized:workoutExerciseNameComparable(cleaned)!==workoutExerciseNameComparable(picked),
+          sourceName:original
+        };
+      }
+    }
+  }
+  var fallback=cleaned
+    .replace(/^[^A-Za-z0-9]+/,'')
+    .replace(/\s+/g,' ')
+    .trim()
+    .toUpperCase();
+  return {name:fallback,builtin:null,matched:false,canonicalized:false,sourceName:original};
+}
 
 // ─── SESSION STATE ────────────────────────────────────────────────
 var exs=[],wType='home',logs=[],curEx=0,curSet=0,phase='idle',_betweenTok=0;
@@ -10717,34 +11143,7 @@ function previewParsePaste(){
   var msg=document.getElementById('previewPasteMsg');
   var text=(inp?inp.value:'').trim();
   if(!text){if(msg){msg.textContent='Paste something first';msg.style.color='var(--orange)';}return;}
-
-  // ── Name normalisation: token list, first match wins ─────────────
-  var NAME_RULES=[
-    ['SUPINATED PULL-UPS',       ['supinated pull','supinated pullup']],
-    ['PULL-UPS',                 ['pull-up ladder','pull up ladder','pull-ups','pull-up','pullups','pullup']],
-    ['CLOSE-GRIP PUSH-UPS',      ['close-grip push','close grip push','close grip pu']],
-    ['DIAMOND PUSH-UPS',         ['diamond push']],
-    ['PIKE PUSH-UPS',            ['pike push']],
-    ['ARCHER PUSH-UPS',          ['archer push']],
-    ['PUSH-UPS',                 ['push-up','push-ups','pushup','pushups']],
-    ['DIPS',                     ['tricep dip','triceps dip','dip']],
-    ['SINGLE-LEG GLUTE BRIDGES', ['single-leg glute','single leg glute','sl glute','glute bridge']],
-    ['LEG RAISES',               ['leg raise','hanging knee','hanging leg']],
-    ['HOLLOW BODY HOLD',         ['hollow body','hollow hold']],
-    ['SIDE PLANKS',              ['side plank']],
-    ['AUSTRALIAN PULL-UPS',      ['australian pull','aussie pull']],
-    ['HIIT',                     ['hiit','interval']],
-    ['WALK',                     ['walk']],
-  ];
-  function normaliseName(raw){
-    var clean=raw.replace(/\b(progression|new target|upgrade|pr\b|pb\b)\b/gi,'').trim();
-    var lower=clean.toLowerCase().replace(/\s+/g,' ').trim();
-    for(var ri=0;ri<NAME_RULES.length;ri++){
-      var tokens=NAME_RULES[ri][1];
-      for(var ti=0;ti<tokens.length;ti++){if(lower.indexOf(tokens[ti])>=0)return NAME_RULES[ri][0];}
-    }
-    return clean.toUpperCase();
-  }
+  var canonicalizedNames=0,voiceMatchedNames=0;
 
   // ── Strip leading emoji/number prefix ────────────────────────────
   function stripLeading(s){
@@ -10901,7 +11300,10 @@ function previewParsePaste(){
       if(nextNums)repsPart=repsPart+' '+nextNums;
     }
 
-    var internalName=normaliseName(namePart);
+    var nameMatch=workoutCanonicalExerciseMatch(namePart,wType);
+    var internalName=nameMatch.name;
+    if(nameMatch.canonicalized)canonicalizedNames++;
+    if(nameMatch.builtin&&nameMatch.builtin.seq)voiceMatchedNames++;
     var isPlank=internalName.indexOf('PLANK')>=0;
     var rc;
 
@@ -10920,13 +11322,12 @@ function previewParsePaste(){
     var parsedTweak=parseTweak(block.lines);
     var parsedGoal=parseGoal(block.lines);
 
-    var defaults=wType==='home'?homeEx:hotelEx;
-    var existing=null;
-    for(var i=0;i<defaults.length;i++){if(defaults[i].name===internalName){existing=defaults[i];break;}}
+    var existing=nameMatch.builtin||workoutFindBuiltinExerciseByName(internalName,wType);
     var ex=existing?JSON.parse(JSON.stringify(existing)):{
       name:internalName,sets:rc.length,reps:rc.join('/'),rc:rc,
       rest:rest||60,form:'',tweak:null,watch:null,isPlank:isPlank,seq:null
     };
+    if(nameMatch.canonicalized)ex.importedName=namePart;
     ex.rc=rc; ex.sets=rc.length;
     ex.reps=ex.isPlank?(rc[0]||60)+' sec/side':rc.join('/');
     if(rest)ex.rest=rest;
@@ -10941,11 +11342,22 @@ function previewParsePaste(){
     return;
   }
 
+  try{parsed=applySeqDefaults(parsed);}catch(e){}
+  parsed.forEach(function(ex){
+    if(ex&&ex.seq){
+      try{ex.seq=sanitizeSequenceForTiming(enforceCueTiming(ex.seq));}catch(e){}
+    }
+  });
+
   exs=parsed;
   _previewSkipped=exs.map(function(){return false;});
   renderPreview();
   var msg2=document.getElementById('previewPasteMsg');
-  if(msg2){msg2.textContent='\u2713 '+parsed.length+' exercise'+(parsed.length>1?'s':'')+' loaded — review below then start';msg2.style.color='var(--green)';}
+  if(msg2){
+    var extra=voiceMatchedNames?(' · '+voiceMatchedNames+' matched to voice cues'):(canonicalizedNames?(' · '+canonicalizedNames+' names matched'):'');
+    msg2.textContent='\u2713 '+parsed.length+' exercise'+(parsed.length>1?'s':'')+' loaded'+extra+' — review below then start';
+    msg2.style.color='var(--green)';
+  }
 }
 
 function renderPreview(){
@@ -12146,6 +12558,80 @@ function aiCoachOpenAICall(payload,timeoutMs){
     );
     if(shouldFallback) return runWithModel('gpt-5.5');
     throw err;
+	  });
+	}
+function aiCoachChatDataText(data){
+  try{return String(((((data||{}).choices||[])[0]||{}).message||{}).content||'');}
+  catch(e){return '';}
+}
+function aiCoachOpenAIBackgroundCall(payload,timeoutMs,opts){
+  var options=opts&&typeof opts==='object'?opts:{};
+  var task=String(options.task||'background_ai');
+  var body=Object.assign({},payload||{});
+  var requestedTimeout=parseInt(timeoutMs,10)||90000;
+  if(!wtAiProxyConfigured()||!navigator.onLine||options.forceSync){
+    return aiCoachOpenAICall(body,requestedTimeout);
+  }
+  var started=Date.now();
+  var model=String(body.model||'');
+  var maxWait=Math.min(180000,Math.max(30000,parseInt(options.maxWaitMs,10)||0,requestedTimeout));
+  var deadline=Date.now()+maxWait;
+  var firstDelay=Math.max(900,parseInt(options.initialPollDelayMs,10)||1300);
+  function routeErr(res,phase){
+    return new Error(String((res&&(res.message||res.errorCode))||('ai_proxy_background_'+phase+'_failed')));
+  }
+  function responseStatus(res){
+    return String((res&&(res.responseStatus||((res.data||{}).responseStatus)))||'').toLowerCase();
+  }
+  function responseId(res){
+    return String((res&&(res.responseId||((res.data||{}).responseId)))||'').trim();
+  }
+  function completedDataOrNull(res,phase){
+    if(!res)throw new Error('ai_proxy_background_'+phase+'_empty');
+    if(res.status!=='ok')throw routeErr(res,phase);
+    var st=responseStatus(res);
+    var data=res.data||{};
+    var txt=aiCoachChatDataText(data);
+    if(st==='completed'||txt)return data;
+    if(st==='failed'||st==='cancelled'||st==='incomplete')throw routeErr(res,phase);
+    return null;
+  }
+  function poll(id,attempt){
+    if(Date.now()>=deadline)throw new Error('ai_proxy_background_timeout');
+    var waitMs=Math.min(5200,Math.round(firstDelay*Math.pow(1.28,Math.max(0,attempt||0))));
+    return new Promise(function(res){setTimeout(res,waitMs);}).then(function(){
+      return wtAiProxyPost('/v1/background/poll',{responseId:id},Math.min(25000,Math.max(12000,waitMs+9000))).then(function(res){
+        var done=completedDataOrNull(res,'poll');
+        if(done)return done;
+        return poll(id,(attempt||0)+1);
+      });
+    });
+  }
+  wtLogEvent('ai_proxy_background_requested',{task:task,model:model,timeoutMs:requestedTimeout,maxWaitMs:maxWait});
+  return wtAiProxyPost('/v1/background/start',{payload:body},Math.min(30000,Math.max(12000,requestedTimeout))).then(function(res){
+    var done=completedDataOrNull(res,'start');
+    if(done)return done;
+    var id=responseId(res);
+    if(!id)throw new Error('ai_proxy_background_missing_response_id');
+    wtLogEvent('ai_proxy_background_started',{task:task,model:model,responseId:id});
+    return poll(id,0);
+  }).then(function(j){
+    appDoctorPatchState('ai',{
+      lastRoute:'aiProxyBackgroundResponses',
+      lastModel:model,
+      lastStatus:'ok',
+      lastDurationMs:Date.now()-started,
+      lastError:'',
+      lastFinishReason:String(((((j||{}).choices||[])[0]||{}).finish_reason)||'completed'),
+      lastRawLength:aiCoachChatDataText(j).length
+    });
+    aiUsageTrackFromApi(j,model);
+    wtLogEvent('ai_proxy_background_success',{task:task,model:model,durationMs:Date.now()-started});
+    return j;
+  }).catch(function(err){
+    appLogEvent('warn','ai_proxy_background_fallback','Background Responses failed; falling back to current AI route.',{task:task,model:model,message:String(err&&err.message||err||'')});
+    wtLogEvent('ai_proxy_background_fallback',{task:task,model:model,durationMs:Date.now()-started,errorCode:String(err&&err.message||err||'background_failed')});
+    return aiCoachOpenAICall(body,requestedTimeout);
   });
 }
 function aiCoachFriendlyApiError(err){
@@ -12659,7 +13145,8 @@ function aiCoachValidatePlan(parsed,type,ctx,cached){
     return true;
   }
   var validExercises=parsed.exercises.map(function(ex){
-    var nm=String(ex&&ex.name||'').toUpperCase().trim();
+    var nameMatch=workoutCanonicalExerciseMatch(ex&&ex.name,type);
+    var nm=String((nameMatch&&nameMatch.name)||(ex&&ex.name)||'').toUpperCase().trim();
     if(!allowed[nm])return null;
     if(!equipmentAllowed(nm))return null;
     var reps=Array.isArray(ex.repTargets)?ex.repTargets:(typeof ex.repTargets==='string'?ex.repTargets.split('/'):[]);
@@ -12685,6 +13172,23 @@ function aiCoachValidatePlan(parsed,type,ctx,cached){
     return {ok:false,message:'too_few_valid_exercises',plan:aiCoachBuildFallbackPlan(type,ctx,cached)};
   }
   parsed.exercises=validExercises;
+  if(parsed.seqOverrides&&typeof parsed.seqOverrides==='object'){
+    var validNameMap={};
+    validExercises.forEach(function(ex){if(ex&&ex.name)validNameMap[String(ex.name||'').toUpperCase()]=true;});
+    var seqClean={};
+    Object.keys(parsed.seqOverrides).forEach(function(k){
+      var seqMatch=workoutCanonicalExerciseMatch(k,type);
+      var key=String((seqMatch&&seqMatch.name)||k||'').toUpperCase().trim();
+      if(!validNameMap[key])return;
+      var stepMap=parsed.seqOverrides[k];
+      if(!stepMap||typeof stepMap!=='object'||Array.isArray(stepMap))return;
+      seqClean[key]=seqClean[key]||{};
+      Object.keys(stepMap).forEach(function(stepName){
+        seqClean[key][stepName]=stepMap[stepName];
+      });
+    });
+    parsed.seqOverrides=Object.keys(seqClean).length?seqClean:null;
+  }
   parsed.nonNegotiables=Array.isArray(parsed.nonNegotiables)?parsed.nonNegotiables.slice(0,3):[];
   parsed.changeLog=Array.isArray(parsed.changeLog)?parsed.changeLog.slice(0,4):[];
   parsed.whatStayedSame=Array.isArray(parsed.whatStayedSame)?parsed.whatStayedSame.slice(0,4):[];
@@ -13041,11 +13545,11 @@ function aiCoachGenerate(type,onDone,opts){
   function runModel(model,maxTokens,timeoutMs,promptText){
     wtLogEvent('generation_model_call_started',Object.assign({},genMetaBase,{model:model}));
     var start=Date.now();
-    return aiCoachOpenAICall({
+    return aiCoachOpenAIBackgroundCall({
       model:model,
       messages:[{role:'user',content:(promptText||prompt)}],
       max_tokens:maxTokens
-    },timeoutMs||60000).then(function(r){
+    },timeoutMs||60000,{task:'generated_plan_'+type,maxWaitMs:Math.min(150000,Math.max(70000,(timeoutMs||60000)+30000))}).then(function(r){
       wtLogEvent('generation_model_call_finished',Object.assign({},genMetaBase,{model:model,durationMs:Date.now()-start}));
       return r;
     }).catch(function(err){
@@ -13573,31 +14077,8 @@ function coachBridgeDetectType(text,selectedType){
   return {detectedType:detected,confidence:confidence,reason:reason,homeScore:homeScore,hotelScore:hotelScore,selectedType:chosen};
 }
 function coachBridgeCanonName(raw,type){
-  var pool=(type==='hotel'?hotelEx:homeEx), up=String(raw||'').toUpperCase();
-  var aliases=[
-    ['AUSTRALIAN PULL-UPS',['AUSTRALIAN','AUSSIE','ROW']],
-    ['PULL-UPS',['PULL-UP','PULL UP','PULLUPS']],
-    ['SUPINATED PULL-UPS',['SUPINATED','CHIN-UP','CHIN UP']],
-    ['CLOSE-GRIP PUSH-UPS',['CLOSE-GRIP','CLOSE GRIP']],
-    ['DIAMOND PUSH-UPS',['DIAMOND']],
-    ['ARCHER PUSH-UPS',['ARCHER']],
-    ['PIKE PUSH-UPS',['PIKE']],
-    ['PUSH-UPS',['PUSH-UP','PUSH UP','PUSHUPS']],
-    ['DIPS',['DIP']],
-    ['LEG RAISES',['LEG RAISE','KNEE RAISE','HANGING']],
-    ['HOLLOW BODY HOLD',['HOLLOW']],
-    ['SINGLE-LEG GLUTE BRIDGES',['SINGLE-LEG GLUTE','SINGLE LEG GLUTE','GLUTE BRIDGE']],
-    ['SIDE PLANKS',['SIDE PLANK']]
-  ];
-  for(var i=0;i<pool.length;i++){
-    if(up.indexOf(String(pool[i].name||'').toUpperCase())>=0)return pool[i].name;
-  }
-  for(var a=0;a<aliases.length;a++){
-    for(var j=0;j<aliases[a][1].length;j++){
-      if(up.indexOf(aliases[a][1][j])>=0)return aliases[a][0];
-    }
-  }
-  return up.replace(/^\d+[\).\s-]*/,'').trim();
+  var match=workoutCanonicalExerciseMatch(raw,type);
+  return String((match&&match.name)||raw||'').toUpperCase().replace(/^\d+[\).\s-]*/,'').trim();
 }
 function coachBridgeAttr(s){
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -15605,6 +16086,8 @@ function aiCoachLoadAndStart(){
 
   // Normalise a returned name ('Pull-Ups') to our internal key ('PULL-UPS')
   function canonName(n){
+    var match=workoutCanonicalExerciseMatch(n,_aiCoachCurrentType);
+    if(match&&match.name&&builtinDefs[match.name])return match.name;
     var up=n.toUpperCase().trim();
     // direct hit
     if(builtinDefs[up])return up;
@@ -16154,20 +16637,35 @@ function trainerRetryResolveStateCandidateBySessionId(sessionId,forcedTarget){
   })||null;
   if(cached)return cached;
   return trainerRetrySeedSessionFromHints(sid,target,'backend_sessions_tab');
-}
-function trainerRetryFetchRemoteCandidates(planSlot){
-  if(!navigator.onLine||!CLOUD_URL)return Promise.resolve([]);
-  var slot=String(planSlot||'HOME_NEXT').toUpperCase()==='HOTEL_NEXT'?'HOTEL_NEXT':'HOME_NEXT';
-  var forcedTarget=generatedPlanTargetTypeFromSlot(slot);
-  function fromRecent(){
-    return wtBackendPost({type:'getRecentWorkouts',limit:20,timeoutMs:26000,_nonce:Date.now()}).then(function(r){
-      var data=(r&&r.data&&typeof r.data==='object')?r.data:r||{};
-      var rows=Array.isArray(data.workouts)?data.workouts:(Array.isArray(r&&r.workouts)?r.workouts:[]);
+	}
+	function trainerRetryFetchRemoteCandidates(planSlot){
+	  if(!navigator.onLine||(!CLOUD_URL&&!wtTrainerCloudCacheAvailable()))return Promise.resolve([]);
+	  var slot=String(planSlot||'HOME_NEXT').toUpperCase()==='HOTEL_NEXT'?'HOTEL_NEXT':'HOME_NEXT';
+	  var forcedTarget=generatedPlanTargetTypeFromSlot(slot);
+	  function fromCloudState(){
+	    if(!wtTrainerCloudCacheAvailable())return Promise.resolve([]);
+	    return wtTrainerCloudCacheLoad({planSlot:slot,timeoutMs:10000}).then(function(data){
+	      var rows=[];
+	      if(data&&data.latestCompletedSession)rows.push({row:data.latestCompletedSession,source:'cloudflare_d1'});
+	      if(data&&data.latestSession)rows.push({row:data.latestSession,source:'cloudflare_d1'});
+	      return rows.map(function(item){
+	        var normalized=trainerRetryNormalizeSessionCandidate(item&&item.row?item.row:null,item&&item.source?item.source:'cloudflare_d1',forcedTarget);
+	        if(normalized)normalized._backendSourceTag='cloudflare_d1';
+	        return normalized;
+	      }).filter(Boolean);
+	    }).catch(function(){return [];});
+	  }
+	  function fromRecent(){
+	    if(!CLOUD_URL)return Promise.resolve([]);
+	    return wtBackendPost({type:'getRecentWorkouts',limit:20,timeoutMs:26000,_nonce:Date.now()}).then(function(r){
+	      var data=(r&&r.data&&typeof r.data==='object')?r.data:r||{};
+	      var rows=Array.isArray(data.workouts)?data.workouts:(Array.isArray(r&&r.workouts)?r.workouts:[]);
       return rows.map(function(x){return trainerRetryNormalizeSessionCandidate(x,'sheet',forcedTarget);}).filter(Boolean);
-    }).catch(function(){return [];});
-  }
-  function fromLatestState(){
-    return wtBackendPost({type:'getLatestTrainerState',requestId:'retry_source_'+Date.now().toString(36),timeoutMs:26000,_nonce:Date.now()}).then(function(r){
+	    }).catch(function(){return [];});
+	  }
+	  function fromLatestState(){
+	    if(!CLOUD_URL)return Promise.resolve([]);
+	    return wtBackendPost({type:'getLatestTrainerState',requestId:'retry_source_'+Date.now().toString(36),timeoutMs:26000,_nonce:Date.now()}).then(function(r){
       var data=(r&&r.data&&typeof r.data==='object')?r.data:{};
       var rows=[];
       if(data.latestCompletedSession)rows.push({row:data.latestCompletedSession,source:'backend_sessions_tab'});
@@ -16181,13 +16679,14 @@ function trainerRetryFetchRemoteCandidates(planSlot){
         return normalized;
       }).filter(Boolean);
     }).catch(function(){return [];});
-  }
-  return Promise.all([
-    trainerBootstrapCollectRemoteCandidates().catch(function(){return [];}),
-    fromRecent(),
-    fromLatestState()
-  ]).then(function(parts){
-    var all=(parts[0]||[]).concat(parts[1]||[]).concat(parts[2]||[]);
+	  }
+	  return Promise.all([
+	    fromCloudState(),
+	    trainerBootstrapCollectRemoteCandidates().catch(function(){return [];}),
+	    fromRecent(),
+	    fromLatestState()
+	  ]).then(function(parts){
+	    var all=(parts[0]||[]).concat(parts[1]||[]).concat(parts[2]||[]).concat(parts[3]||[]);
     var byKey={};
     all.forEach(function(row){
       if(!row)return;
@@ -17162,28 +17661,29 @@ function trainerDashboardParseRemoteJson(raw,fallback){
     return fallback;
   }catch(e){return fallback;}
 }
-function trainerDashboardMergeLatestTrainerState(state){
-  if(!state||typeof state!=='object')return false;
-  var changed=false;
-  try{
-    var ls=state.latestCompletedSession||(state.sessionsTab&&state.sessionsTab.latestCompletedSession)||state.latestSession;
-    if(ls&&ls.sessionId){
+	function trainerDashboardMergeLatestTrainerState(state){
+	  if(!state||typeof state!=='object')return false;
+	  var changed=false;
+	  var isCloudCache=String(state.source||'').toLowerCase()==='cloudflare_d1';
+	  try{
+	    var ls=state.latestCompletedSession||(state.sessionsTab&&state.sessionsTab.latestCompletedSession)||state.latestSession;
+	    if(ls&&ls.sessionId){
       var local=workoutFindLocal(ls.sessionId);
       var localRev=parseInt((local&&local.sessionRevision)||0,10)||0;
       var remoteRev=parseInt(ls.sessionRevision||0,10)||0;
       var localTs=artifactQueueToMs((local&&local.updatedAt)||0);
       var remoteTs=artifactQueueToMs(ls.updatedAt||ls.completedAt||0);
       if(!local||remoteRev>localRev||(remoteRev===localRev&&remoteTs>localTs)){
-        var merged=workoutNormalizeSession(Object.assign({},local||{},ls,{
-          sessionId:String(ls.sessionId||''),
-          sessionRevision:remoteRev||1,
-          workoutType:String(ls.workoutType||((local&&local.workoutType)||'')),
-          date:String(ls.date||((local&&local.date)||localDateStr())),
-          completedAt:String(ls.completedAt||ls.updatedAt||wtNowIso()),
-          updatedAt:String(ls.updatedAt||ls.completedAt||wtNowIso()),
-          syncState:'synced',
-          _hasSynced:true
-        }));
+	        var merged=workoutNormalizeSession(Object.assign({},local||{},ls,{
+	          sessionId:String(ls.sessionId||''),
+	          sessionRevision:remoteRev||1,
+	          workoutType:String(ls.workoutType||((local&&local.workoutType)||'')),
+	          date:String(ls.date||((local&&local.date)||localDateStr())),
+	          completedAt:String(ls.completedAt||ls.updatedAt||wtNowIso()),
+	          updatedAt:String(ls.updatedAt||ls.completedAt||wtNowIso()),
+	          syncState:String(ls.syncState||(isCloudCache?'cloud_cached':'synced')),
+	          _hasSynced:String(ls.syncState||(isCloudCache?'cloud_cached':'synced'))==='synced'
+	        }));
         recSession(merged);
         workoutUpsertCache(merged);
         changed=true;
@@ -17201,11 +17701,11 @@ function trainerDashboardMergeLatestTrainerState(state){
       review.sessionId=String(review.sessionId||rr.sessionId||rr.sourceSessionId||'');
       if(review.sessionId){
         var all=postWorkoutReviewsLoad();
-        var local=all[review.sessionId]||null;
-        if(trainerDashboardArtifactIsNewer(review,local)){
-          review.syncState='synced';
-          all[review.sessionId]=review;
-          postWorkoutReviewsSave(all);
+	        var local=all[review.sessionId]||null;
+	        if(trainerDashboardArtifactIsNewer(review,local)){
+	          review.syncState=String(review.syncState||(isCloudCache?'cloud_cached':'synced'));
+	          all[review.sessionId]=review;
+	          postWorkoutReviewsSave(all);
           changed=true;
         }
       }
@@ -17220,11 +17720,11 @@ function trainerDashboardMergeLatestTrainerState(state){
       var rrRev=parseInt(remoteState.coachStateRevision||0,10)||0;
       var lrRev=parseInt(localState.coachStateRevision||0,10)||0;
       var rt=artifactQueueToMs(remoteState.updatedAt||remoteState.lastUpdatedAt||0);
-      var lt=artifactQueueToMs(localState.updatedAt||localState.lastUpdatedAt||0);
-      if(rrRev>lrRev||(rrRev===lrRev&&rt>lt)){
-        remoteState.syncState='synced';
-        coachStateSave(remoteState);
-        changed=true;
+	      var lt=artifactQueueToMs(localState.updatedAt||localState.lastUpdatedAt||0);
+	      if(rrRev>lrRev||(rrRev===lrRev&&rt>lt)){
+	        remoteState.syncState=String(remoteState.syncState||(isCloudCache?'cloud_cached':'synced'));
+	        coachStateSave(remoteState);
+	        changed=true;
       }
     }
   }catch(e){}
@@ -17238,12 +17738,12 @@ function trainerDashboardMergeLatestTrainerState(state){
       if(!rp)return;
       var parsed=trainerDashboardParseRemoteJson(rp.payloadJson||'',null);
       var plan=(parsed&&typeof parsed==='object')?parsed:Object.assign({},rp);
-      plan.planId=String(plan.planId||rp.planId||'');
-      if(!plan.planId)return;
-      plan.planSlot=String(plan.planSlot||rp.planSlot||'').toUpperCase();
-      if(!plan.planSlot)return;
-      plan.syncState='synced';
-      var local=map[plan.planId]||null;
+	      plan.planId=String(plan.planId||rp.planId||'');
+	      if(!plan.planId)return;
+	      plan.planSlot=String(plan.planSlot||rp.planSlot||'').toUpperCase();
+	      if(!plan.planSlot)return;
+	      plan.syncState=String(plan.syncState||(isCloudCache?'cloud_cached':'synced'));
+	      var local=map[plan.planId]||null;
       if(!local||trainerDashboardArtifactIsNewer(plan,local)){
         map[plan.planId]=generatedPlanNormalizeArtifact(plan);
         planChanged=true;
@@ -17265,10 +17765,10 @@ function trainerDashboardMergeLatestTrainerState(state){
       var remoteProfile=(parsedEq&&typeof parsedEq==='object')?parsedEq:Object.assign({},eq);
       var localProfile=coachEquipmentProfileLoad();
       var rt=artifactQueueToMs(remoteProfile.updatedAt||0);
-      var lt=artifactQueueToMs(localProfile.updatedAt||0);
-      if(rt>lt){
-        remoteProfile.syncState='synced';
-        coachEquipmentProfileSave(remoteProfile);
+	      var lt=artifactQueueToMs(localProfile.updatedAt||0);
+	      if(rt>lt){
+	        remoteProfile.syncState=String(remoteProfile.syncState||(isCloudCache?'cloud_cached':'synced'));
+	        coachEquipmentProfileSave(remoteProfile);
         changed=true;
       }
     }
@@ -17578,19 +18078,36 @@ function trainerBootstrapCollectIdbCandidates(){
     }
     return out;
   }).catch(function(){return [];});
-}
-function trainerBootstrapCollectRemoteCandidates(){
-  if(!navigator.onLine||!CLOUD_URL)return Promise.resolve([]);
-  function recentReq(){
-    return wtBackendPost({type:'getRecentWorkouts',limit:20,timeoutMs:35000,_nonce:Date.now()})
-      .then(function(r){
+	}
+	function trainerBootstrapCollectRemoteCandidates(){
+	  if(!navigator.onLine||(!CLOUD_URL&&!wtTrainerCloudCacheAvailable()))return Promise.resolve([]);
+	  function cloudReq(){
+	    if(!wtTrainerCloudCacheAvailable())return Promise.resolve([]);
+	    return wtTrainerCloudCacheLoad({timeoutMs:10000}).then(function(data){
+	      var rows=[];
+	      if(data&&data.latestCompletedSession){
+	        var s0=trainerBootstrapNormalizeCandidate(data.latestCompletedSession,'cloudflare_d1');
+	        if(s0)rows.push(s0);
+	      }
+	      if(data&&data.latestSession){
+	        var s1=trainerBootstrapNormalizeCandidate(data.latestSession,'cloudflare_d1');
+	        if(s1)rows.push(s1);
+	      }
+	      return rows;
+	    }).catch(function(){return [];});
+	  }
+	  function recentReq(){
+	    if(!CLOUD_URL)return Promise.resolve([]);
+	    return wtBackendPost({type:'getRecentWorkouts',limit:20,timeoutMs:35000,_nonce:Date.now()})
+	      .then(function(r){
         var data=(r&&r.data)||r||{};
         var rows=(Array.isArray(data.workouts)?data.workouts:(Array.isArray(r&&r.workouts)?r.workouts:[]));
         return rows.map(function(s){return trainerBootstrapNormalizeCandidate(s,'sheet');}).filter(Boolean);
       }).catch(function(){return [];});
-  }
-  function latestReq(){
-    return wtBackendPost({type:'getLatestTrainerState',requestId:'bootstrap_'+Date.now().toString(36),timeoutMs:30000,_nonce:Date.now()})
+	  }
+	  function latestReq(){
+	    if(!CLOUD_URL)return Promise.resolve([]);
+	    return wtBackendPost({type:'getLatestTrainerState',requestId:'bootstrap_'+Date.now().toString(36),timeoutMs:30000,_nonce:Date.now()})
       .then(function(r){
         var rows=[];
         if(r&&r.status==='ok'&&r.data){
@@ -17610,10 +18127,10 @@ function trainerBootstrapCollectRemoteCandidates(){
         return rows;
       }).catch(function(){return [];});
   }
-  return Promise.all([recentReq(),latestReq()]).then(function(parts){
-    return (parts[0]||[]).concat(parts[1]||[]);
-  }).catch(function(){return [];});
-}
+	  return Promise.all([cloudReq(),recentReq(),latestReq()]).then(function(parts){
+	    return (parts[0]||[]).concat(parts[1]||[]).concat(parts[2]||[]);
+	  }).catch(function(){return [];});
+	}
 function trainerBootstrapPickLatest(candidates){
   var rows=(Array.isArray(candidates)?candidates:[]).filter(Boolean);
   if(!rows.length)return null;
@@ -21451,19 +21968,23 @@ function appDoctorWorkoutSaveAudit(){
     ]
   };
 }
-function appDoctorQueueAudit(){
-  var q=artifactQueueSummary();
-  var jobs=(artifactQueueLoadStore().jobs||[]);
-  var open=(q.pending||0)+(q.running||0)+(q.failed_retryable||0)+(q.failed_final||0);
-  var completed=(q.succeeded||0)+(q.cancelled||0);
-  return {
-    queue_store_key:ARTIFACT_QUEUE_KEY,
-    persistent_local_queue:true,
-    idb_mirror_enabled:typeof indexedDB!=='undefined',
-    resumable_after_reload:true,
-    open_count:open,
-    completed_count:completed,
-    pending_count:(q.pending||0)+(q.running||0)+(q.failed_retryable||0),
+	function appDoctorQueueAudit(){
+	  var q=artifactQueueSummary();
+	  var jobs=(artifactQueueLoadStore().jobs||[]);
+	  var open=(q.pending||0)+(q.running||0)+(q.failed_retryable||0)+(q.failed_final||0);
+	  var completed=(q.succeeded||0)+(q.cancelled||0);
+	  var cloudQueue={items:[]};
+	  try{cloudQueue=wtTrainerCloudCacheQueueLoad();}catch(e){cloudQueue={items:[]};}
+	  return {
+	    queue_store_key:ARTIFACT_QUEUE_KEY,
+	    cloud_cache_queue_store_key:WT_TRAINER_CLOUD_CACHE_QUEUE_KEY,
+	    persistent_local_queue:true,
+	    idb_mirror_enabled:typeof indexedDB!=='undefined',
+	    resumable_after_reload:true,
+	    open_count:open,
+	    cloud_cache_pending_count:(cloudQueue.items||[]).length,
+	    completed_count:completed,
+	    pending_count:(q.pending||0)+(q.running||0)+(q.failed_retryable||0),
     failed_retryable_count:(q.failed_retryable||0),
     failed_final_count:(q.failed_final||0),
     next_retry_time:appDoctorFmtTs(q.nextRetryAt||0),
@@ -21511,7 +22032,7 @@ function appDoctorSecurityAudit(){
     ai_proxy_browser_bearer_token_enabled:wtAiProxyBearerAuthEnabled(),
     ai_proxy_default_auth:'none_tokenless_optional_proxy_fallback',
     backend_keys_expected_in_script_properties:['OPENAI_API_KEY','GEMINI_API_KEY','ANTHROPIC_API_KEY','HEALTH_BRIDGE_TOKEN'],
-    ai_proxy_keys_expected_in_proxy_environment:['OPENAI_API_KEY'],
+    ai_proxy_keys_expected_in_proxy_environment:['OPENAI_API_KEY','GEMINI_API_KEY','ANTHROPIC_API_KEY'],
     note:'app_doctor_and_copy_report_redact_token_like_values'
   };
 }
@@ -22895,18 +23416,27 @@ function appDoctorRunPhase7HardTests(){
       return {pass:pass,errorCode:pass?'':'old_buttons_not_bound_to_active_artifacts',details:'opened='+opened.join(',')+' home='+(cache.home&&cache.home.planId||'')+' hotel='+(cache.hotel&&cache.hotel.planId||'')};
     });
   });
-  chain=chain.then(function(){
-    return runTest('21. ChatGPT import: pasted HOME plan parses',function(){
-      var txt='HOME\n1) Pull-ups 3x6 rest 90\nCue: long neck\nGoal: clean bar path\nRationale: progress vertical pull';
-      var det=coachBridgeDetectType(txt,'home');
-      var parsed=coachBridgeParseText(txt,det.detectedType);
-      var ex=(parsed&&parsed.plan&&parsed.plan.exercises)||[];
-      var pass=det.detectedType==='home'&&ex.length>0;
-      return {pass:pass,errorCode:pass?'':'home_import_parse_failed',details:'detected='+det.detectedType+' exercises='+ex.length};
-    });
-  });
-  chain=chain.then(function(){
-    return runTest('22. ChatGPT import: pasted HOTEL plan parses',function(){
+	  chain=chain.then(function(){
+	    return runTest('21. ChatGPT import: pasted HOME plan parses',function(){
+	      var txt='HOME\n1) Pull-ups 3x6 rest 90\nCue: long neck\nGoal: clean bar path\nRationale: progress vertical pull';
+	      var det=coachBridgeDetectType(txt,'home');
+	      var parsed=coachBridgeParseText(txt,det.detectedType);
+	      var ex=(parsed&&parsed.plan&&parsed.plan.exercises)||[];
+	      var pass=det.detectedType==='home'&&ex.length>0;
+	      return {pass:pass,errorCode:pass?'':'home_import_parse_failed',details:'detected='+det.detectedType+' exercises='+ex.length};
+	    });
+	  });
+	  chain=chain.then(function(){
+	    return runTest('21b. ChatGPT import: aliases use canonical voice names',function(){
+	      var txt='HOME\n1) Diamond Push-Ups 3x10 rest 60\n2) Triceps Dips 2x12 rest 85\n3) Hanging Knee Raises 2x15 rest 60\n4) Side Plank Hold 2x60 rest 30';
+	      var parsed=coachBridgeParseText(txt,'home');
+	      var names=((parsed&&parsed.plan&&parsed.plan.exercises)||[]).map(function(ex){return String(ex.name||'').toUpperCase();});
+	      var pass=names.indexOf('CLOSE-GRIP PUSH-UPS')>=0&&names.indexOf('DIPS')>=0&&names.indexOf('LEG RAISES')>=0&&names.indexOf('SIDE PLANKS')>=0&&names.indexOf('DIAMOND PUSH-UPS')<0;
+	      return {pass:pass,errorCode:pass?'':'chatgpt_import_aliases_not_canonical',details:'names='+names.join(',')};
+	    });
+	  });
+	  chain=chain.then(function(){
+	    return runTest('22. ChatGPT import: pasted HOTEL plan parses',function(){
       var txt='HOTEL\n1) Australian Pull-Ups 3x10 rest 60\nCue: keep torso rigid\nGoal: train pull without bar\nRationale: hotel-friendly pull exposure';
       var det=coachBridgeDetectType(txt,'home');
       var parsed=coachBridgeParseText(txt,det.detectedType);
@@ -31949,8 +32479,9 @@ function wtAppBootOnce(trigger){
   setTimeout(function(){wtStaticryptHardeningSweep('boot:'+String(trigger||'DOMContentLoaded')+':250ms');},250);
   setTimeout(function(){wtStaticryptHardeningSweep('boot:'+String(trigger||'DOMContentLoaded')+':1200ms');},1200);
   setTimeout(function(){wtStaticryptHardeningSweep('boot:'+String(trigger||'DOMContentLoaded')+':2600ms');},2600);
-  try{wtApplyPersonalConnectionDefaults();}catch(e){}
-  try{_wtStartupSyncPromise=wtFetchAppStatus().then(function(st){
+	  try{wtApplyPersonalConnectionDefaults();}catch(e){}
+	  try{wtTrainerCloudCacheBoot();}catch(e){}
+	  try{_wtStartupSyncPromise=wtFetchAppStatus().then(function(st){
     if(st&&st.min_frontend_version&&!wtVersionGte(WT_FRONTEND_VERSION,st.min_frontend_version)){
       wtShowPwaBanner('note','Backend may be newer than this app version. Local-only mode remains available.',[{label:'Later',fn:'wtHidePwaBanner()'}]);
     }
@@ -34741,46 +35272,62 @@ function nutFillFromScan(d,statusEl){
     setTimeout(function(){nutVerifyInBackground(d.name||'','',[],d,statusEl);},800);}
 }
 
-function _claudeMsiFetch(query, serving, ctxBrand){
-  // POST to GAS with image — falls back to text-only if image too large or unavailable
+function _claudeNutritionNormalize(result){
+  if(!result)return {source:'Claude',status:'error'};
+  if(result.message&&/(credit|billing)/i.test(String(result.message||'')))return {source:'Claude',status:'credits',message:result.message};
+  if(result.status!=='ok')return result;
+  return {
+    source:result.source||'Claude',
+    status:'ok',
+    calories:Math.round(parseFloat(result.calories)||0),
+    prot:Math.round((parseFloat(result.prot!==undefined?result.prot:result.protein)||0)*10)/10,
+    carb:Math.round((parseFloat(result.carb!==undefined?result.carb:result.carbs)||0)*10)/10,
+    fat:Math.round((parseFloat(result.fat)||0)*10)/10,
+    sat:(result.sat!==undefined&&result.sat!==null)?Math.round((parseFloat(result.sat)||0)*10)/10:Math.round((parseFloat(result.satFat)||0)*10)/10,
+    fib:(result.fib!==undefined&&result.fib!==null)?Math.round((parseFloat(result.fib)||0)*10)/10:Math.round((parseFloat(result.fibre)||0)*10)/10,
+    sodium:Math.round(parseFloat(result.sodium)||0)
+  };
+}
+function _claudeMsiFetchAppsScript(payload){
   return new Promise(function(resolve){
     var timeout=setTimeout(function(){
       resolve({source:'Claude',status:'timeout'});
     },25000);
-    var qParts=[
-      'Estimate nutrition for this specific item from a meal photo.',
-      'Target item: '+query+'.',
-      'Return realistic calories/macros for this item only (not whole plate).'
-    ];
-    if(ctxBrand)qParts.push('Brand/location context: '+ctxBrand+'.');
-    var payload={type:'callClaudeVision',query:qParts.join(' '),serving:serving};
-    // Attach image whenever practical (keep headroom under GAS payload limits).
-    if(_msiLastB64&&_msiLastB64.length<5.2*1024*1024){
-      payload.imageBase64=_msiLastB64;
-      payload.imageMime=_msiLastMime||'image/jpeg';
-    }
-	    wtBackendPost(payload)
-	    .then(function(result){
-      clearTimeout(timeout);
-      if(!result||result.status!=='ok'){
-        if(result&&result.message&&(result.message.indexOf('credit')>=0||result.message.indexOf('billing')>=0))
-          resolve({source:'Claude',status:'credits'});
-        else resolve(result||{source:'Claude',status:'error'});
-        return;
-      }
-      resolve({source:'Claude',status:'ok',
-        calories:result.calories,
-        prot:result.protein,
-        carb:result.carbs,
-        fat:result.fat,
-        sat:result.satFat,
-        fib:result.fibre||null});
-    })
-    .catch(function(){
-      clearTimeout(timeout);
-      resolve({source:'Claude',status:'error'});
-    });
+    wtBackendPost(payload)
+      .then(function(result){
+        clearTimeout(timeout);
+        resolve(_claudeNutritionNormalize(result));
+      })
+      .catch(function(){
+        clearTimeout(timeout);
+        resolve({source:'Claude',status:'error'});
+      });
   });
+}
+function _claudeMsiFetch(query, serving, ctxBrand){
+  var qParts=[
+    'Estimate nutrition for this specific item from a meal photo.',
+    'Target item: '+query+'.',
+    'Return realistic calories/macros for this item only (not whole plate).'
+  ];
+  if(ctxBrand)qParts.push('Brand/location context: '+ctxBrand+'.');
+  var payload={type:'callClaudeVision',query:qParts.join(' '),serving:serving};
+  // Attach image whenever practical (keep headroom under GAS payload limits).
+  if(_msiLastB64&&_msiLastB64.length<5.2*1024*1024){
+    payload.imageBase64=_msiLastB64;
+    payload.imageMime=_msiLastMime||'image/jpeg';
+  }
+  if(wtAiProxyConfigured()&&navigator.onLine){
+    var proxyPayload=Object.assign({},payload);
+    delete proxyPayload.type;
+    return wtAiProxyPost('/v1/claude-vision-nutrition',proxyPayload,28000).then(function(result){
+      return _claudeNutritionNormalize(result);
+    }).catch(function(err){
+      appLogEvent('warn','nutrition.ai_proxy_claude_vision_fallback','AI proxy Claude vision route failed; falling back to Apps Script Claude route.',{message:String(err&&err.message||err||'')});
+      return _claudeMsiFetchAppsScript(payload);
+    });
+  }
+  return _claudeMsiFetchAppsScript(payload);
 }
 
 function _officialMsiFetch(query, serving, ctxBrand, dbOnly, hints){
@@ -35122,8 +35669,7 @@ function _fetchAllSources(query, serving){
   return Promise.all(promises);
 }
 
-function _claudeFetch(query, serving){
-  // Route through GAS proxy to avoid CORS
+function _claudeFetchJsonp(query, serving){
   return new Promise(function(resolve){
     var cbName='_claudeCb_'+Date.now();
     var timeout=setTimeout(function(){
@@ -35141,6 +35687,17 @@ function _claudeFetch(query, serving){
     s.onerror=function(){clearTimeout(timeout);wtRetireJsonpCallback(cbName);resolve({source:'Claude',status:'error'});};
     document.head.appendChild(s);
   });
+}
+function _claudeFetch(query, serving){
+  if(wtAiProxyConfigured()&&navigator.onLine){
+    return wtAiProxyPost('/v1/claude-nutrition',{query:query,serving:serving},24000).then(function(result){
+      return _claudeNutritionNormalize(result);
+    }).catch(function(err){
+      appLogEvent('warn','nutrition.ai_proxy_claude_text_fallback','AI proxy Claude nutrition route failed; falling back to Apps Script JSONP route.',{message:String(err&&err.message||err||'')});
+      return _claudeFetchJsonp(query,serving);
+    });
+  }
+  return _claudeFetchJsonp(query,serving);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -35717,7 +36274,7 @@ function connResetConnectionDefaults(){
 }
 
 function connAiProxyAllowedOriginsText(){
-  return 'https://bananarama23.github.io,http://127.0.0.1:8765,http://localhost:8765,null';
+  return 'https://bananarama23.github.io,http://127.0.0.1:8765,http://localhost:8765,http://127.0.0.1:8777,http://localhost:8777,http://127.0.0.1:8778,http://localhost:8778,null';
 }
 function connAiProxyAppEnableUrl(){
   var base='https://bananarama23.github.io/workout-tracker/';
@@ -35734,11 +36291,14 @@ function connAiProxyRenderStatus(){
   var configured=wtAiProxyConfigured();
   var st={};
   try{st=(appDoctorLoadState().ai_proxy||{});}catch(e){}
-  var last=String(st.lastStatus||'unknown');
-  var err=String(st.lastError||'');
-  if(configured){
-    status.innerHTML='AI Proxy: <strong style="color:var(--green);">configured</strong> · '+escHtml(wtAiProxyRedactedUrl())+' · Last status: '+escHtml(last)+(err?' · Error: '+escHtml(err):'');
-  }else{
+	  var last=String(st.lastStatus||'unknown');
+	  var err=String(st.lastError||'');
+	  if(configured){
+	    var d1=(st.d1Configured===true&&st.trainerCacheRoutes===true)?' · D1 trainer cache: ready':'';
+	    function pstat(key){return Object.prototype.hasOwnProperty.call(st,key)?(st[key]?'ready':'missing'):'unknown';}
+	    var providers=' · OpenAI: '+pstat('openaiConfigured')+' · Gemini: '+pstat('geminiConfigured')+' · Claude: '+pstat('anthropicConfigured');
+	    status.innerHTML='AI Proxy: <strong style="color:var(--green);">configured</strong> · '+escHtml(wtAiProxyRedactedUrl())+providers+d1+' · Last status: '+escHtml(last)+(err?' · Error: '+escHtml(err):'');
+	  }else{
     status.innerHTML='AI Proxy: <strong style="color:var(--muted);">not configured</strong> · App is using Apps Script AI routes.';
   }
 }
@@ -35767,12 +36327,17 @@ function connAiProxyTest(enableOnSuccess){
     return;
   }
   if(status)status.innerHTML='AI Proxy: testing '+escHtml(url)+'...';
-  wtAiProxyHealth(url,12000).then(function(res){
-    var ok=res&&res.status==='ok';
-    var openai=!!(res&&res.openaiConfigured);
-    var origins=!!(res&&res.allowedOriginsConfigured);
-    var originAllowed=(res&&res.requestOriginAllowed)!==false;
-    var ready=!!(ok&&openai&&origins&&originAllowed);
+	  wtAiProxyHealth(url,12000).then(function(res){
+	    var ok=res&&res.status==='ok';
+	    var openai=!!(res&&res.openaiConfigured);
+	    var gemini=!!(res&&res.geminiConfigured);
+	    var anthropic=!!(res&&res.anthropicConfigured);
+	    var origins=!!(res&&res.allowedOriginsConfigured);
+	    var d1=!!(res&&res.d1Configured);
+	    var trainerRoutes=!!(res&&res.trainerCacheRoutes);
+	    var providerRoutes=!!(res&&res.providerRoutes);
+	    var originAllowed=(res&&res.requestOriginAllowed)!==false;
+	    var ready=!!(ok&&openai&&origins&&originAllowed);
     if(ok){
       if(ready&&enableOnSuccess)wtAiProxySaveUrl(url);
       if(input)input.value=url;
@@ -35783,14 +36348,20 @@ function connAiProxyTest(enableOnSuccess){
       appDoctorPatchState('ai_proxy',{
         configured:wtAiProxyConfigured(),
         url:(ready&&enableOnSuccess)?wtAiProxyRedactedUrl():url.replace(/([?&](?:token|key|secret)=)[^&]+/ig,'$1REDACTED'),
-        lastRoute:'/health',
-        lastStatus:ready?(enableOnSuccess?'ok':'test_ok'):(!openai?'openai_key_missing':(!origins?'allowed_origins_missing':'origin_not_allowed')),
-        lastError:errMsg,
-        lastDurationMs:parseInt(res.durationMs||0,10)||0
-      });
-      if(status){
-        status.innerHTML='AI Proxy: <strong style="color:'+(ready?'var(--green)':'var(--orange)')+';">'+(ready?(enableOnSuccess?'ready':'test passed, tap Test + Enable to save'):'Worker reachable, setup incomplete')+'</strong> · '+escHtml(url)+(errMsg?' · '+escHtml(errMsg):'');
-      }
+	        lastRoute:'/health',
+	        lastStatus:ready?(enableOnSuccess?'ok':'test_ok'):(!openai?'openai_key_missing':(!origins?'allowed_origins_missing':'origin_not_allowed')),
+	        lastError:errMsg,
+	        lastDurationMs:parseInt(res.durationMs||0,10)||0,
+	        d1Configured:d1,
+	        trainerCacheRoutes:trainerRoutes,
+	        openaiConfigured:openai,
+	        geminiConfigured:gemini,
+	        anthropicConfigured:anthropic,
+	        providerRoutes:providerRoutes
+	      });
+	      if(status){
+	        status.innerHTML='AI Proxy: <strong style="color:'+(ready?'var(--green)':'var(--orange)')+';">'+(ready?(enableOnSuccess?'ready':'test passed, tap Test + Enable to save'):'Worker reachable, setup incomplete')+'</strong> · '+escHtml(url)+' · OpenAI: '+(openai?'ready':'missing')+' · Gemini: '+(gemini?'ready':'missing')+' · Claude: '+(anthropic?'ready':'missing')+' · provider routes: '+(providerRoutes?'ready':'not reported')+' · D1 trainer cache: '+(d1&&trainerRoutes?'ready':'not active')+(errMsg?' · '+escHtml(errMsg):'');
+	      }
       appToast(ready?(enableOnSuccess?'AI proxy is ready.':'AI proxy test passed.'):'Worker reachable, but setup is incomplete.',ready?'var(--green)':'var(--orange)');
       try{connSetupLog('AI proxy health response',res);}catch(e){}
       return;
@@ -35863,7 +36434,7 @@ function connCopyAppToken(){ wtCopyText('No APP_CLIENT_TOKEN needed. Backend run
 function connCopyScriptProps(){
   var hcfg=healthCfgLoad();
   var healthToken=hcfg.bridgeToken||'';
-  var txt='Open Google Apps Script.\nGo to Project Settings.\nScroll to Script Properties.\nAdd:\n\nHEALTH_BRIDGE_TOKEN = '+(healthToken||'<generated health bridge token>')+'\nOPENAI_API_KEY = optional, for AI food scan\nGEMINI_API_KEY = optional\nANTHROPIC_API_KEY = optional\n\nSave.\nDeploy → Manage deployments → Edit → New version → Deploy.';
+  var txt='Cloudflare Worker secrets (primary fast AI path):\nOPENAI_API_KEY = required for workout/nutrition OpenAI calls\nGEMINI_API_KEY = optional Gemini AI gateway\nANTHROPIC_API_KEY = optional Claude AI gateway\n\nGoogle Apps Script properties (Sheet/backup/fallback path):\nHEALTH_BRIDGE_TOKEN = '+(healthToken||'<generated health bridge token>')+'\nOPENAI_API_KEY = optional fallback\nGEMINI_API_KEY = optional fallback\nANTHROPIC_API_KEY = optional fallback\n\nSave. For Apps Script changes: Deploy → Manage deployments → Edit → New version → Deploy.';
   wtCopyText(txt,'Apps Script setup instructions');
 }
 function connTestBackend(){
@@ -39732,13 +40303,24 @@ function nutMsiRunClaudeMealPass(){
     payload.imageBase64=_msiLastB64;
     payload.imageMime=_msiLastMime||'image/jpeg';
   }
+  function runClaudeFullMeal(){
+    if(wtAiProxyConfigured()&&navigator.onLine){
+      var proxyPayload=Object.assign({},payload);
+      delete proxyPayload.type;
+      return wtAiProxyPost('/v1/claude-vision-nutrition',proxyPayload,28000).catch(function(err){
+        appLogEvent('warn','nutrition.ai_proxy_claude_full_meal_fallback','AI proxy Claude full-meal route failed; falling back to Apps Script Claude route.',{message:String(err&&err.message||err||'')});
+        return wtBackendPost(payload);
+      });
+    }
+    return wtBackendPost(payload);
+  }
   var _done=false;
   var _to=setTimeout(function(){
     if(_done)return;
     _done=true;
     nutMealScanSetStatus('Claude full-meal compare timed out','var(--orange)');
   },28000);
-  wtBackendPost(payload).then(function(res){
+  runClaudeFullMeal().then(function(res){
     if(_done)return;
     _done=true;clearTimeout(_to);
     if(!res||res.status!=='ok')throw new Error('claude_failed');
@@ -41020,8 +41602,8 @@ function nutMealScanToggleClaudeFullPass(){
       <div id="connTokenStatus" style="font-size:0.68rem;color:var(--muted);line-height:1.5;margin-top:4px;">App token: not saved</div>
       <div id="connHealthTokenStatus" style="font-size:0.68rem;color:var(--muted);line-height:1.5;margin-top:4px;">Health token: not saved · iCal URL: not saved</div>
       <div id="connAiProxySetupCard" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;scroll-margin-top:70px;">
-        <div style="font-size:0.72rem;font-weight:700;color:var(--text2);margin-bottom:6px;">AI Proxy Setup (optional, faster photos)</div>
-        <div style="font-size:0.66rem;color:var(--muted);line-height:1.45;margin-bottom:8px;">Paste your Cloudflare Worker URL here. If it is not configured, the app safely keeps using Apps Script AI routes.</div>
+        <div style="font-size:0.72rem;font-weight:700;color:var(--text2);margin-bottom:6px;">AI Proxy Setup (Cloudflare fast path)</div>
+        <div style="font-size:0.66rem;color:var(--muted);line-height:1.45;margin-bottom:8px;">Paste your Cloudflare Worker URL here. AI uses Cloudflare first, trainer state caches to D1 when available, and Apps Script/Sheets remains the backup.</div>
         <input id="connAiProxyUrlInput" type="text" placeholder="https://plusultra-ai-proxy.YOUR.workers.dev" autocorrect="off" autocapitalize="none" spellcheck="false" style="width:100%;margin-bottom:8px;padding:9px 10px;background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:0.72rem;box-sizing:border-box;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <button type="button" onclick="connAiProxySave()" style="padding:9px;background:var(--green-dim);border:1px solid rgba(76,217,100,0.35);border-radius:8px;color:var(--green);font-size:0.68rem;font-weight:800;">Test + Enable</button>
