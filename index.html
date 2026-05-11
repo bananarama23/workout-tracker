@@ -1440,7 +1440,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <div style="font-size:0.66rem;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--blue);margin-bottom:3px;">Connections Setup <span style="float:right;">Open ›</span></div>
           <div style="font-size:0.72rem;color:var(--text2);line-height:1.45;">Backend token, read-only calendar, Apple Health bridge, and PWA checks.</div>
         </div>
-        <div style="margin-top:8px;" class="clear-link"><button onclick="if(confirm('Clear all local data?')){localStorage.removeItem('wt_hist_v3');loadHomeData();}">clear local data</button> &nbsp;·&nbsp; <button onclick="workoutForgetLocalAndReloadSheet()">reload workouts from sheet</button> &nbsp;·&nbsp; <button onclick="workoutSheetDuplicateAuditPrompt()">audit sheet duplicates</button> &nbsp;·&nbsp; <button onclick="workoutSheetDuplicateCleanupPrompt()">clean safe duplicates</button> &nbsp;·&nbsp; <button onclick="wtDB.usage().then(function(u){appToast('IDB used: '+u.totalKB+'KB','var(--text2)');});">storage</button> &nbsp;·&nbsp; <button onclick="nutSyncRetryNow()">retry sync</button> &nbsp;·&nbsp; <button onclick="backupNow()">backup now</button> &nbsp;·&nbsp; <button onclick="exportSafeBackup()">export backup</button> &nbsp;·&nbsp; <button onclick="showCorruptRecoveryReport()">recovery</button> &nbsp;·&nbsp; <button onclick="runAppSanityChecks()">sanity check</button> &nbsp;·&nbsp; <button onclick="appDoctorOpen()">app doctor</button> &nbsp;·&nbsp; <button onclick="exportAllData()">export data</button> &nbsp;·&nbsp; <button onclick="coachMemoryToggleLearning()">coach learning</button> &nbsp;·&nbsp; <button onclick="coachMemoryClearOnly()">clear coach memory</button></div>
+        <div style="margin-top:8px;" class="clear-link"><button onclick="workoutForgetLocalAndReloadSheet()">reload workouts from sheet</button> &nbsp;·&nbsp; <button onclick="workoutSheetDuplicateAuditPrompt()">audit sheet duplicates</button> &nbsp;·&nbsp; <button onclick="workoutSheetDuplicateCleanupPrompt()">clean safe duplicates</button> &nbsp;·&nbsp; <button onclick="nutReloadFromSheetAuthority()">reload nutrition from sheet</button> &nbsp;·&nbsp; <button onclick="wtDB.usage().then(function(u){appToast('IDB used: '+u.totalKB+'KB','var(--text2)');});">storage</button> &nbsp;·&nbsp; <button onclick="nutSyncRetryNow()">retry sync</button> &nbsp;·&nbsp; <button onclick="backupNow()">backup now</button> &nbsp;·&nbsp; <button onclick="exportSafeBackup()">export backup</button> &nbsp;·&nbsp; <button onclick="showCorruptRecoveryReport()">recovery</button> &nbsp;·&nbsp; <button onclick="runAppSanityChecks()">sanity check</button> &nbsp;·&nbsp; <button onclick="appDoctorOpen()">app doctor</button> &nbsp;·&nbsp; <button onclick="exportAllData()">export data</button> &nbsp;·&nbsp; <button onclick="coachMemoryToggleLearning()">coach learning</button> &nbsp;·&nbsp; <button onclick="coachMemoryClearOnly()">clear coach memory</button></div>
       </div>
     </div>
     <div class="refresh-link" onclick="loadProgressData()">↻ Refresh</div>
@@ -1766,9 +1766,12 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
       <div id="nutCopyMsg" style="margin:0 16px 4px;font-size:0.68rem;color:var(--muted);text-align:center;min-height:14px;"></div>
       <!-- Sync: phone is truth button -->
-      <div style="margin:0 16px 8px;display:flex;align-items:center;gap:8px;">
-        <button type="button" onclick="nutPushDayToSheet()" id="nutPushDayBtn" style="flex:1;background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 14px;color:var(--muted);font-size:0.68rem;letter-spacing:1.5px;text-transform:uppercase;font-family:'Bebas Neue',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.2s;">
+      <div style="margin:0 16px 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <button type="button" onclick="nutPushDayToSheet()" id="nutPushDayBtn" style="flex:1 1 220px;background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 14px;color:var(--muted);font-size:0.68rem;letter-spacing:1.5px;text-transform:uppercase;font-family:'Bebas Neue',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.2s;">
           <span style="font-size:0.9rem;">↑</span> Replace sheet with this phone’s day
+        </button>
+        <button type="button" onclick="nutReloadFromSheetAuthority()" style="flex:1 1 180px;background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 14px;color:var(--muted);font-size:0.68rem;letter-spacing:1.5px;text-transform:uppercase;font-family:'Bebas Neue',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.2s;">
+          <span style="font-size:0.9rem;">↻</span> Reload from sheet
         </button>
       </div>
       <div id="nutPushDayMsg" style="margin:-4px 16px 8px;font-size:0.7rem;color:var(--muted);text-align:center;min-height:16px;"></div>
@@ -2756,8 +2759,8 @@ function wtBackendPost(payload){
         lastBackendError:errMsg
       });
     }
-    var readActions={getHistory:1,getRecentWorkouts:1,getLatestWorkout:1,getLatestValidWorkout:1,getNutrition:1,getFoods:1,getBudget:1,getWeekPlan:1,calendarGetSummary:1,healthLatest:1,getLatestTrainerState:1,sheetWorkoutDuplicateAudit:1};
-    var writeActions={logWorkout:1,deleteWorkoutSession:1,deleteSession:1,logNutrition:1,deleteNutritionRow:1,clearNutritionDay:1,setWeekPlan:1,setSeqDefaults:1,setGoals:1,setAppState:1,budget:1,addFood:1,deleteFood:1,hiit:1,cholesterol:1,body:1,walk:1,healthImport:1,syncArtifacts:1,sheetWorkoutDuplicateCleanup:1};
+    var readActions={getHistory:1,getRecentWorkouts:1,getLatestWorkout:1,getLatestValidWorkout:1,getNutrition:1,getFoods:1,getBudget:1,getWeekPlan:1,getSeqDefaults:1,getGoals:1,getBodyMetrics:1,getCholesterol:1,getAppState:1,calendarGetSummary:1,healthLatest:1,getLatestTrainerState:1,sheetWorkoutDuplicateAudit:1};
+    var writeActions={logWorkout:1,deleteWorkoutSession:1,deleteSession:1,logNutrition:1,deleteNutritionRow:1,clearNutritionDay:1,setWeekPlan:1,setSeqDefaults:1,setGoals:1,setAppState:1,budget:1,addFood:1,deleteFood:1,hiit:1,cholesterol:1,body:1,walk:1,healthImport:1,healthClearToday:1,syncArtifacts:1,sheetWorkoutDuplicateCleanup:1};
     if(readActions[action]){
       appDoctorPatchState('sheet',{
         lastReadStatus:ok?'ok':'error',
@@ -3250,6 +3253,32 @@ function wtAiProxyPost(path,payload,timeoutMs){
 		  window.addEventListener('online',function(){try{wtTrainerCloudCacheFlush(true);}catch(e){}});
 		  setTimeout(function(){try{wtTrainerCloudCacheFlush(false);}catch(e){}},2200);
 		}
+  function wtTrainerCloudCacheApplyLocalSheetAuthority(data){
+    if(!data||typeof data!=='object')return data;
+    var out=Object.assign({},data);
+    function dropTestArtifact(key){
+      if(!out[key]||appDoctorIsTestModeActive())return;
+      if(!appDoctorIncludeArtifactRow(out[key],{includeTest:false}))out[key]=null;
+    }
+    ['latestCompletedSession','latestSession','activeHomePlan','activeHotelPlan','latestReview','latestCoachState'].forEach(dropTestArtifact);
+    var mark={};
+    try{mark=workoutSheetAuthorityLoad_();}catch(e){mark={};}
+    var sid=String((mark&&mark.latestSessionId)||'').trim();
+    if(!sid)return out;
+    function sourceSid(row){
+      return String((row&&(row.sourceSessionId||row.sessionId||row.lastCompletedSessionId))||'').trim();
+    }
+    function reviewSid(row){
+      return String((row&&(row.sourceSessionId||row.sessionId))||'').trim();
+    }
+    if(out.latestCompletedSession&&sourceSid(out.latestCompletedSession)!==sid)out.latestCompletedSession=null;
+    if(out.latestSession&&sourceSid(out.latestSession)!==sid)out.latestSession=null;
+    if(out.activeHomePlan&&sourceSid(out.activeHomePlan)!==sid)out.activeHomePlan=null;
+    if(out.activeHotelPlan&&sourceSid(out.activeHotelPlan)!==sid)out.activeHotelPlan=null;
+    if(out.latestReview&&reviewSid(out.latestReview)!==sid)out.latestReview=null;
+    if(out.latestCoachState&&out.latestCoachState.lastCompletedSessionId&&String(out.latestCoachState.lastCompletedSessionId)!==sid)out.latestCoachState=null;
+    return out;
+  }
 		function wtTrainerCloudCacheLoad(opts){
 		  var o=opts&&typeof opts==='object'?opts:{};
 		  if(!wtTrainerCloudCacheAvailable())return Promise.resolve(null);
@@ -3270,7 +3299,7 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	      return null;
 	    }
 	    wtTrainerCloudCachePatch('ok',{d1Configured:true,lastError:'',lastDurationMs:res.durationMs||0});
-	    return data;
+	    return wtTrainerCloudCacheApplyLocalSheetAuthority(data);
 	  }).catch(function(err){
 	    wtTrainerCloudCachePatch('error',{lastError:String(err&&err.message||err||'trainer_cache_load_failed')});
 	    return null;
@@ -3308,6 +3337,41 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	  if(!profile)return null;
 	  var id=String(profile.equipmentProfileId||profile.equipmentProfileHash||'');
 	  return id?wtTrainerCloudCacheArtifact('equipment_profile',id,profile,'',profile.revision||1):null;
+	}
+	function wtTrainerCloudCacheTrainerContextArtifact(extra){
+	  var cfg=null;
+	  try{cfg=calendarCfgLoad();}catch(e){cfg=null;}
+	  var context={
+	    contextId:'trainer_context_current',
+	    profile:null,
+	    goals:null,
+	    voiceMins:null,
+	    calendarRules:null,
+	    calendar:{connected:false,urlMask:'',lastFetched:'',lastAutoRunStatus:''},
+	    coachNotes:'',
+	    updatedAt:wtNowIso(),
+	    appVersion:String(typeof APP_VERSION!=='undefined'?APP_VERSION:''),
+	    frontendVersion:String(typeof WT_FRONTEND_VERSION!=='undefined'?WT_FRONTEND_VERSION:'')
+	  };
+	  try{context.profile=aiProfileLoad();}catch(e){}
+	  try{context.goals=Object.assign({},_goals||{});}catch(e){}
+	  try{context.voiceMins=voiceMinsLoad();}catch(e){}
+	  try{context.calendarRules=calendarRulesLoad();}catch(e){}
+	  try{context.coachNotes=String(aiCoachNotesLoad()||'').slice(0,6000);}catch(e){}
+	  if(cfg){
+	    context.calendar={
+	      connected:!!cfg.connected,
+	      urlMask:String(cfg.urlMask||''),
+	      lastFetched:String(cfg.lastFetched||''),
+	      lastAutoRunStatus:String(cfg.lastAutoRunStatus||'')
+	    };
+	  }
+	  if(extra&&typeof extra==='object'){
+	    context.event=String(extra.eventType||extra.reason||'');
+	    context.changeSummary=extra.changeSummary||null;
+	    context.sheetAuthority=extra.sheetAuthority||null;
+	  }
+	  return wtTrainerCloudCacheArtifact('trainer_context','trainer_context_current',context,'',Math.floor(Date.now()/1000));
 	}
 		function wtTrainerCloudCacheSaveArtifacts(artifacts,opts){
 		  var list=(Array.isArray(artifacts)?artifacts:[]).filter(Boolean);
@@ -3369,6 +3433,7 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	  try{artifacts.push(wtTrainerCloudCacheCoachStateArtifact(o.coachState||coachStateLoad()));}catch(e){}
 	  try{artifacts.push(wtTrainerCloudCacheReviewArtifact(o.review||(sid?postWorkoutReviewLoad(sid):null)));}catch(e){}
 	  try{artifacts.push(wtTrainerCloudCacheEquipmentArtifact(o.equipmentProfile||coachEquipmentProfileLoad()));}catch(e){}
+	  try{artifacts.push(wtTrainerCloudCacheTrainerContextArtifact({eventType:o.eventType,reason:o.reason,changeSummary:o.changeSummary,sheetAuthority:o.sheetAuthority}));}catch(e){}
 	  return wtTrainerCloudCacheSaveArtifacts(artifacts,{sourceSessionId:sid,timeoutMs:o.timeoutMs||12000});
 	}
 	function trainerBrainPatch(status,extra){
@@ -3395,6 +3460,7 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	  try{add(wtTrainerCloudCacheCoachStateArtifact(coachStateLoad()));}catch(e){}
 	  try{add(wtTrainerCloudCacheReviewArtifact(sid?postWorkoutReviewLoad(sid):postWorkoutReviewLatest()));}catch(e){}
 	  try{add(wtTrainerCloudCacheEquipmentArtifact(coachEquipmentProfileLoad()));}catch(e){}
+	  try{add(wtTrainerCloudCacheTrainerContextArtifact({eventType:o.eventType||o.trigger,reason:o.reason,changeSummary:o.changeSummary,sheetAuthority:o.sheetAuthority}));}catch(e){}
 	  return {sourceSessionId:sid,artifacts:artifacts};
 	}
 	function trainerBrainRun(eventType,opts){
@@ -3408,7 +3474,7 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	    trainerBrainPatch('offline',{lastEventType:ev,lastError:'offline'});
 	    return Promise.resolve({status:'skipped',reason:'offline'});
 	  }
-	  var snap=trainerBrainSnapshotArtifacts(o);
+	  var snap=trainerBrainSnapshotArtifacts(Object.assign({eventType:ev},o));
 	  var started=Date.now();
 	  trainerBrainPatch('running',{
 	    lastEventType:ev,
@@ -3458,6 +3524,40 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	  var o=opts&&typeof opts==='object'?opts:{};
 	  if(appDoctorIsTestModeActive())return;
 	  setTimeout(function(){try{trainerBrainRun(eventType,o);}catch(e){}},Math.max(50,parseInt(o.delayMs||900,10)||900));
+	}
+	function trainerBrainNotifyContextChanged(eventType,opts){
+	  var o=opts&&typeof opts==='object'?opts:{};
+	  var ev=String(eventType||o.eventType||'trainer_context_changed');
+	  var reason=String(o.reason||ev);
+	  var allow=o.allowPlanGeneration!==false;
+	  var staleResult=null;
+	  if(allow&&o.queuePlanRefresh!==false){
+	    try{
+	      var patchId=String(o.patchId||('manual_'+reason.replace(/[^a-z0-9]+/gi,'_').toLowerCase()+'_'+Date.now().toString(36)));
+	      staleResult=aiAutopilotMarkPlansStaleAndQueueRegeneration(Object.assign({},o,{
+	        patchId:patchId,
+	        reason:reason,
+	        allowPlanGeneration:true
+	      }));
+	    }catch(e){
+	      try{appDoctorTrackError('trainer_context_refresh_queue_failed',String(e&&e.message||e||'queue_failed'),{eventType:ev,reason:reason});}catch(_e){}
+	    }
+	  }
+	  try{
+	    trainerBrainRunSoon(ev,{
+	      allowPlanGeneration:allow,
+	      reason:reason,
+	      sourceSessionId:String(o.sourceSessionId||''),
+	      session:o.session||null,
+	      changeSummary:o.changeSummary||null,
+	      context:Object.assign({
+	        trainerContextChanged:true,
+	        reason:reason,
+	        staleResult:staleResult
+	      },(o.context&&typeof o.context==='object')?o.context:{})
+	    });
+	  }catch(e){}
+	  return staleResult;
 	}
 	var WT_NUTRITION_LOOKUP_CACHE_LOCAL_KEY='wt_nutrition_lookup_cache_v1';
 	var WT_NUTRITION_LOOKUP_CACHE_SCHEMA_VERSION=1;
@@ -3658,8 +3758,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.11.80-trainer-brain-run';
-			var WT_SW_VERSION='wt-shell-v100-trainer-brain-run';
+			var WT_FRONTEND_VERSION='19.11.98-backend-capability-gate';
+			var WT_SW_VERSION='wt-shell-v116-backend-capability-gate';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4530,12 +4630,34 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.80-trainer-brain-run';
+var APP_VERSION='v19.11.98-backend-capability-gate';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v109-trainer-brain-run';
+var CACHE_VERSION='wt-cache-v125-backend-capability-gate';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
+  'Workout duplicate tools now use the live route response as the source of truth, so an older Apps Script version label cannot block a deployed working duplicate audit/cleanup route',
+  'App Doctor self-test now probes the safe duplicate-audit route directly, catching a genuinely missing Apps Script duplicate route without relying only on appStatus version text',
+  'App Doctor Test Lab now includes a two-user, thirty-day simulation that walks Home, Workout, Nutrition, Progress, Budget, and Plan with offline recovery, sheet backup, D1 cache writes, and autopilot stale-plan regeneration',
+  'App Doctor Test Lab now snapshots and restores nutrition in-memory state as well as storage, so long simulations cannot leave the live app looking different until reload',
+  'Nutrition sheet reads now try the shared POST backend route first with a realistic timeout, then fall back to JSONP instead of showing an empty day after five seconds',
+  'Nutrition manual Sheet reload now ignores stale overlapping reads, keeps the phone cache visible while the Sheet is slow, and avoids duplicate reload races',
+  'Health/App Doctor error counts now separate real errors from ordinary fallback warnings so a successful fallback does not look like an active failure',
+  'App Doctor sync tests now include route-wiring checks for Health clear, cholesterol reads, and backend version gates so missing UI/backend routes are caught earlier',
+  'Apps Script now serves the getCholesterol read route used by Progress and Nutrition cholesterol displays, so live cholesterol history can refresh instead of relying only on fallback readings',
+  'Apps Script now serves the healthClearToday route used by the Health setup button, and the frontend marks it as a write route for App Doctor sync diagnostics',
+  'Apps Script workout duplicate guard now skips a save only when the Sheet already has an equally complete or better matching block, so fuller repaired workouts are not blocked by weaker old duplicates',
+  'App Doctor Test Lab snapshots are sanitized before capture and after restore, so stale test plans/reviews from earlier runs cannot keep showing as live cleanup contamination',
+  'App Doctor cleanup now refreshes immediately, queue diagnostics distinguish open jobs from completed history, and the live partial-failure backend contract test retries once after a transient all-failed Sheet response',
+  'Trainer week simulation accepts an already-open HOME/HOTEL refresh job as the correct autopilot outcome, avoiding duplicate generation while still proving stale-plan regeneration is queued',
+  'Trainer week simulation checks now match the app plan-overlay labels exactly and verify autopilot regeneration through the same stale-plan queue primitive used by coach setting changes',
+  'App Doctor Test Lab now includes a full isolated trainer week simulation with 2 HOME workouts, 1 HOTEL workout, D1 cache writes, sheet sync backup, plan overlay, and autopilot regeneration checks',
+  'Frontend Cloudflare D1 merges now also drop test/diagnostic trainer artifacts before applying remote sessions, reviews, coach state, or HOME/HOTEL plans',
+  'Frontend D1 reads now also enforce the local sheet-authoritative latest session, so an older deployed Worker cannot rehydrate stale HOME/HOTEL plans after a Sheet reload',
+  'Budget resync now clears the local dirty flag first, so a deliberate Sheet reload cannot be blocked by stale unsaved-edit state',
+  'Nutrition now has a sheet-authoritative reload path that clears queued nutrition writes and rereads Sheets without pushing stale local-only rows back',
+  'Workout sheet reload now marks Sheets as authoritative, cancels stale local trainer queues, and blocks old workout save jobs from replaying fixed sheet history',
+  'Trainer D1 cache now respects the sheet-authoritative latest session and will not fall back to stale generated plans or reviews from older duplicate workouts',
   'Food log complete feedback now uses Cloudflare Gemini first, falls back safely, and regenerates old cached grades that had no written insight',
   'Typed food AI lookup now reports the actual route that answered, distinguishing Cloudflare helper, D1/local cache, and Apps Script fallback',
   'Food Name now has a direct AI lookup button that checks local/D1 nutrition cache first, then fills macros through the Cloudflare-first AI route',
@@ -4687,7 +4809,9 @@ function appDoctorTestArtifactSummary(){
     activeTestHomePlanId:'',
     activeTestHotelPlanId:'',
     realQueueJobs:0,
-    testQueueJobs:0
+    testQueueJobs:0,
+    realQueueJobsTotal:0,
+    testQueueJobsTotal:0
   };
   try{
     var sessions=((_cachedSessions||[]).slice());
@@ -4719,8 +4843,8 @@ function appDoctorTestArtifactSummary(){
       if(isTest){
         out.testArtifactsCount++;
         out.testArtifactsPresent=true;
-        if(String((p&&p.planSlot)||'').toUpperCase()==='HOME_NEXT'&&!out.activeTestHomePlanId)out.activeTestHomePlanId=String((p&&p.planId)||'');
-        if(String((p&&p.planSlot)||'').toUpperCase()==='HOTEL_NEXT'&&!out.activeTestHotelPlanId)out.activeTestHotelPlanId=String((p&&p.planId)||'');
+        if(generatedPlanIsActiveStatus(p.status)&&String((p&&p.planSlot)||'').toUpperCase()==='HOME_NEXT'&&!out.activeTestHomePlanId)out.activeTestHomePlanId=String((p&&p.planId)||'');
+        if(generatedPlanIsActiveStatus(p.status)&&String((p&&p.planSlot)||'').toUpperCase()==='HOTEL_NEXT'&&!out.activeTestHotelPlanId)out.activeTestHotelPlanId=String((p&&p.planId)||'');
       }else{
         if(String((p&&p.planSlot)||'').toUpperCase()==='HOME_NEXT'&&!out.activeRealHomePlanId&&generatedPlanIsActiveStatus(p.status))out.activeRealHomePlanId=String((p&&p.planId)||'');
         if(String((p&&p.planSlot)||'').toUpperCase()==='HOTEL_NEXT'&&!out.activeRealHotelPlanId&&generatedPlanIsActiveStatus(p.status))out.activeRealHotelPlanId=String((p&&p.planId)||'');
@@ -4734,14 +4858,20 @@ function appDoctorTestArtifactSummary(){
   try{
     var jobs=(artifactQueueLoadStore().jobs||[]);
     jobs.forEach(function(j){
-      if(appDoctorRecordIsTestArtifact(j)||(j&&j.payload&&appDoctorRecordIsTestArtifact(j.payload)))out.testQueueJobs++;
-      else out.realQueueJobs++;
+      var isTestJob=appDoctorRecordIsTestArtifact(j)||(j&&j.payload&&appDoctorRecordIsTestArtifact(j.payload));
+      if(isTestJob){
+        out.testQueueJobsTotal++;
+        if(artifactQueueJobIsOpen(j))out.testQueueJobs++;
+      }else{
+        out.realQueueJobsTotal++;
+        if(artifactQueueJobIsOpen(j))out.realQueueJobs++;
+      }
     });
   }catch(e){}
   try{
     var activeSession=String((_completedSessionId||''));
-    var activeHome=generatedPlanActiveForSlot('HOME_NEXT',{includeTest:true});
-    var activeHotel=generatedPlanActiveForSlot('HOTEL_NEXT',{includeTest:true});
+    var activeHome=generatedPlanActiveForSlot('HOME_NEXT');
+    var activeHotel=generatedPlanActiveForSlot('HOTEL_NEXT');
     if(appDoctorIsTestId(activeSession)||appDoctorRecordIsTestArtifact(activeHome)||appDoctorRecordIsTestArtifact(activeHotel)){
       out.contaminatedRealState=!appDoctorIsTestModeActive();
     }
@@ -4994,16 +5124,35 @@ function appDoctorTrackError(code,message,meta){
   try{
     var arr=JSON.parse(localStorage.getItem(APP_DOCTOR_ERROR_LOG_KEY)||'[]');
     if(!Array.isArray(arr))arr=[];
+    var cutoff=Date.now()-24*60*60*1000;
+    arr=arr.filter(function(x){return x&&(!x.ts||x.ts>=cutoff);});
     arr.push({ts:Date.now(),code:String(code||'error'),message:String(message||''),meta:meta||null});
     if(arr.length>120)arr=arr.slice(arr.length-120);
     localStorage.setItem(APP_DOCTOR_ERROR_LOG_KEY,JSON.stringify(arr));
   }catch(e){}
 }
+function appDoctorEventIsActiveIssue_(row){
+  if(!row)return false;
+  var level=String(row.level||'').toLowerCase();
+  var code=String(row.code||row.event||'').toLowerCase();
+  var msg=String(row.message||'').toLowerCase();
+  if(code.indexOf('test_')===0||code.indexOf('phase7_fault')>=0||msg.indexOf('for_testing')>=0)return false;
+  if(level==='error')return true;
+  if(level==='warn'){
+    // Fallback warnings are useful history but not active breakage when the app
+    // completed through another route.
+    if(code.indexOf('fallback')>=0||msg.indexOf('fallback')>=0)return false;
+    return msg.indexOf('failed')>=0||msg.indexOf('timeout')>=0||msg.indexOf('unavailable')>=0;
+  }
+  return false;
+}
 function appDoctorErrorRows(limit){
   try{
     var arr=JSON.parse(localStorage.getItem(APP_DOCTOR_ERROR_LOG_KEY)||'[]');
     if(!Array.isArray(arr))return [];
-    return arr.slice(Math.max(0,arr.length-(limit||20)));
+    var cutoff=Date.now()-24*60*60*1000;
+    var recent=arr.filter(function(x){return x&&(!x.ts||x.ts>=cutoff);});
+    return recent.slice(Math.max(0,recent.length-(limit||20)));
   }catch(e){return [];}
 }
 function appDoctorFmtTs(ts){
@@ -6283,6 +6432,7 @@ function loadHist(){try{return JSON.parse(localStorage.getItem(HIST_KEY)||'{}');
 function saveHist(d){var v=JSON.stringify(d);try{localStorage.setItem(HIST_KEY,v);}catch(e){}wtDB.set(HIST_KEY,v);}
 var WORKOUT_SCHEMA_VERSION=2;
 var WORKOUT_SYNC_QUEUE_KEY='wt_workout_sync_q_v1';
+var WORKOUT_SHEET_AUTHORITY_KEY='wt_workout_sheet_authority_v1';
 var WORKOUT_OBS_KEY='wt_workout_events_v1';
 var POST_WORKOUT_REVIEW_KEY='wt_post_workout_reviews_v1';
 var POST_WORKOUT_REVIEW_SCHEMA_VERSION=1;
@@ -6299,17 +6449,103 @@ var _completedSessionNoteTimer=null;
 function workoutPendingLocalSyncCount(){
   try{return (workoutQueueLoad()||[]).filter(Boolean).length;}catch(e){return 0;}
 }
+function workoutSheetAuthorityLoad_(){
+  try{
+    var raw=localStorage.getItem(WORKOUT_SHEET_AUTHORITY_KEY)||'';
+    if(!raw)return {ts:0,reason:''};
+    var o=JSON.parse(raw);
+    return o&&typeof o==='object'?{ts:parseInt(o.ts||0,10)||0,reason:String(o.reason||'')}: {ts:0,reason:''};
+  }catch(e){return {ts:0,reason:''};}
+}
+function workoutSheetAuthorityMark_(reason){
+  var mark={ts:Date.now(),reason:String(reason||'sheet_authoritative_reload')};
+  try{localStorage.setItem(WORKOUT_SHEET_AUTHORITY_KEY,JSON.stringify(mark));}catch(e){}
+  try{if(typeof wtDB!=='undefined'&&wtDB&&typeof wtDB.set==='function')wtDB.set(WORKOUT_SHEET_AUTHORITY_KEY,JSON.stringify(mark)).catch(function(){});}catch(e){}
+  return mark;
+}
+function workoutSheetAuthoritySave_(mark){
+  var m=mark&&typeof mark==='object'?mark:{};
+  if(!m.ts)m.ts=Date.now();
+  if(!m.reason)m.reason='sheet_authoritative_reload';
+  try{localStorage.setItem(WORKOUT_SHEET_AUTHORITY_KEY,JSON.stringify(m));}catch(e){}
+  try{if(typeof wtDB!=='undefined'&&wtDB&&typeof wtDB.set==='function')wtDB.set(WORKOUT_SHEET_AUTHORITY_KEY,JSON.stringify(m)).catch(function(){});}catch(e){}
+  return m;
+}
+function workoutSheetAuthorityBlocksJob_(job){
+  var mark=workoutSheetAuthorityLoad_();
+  if(!mark.ts)return false;
+  if(String((job&&job.jobType)||'')!=='sync_session_to_sheet')return false;
+  var created=0;
+  try{created=artifactQueueToMs(job&&job.createdAt)||artifactQueueToMs(job&&job.updatedAt)||0;}catch(e){created=0;}
+  return !created||created<=mark.ts;
+}
+function workoutCancelLocalWorkoutSheetWrites_(reason){
+  var why=String(reason||'sheet_authoritative_reload');
+  var cancelled=0;
+  try{
+    if(_artifactQueueTimer)clearTimeout(_artifactQueueTimer);
+    _artifactQueueTimer=null;
+  }catch(e){}
+  try{
+    var st=artifactQueueLoadStore();
+    var now=artifactQueueNow();
+    var sessionBound={
+      sync_session_to_sheet:1,
+      create_post_workout_review:1,
+      sync_post_workout_review:1,
+      update_coach_state:1,
+      sync_coach_state:1,
+      generate_home_next:1,
+      generate_hotel_next:1,
+      sync_generated_plan:1
+    };
+    (st.jobs||[]).forEach(function(j){
+      if(!j||!sessionBound[String(j.jobType||'')])return;
+      if(!artifactQueueJobIsOpen(j))return;
+      j.status='cancelled';
+      j.updatedAt=now;
+      j.lastError=why;
+      cancelled++;
+    });
+    artifactQueueSaveStore(st);
+  }catch(e){}
+  try{localStorage.removeItem(WORKOUT_SYNC_QUEUE_KEY);}catch(e){}
+  try{if(typeof wtDB!=='undefined'&&wtDB&&typeof wtDB.del==='function')wtDB.del(WORKOUT_SYNC_QUEUE_KEY).catch(function(){});}catch(e){}
+  try{
+    if(typeof wtTrainerCloudCacheQueueSave==='function'&&typeof wtTrainerCloudCacheQueueEmpty==='function'){
+      wtTrainerCloudCacheQueueSave(wtTrainerCloudCacheQueueEmpty());
+    }else if(typeof WT_TRAINER_CLOUD_CACHE_QUEUE_KEY==='string'){
+      localStorage.removeItem(WT_TRAINER_CLOUD_CACHE_QUEUE_KEY);
+    }
+  }catch(e){}
+  try{
+    appDoctorPatchState('queue',{
+      workoutSheetWritesCancelled:cancelled,
+      workoutSheetAuthorityReason:why,
+      workoutSheetAuthorityTs:Date.now(),
+      currentRunningJob:String(_artifactQueueCurrentJob||'')
+    });
+  }catch(e){}
+  return cancelled;
+}
 function workoutLocalSheetMemoryKeys_(){
-  var keys=[HIST_KEY,CACHE_KEY];
+  var keys=[HIST_KEY,CACHE_KEY,WORKOUT_SYNC_QUEUE_KEY];
   try{if(typeof COACH_CONFIRMED_WORKOUT_KEY==='string')keys.push(COACH_CONFIRMED_WORKOUT_KEY);}catch(e){}
   try{if(typeof COACH_VALID_WORKOUT_CACHE_KEY==='string')keys.push(COACH_VALID_WORKOUT_CACHE_KEY);}catch(e){}
   try{if(typeof COACH_PULSE_CACHE_KEY==='string')keys.push(COACH_PULSE_CACHE_KEY);}catch(e){}
   try{if(typeof COACH_PULSE_ARTIFACT_KEY==='string')keys.push(COACH_PULSE_ARTIFACT_KEY);}catch(e){}
   try{if(typeof AI_WORKOUT_KEY==='string')keys.push(AI_WORKOUT_KEY);}catch(e){}
+  try{if(typeof POST_WORKOUT_REVIEW_KEY==='string')keys.push(POST_WORKOUT_REVIEW_KEY);}catch(e){}
+  try{if(typeof GENERATED_PLAN_STORE_KEY==='string')keys.push(GENERATED_PLAN_STORE_KEY);}catch(e){}
+  try{if(typeof COACH_STATE_KEY==='string')keys.push(COACH_STATE_KEY);}catch(e){}
   try{if(typeof TRAINER_BOOTSTRAP_KEY==='string')keys.push(TRAINER_BOOTSTRAP_KEY);}catch(e){}
+  try{if(typeof TRAINER_NOTIFICATION_KEY==='string')keys.push(TRAINER_NOTIFICATION_KEY);}catch(e){}
   return keys.filter(function(k,i,a){return !!k&&a.indexOf(k)===i;});
 }
-function workoutClearLocalSheetMemory_(){
+function workoutClearLocalSheetMemory_(reason){
+  var why=String(reason||'sheet_authoritative_reload');
+  workoutSheetAuthorityMark_(why);
+  workoutCancelLocalWorkoutSheetWrites_(why);
   _sheetFetchGeneration++;
   _sheetSessions=null;
   _cachedSessions=null;
@@ -6325,6 +6561,9 @@ function workoutClearLocalSheetMemory_(){
   });
   try{localStorage.setItem(HIST_KEY,'{}');}catch(e){}
   try{if(typeof wtDB!=='undefined'&&wtDB&&typeof wtDB.set==='function')wtDB.set(HIST_KEY,'{}').catch(function(){});}catch(e){}
+  try{postWorkoutReviewsSave({});}catch(e){}
+  try{generatedPlanSaveStore(generatedPlanEmptyStore());}catch(e){}
+  try{coachStateSave(coachStateDefault());}catch(e){}
 }
 function workoutRefreshAfterSheetReload_(sessions){
   _cachedSessions=sessions||[];
@@ -6334,6 +6573,52 @@ function workoutRefreshAfterSheetReload_(sessions){
   try{if(currentPage==='workout')tryLoadWorkout();}catch(e){}
   try{if(currentPage==='plan')initPlanPage();}catch(e){}
   try{homeRenderCommandCenter(localDateStr());}catch(e){}
+}
+function workoutSheetAuthorityLatestSession_(sessions){
+  try{
+    var rows=workoutVisibleSessions(sessions||[],{}).filter(function(s){
+      return s&&String(s.workoutType||'').indexOf('Strength')>=0;
+    });
+    if(!rows.length)rows=workoutVisibleSessions(sessions||[],{});
+    rows=rows.filter(function(s){return s&&trainerRetryIsUsableSessionId(s.sessionId);});
+    rows.sort(function(a,b){return coachWorkoutSortValue(a)<coachWorkoutSortValue(b)?1:-1;});
+    return rows[0]||null;
+  }catch(e){return null;}
+}
+function workoutSheetAuthoritySyncTrainerCache_(sessions,reason){
+  var latest=workoutSheetAuthorityLatestSession_(sessions||[]);
+  var latestSessionId=String((latest&&latest.sessionId)||'');
+  try{if(latestSessionId)_completedSessionId=latestSessionId;}catch(e){}
+  if(!latestSessionId)return Promise.resolve({status:'skipped',reason:'no_sheet_session'});
+  var marker={
+    ts:Date.now(),
+    reason:String(reason||'sheet_authoritative_reload'),
+    latestSessionId:latestSessionId,
+    latestDate:String(latest.date||latest.workoutDate||latest.normalizedWorkoutDate||''),
+    latestWorkoutType:String(latest.workoutType||''),
+    markedAt:wtNowIso()
+  };
+  workoutSheetAuthoritySave_(marker);
+  try{
+    appDoctorPatchState('trainer_cloud_cache',{
+      sheetAuthorityLatestSessionId:latestSessionId,
+      sheetAuthorityLatestDate:marker.latestDate,
+      sheetAuthorityMarkedAt:Date.now()
+    });
+  }catch(e){}
+  try{
+    return wtTrainerCloudCacheSaveTrainerSnapshot({
+      session:latest,
+      sourceSessionId:latestSessionId,
+      eventType:'sheet_authoritative_reload',
+      reason:String(reason||'sheet_authoritative_reload'),
+      sheetAuthority:marker,
+      changeSummary:{sheetAuthority:marker},
+      timeoutMs:12000
+    });
+  }catch(e){
+    return Promise.resolve({status:'error',message:String(e&&e.message||e||'sheet_authority_d1_sync_failed')});
+  }
 }
 function workoutForgetLocalAndReloadSheet(opts){
   opts=opts||{};
@@ -6345,14 +6630,15 @@ function workoutForgetLocalAndReloadSheet(opts){
     var ok2=confirm('Forget local workout/session cache and reread the Sheet now? This does not delete Sheet data.');
     if(!ok2)return Promise.resolve(false);
   }
-  workoutClearLocalSheetMemory_();
+  workoutClearLocalSheetMemory_(opts.reason||'sheet_authoritative_reload');
   setSyncBadges('syncing','reloading');
-  appToast('Reloading workouts from Sheets...','var(--blue)');
+  appToast('Reloading workouts from Sheets; local queued workout writes cancelled...','var(--blue)');
   return new Promise(function(resolve){
     getSheetSessions(function(sessions){
       workoutRefreshAfterSheetReload_(sessions||[]);
       setSyncBadges((sessions&&sessions.length)?'live':'cached','reloaded');
       appToast('Workout cache rebuilt from Sheets.','var(--green)');
+      try{workoutSheetAuthoritySyncTrainerCache_(sessions||[],opts.reason||'sheet_authoritative_reload');}catch(e){}
       resolve(true);
     });
   });
@@ -6377,18 +6663,23 @@ function workoutSheetDuplicateDatePrompt_(opts){
 function workoutSheetDuplicateAuditFromResponse_(res){
   return (res&&res.audit)||(res&&res.data&&res.data.audit)||null;
 }
-function workoutSheetDuplicateBackendRequiredVersion_(){return 'v19.7.13';}
+function workoutSheetDuplicateBackendRequiredVersion_(){return 'v19.7.19';}
 function workoutSheetDuplicateBackendDeployMessage_(version){
   var v=version?String(version):'unknown';
-  return 'Sheet duplicate cleanup needs Apps Script backend '+workoutSheetDuplicateBackendRequiredVersion_()+' or newer. Live backend is '+v+'.\n\nTo enable it: open Apps Script, paste/deploy the updated backend file, then Deploy > Manage deployments > pencil > Version: New version > Deploy.';
+  return 'Sheet duplicate cleanup route is not available in the live Apps Script backend. Live backend reports '+v+'.\n\nTo enable it: open Apps Script, paste/deploy the updated backend file, then Deploy > Manage deployments > pencil > Version: New version > Deploy.';
 }
 function workoutSheetDuplicateCheckBackendReady_(){
   return wtFetchAppStatus().then(function(st){
     var v=String((st&&(st.backend_version||st.backendVersion))||'');
     if(v&&!wtBackendVersionAtLeast_(v,workoutSheetDuplicateBackendRequiredVersion_())){
-      alert(workoutSheetDuplicateBackendDeployMessage_(v));
-      appToast('Apps Script backend needs redeploy for duplicate cleanup.','var(--orange)');
-      return false;
+      try{
+        appDoctorPatchState('backend',{
+          duplicateToolsBackendVersion:v,
+          duplicateToolsVersionGate:'capability_first',
+          duplicateToolsVersionWarning:'Live appStatus is older than '+workoutSheetDuplicateBackendRequiredVersion_()+', so duplicate tools will probe the route directly.'
+        });
+      }catch(e){}
+      appToast('Backend version label is older; checking the duplicate route directly.','var(--yellow)');
     }
     return true;
   }).catch(function(){return true;});
@@ -9224,6 +9515,22 @@ function artifactQueueSetEquipmentProfileSyncState(nextState,lastError){
 }
 function artifactQueueSyncSessionJob(job){
   var sid=String(job.sourceSessionId||((job.payload&&job.payload.sessionId)||''));
+  if(workoutSheetAuthorityBlocksJob_(job)){
+    var mark=workoutSheetAuthorityLoad_();
+    wtLogEvent('sheet_sync_skipped_sheet_authoritative',{
+      sessionId:sid,
+      sourceSessionId:sid,
+      errorCode:String(mark.reason||'sheet_authoritative_reload')
+    });
+    try{
+      appDoctorPatchState('queue',{
+        lastSheetAuthoritativeSkipSessionId:sid,
+        lastSheetAuthoritativeSkipTs:Date.now(),
+        currentRunningJob:String(_artifactQueueCurrentJob||'')
+      });
+    }catch(e){}
+    return {skipped:true,reason:String(mark.reason||'sheet_authoritative_reload'),sessionId:sid,artifactIds:sid?[sid]:[]};
+  }
   var sd=artifactQueueSessionById(sid,job);
   if(!sd)throw {retryable:false,code:'session_missing',message:'session_missing'};
   if(sd.legacyMigratedNoSheetUpsert||String(sd.source||'')==='legacy_migrated'){
@@ -9592,6 +9899,10 @@ function artifactQueueBuildFallbackGeneratedPlan(type,ctx,reason){
     cached[t]=generatedPlanArtifactToLegacyWorkout(active);
   }
   var legacy=aiCoachBuildFallbackPlan(t,ctx,cached);
+  try{
+    legacy=aiCoachEnrichPlanNarrative(legacy,t,ctx,cached);
+    legacy=aiCoachSanitizePlanForEnvironment(legacy,t,ctx);
+  }catch(_fallbackShapeErr){}
   legacy.targetType=t;
   legacy.generationState='generation_fallback_used';
   legacy.confidenceReason=String(reason||'queue_fallback');
@@ -9720,6 +10031,19 @@ function artifactQueueGeneratePlanJob(job){
     if(!preserveCurrentOnFailure||!currentActive||!generatedPlanIsActiveStatus(currentActive.status)){
       return null;
     }
+    var currentSid=String(currentActive.sourceSessionId||'');
+    if(sid&&currentSid!==String(sd.sessionId||sid)){
+      wtLogEvent('generation_retry_rejected_stale_current',{
+        sessionId:sd.sessionId,
+        sourceSessionId:sd.sessionId,
+        planId:currentActive.planId,
+        planSourceSessionId:currentSid,
+        targetType:type,
+        requestedTargetType:type,
+        errorCode:String(reason||'stale_current_plan_rejected')
+      });
+      return null;
+    }
     wtLogEvent('generation_retry_kept_current',{
       sessionId:sd.sessionId,
       sourceSessionId:sd.sessionId,
@@ -9752,6 +10076,10 @@ function artifactQueueGeneratePlanJob(job){
     if(!validated.validation.ok){
       if(String(type||'').toLowerCase()==='hotel'){
         var safeLegacy=aiCoachBuildFallbackPlan(type,ctx,{});
+        try{
+          safeLegacy=aiCoachEnrichPlanNarrative(safeLegacy,type,ctx,{});
+          safeLegacy=aiCoachSanitizePlanForEnvironment(safeLegacy,type,ctx);
+        }catch(_safeShapeErr){}
         safeLegacy.targetType=type;
         safeLegacy.generationState='generation_fallback_used';
         safeLegacy.confidenceReason=String(reason||'hotel_sanitized_fallback');
@@ -9901,6 +10229,10 @@ function artifactQueueGeneratePlanJob(job){
     if(err&&err.code==='fallback_validation_failed'&&String(type||'').toLowerCase()==='hotel'){
       try{
         var forcedLegacy=aiCoachBuildFallbackPlan(type,ctx,{});
+        try{
+          forcedLegacy=aiCoachEnrichPlanNarrative(forcedLegacy,type,ctx,{});
+          forcedLegacy=aiCoachSanitizePlanForEnvironment(forcedLegacy,type,ctx);
+        }catch(_forcedShapeErr){}
         forcedLegacy.targetType=type;
         forcedLegacy.generationState='generation_fallback_used';
         forcedLegacy.confidenceReason='hotel_force_relaxed_fallback';
@@ -18314,12 +18646,13 @@ function trainerDashboardParseRemoteJson(raw,fallback){
     return fallback;
   }catch(e){return fallback;}
 }
-	function trainerDashboardMergeLatestTrainerState(state){
+function trainerDashboardMergeLatestTrainerState(state){
 	  if(!state||typeof state!=='object')return false;
 	  var changed=false;
 	  var isCloudCache=String(state.source||'').toLowerCase()==='cloudflare_d1';
 	  try{
 	    var ls=state.latestCompletedSession||(state.sessionsTab&&state.sessionsTab.latestCompletedSession)||state.latestSession;
+	    if(ls&&!appDoctorIsTestModeActive()&&!appDoctorIncludeArtifactRow(ls,{includeTest:false}))ls=null;
 	    if(ls&&ls.sessionId){
       var local=workoutFindLocal(ls.sessionId);
       var localRev=parseInt((local&&local.sessionRevision)||0,10)||0;
@@ -18351,15 +18684,18 @@ function trainerDashboardParseRemoteJson(raw,fallback){
     if(rr){
       var parsed=trainerDashboardParseRemoteJson(rr.payloadJson||'',null);
       var review=(parsed&&typeof parsed==='object')?parsed:Object.assign({},rr);
-      review.sessionId=String(review.sessionId||rr.sessionId||rr.sourceSessionId||'');
-      if(review.sessionId){
-        var all=postWorkoutReviewsLoad();
+      if(review&&!appDoctorIsTestModeActive()&&!appDoctorIncludeArtifactRow(review,{includeTest:false}))review=null;
+      if(review){
+        review.sessionId=String(review.sessionId||rr.sessionId||rr.sourceSessionId||'');
+        if(review.sessionId){
+          var all=postWorkoutReviewsLoad();
 	        var local=all[review.sessionId]||null;
 	        if(trainerDashboardArtifactIsNewer(review,local)){
 	          review.syncState=String(review.syncState||(isCloudCache?'cloud_cached':'synced'));
 	          all[review.sessionId]=review;
 	          postWorkoutReviewsSave(all);
-          changed=true;
+            changed=true;
+          }
         }
       }
     }
@@ -18369,15 +18705,18 @@ function trainerDashboardParseRemoteJson(raw,fallback){
     if(cs){
       var parsedState=trainerDashboardParseRemoteJson(cs.payloadJson||'',null);
       var remoteState=(parsedState&&typeof parsedState==='object')?parsedState:Object.assign({},cs);
-      var localState=coachStateLoad();
-      var rrRev=parseInt(remoteState.coachStateRevision||0,10)||0;
-      var lrRev=parseInt(localState.coachStateRevision||0,10)||0;
-      var rt=artifactQueueToMs(remoteState.updatedAt||remoteState.lastUpdatedAt||0);
+      if(remoteState&&!appDoctorIsTestModeActive()&&!appDoctorIncludeArtifactRow(remoteState,{includeTest:false}))remoteState=null;
+      if(remoteState){
+        var localState=coachStateLoad();
+        var rrRev=parseInt(remoteState.coachStateRevision||0,10)||0;
+        var lrRev=parseInt(localState.coachStateRevision||0,10)||0;
+        var rt=artifactQueueToMs(remoteState.updatedAt||remoteState.lastUpdatedAt||0);
 	      var lt=artifactQueueToMs(localState.updatedAt||localState.lastUpdatedAt||0);
 	      if(rrRev>lrRev||(rrRev===lrRev&&rt>lt)){
 	        remoteState.syncState=String(remoteState.syncState||(isCloudCache?'cloud_cached':'synced'));
 	        coachStateSave(remoteState);
 	        changed=true;
+        }
       }
     }
   }catch(e){}
@@ -18391,6 +18730,7 @@ function trainerDashboardParseRemoteJson(raw,fallback){
       if(!rp)return;
       var parsed=trainerDashboardParseRemoteJson(rp.payloadJson||'',null);
       var plan=(parsed&&typeof parsed==='object')?parsed:Object.assign({},rp);
+	      if(plan&&!appDoctorIsTestModeActive()&&!appDoctorIncludeArtifactRow(plan,{includeTest:false}))return;
 	      plan.planId=String(plan.planId||rp.planId||'');
 	      if(!plan.planId)return;
 	      plan.planSlot=String(plan.planSlot||rp.planSlot||'').toUpperCase();
@@ -22085,18 +22425,22 @@ function closeCoachProfile(){
 
 function saveCoachProfile(){
   var p=aiProfileLoad();
+  var beforeProfile=null,beforeVoice=null;
+  try{beforeProfile=JSON.parse(JSON.stringify(p||{}));}catch(e){beforeProfile=Object.assign({},p||{});}
+  try{beforeVoice=voiceMinsLoad();}catch(e){beforeVoice=null;}
   p.goalNote=(document.getElementById('cpGoalNote')||{}).value||'';
   p.homeDuration=parseInt((document.getElementById('cpHomeDur')||{}).value)||45;
   p.hotelDuration=parseInt((document.getElementById('cpHotelDur')||{}).value)||45;
   p.nextTestDate=(document.getElementById('cpNextTestDate')||{}).value||'';
   var ps=document.getElementById('cpProgressionStyle');
   if(ps)p.progressionStyle=ps.value||'intensity-first';
-  voiceMinsSave({
+  var nextVoiceMins={
     concentric:(document.getElementById('cpVmCon')||{}).value,
     eccentric:(document.getElementById('cpVmEcc')||{}).value,
     isometric:(document.getElementById('cpVmIso')||{}).value,
     defaultMin:(document.getElementById('cpVmDef')||{}).value
-  });
+  };
+  voiceMinsSave(nextVoiceMins);
   var autoBtn=document.getElementById('cpAutoCoachBtn');
   try{
     if(autoBtn){
@@ -22119,6 +22463,27 @@ function saveCoachProfile(){
   var handoffBlocks=existingBlocks.filter(function(b){return b.indexOf('EXERCISE STATE')>=0||b.indexOf('NEXT CYCLE HANDOFF')>=0;});
   var combined=[userNotes].concat(handoffBlocks).filter(Boolean).join(' || ');
   aiCoachNotesSave(combined);
+  try{
+    var changedFields=[];
+    function profileChanged(k){
+      var a=beforeProfile?beforeProfile[k]:undefined;
+      var b=p?p[k]:undefined;
+      if(JSON.stringify(a)!==JSON.stringify(b))changedFields.push(k);
+    }
+    ['goalNote','homeDuration','hotelDuration','nextTestDate','progressionStyle','maxRepsPerSet'].forEach(profileChanged);
+    var afterVoice=voiceMinsLoad();
+    if(JSON.stringify(beforeVoice||{})!==JSON.stringify(afterVoice||{}))changedFields.push('voiceMins');
+    if(String(existingNotes||'')!==String(combined||''))changedFields.push('coachNotes');
+    if(changedFields.length){
+      trainerBrainNotifyContextChanged('coach_settings_changed',{
+        reason:'coach_profile_saved',
+        profileChangedFields:changedFields,
+        allowPlanGeneration:true,
+        changeSummary:{profileChangedFields:changedFields},
+        context:{screen:'coach_profile',profileChangedFields:changedFields}
+      });
+    }
+  }catch(e){}
   // Invalidate cached workout so next generation uses new profile
   try{localStorage.removeItem(AI_WORKOUT_KEY);}catch(e){}
   closeCoachProfile();
@@ -22341,6 +22706,44 @@ function wtTestSyncAuth(){
   out.push(wtTestResult('Export sanitizer excludes tokens',true,'Safe backup excludes app/health tokens and keys by design'));
   out.push(wtTestResult('Service worker cache paths',typeof WT_SW_VERSION==='string'&&WT_SW_VERSION.indexOf('wt-shell-')===0,'SW version present for shell cache checks'));
   out.push(wtTestResult('Sheet duplicate tools available',typeof workoutSheetDuplicateAuditPrompt==='function'&&typeof workoutSheetDuplicateCleanupPrompt==='function'&&typeof workoutForgetLocalAndReloadSheet==='function'&&typeof workoutSheetDuplicateCheckBackendReady_==='function','Workout cache reload, duplicate cleanup, and backend version guard are wired'));
+  out.push(wtTestResult('Backend version gate current',typeof workoutSheetDuplicateBackendRequiredVersion_==='function'&&workoutSheetDuplicateBackendRequiredVersion_()==='v19.7.19','Duplicate/Health/Cholesterol/Nutrition POST-read backend tools require the deployed backend with all current routes'));
+  out.push(wtTestResult('Health clear route wired',typeof connClearLatestHealthImportToday==='function'&&String(wtBackendPost).indexOf('healthClearToday')>=0,'Health setup clear button route is tracked as a backend write'));
+  out.push(wtTestResult('Cholesterol read route wired',typeof buildCholDisplay==='function'&&typeof nutFetchCholForWeekTab==='function'&&String(buildCholDisplay).indexOf('getCholesterol')>=0&&String(nutFetchCholForWeekTab).indexOf('getCholesterol')>=0,'Progress and Nutrition cholesterol displays read the live cholesterol route'));
+  out.push(wtTestResult('Nutrition POST read route wired',typeof nutFetchEntries==='function'&&String(nutFetchEntries).indexOf("type:'getNutrition'")>=0&&String(nutFetchEntries).indexOf('jsonpFallback')>=0,'Nutrition reads use backend POST first with JSONP fallback'));
+  try{
+    var missingHandlers=[];
+    var knownGlobals={alert:1,confirm:1,prompt:1,setTimeout:1,clearTimeout:1,setInterval:1,clearInterval:1,requestAnimationFrame:1,encodeURIComponent:1,decodeURIComponent:1};
+    var jsKeywords={if:1,return:1,typeof:1,void:1,let:1,const:1,var:1,for:1,while:1,switch:1,try:1,catch:1};
+    Array.prototype.slice.call(document.querySelectorAll('*')).forEach(function(el){
+      Array.prototype.slice.call(el.attributes||[]).forEach(function(attr){
+        if(!/^on/i.test(attr.name))return;
+        var code=String(attr.value||'');
+        var m=code.match(/^\s*([A-Za-z_$][\w$]*)\s*\(/);
+        if(m&&!(m[1] in jsKeywords)&&!(m[1] in knownGlobals)&&typeof window[m[1]]!=='function')missingHandlers.push(m[1]);
+      });
+    });
+    missingHandlers=missingHandlers.filter(function(v,i,a){return a.indexOf(v)===i;});
+    out.push(wtTestResult('Visible button handlers resolve',missingHandlers.length===0,missingHandlers.length?('Missing: '+missingHandlers.join(', ')):'All visible inline handlers resolve'));
+  }catch(err){
+    out.push(wtTestResult('Visible button handlers resolve',false,err&&err.message||String(err)));
+  }
+  var prevAuthority=null, hadPrevAuthority=false;
+  try{
+    prevAuthority=localStorage.getItem(WORKOUT_SHEET_AUTHORITY_KEY);
+    hadPrevAuthority=prevAuthority!==null;
+    localStorage.setItem(WORKOUT_SHEET_AUTHORITY_KEY,JSON.stringify({ts:2000,reason:'self_test'}));
+    var oldBlocked=workoutSheetAuthorityBlocksJob_({jobType:'sync_session_to_sheet',createdAt:1000,sourceSessionId:'self_old'});
+    var newAllowed=!workoutSheetAuthorityBlocksJob_({jobType:'sync_session_to_sheet',createdAt:3000,sourceSessionId:'self_new'});
+    var otherAllowed=!workoutSheetAuthorityBlocksJob_({jobType:'generate_home_next',createdAt:1000,sourceSessionId:'self_plan'});
+    out.push(wtTestResult('Sheet-authority replay guard',oldBlocked&&newAllowed&&otherAllowed,'Old workout sheet writes are blocked after a sheet-authoritative reload; new writes still pass'));
+  }catch(err){
+    out.push(wtTestResult('Sheet-authority replay guard',false,err&&err.message||String(err)));
+  }finally{
+    try{
+      if(hadPrevAuthority)localStorage.setItem(WORKOUT_SHEET_AUTHORITY_KEY,prevAuthority);
+      else localStorage.removeItem(WORKOUT_SHEET_AUTHORITY_KEY);
+    }catch(_e){}
+  }
   return out;
 }
 function wtTestStorageCompat(){
@@ -22713,6 +23116,15 @@ function appDoctorWorkoutSaveAudit(){
 	  var completed=(q.succeeded||0)+(q.cancelled||0);
 	  var cloudQueue={items:[]};
 	  try{cloudQueue=wtTrainerCloudCacheQueueLoad();}catch(e){cloudQueue={items:[]};}
+  var sheetAuthorityMarker={ts:0,reason:''};
+  var staleSheetReplayJobs=0;
+  try{
+    sheetAuthorityMarker=workoutSheetAuthorityLoad_();
+    staleSheetReplayJobs=jobs.filter(function(j){return j&&artifactQueueJobIsOpen(j)&&workoutSheetAuthorityBlocksJob_(j);}).length;
+  }catch(e){
+    sheetAuthorityMarker={ts:0,reason:''};
+    staleSheetReplayJobs=0;
+  }
 	  return {
 	    queue_store_key:ARTIFACT_QUEUE_KEY,
 	    cloud_cache_queue_store_key:WT_TRAINER_CLOUD_CACHE_QUEUE_KEY,
@@ -22728,6 +23140,9 @@ function appDoctorWorkoutSaveAudit(){
     next_retry_time:appDoctorFmtTs(q.nextRetryAt||0),
     health:open===0?'idle':((q.failed_final||0)>0?'needs_attention':'active'),
     stale_overwrite_guard:'session_freshness_and_plan_activation_checks',
+    sheet_authority_active:!!(sheetAuthorityMarker&&sheetAuthorityMarker.ts),
+    sheet_authority_reason:String((sheetAuthorityMarker&&sheetAuthorityMarker.reason)||''),
+    stale_sheet_replay_jobs_blocked_count:staleSheetReplayJobs,
     current_running_job:String(_artifactQueueCurrentJob||''),
     queue_job_types:Array.from(new Set(jobs.map(function(j){return String((j&&j.jobType)||'');}).filter(Boolean))).sort()
   };
@@ -22854,7 +23269,7 @@ function appDoctorRecentAppEvents(limit){
 function appDoctorRecentErrors(limit){
   var out=[];
   appDoctorRecentAppEvents((limit||20)*2).forEach(function(x){
-    if(String(x.level||'').toLowerCase()==='error'||String(x.level||'').toLowerCase()==='warn'||String(x.message||'').toLowerCase().indexOf('error')>=0){
+    if(appDoctorEventIsActiveIssue_(x)){
       out.push(x);
     }
   });
@@ -22884,6 +23299,14 @@ function appDoctorSnapshot(){
   try{appStatus=JSON.parse(localStorage.getItem(WT_APPSTATUS_CACHE_KEY)||'{}')||{};}catch(e){appStatus={};}
   var queues=appDoctorPendingSheetWrites();
   var queueSum=artifactQueueSummary();
+  var sheetAuthorityMarker={ts:0,reason:''}, staleSheetReplayJobs=0;
+  try{
+    sheetAuthorityMarker=workoutSheetAuthorityLoad_();
+    staleSheetReplayJobs=(artifactQueueLoadStore().jobs||[]).filter(function(j){return j&&artifactQueueJobIsOpen(j)&&workoutSheetAuthorityBlocksJob_(j);}).length;
+  }catch(e){
+    sheetAuthorityMarker={ts:0,reason:''};
+    staleSheetReplayJobs=0;
+  }
   var completedSeed=String((_completedSessionId||''));
   if(!appDoctorIsTestModeActive()&&appDoctorIsTestId(completedSeed))completedSeed='';
   var canonicalSid=String((canonicalLatest&&canonicalLatest.sessionId)||'');
@@ -23165,6 +23588,9 @@ function appDoctorSnapshot(){
       queue_health:(queueSum.pending+queueSum.running+queueSum.failed_retryable+queueSum.failed_final)===0?'idle':((queueSum.failed_final||0)>0?'needs_attention':'active'),
       strandedRunningJobsRecovered:parseInt((st.queue&&st.queue.strandedRunningJobsRecovered)||0,10)||0,
       duplicateGenerationJobsSuppressed:parseInt((st.queue&&st.queue.duplicateGenerationJobsSuppressed)||0,10)||0,
+      sheet_authority_active:!!(sheetAuthorityMarker&&sheetAuthorityMarker.ts),
+      sheet_authority_reason:String((sheetAuthorityMarker&&sheetAuthorityMarker.reason)||''),
+      stale_sheet_replay_jobs_blocked_count:staleSheetReplayJobs,
       current_running_job:appDoctorCurrentJob(),
       last_20_app_events:appDoctorRecentAppEvents(20),
       last_20_errors:appDoctorRecentErrors(20)
@@ -23254,8 +23680,10 @@ function appDoctorSnapshot(){
         active_test_sessionId:contam.activeTestSessionId,
 	        active_test_HOME_planId:contam.activeTestHomePlanId,
 	        active_test_HOTEL_planId:contam.activeTestHotelPlanId,
-	        queue_jobs_real:contam.realQueueJobs,
-	        queue_jobs_test:contam.testQueueJobs,
+	        queue_jobs_open_real:contam.realQueueJobs,
+	        queue_jobs_open_test:contam.testQueueJobs,
+	        queue_jobs_total_real:contam.realQueueJobsTotal,
+	        queue_jobs_total_test:contam.testQueueJobsTotal,
 	        restore_snapshot_available:snapshotPresent,
 	        last_restore_status:String((restoreMeta&&restoreMeta.status)||''),
 	        last_restore_time:appDoctorFmtTs((restoreMeta&&restoreMeta.ts)||0),
@@ -23467,6 +23895,17 @@ function appDoctorTestLabGlobalsSnapshot(){
     _sheetSessions:appDoctorTestLabClone(_sheetSessions||[]),
     _completedSessionId:_completedSessionId,
     _goals:appDoctorTestLabClone(_goals||{}),
+    _cachedPlan:appDoctorTestLabClone((typeof _cachedPlan!=='undefined'&&_cachedPlan)?_cachedPlan:null),
+    _weekPlan:appDoctorTestLabClone((typeof _weekPlan!=='undefined'&&_weekPlan)?_weekPlan:{}),
+    _allWeekPlans:appDoctorTestLabClone((typeof _allWeekPlans!=='undefined'&&_allWeekPlans)?_allWeekPlans:{}),
+    _completedWorkoutOverlay:appDoctorTestLabClone((typeof _completedWorkoutOverlay!=='undefined'&&_completedWorkoutOverlay)?_completedWorkoutOverlay:{}),
+    _nutEntries:appDoctorTestLabClone((typeof _nutEntries!=='undefined'&&Array.isArray(_nutEntries))?_nutEntries:[]),
+    _nutFoods:appDoctorTestLabClone((typeof _nutFoods!=='undefined'&&Array.isArray(_nutFoods))?_nutFoods:[]),
+    _nutFoodMemory:appDoctorTestLabClone((typeof _nutFoodMemory!=='undefined'&&Array.isArray(_nutFoodMemory))?_nutFoodMemory:[]),
+    _nutMealTemplates:appDoctorTestLabClone((typeof _nutMealTemplates!=='undefined'&&Array.isArray(_nutMealTemplates))?_nutMealTemplates:[]),
+    _nutFoodLibraryMeta:appDoctorTestLabClone((typeof _nutFoodLibraryMeta!=='undefined'&&_nutFoodLibraryMeta)?_nutFoodLibraryMeta:{}),
+    _nutDate:(typeof _nutDate!=='undefined')?_nutDate:'',
+    _nutTargets:appDoctorTestLabClone((typeof _nutTargets!=='undefined'&&_nutTargets)?_nutTargets:{}),
     _aiCoachMode:String(_aiCoachMode||''),
     _aiCoachLastAutoPatch:appDoctorTestLabClone(_aiCoachLastAutoPatch||null),
     _artifactQueueMem:appDoctorTestLabClone(_artifactQueueMem),
@@ -23485,6 +23924,17 @@ function appDoctorTestLabGlobalsRestore(globalsSnap){
   _sheetSessions=appDoctorTestLabClone(g._sheetSessions||[]);
   _completedSessionId=g._completedSessionId||null;
   _goals=appDoctorTestLabClone(g._goals||_goals||{});
+  if(typeof _cachedPlan!=='undefined')_cachedPlan=appDoctorTestLabClone(g._cachedPlan||null);
+  if(typeof _weekPlan!=='undefined')_weekPlan=appDoctorTestLabClone(g._weekPlan||{});
+  if(typeof _allWeekPlans!=='undefined')_allWeekPlans=appDoctorTestLabClone(g._allWeekPlans||{});
+  if(typeof _completedWorkoutOverlay!=='undefined')_completedWorkoutOverlay=appDoctorTestLabClone(g._completedWorkoutOverlay||{});
+  if(typeof _nutEntries!=='undefined')_nutEntries=appDoctorTestLabClone(g._nutEntries||[]);
+  if(typeof _nutFoods!=='undefined')_nutFoods=appDoctorTestLabClone(g._nutFoods||[]);
+  if(typeof _nutFoodMemory!=='undefined')_nutFoodMemory=appDoctorTestLabClone(g._nutFoodMemory||[]);
+  if(typeof _nutMealTemplates!=='undefined')_nutMealTemplates=appDoctorTestLabClone(g._nutMealTemplates||[]);
+  if(typeof _nutFoodLibraryMeta!=='undefined')_nutFoodLibraryMeta=appDoctorTestLabClone(g._nutFoodLibraryMeta||{});
+  if(typeof _nutDate!=='undefined')_nutDate=g._nutDate||localDateStr();
+  if(typeof _nutTargets!=='undefined')_nutTargets=appDoctorTestLabClone(g._nutTargets||{});
   _aiCoachMode=String(g._aiCoachMode||'');
   _aiCoachLastAutoPatch=appDoctorTestLabClone(g._aiCoachLastAutoPatch||null);
   _artifactQueueMem=appDoctorTestLabClone(g._artifactQueueMem);
@@ -23574,6 +24024,7 @@ function appDoctorTestLabRestoreFromSnapshotAsync(snapshot,opts){
   return appDoctorTestLabRestoreIdbSnapshot(snap.idb||{}).then(function(){
     appDoctorTestLabGlobalsRestore(snap.globals||{});
     appDoctorSetTestModeActive(false);
+    try{appDoctorTestLabPurgeTestArtifactsBestEffort();}catch(_purgeErr){}
     if(o.clearSavedSnapshot){
       try{localStorage.removeItem(APP_DOCTOR_TEST_SNAPSHOT_KEY);}catch(e){}
       try{wtDB.del(APP_DOCTOR_TEST_SNAPSHOT_KEY);}catch(e){}
@@ -23645,6 +24096,7 @@ function appDoctorTestLabRestoreRealState(){
 	          message:'snapshot_missing_test_mode_cleared'
 	        }));
 	      }catch(e){}
+	      try{appDoctorRender();}catch(_renderErr){}
 	      appToast('No Test Lab snapshot found. Cleared test mode only.','var(--orange)');
 	      return false;
 	    }
@@ -23685,6 +24137,11 @@ function appDoctorPhase7ResetWorkingState(){
   _aiGenerationJobs={};
   _aiCoachGenerateActiveId=0;
   _aiCoachGeneratingBusy=false;
+  _completedWorkoutOverlay={};
+  _trainerDashboardLastSnapshot=null;
+  _trainerDashboardRemoteSyncInFlight=false;
+  _trainerDashboardLastRemoteSyncTs=0;
+  _trainerDashboardLastCloudSnapshotSaveTs=0;
   if(_artifactQueueTimer)clearTimeout(_artifactQueueTimer);
   _artifactQueueTimer=null;
   _artifactQueueCurrentJob='';
@@ -23707,8 +24164,27 @@ function appDoctorTestLabResetWorkspaceAsync(){
     ARTIFACT_QUEUE_KEY,
     AI_WORKOUT_KEY,
     TRAINER_BOOTSTRAP_KEY,
-    TRAINER_NOTIFICATION_KEY
+    TRAINER_NOTIFICATION_KEY,
+    APP_DOCTOR_STATE_KEY,
+    APP_DOCTOR_ERROR_LOG_KEY,
+    APP_DOCTOR_TEST_RESTORE_STATUS_KEY
   ];
+  try{if(typeof WORKOUT_SHEET_AUTHORITY_KEY==='string')keys.push(WORKOUT_SHEET_AUTHORITY_KEY);}catch(e){}
+  try{if(typeof WT_TRAINER_CLOUD_CACHE_QUEUE_KEY==='string')keys.push(WT_TRAINER_CLOUD_CACHE_QUEUE_KEY);}catch(e){}
+  [
+    (typeof NUT_ENTRIES_KEY!=='undefined'?NUT_ENTRIES_KEY:''),
+    (typeof NUT_FOODS_KEY!=='undefined'?NUT_FOODS_KEY:''),
+    (typeof NUT_MEMORY_KEY!=='undefined'?NUT_MEMORY_KEY:''),
+    (typeof NUT_MEAL_TEMPLATES_KEY!=='undefined'?NUT_MEAL_TEMPLATES_KEY:''),
+    (typeof NUT_FOOD_LIBRARY_META_KEY!=='undefined'?NUT_FOOD_LIBRARY_META_KEY:''),
+    (typeof NUT_TARGETS_KEY!=='undefined'?NUT_TARGETS_KEY:''),
+    (typeof NUT_ACTIVE_KEY!=='undefined'?NUT_ACTIVE_KEY:''),
+    (typeof NUT_CHEAT_KEY!=='undefined'?NUT_CHEAT_KEY:''),
+    (typeof NUT_NOT_EATEN_KEY!=='undefined'?NUT_NOT_EATEN_KEY:''),
+    (typeof NUT_SYNC_QUEUE_KEY!=='undefined'?NUT_SYNC_QUEUE_KEY:''),
+    (typeof NUT_EXTENDED_CACHE_KEY!=='undefined'?NUT_EXTENDED_CACHE_KEY:''),
+    (typeof DAY_DONE_KEY!=='undefined'?DAY_DONE_KEY:'')
+  ].forEach(function(k){if(k&&keys.indexOf(k)<0)keys.push(k);});
   keys.forEach(function(k){
     try{localStorage.removeItem(k);}catch(e){}
   });
@@ -23717,6 +24193,11 @@ function appDoctorTestLabResetWorkspaceAsync(){
   try{localStorage.setItem(POST_WORKOUT_REVIEW_KEY,'{}');}catch(e){}
   try{localStorage.setItem(ARTIFACT_QUEUE_KEY,JSON.stringify(artifactQueueEmptyStore()));}catch(e){}
   try{localStorage.setItem(GENERATED_PLAN_STORE_KEY,JSON.stringify(generatedPlanEmptyStore()));}catch(e){}
+  if(typeof _nutEntries!=='undefined')_nutEntries=[];
+  if(typeof _nutFoods!=='undefined')_nutFoods=[];
+  if(typeof _nutFoodMemory!=='undefined')_nutFoodMemory=[];
+  if(typeof _nutMealTemplates!=='undefined')_nutMealTemplates=[];
+  if(typeof _nutFoodLibraryMeta!=='undefined')_nutFoodLibraryMeta={};
   if(typeof wtDB==='undefined'||!wtDB||typeof wtDB.del!=='function')return Promise.resolve(true);
   return Promise.all(keys.map(function(k){
     return wtDB.del(k).catch(function(){return false;});
@@ -24517,7 +24998,7 @@ function appDoctorRunTestLab(mode){
   var results=[];
   var busyState=appDoctorTestLabPreflight();
   var forcedReadOnly=false;
-  var destructiveMode=(targetMode==='all'||targetMode==='storage'||targetMode==='pipeline'||targetMode==='ai_failure'||targetMode==='validation');
+  var destructiveMode=(targetMode==='all'||targetMode==='storage'||targetMode==='pipeline'||targetMode==='month'||targetMode==='ai_failure'||targetMode==='validation');
   if(busyState.blocked&&destructiveMode){
     forcedReadOnly=true;
     targetMode='readonly';
@@ -24533,6 +25014,7 @@ function appDoctorRunTestLab(mode){
     if(targetMode==='storage')return category==='storage';
     if(targetMode==='backend')return category==='backend_sheet';
     if(targetMode==='pipeline')return category==='trainer_pipeline'||category==='dashboard'||category==='autopilot';
+    if(targetMode==='month')return category==='month_simulation';
 	    if(targetMode==='ai_failure')return category==='ai_failure';
 	    if(targetMode==='validation')return category==='home_hotel_validation';
 	    if(targetMode==='pwa')return category==='pwa_cache';
@@ -24587,9 +25069,18 @@ function appDoctorRunTestLab(mode){
   var origAiOpenAICall=aiCoachOpenAICall;
   var origArtifactQueueAiGeneratePlanPromise=artifactQueueAiGeneratePlanPromise;
   var origRemoteSync=trainerDashboardRemoteSync;
+  var origWtTrainerCloudCacheSaveArtifacts=wtTrainerCloudCacheSaveArtifacts;
+  var testLabCloudCacheSaves=[];
   wtResetIdGenerator();
   var origWtNewId=wtNewId;
   var cases=[];
+
+  try{
+    appDoctorSetTestModeActive(false);
+    appDoctorTestLabPurgeTestArtifactsBestEffort();
+  }catch(_preSnapshotPurgeErr){}
+  lsSnap=appDoctorPhase7StorageSnapshot();
+  globalsSnap=appDoctorTestLabGlobalsSnapshot();
 
   cases.push({
     category:'storage',
@@ -24753,21 +25244,50 @@ function appDoctorRunTestLab(mode){
     category:'backend_sheet',
     name:'Backend/Sheet: partial failure handling',
     fn:function(){
-      var okId=appDoctorTestLabNs('test_event');
-      var badId=appDoctorTestLabNs('test_event');
-      return artifactQueueSyncArtifacts([
-        {artifactType:'app_event',artifactId:okId,revision:1,data:{namespace:'test_lab',label:'partial_failure_ok',createdAt:wtNowIso()}},
-        {artifactType:'app_event',artifactId:badId,revision:1,data:{namespace:'test_lab',label:'partial_failure_forced_retryable',createdAt:wtNowIso(),forceRetryableFailureForTest:true}}
-      ],{timeoutMs:25000}).then(function(sync){
+      function attempt(attemptNo){
+        var okId=appDoctorTestLabNs('test_event');
+        var badId=appDoctorTestLabNs('test_event');
+        return artifactQueueSyncArtifacts([
+          {artifactType:'app_event',artifactId:okId,revision:1,data:{namespace:'test_lab',label:'partial_failure_ok_'+attemptNo,createdAt:wtNowIso()}},
+          {artifactType:'app_event',artifactId:badId,revision:1,data:{namespace:'test_lab',label:'partial_failure_forced_retryable_'+attemptNo,createdAt:wtNowIso(),forceRetryableFailureForTest:true}}
+        ],{timeoutMs:35000}).then(function(sync){
+          return {sync:sync,okId:okId,badId:badId,attemptNo:attemptNo};
+        });
+      }
+      function assess(row){
+        var sync=row&&row.sync?row.sync:{};
         var rows=Array.isArray(sync.results)?sync.results:[];
-        var okRow=rows.find(function(r){return r&&String(r.artifactId||'')===okId;});
-        var badRow=rows.find(function(r){return r&&String(r.artifactId||'')===badId;});
+        var okRow=rows.find(function(r){return r&&String(r.artifactId||'')===row.okId;});
+        var badRow=rows.find(function(r){return r&&String(r.artifactId||'')===row.badId;});
         var statusOk=(String(sync.status||'')==='partial'||String(sync.status||'')==='error');
         var retryabilityDeclared=!!(badRow&&badRow.retryable!==undefined);
         var pass=statusOk&&!!okRow&&String(okRow.status||'')==='ok'&&!!badRow&&String(badRow.status||'')==='error'&&retryabilityDeclared&&badRow.retryable===true&&parseInt(sync.failedCount||0,10)>=1;
-        return {pass:pass,errorCode:pass?'':'partial_failure_not_reported',details:'status='+(sync.status||'')+' failed='+(sync.failedCount||0)+' retryable='+(badRow&&badRow.retryable),artifactIds:[okId,badId],cleanupStatus:'server_namespaced_event_retained'};
+        return {
+          pass:pass,
+          retryableContractFlake:!pass&&!!badRow&&badRow.retryable===true&&parseInt(sync.failedCount||0,10)>=2,
+          details:'status='+(sync.status||'')+' failed='+(sync.failedCount||0)+' retryable='+(badRow&&badRow.retryable)+' attempt='+(row.attemptNo+1),
+          artifactIds:[row.okId,row.badId],
+          sync:sync
+        };
+      }
+      return attempt(0).then(function(first){
+        var checked=assess(first);
+        if(checked.pass)return {pass:true,errorCode:'',details:checked.details,artifactIds:checked.artifactIds,cleanupStatus:'server_namespaced_event_retained'};
+        if(!checked.retryableContractFlake)return {pass:false,errorCode:'partial_failure_not_reported',details:checked.details,artifactIds:checked.artifactIds,cleanupStatus:'server_namespaced_event_retained'};
+        return new Promise(function(resolve){setTimeout(resolve,1800);}).then(function(){
+          return attempt(1).then(function(second){
+            var checked2=assess(second);
+            return {
+              pass:checked2.pass,
+              errorCode:checked2.pass?'':'partial_failure_not_reported',
+              details:checked2.details+' · retried after transient all-failed response',
+              artifactIds:checked.artifactIds.concat(checked2.artifactIds),
+              cleanupStatus:'server_namespaced_event_retained'
+            };
+          });
+        });
       }).catch(function(e){
-        return {pass:false,errorCode:'partial_failure_exception',details:String(e&&e.message||e),artifactIds:[okId,badId],cleanupStatus:'server_namespaced_event_retained'};
+        return {pass:false,errorCode:'partial_failure_exception',details:String(e&&e.message||e),artifactIds:[],cleanupStatus:'server_namespaced_event_retained'};
       });
     }
   });
@@ -24809,6 +25329,588 @@ function appDoctorRunTestLab(mode){
           var ids=[sd.sessionId,rv&&rv.reviewId||'',state&&state.coachStateId||'',home&&home.planId||'',hotel&&hotel.planId||''].filter(Boolean);
           return {pass:pass,errorCode:pass?'':'pipeline_chain_incomplete',details:'home='+(home&&home.planId||'')+' hotel='+(hotel&&hotel.planId||'')+' jobs='+qJobs.length,artifactIds:ids,cleanupStatus:'isolated_snapshot_restore'};
         });
+      });
+    }
+  });
+  cases.push({
+    category:'trainer_pipeline',
+    name:'Trainer week simulation: 2 HOME + 1 HOTEL, backup/sync/autopilot',
+    fn:function(){
+      var weekDates=getWeekDates(0).map(function(d){return fmtDate(d);});
+      var cloudStart=testLabCloudCacheSaves.length;
+      var rawPlan={};
+      rawPlan[weekDates[0]]='Home';
+      rawPlan[weekDates[1]]='HIIT';
+      rawPlan[weekDates[2]]='Home';
+      rawPlan[weekDates[3]]='Rest';
+      rawPlan[weekDates[4]]='Hotel';
+      rawPlan[weekDates[5]]='HIIT';
+      rawPlan[weekDates[6]]='Rest';
+      _cachedPlan=JSON.parse(JSON.stringify(rawPlan));
+      _allWeekPlans[weekDates[0]]=JSON.parse(JSON.stringify(rawPlan));
+      _weekPlan=overlayCompletedWorkouts(JSON.parse(JSON.stringify(rawPlan)),[],0);
+      savePlanCache(rawPlan);
+      _goals=Object.assign({},_goals||{},{strGoal:3,hiitSessions:2,effortGoal:13,durGoal:28});
+      saveGoalsCache(_goals);
+      function exerciseRows(target,idx){
+        if(target==='HOTEL'){
+          return [
+            {name:'CLOSE-GRIP PUSH-UPS',targetReps:'8/8',sets:[String(8+idx),String(7+idx)],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_week_hotel_push',skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:90,isPlank:'no'},
+            {name:'DIPS',targetReps:'10/10',sets:['10','9'],setFeels:['Medium','Medium-hard'],feel:'Medium-hard',notes:'test_lab_week_hotel_dips',skipped:'',skipReason:'',restSecs:75,betweenExRestSecs:90,isPlank:'no'},
+            {name:'LEG RAISES',targetReps:'15/15',sets:['15','14'],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_week_hotel_core',skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:85,isPlank:'no'},
+            {name:'SIDE PLANKS',targetReps:'45/45',sets:['45','45'],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_week_hotel_plank',skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:90,isPlank:'yes'}
+          ];
+        }
+        return [
+          {name:'PULL-UPS',targetReps:'4/3/3',sets:[String(4+idx),'3','3'],setFeels:['Medium-hard','Medium','Medium'],feel:'Medium-hard',notes:'test_lab_week_home_pull',skipped:'',skipReason:'',restSecs:90,betweenExRestSecs:110,isPlank:'no'},
+          {name:'CLOSE-GRIP PUSH-UPS',targetReps:'9/8',sets:[String(9+idx),'8'],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_week_home_push',skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:90,isPlank:'no'},
+          {name:'DIPS',targetReps:'10/10',sets:['10','10'],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_week_home_dips',skipped:'',skipReason:'',restSecs:75,betweenExRestSecs:90,isPlank:'no'},
+          {name:'LEG RAISES',targetReps:'15/15',sets:['15','15'],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_week_home_core',skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:85,isPlank:'no'},
+          {name:'SIDE PLANKS',targetReps:'45/45',sets:['45','45'],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_week_home_plank',skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:90,isPlank:'yes'}
+        ];
+      }
+      function makeSession(target,offset,label,idx){
+        var ds=weekDates[offset];
+        var ts=new Date(Date.now()-(6-idx)*60*60*1000).toISOString();
+        var ex=exerciseRows(target,idx);
+        var sd=workoutNormalizeSession({
+          artifactType:'session',
+          sessionId:appDoctorTestLabNs('test_session'),
+          clientMutationId:appDoctorTestLabNs('test_event'),
+          sessionRevision:1,
+          date:ds,
+          week:'Week '+getWeekNum(ds),
+          workoutType:target==='HOTEL'?'Hotel Strength':'Home Strength',
+          targetType:target,
+          bodyFeel:idx===2?'Travel-tired but ok':'Good',
+          duration:target==='HOTEL'?31:37+idx,
+          notes:'test_lab_week_sim_'+String(label||target).toLowerCase(),
+          exercises:ex,
+          targets:ex.map(function(row){return {name:row.name,sets:(row.sets||[]).slice(0)};}),
+          actuals:ex.map(function(row){return {name:row.name,sets:(row.sets||[]).slice(0)};}),
+          sourceRuntime:appDoctorRuntimeLabel(),
+          schemaVersion:WORKOUT_SCHEMA_VERSION,
+          source:'test_lab',
+          syncState:'completed_local',
+          state:'completed_local',
+          createdAt:ts,
+          completedAt:ts,
+          updatedAt:ts
+        },{newSession:true});
+        recSession(sd);
+        workoutUpsertCache(sd);
+        _completedSessionId=sd.sessionId;
+        return sd;
+      }
+      var created=[];
+      function runOne(target,offset,label,idx){
+        var sd=makeSession(target,offset,label,idx);
+        created.push(sd);
+        artifactQueueReviewForSession(sd,{allowGenerateFallback:true});
+        return Promise.resolve(artifactQueueUpdateCoachStateJob({sourceSessionId:sd.sessionId,payload:{sessionId:sd.sessionId}})).then(function(){
+          return artifactQueueGeneratePlanJob({sourceSessionId:sd.sessionId,payload:{sessionId:sd.sessionId,planSlot:'HOME_NEXT',targetType:'HOME',preserveCurrentOnFailure:true}});
+        }).then(function(){
+          return artifactQueueGeneratePlanJob({sourceSessionId:sd.sessionId,payload:{sessionId:sd.sessionId,planSlot:'HOTEL_NEXT',targetType:'HOTEL',preserveCurrentOnFailure:true}});
+        }).then(function(){
+          artifactQueueEnqueuePostWorkoutPipeline(sd,{idPrefix:'testlab_week_'+idx,brainRun:false,preserveCurrentOnFailure:true});
+          return sd;
+        });
+      }
+      var savedSyncArtifacts=artifactQueueSyncArtifacts;
+      var sheetSyncCalls=[];
+      artifactQueueSyncArtifacts=function(artifacts,opts){
+        var list=(Array.isArray(artifacts)?artifacts:[]).filter(Boolean);
+        sheetSyncCalls.push({
+          ts:Date.now(),
+          artifactTypes:list.map(function(a){return String((a&&a.artifactType)||'');}),
+          artifactIds:list.map(function(a){return String((a&&a.artifactId)||'');})
+        });
+        return Promise.resolve({
+          status:'ok',
+          type:'syncArtifacts',
+          requestId:appDoctorTestLabNs('test_event'),
+          results:list.map(function(a){
+            return {
+              status:'ok',
+              artifactType:String((a&&a.artifactType)||''),
+              artifactId:String((a&&a.artifactId)||''),
+              planSlot:String((a&&a.planSlot)||'')
+            };
+          }),
+          successCount:list.length,
+          failedCount:0
+        });
+      };
+      return runOne('HOME',0,'home_one',0).then(function(){
+        return runOne('HOME',2,'home_two',1);
+      }).then(function(){
+        return runOne('HOTEL',4,'hotel_one',2);
+      }).then(function(){
+        var syncChain=Promise.resolve();
+        created.forEach(function(sd){
+          syncChain=syncChain.then(function(){
+            return artifactQueueSyncSessionJob({sourceSessionId:sd.sessionId,payload:sd,attempts:0});
+          }).then(function(){
+            return artifactQueueSyncReviewJob({sourceSessionId:sd.sessionId,payload:{sessionId:sd.sessionId},attempts:0});
+          });
+        });
+        syncChain=syncChain.then(function(){
+          return artifactQueueSyncCoachStateJob({sourceSessionId:created[2].sessionId,payload:{sessionId:created[2].sessionId},attempts:0});
+        }).then(function(){
+          return artifactQueueSyncGeneratedPlanJob({sourceSessionId:created[2].sessionId,payload:{sessionId:created[2].sessionId,planSlot:'HOME_NEXT'},attempts:0});
+        }).then(function(){
+          return artifactQueueSyncGeneratedPlanJob({sourceSessionId:created[2].sessionId,payload:{sessionId:created[2].sessionId,planSlot:'HOTEL_NEXT'},attempts:0});
+        });
+        return syncChain;
+      }).then(function(){
+        _weekPlan=overlayCompletedWorkouts(JSON.parse(JSON.stringify(_cachedPlan||rawPlan)),_cachedSessions||[],0);
+        function envOf(s){
+          var e=String(coachSessionEnv(s)||'').toUpperCase();
+          if(e==='HOME'||e==='HOTEL')return e;
+          var wt=String((s&&s.workoutType)||'').toLowerCase();
+          return wt.indexOf('hotel')>=0?'HOTEL':(wt.indexOf('home')>=0?'HOME':'');
+        }
+        var ids={}; created.forEach(function(s){ids[String(s.sessionId||'')]=1;});
+        var weekSessions=(_cachedSessions||[]).filter(function(s){return s&&ids[String(s.sessionId||'')];});
+        var homeCount=weekSessions.filter(function(s){return envOf(s)==='HOME';}).length;
+        var hotelCount=weekSessions.filter(function(s){return envOf(s)==='HOTEL';}).length;
+        var overlayHome=weekDates.filter(function(ds){return completedWorkoutOverlayType(ds)==='Home';}).length;
+        var overlayHotel=weekDates.filter(function(ds){return completedWorkoutOverlayType(ds)==='Hotel';}).length;
+        var reviewsOk=created.every(function(s){return !!postWorkoutReviewLoad(s.sessionId);});
+        var state=coachStateLoad();
+        var preHome=generatedPlanActiveForSlot('HOME_NEXT');
+        var preHotel=generatedPlanActiveForSlot('HOTEL_NEXT');
+        var finalSid=String(created[2].sessionId||'');
+        var plansFromFinal=!!(preHome&&preHotel&&String(preHome.sourceSessionId||'')===finalSid&&String(preHotel.sourceSessionId||'')===finalSid&&String(preHome.targetType||'')==='HOME'&&String(preHotel.targetType||'')==='HOTEL');
+        var sheetTypes={};
+        sheetSyncCalls.forEach(function(c){(c.artifactTypes||[]).forEach(function(t){sheetTypes[t]=(sheetTypes[t]||0)+1;});});
+        var cloudTypes={};
+        testLabCloudCacheSaves.slice(cloudStart).forEach(function(c){(c.artifactTypes||[]).forEach(function(t){cloudTypes[t]=(cloudTypes[t]||0)+1;});});
+        var backupOk=(sheetTypes.session>=3&&sheetTypes.post_workout_review>=3&&sheetTypes.coach_state>=1&&sheetTypes.generated_plan>=2);
+        var d1Ok=(cloudTypes.session>=3&&cloudTypes.post_workout_review>=3&&cloudTypes.coach_state>=1&&cloudTypes.generated_plan>=2&&cloudTypes.equipment_profile>=1);
+        var queued=(artifactQueueLoadStore().jobs||[]).filter(function(j){return j&&String(j.idempotencyKey||'').indexOf('testlab_week_')===0;});
+        var hasQueuedSession=queued.filter(function(j){return String(j.jobType||'')==='sync_session_to_sheet';}).length>=3;
+        var staleRes=aiAutopilotMarkPlansStaleAndQueueRegeneration({
+          patchId:'testlab_week_autopilot_'+Date.now().toString(36),
+          reason:'test_lab_week_autopilot',
+          allowPlanGeneration:true
+        });
+        var postHome=preHome?generatedPlanFindById(preHome.planId):null;
+        var postHotel=preHotel?generatedPlanFindById(preHotel.planId):null;
+        var qStoreAfterAutopilot=artifactQueueLoadStore();
+        var regenJobs=(qStoreAfterAutopilot.jobs||[]).filter(function(j){
+          return j&&j.payload&&j.payload.autopilotTriggered&&(String(j.jobType||'')==='generate_home_next'||String(j.jobType||'')==='generate_hotel_next');
+        });
+        var openHomeRefresh=artifactQueueFindOpenGenerationForSlotSession('HOME_NEXT',finalSid,qStoreAfterAutopilot);
+        var openHotelRefresh=artifactQueueFindOpenGenerationForSlotSession('HOTEL_NEXT',finalSid,qStoreAfterAutopilot);
+        var autopilotOk=!!(staleRes&&parseInt(staleRes.plansMarkedStale||0,10)>=2&&parseInt(staleRes.regenerationJobsEnqueued||0,10)>=2&&postHome&&postHotel&&String(postHome.status||'')==='stale'&&String(postHotel.status||'')==='stale'&&openHomeRefresh&&openHotelRefresh);
+        var planLabelsUnmutated=rawPlan[weekDates[0]]==='Home'&&rawPlan[weekDates[2]]==='Home'&&rawPlan[weekDates[4]]==='Hotel'&&String((_cachedPlan||{})[weekDates[0]]||'')==='Home'&&String((_cachedPlan||{})[weekDates[4]]||'')==='Hotel';
+        var pass=homeCount===2&&hotelCount===1&&overlayHome===2&&overlayHotel===1&&reviewsOk
+          &&state&&String(state.lastCompletedSessionId||'')===finalSid
+          &&plansFromFinal&&backupOk&&d1Ok&&hasQueuedSession&&autopilotOk&&planLabelsUnmutated;
+        return {
+          pass:pass,
+          errorCode:pass?'':'week_simulation_failed',
+          details:'home='+homeCount+' hotel='+hotelCount+' overlay='+overlayHome+'/'+overlayHotel+' plansFromFinal='+plansFromFinal+' sheet='+JSON.stringify(sheetTypes)+' d1='+JSON.stringify(cloudTypes)+' queued='+queued.length+' autopilot='+autopilotOk+' stale='+JSON.stringify(staleRes||{})+' refreshJobs='+(openHomeRefresh?'home':'')+'/'+(openHotelRefresh?'hotel':'')+' autopilotTagged='+regenJobs.length,
+          artifactIds:created.map(function(s){return s.sessionId;}).concat([preHome&&preHome.planId||'',preHotel&&preHotel.planId||'']).filter(Boolean),
+          cleanupStatus:'isolated_snapshot_restore'
+        };
+      }).finally(function(){
+        artifactQueueSyncArtifacts=savedSyncArtifacts;
+      });
+    }
+  });
+  cases.push({
+    category:'month_simulation',
+    name:'Month simulation: two users, every tab, offline/sync/D1/autopilot',
+    fn:function(){
+      var savedSyncArtifacts=artifactQueueSyncArtifacts;
+      var savedBackendPost=wtBackendPost;
+      var savedBudFetch=(typeof budFetchFromSheet==='function')?budFetchFromSheet:null;
+      var savedLoadWeekPlan=(typeof loadWeekPlan==='function')?loadWeekPlan:null;
+      var savedCalendarRefresh=(typeof calendarRefreshPlan==='function')?calendarRefreshPlan:null;
+      var savedCalendarAuto=(typeof calendarPlannerAutoRunMaybe==='function')?calendarPlannerAutoRunMaybe:null;
+      var summaries=[];
+      function monthStartDate(){
+        var d=new Date();
+        d.setHours(12,0,0,0);
+        d.setDate(d.getDate()-29);
+        return d;
+      }
+      function dayStr(base,offset){
+        var d=new Date(base.getTime());
+        d.setDate(base.getDate()+offset);
+        return fmtDate(d);
+      }
+      function monthPlanLabel(user,idx){
+        var mod=idx%7;
+        if(mod===0||mod===3)return 'Home';
+        if(mod===1||mod===5)return 'HIIT';
+        if(user.travel&&mod===4)return 'Hotel';
+        if(user.travel&&mod===2&&(Math.floor(idx/7)%2===1))return 'Travel';
+        return 'Rest';
+      }
+      function exerciseRows(target,idx,user){
+        var travel=!!(user&&user.travel);
+        if(target==='HOTEL'){
+          return [
+            {name:'CLOSE-GRIP PUSH-UPS',targetReps:'8/8',sets:[String(8+(idx%3)),String(7+(idx%2))],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_month_hotel_push_'+user.key,skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:90,isPlank:'no'},
+            {name:'DIPS',targetReps:'10/10',sets:[String(10+(idx%2)),String(9+(idx%2))],setFeels:['Medium','Medium-hard'],feel:'Medium-hard',notes:'test_lab_month_hotel_dips_'+user.key,skipped:'',skipReason:'',restSecs:75,betweenExRestSecs:90,isPlank:'no'},
+            {name:'LEG RAISES',targetReps:'15/15',sets:['15',String(14+(idx%2))],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_month_hotel_core_'+user.key,skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:85,isPlank:'no'},
+            {name:'SINGLE-LEG GLUTE BRIDGES',targetReps:'14/14',sets:['14','14'],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_month_hotel_glute_'+user.key,skipped:'',skipReason:'',restSecs:50,betweenExRestSecs:80,isPlank:'no'},
+            {name:'SIDE PLANKS',targetReps:'45/45',sets:['45','45'],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_month_hotel_plank_'+user.key,skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:90,isPlank:'yes'}
+          ];
+        }
+        return [
+          {name:'PULL-UPS',targetReps:travel?'4/3/3':'5/4/3',sets:[String(4+(idx%3)),String(3+(idx%2)),'3'],setFeels:['Medium-hard','Medium','Medium'],feel:'Medium-hard',notes:'test_lab_month_home_pull_'+user.key,skipped:'',skipReason:'',restSecs:90,betweenExRestSecs:110,isPlank:'no'},
+          {name:'CLOSE-GRIP PUSH-UPS',targetReps:'9/8',sets:[String(9+(idx%4)),'8'],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_month_home_push_'+user.key,skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:90,isPlank:'no'},
+          {name:'DIPS',targetReps:'10/10',sets:[String(10+(idx%2)),'10'],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_month_home_dips_'+user.key,skipped:'',skipReason:'',restSecs:75,betweenExRestSecs:90,isPlank:'no'},
+          {name:'LEG RAISES',targetReps:'15/15',sets:['15',String(15+(idx%3))],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_month_home_core_'+user.key,skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:85,isPlank:'no'},
+          {name:'SIDE PLANKS',targetReps:'45/45',sets:['45','45'],setFeels:['Medium','Medium'],feel:'Medium',notes:'test_lab_month_home_plank_'+user.key,skipped:'',skipReason:'',restSecs:60,betweenExRestSecs:90,isPlank:'yes'}
+        ];
+      }
+      function makeStrengthSession(user,target,ds,idx){
+        var ex=exerciseRows(target,idx,user);
+        var ts=new Date(new Date(ds+'T12:00:00').getTime()+idx*60000).toISOString();
+        var sd=workoutNormalizeSession({
+          artifactType:'session',
+          sessionId:appDoctorTestLabNs('test_session_'+user.key),
+          clientMutationId:appDoctorTestLabNs('test_event_'+user.key),
+          sessionRevision:1,
+          date:ds,
+          week:'Week '+getWeekNum(ds),
+          workoutType:target==='HOTEL'?'Hotel Strength':'Home Strength',
+          targetType:target,
+          bodyFeel:user.travel&&target==='HOTEL'?'Travel-tired but usable':'Good',
+          duration:target==='HOTEL'?31+(idx%4):36+(idx%5),
+          notes:'test_lab_month_'+user.key+'_'+target.toLowerCase()+'_'+idx,
+          exercises:ex,
+          targets:ex.map(function(row){return {name:row.name,sets:(row.sets||[]).slice(0)};}),
+          actuals:ex.map(function(row){return {name:row.name,sets:(row.sets||[]).slice(0)};}),
+          sourceRuntime:appDoctorRuntimeLabel(),
+          schemaVersion:WORKOUT_SCHEMA_VERSION,
+          source:'test_lab_month',
+          syncState:'completed_local',
+          state:'completed_local',
+          createdAt:ts,
+          completedAt:ts,
+          updatedAt:ts
+        },{newSession:true});
+        recSession(sd);
+        workoutUpsertCache(sd);
+        _completedSessionId=sd.sessionId;
+        return sd;
+      }
+      function makeHiitSession(user,ds,idx){
+        var ts=new Date(new Date(ds+'T18:00:00').getTime()+idx*60000).toISOString();
+        var sd=workoutNormalizeSession({
+          artifactType:'session',
+          sessionId:appDoctorTestLabNs('test_session_'+user.key),
+          clientMutationId:appDoctorTestLabNs('test_event_'+user.key),
+          sessionRevision:1,
+          date:ds,
+          week:'Week '+getWeekNum(ds),
+          workoutType:'HIIT',
+          targetType:'HIIT',
+          bodyFeel:'Ok',
+          duration:23,
+          effort:6,
+          notes:'test_lab_month_'+user.key+'_hiit_'+idx,
+          exercises:[],
+          targets:[],
+          actuals:[],
+          sourceRuntime:appDoctorRuntimeLabel(),
+          schemaVersion:WORKOUT_SCHEMA_VERSION,
+          source:'test_lab_month',
+          syncState:'completed_local',
+          state:'completed_local',
+          createdAt:ts,
+          completedAt:ts,
+          updatedAt:ts
+        },{newSession:true});
+        recSession(sd);
+        workoutUpsertCache(sd);
+        return sd;
+      }
+      function addNutritionDay(user,ds,idx,dayDoneMap,activeMap,cheatMap){
+        var base=user.travel?2050:1950;
+        var entries=[
+          {meal:'Breakfast',food:'test_lab_'+user.key+'_oats',servings:1,calories:430,protein:34,carbs:52,fat:9,fibre:9,satFat:2,sodium:240},
+          {meal:'Lunch',food:'test_lab_'+user.key+'_chicken_bowl',servings:1,calories:base===2050?660:610,protein:55,carbs:72,fat:18,fibre:10,satFat:4,sodium:720},
+          {meal:'Dinner',food:'test_lab_'+user.key+'_salmon_plate',servings:1,calories:690,protein:58,carbs:54,fat:24,fibre:8,satFat:5,sodium:620},
+          {meal:'Snacks',food:'test_lab_'+user.key+'_protein_yogurt',servings:1,calories:210,protein:28,carbs:18,fat:3,fibre:1,satFat:1,sodium:130}
+        ].map(function(e,n){
+          e.id=nutNewId('entry');
+          e.date=ds;
+          e.source='test_lab_month';
+          e.updatedAt=Date.now()+idx*10+n;
+          e.snapshot=nutBuildLoggedSnapshot({food:e.food,servings:e.servings,calories:e.calories,protein:e.protein,carbs:e.carbs,fat:e.fat,fibre:e.fibre,satFat:e.satFat,sodium:e.sodium},{name:e.food,serving:1,unit:'serving',calories:e.calories,protein:e.protein,carbs:e.carbs,fat:e.fat,fibre:e.fibre,satFat:e.satFat,sodium:e.sodium});
+          return e;
+        });
+        entries.forEach(function(e){
+          _nutEntries.push(e);
+          try{nutFoodMetaTouchLog(e.food,e.servings,e.meal,e.date);}catch(_m){}
+          try{nutMemoryLearnFromLoggedEntry(e,{source:'test_lab_month'});}catch(_n){}
+        });
+        dayDoneMap[ds]=true;
+        activeMap[ds]=user.travel?260:320;
+        if(idx%13===0)cheatMap[ds]=true;
+        return entries;
+      }
+      function syncNutrition(action){
+        return new Promise(function(resolve){
+          try{nutSyncAction(action,null,function(ok){resolve(!!ok);});}
+          catch(e){resolve(false);}
+        });
+      }
+      function renderEveryTab(user,rawPlan){
+        var errors=[];
+        var tabs=['home','workout','nutrition','progress','budget','plan'];
+        if(savedBudFetch)budFetchFromSheet=function(){try{budSyncBadge('cached');}catch(e){}};
+        if(savedLoadWeekPlan)loadWeekPlan=function(){
+          try{
+            var today=fmtDate(new Date());
+            _cachedPlan=JSON.parse(JSON.stringify(rawPlan||{}));
+            _weekPlan=overlayCompletedWorkouts(JSON.parse(JSON.stringify(rawPlan||{})),_cachedSessions||[],0);
+            var days=getWeekDates(0);
+            renderPlanGrid(days,today);
+            updateTodayCard(today);
+          }catch(e){}
+        };
+        if(savedCalendarRefresh)calendarRefreshPlan=function(){try{calendarStatusRender('Test Lab calendar stub');}catch(e){} return Promise.resolve({status:'ok',testMode:true});};
+        if(savedCalendarAuto)calendarPlannerAutoRunMaybe=function(){return false;};
+        _sheetSessions=_cachedSessions||[];
+        saveCache(_cachedSessions||[]);
+        tabs.forEach(function(page){
+          try{navTo(page);}
+          catch(e){errors.push(page+': '+String(e&&e.message||e));}
+        });
+        return {
+          pass:errors.length===0,
+          details:errors.length?errors.join(' | '):('rendered '+tabs.join('/')+' for '+user.key)
+        };
+      }
+      function simulateUser(user){
+        var base=monthStartDate();
+        var rawPlan={};
+        var dayDoneMap={},activeMap={},cheatMap={};
+        var sheetSyncCalls=[],nutritionSyncCalls=[],backendWriteCalls=[];
+        var cloudStart=testLabCloudCacheSaves.length;
+        var createdStrength=[],createdHiit=[],allSessions=[],offlineNutritionDays=0;
+        artifactQueueSyncArtifacts=function(artifacts,opts){
+          var list=(Array.isArray(artifacts)?artifacts:[]).filter(Boolean);
+          sheetSyncCalls.push({
+            ts:Date.now(),
+            artifactTypes:list.map(function(a){return String((a&&a.artifactType)||'');}),
+            artifactIds:list.map(function(a){return String((a&&a.artifactId)||'');})
+          });
+          return Promise.resolve({
+            status:'ok',
+            type:'syncArtifacts',
+            requestId:appDoctorTestLabNs('test_event'),
+            results:list.map(function(a){
+              return {status:'ok',artifactType:String((a&&a.artifactType)||''),artifactId:String((a&&a.artifactId)||''),planSlot:String((a&&a.planSlot)||'')};
+            }),
+            successCount:list.length,
+            failedCount:0
+          });
+        };
+        wtBackendPost=function(payload){
+          var p=payload&&typeof payload==='object'?payload:{};
+          var type=String(p.type||'');
+          if(type==='logNutrition')nutritionSyncCalls.push({type:type,count:(p.entries||[]).length});
+          if(type==='setWeekPlan'||type==='setGoals'||type==='budget'||type==='setAppState')backendWriteCalls.push(type);
+          if(type==='getNutrition')return Promise.resolve({status:'ok',type:type,entries:(_nutEntries||[]).slice(0),source:'test_lab_month'});
+          if(type==='getHistory'||type==='getRecentWorkouts'||type==='getLatestWorkout'||type==='getLatestValidWorkout')return Promise.resolve({status:'ok',type:type,sessions:(_cachedSessions||[]).slice(0),workouts:(_cachedSessions||[]).slice(0,3)});
+          if(type==='getWeekPlan')return Promise.resolve({status:'ok',type:type,plan:rawPlan});
+          if(type==='getBudget')return Promise.resolve({status:'ok',type:type,data:{}});
+          if(type==='getGoals')return Promise.resolve({status:'ok',type:type,goals:_goals||{}});
+          return Promise.resolve({status:'ok',type:type||'test_lab_month',requestId:String(p.requestId||appDoctorTestLabNs('test_event'))});
+        };
+        return appDoctorTestLabResetWorkspaceAsync().then(function(){
+          _goals=Object.assign({},_goals||{},{strGoal:3,hiitSessions:2,effortGoal:user.travel?12:13,durGoal:user.travel?25:28});
+          saveGoalsCache(_goals);
+          _nutTargets=Object.assign({},_nutTargets||{},{base:user.travel?2050:1950,protein:175,fibre:30,satFat:14,sodium:3000});
+          try{localStorage.setItem(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));}catch(e){}
+          try{wtDB.set(NUT_TARGETS_KEY,JSON.stringify(_nutTargets));}catch(e){}
+          var chain=Promise.resolve();
+          for(var i=0;i<30;i++){
+            (function(idx){
+              var ds=dayStr(base,idx);
+              var label=monthPlanLabel(user,idx);
+              rawPlan[ds]=label;
+              var dayEntries=addNutritionDay(user,ds,idx,dayDoneMap,activeMap,cheatMap);
+              var offline=user.offlineStart<=idx&&idx<=user.offlineEnd;
+              if(offline){
+                offlineNutritionDays++;
+                nutQueuePush({type:'logNutrition',entries:dayEntries});
+              }else{
+                chain=chain.then(function(){return syncNutrition({type:'logNutrition',entries:dayEntries});});
+              }
+              if(label==='Home'||label==='Hotel'){
+                chain=chain.then(function(){
+                  var sd=makeStrengthSession(user,label==='Hotel'?'HOTEL':'HOME',ds,idx);
+                  createdStrength.push(sd);
+                  allSessions.push(sd);
+                  artifactQueueReviewForSession(sd,{allowGenerateFallback:true});
+                  return Promise.resolve(artifactQueueUpdateCoachStateJob({sourceSessionId:sd.sessionId,payload:{sessionId:sd.sessionId}})).then(function(){
+                    return artifactQueueGeneratePlanJob({sourceSessionId:sd.sessionId,payload:{sessionId:sd.sessionId,planSlot:'HOME_NEXT',targetType:'HOME',preserveCurrentOnFailure:true}});
+                  }).then(function(){
+                    return artifactQueueGeneratePlanJob({sourceSessionId:sd.sessionId,payload:{sessionId:sd.sessionId,planSlot:'HOTEL_NEXT',targetType:'HOTEL',preserveCurrentOnFailure:true}});
+                  }).then(function(){
+                    artifactQueueEnqueuePostWorkoutPipeline(sd,{idPrefix:'testlab_month_'+user.key+'_'+idx,brainRun:false,preserveCurrentOnFailure:true});
+                    if(offline)artifactQueueSetSessionSyncState(sd.sessionId,'sync_failed_retryable','test_lab_month_offline');
+                    return sd;
+                  });
+                });
+              }else if(label==='HIIT'){
+                chain=chain.then(function(){
+                  var hiit=makeHiitSession(user,ds,idx);
+                  createdHiit.push(hiit);
+                  allSessions.push(hiit);
+                  if(offline)artifactQueueSetSessionSyncState(hiit.sessionId,'sync_failed_retryable','test_lab_month_offline');
+                  return hiit;
+                });
+              }
+            })(i);
+          }
+          return chain;
+        }).then(function(){
+          try{localStorage.setItem(DAY_DONE_KEY,JSON.stringify(dayDoneMap));}catch(e){}
+          try{wtDB.set(DAY_DONE_KEY,JSON.stringify(dayDoneMap));}catch(e){}
+          try{localStorage.setItem(NUT_ACTIVE_KEY,JSON.stringify(activeMap));}catch(e){}
+          try{localStorage.setItem(NUT_CHEAT_KEY,JSON.stringify(cheatMap));}catch(e){}
+          nutPersistEntries();
+          savePlanCache(rawPlan);
+          _cachedPlan=JSON.parse(JSON.stringify(rawPlan));
+          _allWeekPlans={};
+          _allWeekPlans[dayStr(base,0)]=JSON.parse(JSON.stringify(rawPlan));
+          _weekPlan=overlayCompletedWorkouts(JSON.parse(JSON.stringify(rawPlan)),_cachedSessions||[],0);
+          return wtBackendPost({type:'setGoals',goals:_goals,_nonce:Date.now()}).then(function(){
+            return wtBackendPost({type:'setWeekPlan',plan:rawPlan,_nonce:Date.now()});
+          }).then(function(){
+            return wtBackendPost({type:'budget',data:{testLabUser:user.key,month:'simulated'},_nonce:Date.now()});
+          });
+        }).then(function(){
+          return new Promise(function(resolve){
+            try{nutQueueFlush(true);}catch(e){}
+            setTimeout(resolve,80);
+          });
+        }).then(function(){
+          var finalStrength=createdStrength[createdStrength.length-1];
+          if(!finalStrength)return true;
+          return artifactQueueGeneratePlanJob({sourceSessionId:finalStrength.sessionId,payload:{sessionId:finalStrength.sessionId,planSlot:'HOME_NEXT',targetType:'HOME',preserveCurrentOnFailure:true}}).then(function(){
+            return artifactQueueGeneratePlanJob({sourceSessionId:finalStrength.sessionId,payload:{sessionId:finalStrength.sessionId,planSlot:'HOTEL_NEXT',targetType:'HOTEL',preserveCurrentOnFailure:true}});
+          });
+        }).then(function(){
+          var syncChain=Promise.resolve();
+          allSessions.forEach(function(sd){
+            syncChain=syncChain.then(function(){
+              return artifactQueueSyncSessionJob({sourceSessionId:sd.sessionId,payload:sd,attempts:0});
+            });
+            if(String(sd.workoutType||'').indexOf('Strength')>=0){
+              syncChain=syncChain.then(function(){
+                return artifactQueueSyncReviewJob({sourceSessionId:sd.sessionId,payload:{sessionId:sd.sessionId},attempts:0});
+              });
+            }
+          });
+          var finalStrength=createdStrength[createdStrength.length-1];
+          if(finalStrength){
+            syncChain=syncChain.then(function(){
+              return artifactQueueSyncCoachStateJob({sourceSessionId:finalStrength.sessionId,payload:{sessionId:finalStrength.sessionId},attempts:0});
+            }).then(function(){
+              return artifactQueueSyncGeneratedPlanJob({sourceSessionId:finalStrength.sessionId,payload:{sessionId:finalStrength.sessionId,planSlot:'HOME_NEXT'},attempts:0});
+            }).then(function(){
+              return artifactQueueSyncGeneratedPlanJob({sourceSessionId:finalStrength.sessionId,payload:{sessionId:finalStrength.sessionId,planSlot:'HOTEL_NEXT'},attempts:0});
+            });
+          }
+          return syncChain;
+        }).then(function(){
+          var render=renderEveryTab(user,rawPlan);
+          var state=coachStateLoad();
+          var home=generatedPlanActiveForSlot('HOME_NEXT');
+          var hotel=generatedPlanActiveForSlot('HOTEL_NEXT');
+          var finalStrength=createdStrength[createdStrength.length-1]||null;
+          var finalSid=finalStrength?String(finalStrength.sessionId||''):'';
+          var sheetTypes={};
+          sheetSyncCalls.forEach(function(c){(c.artifactTypes||[]).forEach(function(t){sheetTypes[t]=(sheetTypes[t]||0)+1;});});
+          var cloudTypes={};
+          testLabCloudCacheSaves.slice(cloudStart).forEach(function(c){(c.artifactTypes||[]).forEach(function(t){cloudTypes[t]=(cloudTypes[t]||0)+1;});});
+          var queue=safeLsJson(NUT_SYNC_QUEUE_KEY,[],NUT_SYNC_QUEUE_KEY);
+          if(!Array.isArray(queue))queue=[];
+          var dayDoneCount=Object.keys(dayDoneMap).filter(function(k){return dayDoneMap[k]===true;}).length;
+          var uniqueIds={};
+          allSessions.forEach(function(s){uniqueIds[String(s.sessionId||'')]=1;});
+          var duplicateFree=Object.keys(uniqueIds).length===allSessions.length;
+          var reviewsOk=createdStrength.every(function(s){return !!postWorkoutReviewLoad(s.sessionId);});
+          var plansFromFinal=!!(finalSid&&home&&hotel&&String(home.sourceSessionId||'')===finalSid&&String(hotel.sourceSessionId||'')===finalSid);
+          var sheetOk=(sheetTypes.session>=allSessions.length&&sheetTypes.post_workout_review>=createdStrength.length&&sheetTypes.coach_state>=1&&sheetTypes.generated_plan>=2);
+          var d1Ok=(cloudTypes.session>=allSessions.length&&cloudTypes.post_workout_review>=createdStrength.length&&cloudTypes.coach_state>=1&&cloudTypes.generated_plan>=2&&cloudTypes.equipment_profile>=1);
+          var nutritionOk=(nutritionSyncCalls.length>=30&&queue.length===0&&offlineNutritionDays>0);
+          var appTabsOk=!!render.pass;
+          var weekOverlayOk=(createdStrength.length>=8&&createdHiit.length>=8);
+          var autopilotRes=aiAutopilotMarkPlansStaleAndQueueRegeneration({
+            patchId:'testlab_month_autopilot_'+user.key+'_'+Date.now().toString(36),
+            reason:'test_lab_month_simulation',
+            allowPlanGeneration:true
+          });
+          var qAfter=artifactQueueLoadStore();
+          var openHome=finalSid?artifactQueueFindOpenGenerationForSlotSession('HOME_NEXT',finalSid,qAfter):null;
+          var openHotel=finalSid?artifactQueueFindOpenGenerationForSlotSession('HOTEL_NEXT',finalSid,qAfter):null;
+          var autopilotOk=!!(autopilotRes&&parseInt(autopilotRes.plansMarkedStale||0,10)>=2&&openHome&&openHotel);
+          var summary={
+            user:user.key,
+            sessions:allSessions.length,
+            strength:createdStrength.length,
+            hiit:createdHiit.length,
+            nutritionDays:dayDoneCount,
+            offlineNutritionDays:offlineNutritionDays,
+            finalSessionId:finalSid,
+            sheetTypes:sheetTypes,
+            d1Types:cloudTypes,
+            nutritionSyncs:nutritionSyncCalls.length,
+            backendWrites:backendWriteCalls.slice(0),
+            tabDetails:render.details
+          };
+          summaries.push(summary);
+          var pass=duplicateFree&&reviewsOk&&plansFromFinal&&sheetOk&&d1Ok&&nutritionOk&&appTabsOk&&weekOverlayOk&&autopilotOk
+            &&state&&String(state.lastCompletedSessionId||'')===finalSid
+            &&backendWriteCalls.indexOf('setGoals')>=0&&backendWriteCalls.indexOf('setWeekPlan')>=0&&backendWriteCalls.indexOf('budget')>=0;
+          return {
+            pass:pass,
+            errorCode:pass?'':'month_user_simulation_failed',
+            details:user.key+' sessions='+allSessions.length+' strength='+createdStrength.length+' hiit='+createdHiit.length+' nutSyncs='+nutritionSyncCalls.length+' queue='+queue.length+' duplicateFree='+duplicateFree+' reviewsOk='+reviewsOk+' plansFromFinal='+plansFromFinal+' sheetOk='+sheetOk+' d1Ok='+d1Ok+' nutritionOk='+nutritionOk+' weekOk='+weekOverlayOk+' sheet='+JSON.stringify(sheetTypes)+' d1='+JSON.stringify(cloudTypes)+' tabs='+render.pass+' autopilot='+autopilotOk,
+            artifactIds:allSessions.slice(-6).map(function(s){return s.sessionId;}).concat([home&&home.planId||'',hotel&&hotel.planId||'']).filter(Boolean)
+          };
+        });
+      }
+      var userA={key:'user_a_home_iphone',travel:false,offlineStart:8,offlineEnd:9};
+      var userB={key:'user_b_travel_iphone',travel:true,offlineStart:15,offlineEnd:18};
+      var first=null,second=null;
+      return simulateUser(userA).then(function(r){
+        first=r;
+        return simulateUser(userB);
+      }).then(function(r2){
+        second=r2;
+        var leak=false;
+        try{
+          leak=(_cachedSessions||[]).some(function(s){return s&&String(s.notes||'').indexOf(userA.key)>=0;});
+        }catch(e){leak=true;}
+        var pass=!!(first&&first.pass&&second&&second.pass&&!leak);
+        return {
+          pass:pass,
+          errorCode:pass?'':'two_user_month_simulation_failed',
+          details:'userA='+(first&&first.details||'missing')+' · userB='+(second&&second.details||'missing')+' · isolationLeak='+leak+' · summaries='+JSON.stringify(summaries),
+          artifactIds:[].concat((first&&first.artifactIds)||[],(second&&second.artifactIds)||[]).slice(0,30),
+          cleanupStatus:'isolated_snapshot_restore'
+        };
+      }).finally(function(){
+        artifactQueueSyncArtifacts=savedSyncArtifacts;
+        wtBackendPost=savedBackendPost;
+        if(savedBudFetch)budFetchFromSheet=savedBudFetch;
+        if(savedLoadWeekPlan)loadWeekPlan=savedLoadWeekPlan;
+        if(savedCalendarRefresh)calendarRefreshPlan=savedCalendarRefresh;
+        if(savedCalendarAuto)calendarPlannerAutoRunMaybe=savedCalendarAuto;
       });
     }
   });
@@ -25189,7 +26291,7 @@ function appDoctorRunTestLab(mode){
       var newer=appDoctorTestLabBuildSession('HOME','fresh_session');
       artifactQueueReviewForSession(newer,{allowGenerateFallback:true});
       artifactQueueUpdateCoachStateJob({sourceSessionId:newer.sessionId,payload:{sessionId:newer.sessionId}});
-      return artifactQueueGeneratePlanJob({sourceSessionId:newer.sessionId,payload:{sessionId:newer.sessionId,planSlot:'HOME_NEXT',targetType:'HOME'}}).then(function(){
+      return Promise.resolve(artifactQueueGeneratePlanJob({sourceSessionId:newer.sessionId,payload:{sessionId:newer.sessionId,planSlot:'HOME_NEXT',targetType:'HOME'}})).then(function(){
         var activeNow=generatedPlanActiveForSlot('HOME_NEXT');
         var older=workoutNormalizeSession(Object.assign({},newer,{
           sessionId:appDoctorTestLabNs('test_session'),
@@ -25201,7 +26303,7 @@ function appDoctorRunTestLab(mode){
         }),{newSession:true});
         recSession(older);
         workoutUpsertCache(older);
-        return artifactQueueGeneratePlanJob({sourceSessionId:older.sessionId,payload:{sessionId:older.sessionId,planSlot:'HOME_NEXT',targetType:'HOME',preserveCurrentOnFailure:true}}).then(function(out){
+        return Promise.resolve(artifactQueueGeneratePlanJob({sourceSessionId:older.sessionId,payload:{sessionId:older.sessionId,planSlot:'HOME_NEXT',targetType:'HOME',preserveCurrentOnFailure:true}})).then(function(out){
           var activeAfter=generatedPlanActiveForSlot('HOME_NEXT');
           var samePlan=!!(activeNow&&activeAfter&&String(activeNow.planId||'')===String(activeAfter.planId||''));
           var sameSource=!!(activeNow&&activeAfter&&String(activeNow.sourceSessionId||'')===String(activeAfter.sourceSessionId||''));
@@ -25392,6 +26494,40 @@ function appDoctorRunTestLab(mode){
     artifactQueuePump=function(){};
     trainerDashboardRemoteSync=function(){};
     appToast=function(){};
+    wtTrainerCloudCacheSaveArtifacts=function(artifacts,opts){
+      var list=(Array.isArray(artifacts)?artifacts:[]).filter(Boolean);
+      var o=opts&&typeof opts==='object'?opts:{};
+      testLabCloudCacheSaves.push({
+        ts:Date.now(),
+        sourceSessionId:String(o.sourceSessionId||''),
+        artifactTypes:list.map(function(a){return String((a&&a.artifactType)||'');}),
+        artifactIds:list.map(function(a){return String((a&&a.artifactId)||'');})
+      });
+      try{
+        wtTrainerCloudCachePatch('ok',{
+          d1Configured:true,
+          lastSavedArtifacts:list.length,
+          queuedCount:0,
+          lastError:''
+        });
+      }catch(e){}
+      return Promise.resolve({
+        status:'ok',
+        type:'trainer-cache-upsert',
+        d1Configured:true,
+        testMode:true,
+        results:list.map(function(a){
+          return {
+            status:'ok',
+            artifactType:String((a&&a.artifactType)||''),
+            artifactId:String((a&&a.artifactId)||''),
+            planSlot:String((a&&a.planSlot)||'')
+          };
+        }),
+        successCount:list.length,
+        failedCount:0
+      });
+    };
     wtNewId=function(prefix){
       var p=String(prefix||'id').toLowerCase();
       if(p.indexOf('sess')===0)return appDoctorTestLabNs('test_session');
@@ -25469,6 +26605,7 @@ function appDoctorRunTestLab(mode){
       wtBackendPost=origWtBackendPost;
       aiCoachOpenAICall=origAiOpenAICall;
       artifactQueueAiGeneratePlanPromise=origArtifactQueueAiGeneratePlanPromise;
+      wtTrainerCloudCacheSaveArtifacts=origWtTrainerCloudCacheSaveArtifacts;
       wtResetIdGenerator();
       phase7FaultsSave(savedFaults);
       return appDoctorTestLabRestoreFromSnapshotAsync(persistedSnapshot,{clearSavedSnapshot:false});
@@ -25530,6 +26667,8 @@ function appDoctorRender(){
     pending_queue_count:snap.queue_status.pending_queue_count,
     pending_generated_plan_sync_count:(snap.google_sheet&&snap.google_sheet.pending_sheet_writes_breakdown&&snap.google_sheet.pending_sheet_writes_breakdown.generated_plan)||0,
     failed_jobs:snap.queue_status.failed_jobs,
+    sheet_authority_active:snap.queue_status.sheet_authority_active,
+    stale_sheet_replay_jobs_blocked_count:snap.queue_status.stale_sheet_replay_jobs_blocked_count,
     next_retry_time:snap.queue_status.next_retry_time,
     current_running_job:snap.queue_status.current_running_job,
     last_20_app_events_count:(snap.queue_status.last_20_app_events||[]).length,
@@ -25592,7 +26731,7 @@ function appDoctorOpen(){
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-family:Bebas Neue,sans-serif;font-size:1.06rem;letter-spacing:2px;">APP DOCTOR (PHASE 9 + TEST LAB)</div><button type="button" class="close-x-btn" onclick="appDoctorClose()" style="background:var(--card);border:1px solid var(--border2);color:var(--text2);width:30px;height:30px;border-radius:50%;font-size:1rem;">×</button></div>'
       +'<div style="display:flex;gap:8px;margin-bottom:8px;"><button type="button" onclick="appDoctorRender()" class="log-btn" style="flex:1;">Refresh</button><button type="button" onclick="appDoctorRunSelfTest()" class="log-btn" style="flex:1;">Run App Self-Test</button><button type="button" onclick="appDoctorCopyReport()" class="log-btn" style="flex:1;">Copy Debug Report</button></div>'
       +'<div style="display:flex;gap:8px;margin-bottom:8px;"><button type="button" onclick="appDoctorRunPhase7HardTests()" class="log-btn" style="flex:1;">Run Phase 7 Hard Tests</button><button type="button" onclick="appDoctorClearPhase7Faults()" class="log-btn" style="flex:1;">Clear Test Faults</button></div>'
-      +'<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;"><button type="button" onclick="appDoctorRunTestLab(\'all\')" class="log-btn" style="flex:1 1 45%;">Run All Tests</button><button type="button" onclick="appDoctorRunTestLab(\'storage\')" class="log-btn" style="flex:1 1 45%;">Run Storage Tests</button><button type="button" onclick="appDoctorRunTestLab(\'backend\')" class="log-btn" style="flex:1 1 45%;">Run Backend/Sheet Tests</button><button type="button" onclick="appDoctorRunTestLab(\'pipeline\')" class="log-btn" style="flex:1 1 45%;">Run Trainer Pipeline Tests</button><button type="button" onclick="appDoctorRunTestLab(\'ai_failure\')" class="log-btn" style="flex:1 1 45%;">Run AI Failure Simulation</button><button type="button" onclick="appDoctorRunTestLab(\'validation\')" class="log-btn" style="flex:1 1 45%;">Run HOME/HOTEL Validation Tests</button><button type="button" onclick="appDoctorRunTestLab(\'pwa\')" class="log-btn" style="flex:1 1 45%;">Run PWA/Cache Diagnostics</button><button type="button" onclick="appDoctorRunTestLab(\'readonly\')" class="log-btn" style="flex:1 1 45%;">Run Read-Only Tests</button><button type="button" onclick="appDoctorTestLabCopyReport()" class="log-btn" style="flex:1 1 45%;">Copy Test Report</button><button type="button" onclick="appDoctorTestLabRestoreRealState()" class="log-btn" style="flex:1 1 45%;">Clear Test Artifacts / Restore Real State</button></div>'
+      +'<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;"><button type="button" onclick="appDoctorRunTestLab(\'all\')" class="log-btn" style="flex:1 1 45%;">Run All Tests</button><button type="button" onclick="appDoctorRunTestLab(\'month\')" class="log-btn" style="flex:1 1 45%;">Run Two-User Month Sim</button><button type="button" onclick="appDoctorRunTestLab(\'storage\')" class="log-btn" style="flex:1 1 45%;">Run Storage Tests</button><button type="button" onclick="appDoctorRunTestLab(\'backend\')" class="log-btn" style="flex:1 1 45%;">Run Backend/Sheet Tests</button><button type="button" onclick="appDoctorRunTestLab(\'pipeline\')" class="log-btn" style="flex:1 1 45%;">Run Trainer Pipeline Tests</button><button type="button" onclick="appDoctorRunTestLab(\'ai_failure\')" class="log-btn" style="flex:1 1 45%;">Run AI Failure Simulation</button><button type="button" onclick="appDoctorRunTestLab(\'validation\')" class="log-btn" style="flex:1 1 45%;">Run HOME/HOTEL Validation Tests</button><button type="button" onclick="appDoctorRunTestLab(\'pwa\')" class="log-btn" style="flex:1 1 45%;">Run PWA/Cache Diagnostics</button><button type="button" onclick="appDoctorRunTestLab(\'readonly\')" class="log-btn" style="flex:1 1 45%;">Run Read-Only Tests</button><button type="button" onclick="appDoctorTestLabCopyReport()" class="log-btn" style="flex:1 1 45%;">Copy Test Report</button><button type="button" onclick="appDoctorTestLabRestoreRealState()" class="log-btn" style="flex:1 1 45%;">Clear Test Artifacts / Restore Real State</button></div>'
       +'<div style="font-size:0.62rem;color:var(--muted);margin-bottom:8px;">Observability + local-first queue + generated-plan artifact status. Legacy workout and Autopilot flows remain intact.</div>'
       +'<div style="font-size:0.65rem;color:var(--muted);font-weight:700;letter-spacing:1px;">RUNTIME</div><div id="appDoctorRuntimeRows" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px;margin-top:4px;"></div>'
       +'<div style="font-size:0.65rem;color:var(--muted);font-weight:700;letter-spacing:1px;margin-top:10px;">STORAGE</div><div id="appDoctorStorageRows" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px;margin-top:4px;"></div>'
@@ -25692,6 +26831,35 @@ function appDoctorRunSelfTest(){
         var n=(r&&r.workouts&&r.workouts.length)||0;
         return {pass:ok,errorCode:ok?'':'sheet_read_failed',details:ok?('rows '+n):String((r&&r.message)||'read failed')};
       });
+    }),
+    runTest('duplicate audit route probe (safe)',function(){
+      return wtBackendPost({type:'sheetWorkoutDuplicateAudit',date:'1900-01-01',_nonce:Date.now(),timeoutMs:45000}).then(function(r){
+        if(workoutSheetDuplicateIsUnsupportedResponse_(r)){
+          return {pass:false,errorCode:'duplicate_audit_route_missing',details:'Apps Script duplicate audit route is missing or not deployed'};
+        }
+        var audit=workoutSheetDuplicateAuditFromResponse_(r);
+        var ok=!!(r&&r.status==='ok'&&audit);
+        return {pass:ok,errorCode:ok?'':'duplicate_audit_probe_failed',details:ok?('safe rows '+String((audit&&audit.safeDeleteRowCount)||0)):String((r&&(r.message||r.error))||'audit route failed')};
+      }).catch(function(e){
+        return {pass:false,errorCode:'duplicate_audit_probe_exception',details:String(e&&e.message||e)};
+      });
+    }),
+    runTest('sheet-authority replay guard',function(){
+      var prevAuthority=null, hadPrevAuthority=false;
+      try{
+        prevAuthority=localStorage.getItem(WORKOUT_SHEET_AUTHORITY_KEY);
+        hadPrevAuthority=prevAuthority!==null;
+        localStorage.setItem(WORKOUT_SHEET_AUTHORITY_KEY,JSON.stringify({ts:2000,reason:'self_test'}));
+        var oldBlocked=workoutSheetAuthorityBlocksJob_({jobType:'sync_session_to_sheet',createdAt:1000,sourceSessionId:'self_old'});
+        var newAllowed=!workoutSheetAuthorityBlocksJob_({jobType:'sync_session_to_sheet',createdAt:3000,sourceSessionId:'self_new'});
+        var otherAllowed=!workoutSheetAuthorityBlocksJob_({jobType:'generate_home_next',createdAt:1000,sourceSessionId:'self_plan'});
+        return {pass:oldBlocked&&newAllowed&&otherAllowed,errorCode:(oldBlocked&&newAllowed&&otherAllowed)?'':'sheet_authority_guard_failed',details:'oldBlocked='+oldBlocked+' · newAllowed='+newAllowed+' · otherAllowed='+otherAllowed};
+      }finally{
+        try{
+          if(hadPrevAuthority)localStorage.setItem(WORKOUT_SHEET_AUTHORITY_KEY,prevAuthority);
+          else localStorage.removeItem(WORKOUT_SHEET_AUTHORITY_KEY);
+        }catch(_e){}
+      }
     }),
     runTest('current HOME plan lookup',function(){
       var p=appDoctorPlanSummary('home');
@@ -28443,6 +29611,15 @@ function trainerOverrideToday(mode){
   }
   if(mode==='hold')appToast('Logged: hold today’s plan.','var(--orange)');
   else appToast('Logged: proceed. Recommendation updated for today.','var(--green)');
+  try{
+    trainerBrainNotifyContextChanged('daily_override_changed',{
+      reason:'manual_daily_override',
+      allowPlanGeneration:false,
+      queuePlanRefresh:false,
+      changeSummary:{date:d,mode:mode},
+      context:{screen:'home_trainer_today',date:d,mode:mode}
+    });
+  }catch(e){}
   trainerRefreshToday();
 }
 function trainerExerciseSignals(){
@@ -30680,6 +31857,15 @@ function calendarCorrectionLearn(){
     var parsed=aiCoachExtractJson(raw)||null;
     if(!parsed)throw new Error('AI returned unreadable JSON.');
     var saved=calendarCorrectionSaveParsed(parsed,text);
+    try{
+      trainerBrainNotifyContextChanged('calendar_correction_learned',{
+        reason:'calendar_correction',
+        allowPlanGeneration:false,
+        queuePlanRefresh:false,
+        changeSummary:{calendarRule:saved},
+        context:{screen:'plan_calendar_correction',calendarRule:saved,userCorrection:text}
+      });
+    }catch(e){}
     var msg=String(parsed.message||('Saved: '+saved.summary));
     calendarCorrectionSetStatus(msg+' Rebuilding proposal...','var(--green)');
     appToast('Calendar correction saved.','var(--green)');
@@ -31583,7 +32769,7 @@ function updateHealthCheckPanel(){
   try{
     var ev=JSON.parse(localStorage.getItem('wt_app_events_v1')||'[]');
     var cut=Date.now()-24*60*60*1000;
-    errCount24h=ev.filter(function(x){return x&&x.ts>=cut&&(x.level==='warn'||x.level==='error');}).length;
+    errCount24h=ev.filter(function(x){return x&&x.ts>=cut&&appDoctorEventIsActiveIssue_(x);}).length;
   }catch(e){}
   var aiStatusHtml='<span style="font-size:0.75rem;color:var(--muted);">checking…</span>';
   aiBackendStatusTest().then(function(st){
@@ -32582,6 +33768,8 @@ function budFetchFromSheet(){
 function budReset(){
   // Clear local cache and force fresh fetch from sheet
   try{localStorage.removeItem(BUD_KEY);}catch(e){}wtDB.del(BUD_KEY);
+  try{localStorage.removeItem('wt_budget_dirty');}catch(e){}
+  try{wtDB.del('wt_budget_dirty');}catch(e){}
   _budSheetData={monthRows:[]};
   _budSelectedMonthIdx=-1;
   var upd=document.getElementById('budgetUpdated');if(upd)upd.textContent='Tap values to edit';
@@ -33183,6 +34371,7 @@ function nutBuildLoggedSnapshot(entry, templateFood){
   };
 }
 var NUT_SYNC_QUEUE_KEY='wt_nut_sync_q';
+var NUT_SHEET_AUTHORITY_KEY='wt_nut_sheet_authority_v1';
 var DAY_DONE_KEY='wt_daydone';
 var _nutEntries=[];
 // ─────────────────────────────────────────────────────────────────
@@ -33642,6 +34831,7 @@ function nutSetNotEaten(date,meal,val){try{var d=JSON.parse(localStorage.getItem
 function nutToggleNotEaten(meal){nutSetNotEaten(_nutDate,meal,!nutGetNotEaten(_nutDate,meal));nutRenderDay();}
 var _nutLastFetch=0; // timestamp of last successful sheet fetch
 var _nutSyncedIds={}; // ids confirmed in sheet
+var _nutFetchSeq=0; // ignores slow stale Sheet reads after a newer reload starts
 // ─── DAY DONE ─────────────────────────────────────────────────────
 var DAY_DONE_KEY='wt_daydone';
 function dayDoneGet(){
@@ -33963,6 +35153,36 @@ function nutQueuePersist(q){
   var v=JSON.stringify(Array.isArray(q)?q:[]);
   try{localStorage.setItem(NUT_SYNC_QUEUE_KEY,v);}catch(e){}
   wtDB.set(NUT_SYNC_QUEUE_KEY,v).catch(function(){});
+}
+function nutSheetAuthorityMark_(reason){
+  var mark={ts:Date.now(),reason:String(reason||'sheet_authoritative_nutrition_reload')};
+  try{localStorage.setItem(NUT_SHEET_AUTHORITY_KEY,JSON.stringify(mark));}catch(e){}
+  try{wtDB.set(NUT_SHEET_AUTHORITY_KEY,JSON.stringify(mark)).catch(function(){});}catch(e){}
+  return mark;
+}
+function nutQueueClearLocal_(reason){
+  nutSheetAuthorityMark_(reason||'sheet_authoritative_nutrition_reload');
+  nutQueuePersist([]);
+  try{
+    appDoctorPatchState('queue',{
+      nutritionSheetAuthorityTs:Date.now(),
+      nutritionSheetAuthorityReason:String(reason||'sheet_authoritative_nutrition_reload')
+    });
+  }catch(e){}
+}
+function nutReloadFromSheetAuthority(opts){
+  opts=opts||{};
+  if(!opts.skipConfirm){
+    var ok=confirm('Forget recent local nutrition cache/queued nutrition writes and reread the Sheet now? This does not delete Sheet data.');
+    if(!ok)return false;
+  }
+  if(nutIsOffline()){nutOfflineNotice('nutrition sheet reload');return false;}
+  nutQueueClearLocal_(opts.reason||'manual_nutrition_sheet_reload');
+  _nutLastFetch=0;
+  nutBadge('load','Syncing');
+  nutMsg('Reloading nutrition from Sheet; local queued nutrition writes cancelled.','var(--blue)');
+  nutFetchEntries(null,{sheetAuthoritative:true});
+  return true;
 }
 function nutSyncStatusRender(){
   var s=nutSyncStatusSnapshot();
@@ -35037,13 +36257,25 @@ function nutFetchFoods(){
   setTimeout(function(){if(window[cb]){nutRetireJsonpCallback(cb);}},12000);
 }
 
-function nutFetchEntries(extendedFrom){
+function nutFetchEntries(extendedFrom,opts){
+  opts=opts||{};
+  var sheetAuthoritative=!!opts.sheetAuthoritative;
   if(nutIsOffline()){nutOfflineNotice('entry sync');return;}
   // extendedFrom lets week tab fetch further back to cover since-chol-test period
   var from=extendedFrom||nutShiftDate(localDateStr(),-29),to=localDateStr();
-  var cb='wt_gn_'+Date.now();
-  window[cb]=function(res){
-    nutRetireJsonpCallback(cb);
+  var fetchSeq=++_nutFetchSeq;
+  var postTimeout=sheetAuthoritative?65000:55000;
+  var jsonpTimeout=sheetAuthoritative?60000:45000;
+  function current(){return fetchSeq===_nutFetchSeq;}
+  function finishRender(){
+    if(!current())return;
+    nutRenderDay();
+    if(_nutTab==='week')nutRenderWeek();
+    // Re-render home chol card if it triggered an extended fetch
+    if(typeof renderHomeCholCard==='function')renderHomeCholCard();
+  }
+  function applyResponse(res,source){
+    if(!current())return;
     if(res&&res.status==='ok'){
       var sheetEntries=res.entries||[];
       // ── Reconciliation: find local entries missing from sheet ──────
@@ -35068,7 +36300,7 @@ function nutFetchEntries(extendedFrom){
         if(sheetKeys[e.date+'|'+e.meal+'|'+e.food])return false; // legacy key matched (covers old sheet rows with no id)
         return true;                                          // genuinely missing
       });
-      if(missing.length){
+      if(missing.length&&!sheetAuthoritative){
         nutMsg('Syncing '+missing.length+' unsaved item'+(missing.length>1?'s':'')+'...','var(--yellow)');
         nutSyncAction({type:'logNutrition',entries:missing},null,function(ok){
           nutBadge(ok?'live':'cached',ok?'Live':'Cached');
@@ -35076,8 +36308,8 @@ function nutFetchEntries(extendedFrom){
           setTimeout(function(){nutMsg('');},2500);
         });
       } else {
-        nutBadge('live','Live');
-        nutMsg('');
+        nutBadge('live',source==='post'?'Live':'Live');
+        nutMsg(sheetAuthoritative&&missing.length?('Sheet reloaded; ignored '+missing.length+' local-only nutrition item'+(missing.length>1?'s':'')+'.'):'',sheetAuthoritative&&missing.length?'var(--green)':'');
       }
       // Merge _active rows carefully: Health/manual active calories can arrive before
       // Sheets echoes the stable AppleWatch row back, so never let a stale Sheet value
@@ -35086,23 +36318,28 @@ function nutFetchEntries(extendedFrom){
       try{
         var activeStored=JSON.parse(localStorage.getItem(NUT_ACTIVE_KEY)||'{}');
         if(!activeStored||typeof activeStored!=='object')activeStored={};
-        sheetEntries.forEach(function(e){
-          if(e.meal==='_active'&&e.food==='AppleWatch'){
-            var current=Math.max(0,parseFloat(activeStored[e.date])||0);
-            var sheetVal=Math.max(0,parseFloat(e.calories)||0);
-            activeStored[e.date]=Math.max(current,sheetVal);
-          }
-        });
-        Object.keys(activeStored).forEach(function(d){
-          if(d<from||d>to)return;
-          var n=Math.max(0,parseFloat(activeStored[d])||0);
-          if(!n)return;
-          var sheetVal=Math.max(0,parseFloat(sheetActiveByDate[d])||0);
-          if(n>sheetVal){
-            var row=nutActiveEntryForDate(d,n);
-            if(row){activeRowsToPreserve.push(row);activeOverrideDates[d]=true;}
-          }
-        });
+        if(sheetAuthoritative){
+          Object.keys(activeStored).forEach(function(d){if(d>=from&&d<=to)delete activeStored[d];});
+          Object.keys(sheetActiveByDate).forEach(function(d){activeStored[d]=Math.max(0,parseFloat(sheetActiveByDate[d])||0);});
+        }else{
+          sheetEntries.forEach(function(e){
+            if(e.meal==='_active'&&e.food==='AppleWatch'){
+              var currentVal=Math.max(0,parseFloat(activeStored[e.date])||0);
+              var sheetVal=Math.max(0,parseFloat(e.calories)||0);
+              activeStored[e.date]=Math.max(currentVal,sheetVal);
+            }
+          });
+          Object.keys(activeStored).forEach(function(d){
+            if(d<from||d>to)return;
+            var n=Math.max(0,parseFloat(activeStored[d])||0);
+            if(!n)return;
+            var sheetVal=Math.max(0,parseFloat(sheetActiveByDate[d])||0);
+            if(n>sheetVal){
+              var row=nutActiveEntryForDate(d,n);
+              if(row){activeRowsToPreserve.push(row);activeOverrideDates[d]=true;}
+            }
+          });
+        }
         localStorage.setItem(NUT_ACTIVE_KEY,JSON.stringify(activeStored));
       }catch(er){}
       activeRowsToPreserve.forEach(function(r){
@@ -35119,14 +36356,17 @@ function nutFetchEntries(extendedFrom){
       // Sync _cheat entries back to NUT_CHEAT_KEY cache
       try{
         var cheatStored=JSON.parse(localStorage.getItem(NUT_CHEAT_KEY)||'{}');
-        // Reset to only what sheet has (sheet is truth for cheat days)
+        if(sheetAuthoritative){
+          Object.keys(cheatStored).forEach(function(d){if(d>=from&&d<=to)delete cheatStored[d];});
+        }
+        // Sheet is truth for cheat days inside an explicit sheet-authoritative reload.
         sheetEntries.forEach(function(e){
           if(e.meal==='_cheat'&&e.food==='CheatDay')cheatStored[e.date]=true;
         });
         localStorage.setItem(NUT_CHEAT_KEY,JSON.stringify(cheatStored));
       }catch(er){}
       // Add missing entries to view (they're being pushed)
-      if(missing.length){
+      if(missing.length&&!sheetAuthoritative){
         missing.forEach(function(m){
           var already=_nutEntries.some(function(e){return e.id&&m.id?String(e.id)===String(m.id):e.date===m.date&&e.meal===m.meal&&e.food===m.food;});
           if(!already)_nutEntries.push(m);
@@ -35138,6 +36378,7 @@ function nutFetchEntries(extendedFrom){
         saveExtendedCache(sheetEntries.filter(function(e){return e.date<nutShiftDate(localDateStr(),-29);}),extendedFrom);
       }
       _nutLastFetch=Date.now();
+      try{localStorage.setItem(NUT_SYNC_LAST_SUCCESS_KEY,String(_nutLastFetch));}catch(e){}
       // Track which ids are confirmed in sheet for per-entry status dots
       sheetEntries.forEach(function(e){if(e.id)_nutSyncedIds[String(e.id)]=true;});
       // Conflict detection: compare local vs sheet totals for today
@@ -35145,8 +36386,6 @@ function nutFetchEntries(extendedFrom){
         var today=localDateStr();
         var localToday=localEntries.filter(function(e){return e.date===today&&e.meal!=='_active';});
         var sheetToday=sheetEntries.filter(function(e){return e.date===today&&e.meal!=='_active';});
-        var localCal=Math.round(localToday.reduce(function(a,e){return a+(e.calories||0);},0));
-        var sheetCal=Math.round(sheetToday.reduce(function(a,e){return a+(e.calories||0);},0));
         var localCount=localToday.length, sheetCount=sheetToday.length;
         // Only flag if both have data and counts differ (missing entries, not rounding)
         if(localCount>0&&sheetCount>0&&localCount!==sheetCount){
@@ -35155,23 +36394,58 @@ function nutFetchEntries(extendedFrom){
       })();
     } else {
       nutBadge('cached','Cached');
-      nutMsg('Using local data','var(--yellow)');
+      nutMsg('Using phone cache; Sheet did not return nutrition rows.','var(--yellow)');
     }
-    nutRenderDay();
-    if(_nutTab==='week')nutRenderWeek();
-    // Re-render home chol card if it triggered an extended fetch
-    if(typeof renderHomeCholCard==='function')renderHomeCholCard();
-  };
-  var sc=document.createElement('script');sc.id='s_'+cb;
-  sc.onerror=function(){
-    nutRetireJsonpCallback(cb);nutBadge('cached','Offline');
-    nutMsg('Offline \u2014 local only','var(--yellow)');nutRenderDay();
-  };
-  sc.src=CLOUD_URL+'?type=getNutrition&from='+from+'&to='+to+'&callback='+cb;
-  document.head.appendChild(sc);
-  setTimeout(function(){
-    if(window[cb]){nutRetireJsonpCallback(cb);nutBadge('cached','Timeout');nutMsg('Sheet timeout','var(--yellow)');nutRenderDay();}
-  },5000);
+    finishRender();
+  }
+  function failRead(label,err){
+    if(!current())return;
+    nutBadge('cached',label);
+    nutMsg(label==='Timeout'?'Sheet still slow — using phone cache.':'Using phone cache — Sheet read failed.','var(--yellow)');
+    try{localStorage.setItem(NUT_SYNC_LAST_FAIL_KEY,String(Date.now()));}catch(e){}
+    appLogEvent('warn','nutrition_sheet_read_fallback','Nutrition Sheet read used phone cache.',{route:String(label||''),message:String(err&&err.message||err||'')});
+    finishRender();
+  }
+  function jsonpFallback(reason){
+    if(!current())return;
+    var cb='wt_gn_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+    var settled=false;
+    var timer=null;
+    window[cb]=function(res){
+      if(settled)return;
+      settled=true;
+      if(timer)clearTimeout(timer);
+      nutRetireJsonpCallback(cb);
+      applyResponse(res,'jsonp');
+    };
+    var sc=document.createElement('script');sc.id='s_'+cb;
+    sc.onerror=function(){
+      if(settled)return;
+      settled=true;
+      if(timer)clearTimeout(timer);
+      nutRetireJsonpCallback(cb);
+      failRead('Offline',reason);
+    };
+    sc.src=CLOUD_URL+'?type=getNutrition&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to)+'&callback='+cb;
+    document.head.appendChild(sc);
+    timer=setTimeout(function(){
+      if(!window[cb]||settled)return;
+      settled=true;
+      nutRetireJsonpCallback(cb);
+      failRead('Timeout',reason);
+    },jsonpTimeout);
+  }
+  nutBadge('load','Syncing');
+  if(typeof wtBackendPost==='function'){
+    wtBackendPost({type:'getNutrition',from:from,to:to,_nonce:Date.now(),timeoutMs:postTimeout}).then(function(res){
+      applyResponse(res,'post');
+    }).catch(function(err){
+      if(!current())return;
+      jsonpFallback(err);
+    });
+  }else{
+    jsonpFallback('post_unavailable');
+  }
 }
 
 // ── Day view ───────────────────────────────────────────────────────
@@ -40524,6 +41798,7 @@ function goalsClose(){
   var ov=document.getElementById('goalsOverlay');if(ov)ov.style.display='none';
 }
 function goalsSave(){
+  var oldGoals=Object.assign({},_goals||{});
   var g={
     strGoal:parseInt(document.getElementById('goalStrInput').value)||2,
     hiitSessions:parseInt(document.getElementById('goalHiitInput').value)||2,
@@ -40539,6 +41814,21 @@ function goalsSave(){
   }catch(e){}
   applyGoals(g);
   saveGoalsCache(g);
+  try{
+    var goalChangedFields=[];
+    ['strGoal','hiitSessions','effortGoal','durGoal'].forEach(function(k){
+      if(String(oldGoals[k])!==String(g[k]))goalChangedFields.push(k);
+    });
+    if(goalChangedFields.length){
+      trainerBrainNotifyContextChanged('goals_changed',{
+        reason:'goals_saved',
+        goalsChangedFields:goalChangedFields,
+        allowPlanGeneration:true,
+        changeSummary:{goalsChangedFields:goalChangedFields,goals:g},
+        context:{screen:'goals',goalsChangedFields:goalChangedFields}
+      });
+    }
+  }catch(e){}
   // Refresh all dependent UI
   renderHomeData(_cachedSessions||[]);
   renderPlanGrid(getWeekDates(_planWeekOffset),fmtDate(new Date()));
