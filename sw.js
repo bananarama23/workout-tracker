@@ -1,4 +1,4 @@
-const SW_VERSION = 'wt-shell-v100-trainer-brain-run';
+const SW_VERSION = 'wt-shell-v116-backend-capability-gate';
 const SHELL_CACHE = `wt-shell-${SW_VERSION}`;
 const OFFLINE_URLS = [
   './',
