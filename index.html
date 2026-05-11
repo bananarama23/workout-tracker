@@ -1035,7 +1035,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div id="trainerDashboardSurface" style="margin:6px 0 8px;padding:8px 10px;background:var(--card2);border:1px solid var(--border);border-radius:8px;font-size:0.68rem;color:var(--text2);line-height:1.5;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
           <div style="font-size:0.62rem;color:var(--muted);letter-spacing:1px;font-weight:700;">TRAINER DASHBOARD</div>
-          <button onclick="trainerDashboardRefresh({background:true,forceRemote:true})" style="font-size:0.62rem;background:var(--card);border:1px solid var(--border);border-radius:999px;color:var(--text2);padding:2px 8px;cursor:pointer;">↻ Refresh</button>
+          <button onclick="trainerDashboardRefresh({background:true,forceRemote:true,recoverPlans:true,manualRefresh:true})" style="font-size:0.62rem;background:var(--card);border:1px solid var(--border);border-radius:999px;color:var(--text2);padding:2px 8px;cursor:pointer;">↻ Refresh</button>
         </div>
         <div id="trainerDashboardStatus" style="font-size:0.66rem;color:var(--muted);margin-bottom:6px;">Loading dashboard…</div>
         <div id="trainerDashboardSections"></div>
@@ -2253,6 +2253,18 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
               <button type="button" onclick="calendarAnalyzeLastWeekFromCalendar()" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;color:var(--muted);font-size:0.72rem;font-weight:700;cursor:pointer;">Analyze last week</button>
               <button type="button" onclick="calendarPlannerToggleRules()" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;color:var(--text2);font-size:0.72rem;font-weight:700;cursor:pointer;">Edit planner rules</button>
             </div>
+            <div id="calendarCorrectionWrap" style="margin-top:10px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:10px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
+                <div style="font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:800;">Calendar correction</div>
+                <div id="calendarCorrectionMemoryCount" style="font-size:0.62rem;color:var(--muted);"></div>
+              </div>
+              <textarea id="calendarCorrectionInput" placeholder="Example: Tue 12 May should be Travel, not Hotel; or AA123 arrival day should be Travel" style="width:100%;min-height:58px;padding:9px 10px;background:var(--card);border:1px solid var(--border);border-radius:9px;color:var(--text2);font-size:0.74rem;resize:vertical;outline:none;"></textarea>
+              <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                <button id="calendarCorrectionLearnBtn" type="button" onclick="calendarCorrectionLearn()" style="flex:1;min-width:150px;padding:10px 12px;background:var(--blue-dim);border:1px solid rgba(59,131,246,0.35);border-radius:9px;color:var(--blue);font-size:0.72rem;font-weight:800;cursor:pointer;">Teach calendar</button>
+                <button type="button" onclick="calendarCorrectionClearInput()" style="padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:9px;color:var(--muted);font-size:0.72rem;font-weight:700;cursor:pointer;">Clear</button>
+              </div>
+              <div id="calendarCorrectionStatus" style="font-size:0.66rem;color:var(--muted);line-height:1.45;margin-top:7px;"></div>
+            </div>
             <div id="calendarPlanHint" style="font-size:0.66rem;color:var(--muted);margin-top:8px;">Build week from calendar plans this week + next week. Last week is review-only. Reminder-only events are ignored by default.</div>
             <details id="calendarPlannerRulesWrap" style="margin-top:10px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:10px;">
               <summary style="cursor:pointer;color:var(--text2);font-size:0.72rem;font-weight:800;">Calendar Planner Rules</summary>
@@ -2861,14 +2873,26 @@ function wtAiProxyUrlLooksSafe(url){
   if(/^https:\/\//i.test(s))return true;
   return /^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?/i.test(s);
 }
-function wtAiProxySaveUrl(url){
+function wtAiProxySaveUrl(url,opts){
   var s=wtAiProxyNormalizeUrl(url);
   if(!s)throw new Error('ai_proxy_url_missing');
   if(!wtAiProxyUrlLooksSafe(s))throw new Error('Use an https:// Worker URL.');
+  var o=opts&&typeof opts==='object'?opts:{};
+  var token=String(o.token||'').trim();
   localStorage.setItem(WT_AI_PROXY_URL_KEY,s);
+  if(token){
+    localStorage.setItem(WT_AI_PROXY_TOKEN_KEY,token);
+    localStorage.setItem(WT_AI_PROXY_AUTH_MODE_KEY,'bearer');
+  }else if(o.clearToken===true){
+    localStorage.removeItem(WT_AI_PROXY_TOKEN_KEY);
+    localStorage.removeItem(WT_AI_PROXY_AUTH_MODE_KEY);
+  }
+  var tokenActive=wtAiProxyBearerAuthEnabled()&&!!wtAiProxyToken();
   appDoctorPatchState('ai_proxy',{
     configured:true,
     url:s.replace(/([?&](?:token|key|secret)=)[^&]+/ig,'$1REDACTED'),
+    tokenConfigured:tokenActive,
+    authMode:tokenActive?'bearer':'none',
     lastStatus:'saved',
     lastError:'',
     enabledAt:Date.now()
@@ -2895,6 +2919,22 @@ function wtAiProxyHealth(url,timeoutMs){
   var base=wtAiProxyNormalizeUrl(url||wtAiProxyBaseUrl());
   if(!base)return Promise.reject(new Error('ai_proxy_url_missing'));
   return wtFetchJsonWithRetry_(base+'/health',{method:'GET'},{
+    tries:1,
+    timeoutMs:parseInt(timeoutMs,10)||12000
+  });
+}
+function wtAiProxyAuthCheck(url,token,timeoutMs){
+  var base=wtAiProxyNormalizeUrl(url||wtAiProxyBaseUrl());
+  if(!base)return Promise.reject(new Error('ai_proxy_url_missing'));
+  var headers={'Content-Type':'application/json'};
+  var t=String(token||wtAiProxyToken()||'').trim();
+  if(t)headers.Authorization='Bearer '+t;
+  if(typeof APP_VERSION!=='undefined')headers['X-WT-Client-Version']=String(APP_VERSION||'');
+  return wtFetchJsonWithRetry_(base+'/v1/auth-check',{
+    method:'POST',
+    headers:headers,
+    body:JSON.stringify({clientVersion:(typeof APP_VERSION!=='undefined'?APP_VERSION:'')})
+  },{
     tries:1,
     timeoutMs:parseInt(timeoutMs,10)||12000
   });
@@ -3521,8 +3561,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-		var WT_FRONTEND_VERSION='19.11.55-trainer-d1-freshness';
-		var WT_SW_VERSION='wt-shell-v75-trainer-d1-freshness';
+		var WT_FRONTEND_VERSION='19.11.69-d1-origin-deploy-ready';
+		var WT_SW_VERSION='wt-shell-v89-d1-origin-deploy-ready';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4393,12 +4433,27 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.55-trainer-d1-freshness';
+var APP_VERSION='v19.11.69-d1-origin-deploy-ready';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v84-trainer-d1-freshness';
+var CACHE_VERSION='wt-cache-v98-d1-origin-deploy-ready';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
+  'Cloudflare AI proxy setup instructions now include the 8777 local test origin so local browser runs can use the fast helper without CORS surprises',
+  'Cloudflare AI proxy setup now supports optional AI_PROXY_TOKEN bearer auth with a safe auth-check route, while preserving tokenless fallback behavior',
+  'Trainer D1 reads now ignore diagnostic fallback-check artifacts such as sess_d1_fallback_check_* so App Doctor smoke data cannot become the real latest workout',
+  'Apple Health imports that arrive today with yesterday active calories now save a dated yesterday Health record as well as the nutrition active-calorie row',
+  'Calendar correction chat now supports explicit wrong-day/date feedback, not only event-phrase memories',
+  'Nutrition sheet refresh now preserves newer local AppleWatch active-calorie rows instead of letting an older Sheet value lower them',
+  'Apple Health active calories, including yesterday values received today, now persist through the normal nutrition sync row instead of only updating local budget cache',
+  'Calendar correction memories now merge during app-state restore, so learned travel rules can carry across devices without replacing local planner settings',
+  'Calendar correction memories now survive planner-rule edits and app-state backup/restore, so taught calendar behavior carries forward',
+  'Weight & Calories AI now detects target changes from both prose and JSON responses so the Apply Changes button reliably returns',
+  'Calendar planner now has an in-app correction box that teaches safe planning memory through Cloudflare/OpenAI and then rebuilds a proposal',
+  'Trainer dashboard now labels usable backup plans as CURRENT and keeps backup details in the source note',
+  'Trainer dashboard now separates current carried-forward plans from plans that truly need refresh, so older source dates no longer look broken when they are expected',
+  'Autopilot/settings changes now mark affected plans stale without auto-generating replacements; use manual refresh/retry or complete a strength workout to rebuild',
+  'Workout dashboard refresh now reads/writes D1 trainer state without auto-generating HOME/HOTEL plans; plan generation is gated to completed strength workouts or explicit manual refresh/retry',
   'Fresh installs now know the configured Cloudflare helper URL by default; if the helper is unavailable the app still falls back to Apps Script',
   'Trainer D1 cache now receives the latest local dashboard snapshot, including the source workout session, so Cloudflare can catch up before Sheets fallback',
   'Trainer dashboard plan retries now rebuild from the latest completed workout before considering an older active fallback plan, while keeping the fallback startable as a backup',
@@ -4478,7 +4533,13 @@ function appDoctorSetTestModeActive(on){
   return _appDoctorTestModeActive;
 }
 function appDoctorIsTestId(v){
-  return /^test_(session|review|plan|coachstate|event)_/i.test(String(v||''));
+  var s=String(v||'');
+  return /^test_(session|review|plan|coachstate|event)_/i.test(s)
+    || /^appdoctor/i.test(s)
+    || /^phase7_/i.test(s)
+    || /^smoke[_-]/i.test(s)
+    || /^diagnostic[_-]/i.test(s)
+    || /(^|[_-])(d1[_-])?fallback[_-]?check([_-]|$)/i.test(s);
 }
 function appDoctorRecordIsTestArtifact(row){
   if(!row||typeof row!=='object')return false;
@@ -9808,7 +9869,6 @@ function artifactQueuePump(force){
     }
     var seeded=false;
     try{seeded=trainerEnsureMissingReviewQueued('queue_idle_missing_review')||seeded;}catch(e){}
-    try{seeded=trainerEnsureMissingPlansQueued('queue_idle_missing_plans')||seeded;}catch(e){}
     if(seeded){
       artifactQueueSchedule(120);
       return;
@@ -14922,6 +14982,7 @@ function aiAutopilotMarkPlansStaleAndQueueRegeneration(meta){
   var m=meta&&typeof meta==='object'?meta:{};
   var patchId=String(m.patchId||('ap_'+Date.now().toString(36)));
   var reason=String(m.reason||'autopilot_settings_changed');
+  var allowQueue=!!(m.allowPlanGeneration||m.manualRefresh);
   var slots=aiAutopilotAffectedSlots(m);
   var latest=appDoctorLatestSession();
   var latestSessionId=String((latest&&latest.sessionId)||'');
@@ -14952,8 +15013,9 @@ function aiAutopilotMarkPlansStaleAndQueueRegeneration(meta){
         sourceSessionId:String(next.sourceSessionId||''),
         cacheKey:String(next.cacheKey||''),
         errorCode:reason
-      });
+    });
     }
+    if(!allowQueue)return;
     var sourceSessionId=String((active&&active.sourceSessionId)||'')||latestSessionId;
     if(!sourceSessionId||sourceSessionId==='none')return;
     var sd=artifactQueueSessionById(sourceSessionId,{payload:{sessionId:sourceSessionId}});
@@ -16526,6 +16588,7 @@ function trainerRetryIsUsableSessionId(sessionId){
   var sid=String(sessionId||'').trim();
   if(!sid)return false;
   if(String(sid).toLowerCase()==='baseline_no_completed_workout')return false;
+  if(appDoctorIsTestId(sid))return trainerRetryAllowTestArtifacts();
   if(/^test_session_/i.test(sid))return trainerRetryAllowTestArtifacts();
   if(!/^sess_/i.test(sid))return false;
   return true;
@@ -17600,7 +17663,7 @@ function trainerDashboardPlanEstimatedMins(plan){
 function trainerDashboardPlanSourceLabel(plan){
   var src=String((plan&&plan.source)||'').toLowerCase();
   if(src==='chatgpt_import')return 'CHATGPT_IMPORT';
-  if(src==='fallback')return 'FALLBACK';
+  if(src==='fallback')return 'BACKUP';
   if(src==='ai')return 'AI';
   return src?src.toUpperCase():'UNKNOWN';
 }
@@ -17662,16 +17725,18 @@ function trainerDashboardBuildSnapshot(){
   var hotelSyncJob=syncPlanJobs.filter(function(j){return String(((j.payload||{}).planSlot)||'').toUpperCase()==='HOTEL_NEXT';})
     .sort(function(a,b){return artifactQueueToMs(b.updatedAt||b.createdAt)-artifactQueueToMs(a.updatedAt||a.createdAt);})[0]||null;
   function planState(slot,plan,job,syncJob){
-    var stale=!!(plan&&(
-      (latestSessionId&&String(plan.sourceSessionId||'')!==latestSessionId)||
-      String(plan.status||'').toLowerCase()==='stale'
-    ));
-    var staleReason='';
+    var planSourceId=String((plan&&plan.sourceSessionId)||'');
+    var sourceMismatch=!!(plan&&latestSessionId&&planSourceId&&planSourceId!==latestSessionId);
+    var statusStale=!!(plan&&String(plan.status||'').toLowerCase()==='stale');
+    var stale=!!(sourceMismatch||statusStale);
+    var freshnessNote='';
+    var freshnessState='none';
     if(stale&&plan){
       var latestLabel=latestSession?String(latestSession.date||trainerDashboardFmtTs(latestSession.completedAt||latestSession.updatedAt)):'the latest workout';
-      staleReason=(latestSessionId&&String(plan.sourceSessionId||'')!==latestSessionId)
-        ? 'Kept as backup: this plan was built from an older workout. Retry AI rebuilds from '+latestLabel+'.'
-        : 'Kept as backup: this plan has been marked stale. Retry AI rebuilds from the latest workout.';
+      freshnessState=sourceMismatch?'needs_refresh':'stale';
+      freshnessNote=sourceMismatch
+        ? 'Needs refresh: this plan was built from an older workout. Manual retry rebuilds from '+latestLabel+'.'
+        : 'Marked stale: this carried-forward plan stays startable until you manually retry or complete another strength workout.';
     }
     var fallback=!!(plan&&(plan.fallbackUsed||String(plan.status||'')==='fallback_used'));
     var failed=!!(job&&String(job.status||'')==='failed_final');
@@ -17681,6 +17746,23 @@ function trainerDashboardBuildSnapshot(){
     if(valid)primary=fallback?'fallback':'ready';
     if(!valid&&failed)primary='failed';
     if(!valid&&pending)primary='pending';
+    var carriedForward=!!(valid&&!stale&&latestSessionId&&planSourceId===latestSessionId);
+    if(!freshnessNote&&valid&&!stale){
+      if(fallback){
+        freshnessState='current_backup';
+        freshnessNote='Using the backup plan from the last completed workout. Start it normally; AI retry is optional.';
+      }else if(carriedForward){
+        freshnessState='current';
+        freshnessNote='Current from the last completed workout. An older date is expected until another strength workout is completed.';
+      }
+    }
+    var displayStatus=primary;
+    if(valid){
+      if(sourceMismatch)displayStatus='needs_refresh';
+      else if(statusStale)displayStatus='stale';
+      else if(fallback)displayStatus='current';
+      else displayStatus='current';
+    }
     var syncState=plan?String(plan.syncState||'unknown'):'unknown';
     if(syncJob&&['pending','running','failed_retryable'].indexOf(String(syncJob.status||''))>=0&&syncState!=='synced')syncState='sync_pending';
     return {
@@ -17688,11 +17770,15 @@ function trainerDashboardBuildSnapshot(){
       plan:plan,
       stale:stale,
       fallback:fallback,
-      staleReason:staleReason,
+      sourceMismatch:sourceMismatch,
+      statusStale:statusStale,
+      freshnessState:freshnessState,
+      freshnessNote:freshnessNote,
       failed:failed,
       pending:pending,
       valid:valid,
       primary:primary,
+      displayStatus:displayStatus,
       syncState:syncState,
       job:job||null,
       syncJob:syncJob||null,
@@ -17721,9 +17807,11 @@ function trainerDashboardBuildSnapshot(){
 }
 function trainerDashboardStatusChip(status){
   var s=String(status||'pending').toLowerCase();
-  var label=s==='imported'?'IMPORTED':s.toUpperCase();
-  var col=s==='ready'?'var(--green)':(s==='imported'?'var(--blue)':(s==='fallback'?'var(--yellow)':(s==='failed'?'var(--orange)':'var(--muted)')));
-  var bg=s==='ready'?'var(--green-dim)':(s==='imported'?'var(--blue-dim)':(s==='fallback'?'var(--yellow-dim)':(s==='failed'?'var(--orange-dim)':'var(--card)')));
+  var label=s==='imported'?'IMPORTED':(s==='current_fallback'?'CURRENT':(s==='needs_refresh'?'NEEDS REFRESH':s.toUpperCase()));
+  var readyLike=(s==='ready'||s==='current'||s==='current_fallback');
+  var warnLike=(s==='fallback'||s==='stale');
+  var col=readyLike?'var(--green)':(s==='imported'?'var(--blue)':(warnLike?'var(--yellow)':(s==='failed'||s==='needs_refresh'?'var(--orange)':'var(--muted)')));
+  var bg=readyLike?'var(--green-dim)':(s==='imported'?'var(--blue-dim)':(warnLike?'var(--yellow-dim)':(s==='failed'||s==='needs_refresh'?'var(--orange-dim)':'var(--card)')));
   return '<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;border:1px solid var(--border);font-size:0.62rem;color:'+col+';background:'+bg+';font-weight:700;letter-spacing:0.5px;">'+escHtml(label)+'</span>';
 }
 function trainerDashboardReviewSummaryHtml(snap){
@@ -17771,16 +17859,18 @@ function trainerDashboardPlanSummaryHtml(planState){
   var startLabel=planState.slot==='HOME_NEXT'?'Start HOME':'Start HOTEL';
   var retryLabel=planState.slot==='HOME_NEXT'?'Retry HOME AI':'Retry HOTEL AI';
   var slotSummary=trainerDashboardPlanSlotSummary(plan);
-  var statusLine=planState.primary+(planState.stale?' / stale':'');
+  var statusLine=String(planState.displayStatus||planState.primary||'pending');
   var syncLine=String(planState.syncState||'unknown');
   if(syncLine==='local_only')syncLine='local only';
-  var freshnessNote=String(planState.staleReason||'')||(planState.fallback?'Fallback kept as a safe backup because AI generation did not return a usable plan.':'');
+  var freshnessNote=String(planState.freshnessNote||'');
+  var sourceExtra=planState.sourceMismatch?' · needs refresh':(planState.statusStale?' · stale':'');
+  if(planState.fallback&&sourceLabel!=='BACKUP')sourceExtra+=' · backup';
   return ''
     +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;"><div style="font-size:0.68rem;color:var(--text);font-weight:800;">'+escHtml(title)+'</div>'+trainerDashboardStatusChip(statusLine)+'</div>'
     +'<div style="font-size:0.66rem;color:var(--text2);line-height:1.55;">Generated: '+escHtml(plan?trainerDashboardFmtTs(plan.updatedAt||plan.createdAt):'—')+'</div>'
     +'<div style="font-size:0.66rem;color:var(--text2);line-height:1.55;">Source workout date: '+escHtml(sourceDate||'—')+'</div>'
     +'<div style="font-size:0.66rem;color:var(--text2);line-height:1.55;">Main focus: '+escHtml(focus||'—')+'</div>'
-    +'<div style="font-size:0.65rem;color:var(--muted);line-height:1.55;">Source: '+escHtml(sourceLabel)+' · Sync: '+escHtml(syncLine)+(planState.fallback?' · fallback':'')+'</div>'
+    +'<div style="font-size:0.65rem;color:var(--muted);line-height:1.55;">Source: '+escHtml(sourceLabel)+' · Sync: '+escHtml(syncLine)+escHtml(sourceExtra)+'</div>'
     +(deferredVertical?('<div style="font-size:0.65rem;color:var(--orange);line-height:1.45;">'+escHtml(deferredVertical)+'</div>'):'')
     +(freshnessNote?('<div style="font-size:0.65rem;color:var(--yellow);line-height:1.45;margin-top:3px;">'+escHtml(freshnessNote)+'</div>'):'')
     +'<div style="font-size:0.64rem;color:var(--muted);line-height:1.45;margin-top:3px;">Trained: '+escHtml(slotSummary.trained)+' · Deferred: '+escHtml(slotSummary.deferred)+'</div>'
@@ -19046,10 +19136,11 @@ function trainerBootstrapRun(opts){
     var hotelNeedsRegen=!trainerBootstrapPlanUsable(hotel,session.sessionId);
     if(homeNeedsRegen)home=trainerBootstrapEnsureFallbackPlan('HOME_NEXT',session,review&&review.reviewId,coachRev,'bootstrap_missing_or_stale_plan','fallback');
     if(hotelNeedsRegen)hotel=trainerBootstrapEnsureFallbackPlan('HOTEL_NEXT',session,review&&review.reviewId,coachRev,'bootstrap_missing_or_stale_plan','fallback');
+    var allowBootstrapPlanGeneration=!!(o.autoGeneratePlans||o.manualRefresh||appDoctorIsTestModeActive());
     trainerBootstrapEnqueueSessionFlow(session,{
       skipSessionSync:legacyMigrated,
-      homeNeedsRegen:homeNeedsRegen,
-      hotelNeedsRegen:hotelNeedsRegen
+      homeNeedsRegen:allowBootstrapPlanGeneration&&homeNeedsRegen,
+      hotelNeedsRegen:allowBootstrapPlanGeneration&&hotelNeedsRegen
     });
     var done=trainerBootstrapSaveMeta({
       schemaVersion:TRAINER_BOOTSTRAP_SCHEMA_VERSION,
@@ -19169,12 +19260,21 @@ function trainerDashboardSaveLocalSnapshotToCloud(reason){
     return {status:'error',message:String(err&&err.message||err||'trainer_d1_snapshot_failed')};
   });
 }
+function trainerDashboardAllowsPlanRecovery(opts){
+  var o=opts&&typeof opts==='object'?opts:{};
+  return !!(o.recoverPlans||o.manualRefresh||o.forceRemote);
+}
 function trainerDashboardRefresh(opts){
   var o=opts&&typeof opts==='object'?opts:{};
   trainerDashboardRender(trainerDashboardBuildSnapshot());
-  try{trainerEnsureHotelPlanSourceConsistency();}catch(e){}
+  var allowPlanRecovery=trainerDashboardAllowsPlanRecovery(o);
+  if(allowPlanRecovery){
+    try{trainerEnsureHotelPlanSourceConsistency();}catch(e){}
+  }
   try{trainerEnsureMissingReviewQueued('dashboard_refresh');}catch(e){}
-  try{trainerEnsureMissingPlansQueued('dashboard_refresh');}catch(e){}
+  if(allowPlanRecovery){
+    try{trainerEnsureMissingPlansQueued(o.manualRefresh?'dashboard_manual_refresh':'dashboard_refresh');}catch(e){}
+  }
   try{trainerDashboardSaveLocalSnapshotToCloud('dashboard_refresh');}catch(e){}
   if(o.background!==false)trainerDashboardRemoteSync({force:!!o.forceRemote});
 }
@@ -19446,7 +19546,7 @@ function trainerDashboardOpenPlanDetail(slot){
     +'<div><strong>CoachState revision:</strong> '+escHtml(String(plan.coachStateRevision||'0'))+'</div>'
     +'<div><strong>EquipmentProfile hash:</strong> '+escHtml(String(plan.equipmentProfileHash||'—'))+'</div>'
     +(s==='HOTEL_NEXT'?('<div><strong>Hotel equipment profile used:</strong> '+escHtml(hotelEq)+'</div>'):'')
-    +'<div><strong>Status:</strong> '+escHtml(String(plan.status||'unknown'))+' · '+escHtml(trainerDashboardPlanSourceLabel(plan))+(plan.fallbackUsed?' · FALLBACK':'')+'</div>'
+    +'<div><strong>Status:</strong> '+escHtml(String(plan.status||'unknown'))+' · '+escHtml(trainerDashboardPlanSourceLabel(plan))+(plan.fallbackUsed?' · BACKUP':'')+'</div>'
     +'<div><strong>Estimated duration:</strong> '+escHtml(String(trainerDashboardPlanEstimatedMins(plan)))+' min</div>'
     +'<div><strong>Main focus:</strong> '+escHtml(trainerDashboardPlanMainFocus(plan))+'</div>'
     +'<div><strong>Movement slots trained:</strong> '+escHtml(slotSummary.trained)+'</div>'
@@ -22227,9 +22327,11 @@ function appDoctorSecurityAudit(){
     app_doctor_sensitive_key_redaction:true,
     ai_proxy_configured:wtAiProxyConfigured(),
     ai_proxy_browser_bearer_token_enabled:wtAiProxyBearerAuthEnabled(),
-    ai_proxy_default_auth:'none_tokenless_optional_proxy_fallback',
+    ai_proxy_browser_bearer_token_saved:!!(wtAiProxyBearerAuthEnabled()&&wtAiProxyToken()),
+    ai_proxy_default_auth:'origin_allowlist_with_optional_AI_PROXY_TOKEN_bearer_auth',
+    ai_proxy_auth_check_route_expected:true,
     backend_keys_expected_in_script_properties:['OPENAI_API_KEY','GEMINI_API_KEY','ANTHROPIC_API_KEY','HEALTH_BRIDGE_TOKEN'],
-    ai_proxy_keys_expected_in_proxy_environment:['OPENAI_API_KEY','GEMINI_API_KEY','ANTHROPIC_API_KEY'],
+    ai_proxy_keys_expected_in_proxy_environment:['OPENAI_API_KEY','GEMINI_API_KEY','ANTHROPIC_API_KEY','AI_PROXY_TOKEN optional','MAX_REQUEST_BYTES optional'],
     note:'app_doctor_and_copy_report_redact_token_like_values'
   };
 }
@@ -22730,6 +22832,8 @@ function appDoctorMaskSecretString(value){
   out=out.replace(/(sk-[A-Za-z0-9_\-]{6})[A-Za-z0-9_\-]+/g,'$1…REDACTED');
   out=out.replace(/(AIza[0-9A-Za-z_\-]{4})[0-9A-Za-z_\-]+/g,'$1…REDACTED');
   out=out.replace(/(wt_health_[a-f0-9]{6})[a-f0-9]+/gi,'$1…REDACTED');
+  out=out.replace(/(wt_(?:proxy|ai)_[A-Za-z0-9_\-]{6})[A-Za-z0-9_\-]+/gi,'$1…REDACTED');
+  out=out.replace(/(AI_PROXY_TOKEN\s*[:=]\s*)[A-Za-z0-9_\-\.]+/ig,'$1[REDACTED]');
   out=out.replace(/(private-)[A-Za-z0-9]+/gi,'$1REDACTED');
   out=out.replace(/(authorization\s*[:=]\s*bearer\s+)[A-Za-z0-9_\-\.]+/ig,'$1[REDACTED]');
   return out;
@@ -27280,27 +27384,105 @@ function healthNormalizePayload(payload){
   };
   return out;
 }
-function healthApplyActiveConflict(date,appleVal){
+function healthActiveCleanNumber(v){
+  if(v==null||v===''||isNaN(v))return 0;
+  return Math.max(0,Number(v)||0);
+}
+function healthExistingActiveCaloriesForDate(date){
+  var d=String(date||'');
+  var current=0;
+  try{
+    var active=safeLsJson(NUT_ACTIVE_KEY,{},NUT_ACTIVE_KEY);
+    if(active&&typeof active==='object')current=healthActiveCleanNumber(active[d]);
+  }catch(e){}
+  try{
+    if(_nutEntries&&_nutEntries.length){
+      _nutEntries.forEach(function(e){
+        if(e&&e.date===d&&e.meal==='_active'&&e.food==='AppleWatch'){
+          current=Math.max(current,healthActiveCleanNumber(e.calories));
+        }
+      });
+    }
+  }catch(e2){}
+  return current;
+}
+function healthMarkActiveNutritionSaved(date,val,opts){
+  try{
+    var d=String(date||''),n=Math.round(healthActiveCleanNumber(val));
+    if(!d||!n)return;
+    var meta=nutritionHealthMetaLoad();
+    var day=meta[d]||{};
+    day.apple_health_active_calories=n;
+    day.apple_health_active_saved_value=n;
+    day.apple_health_active_saved_to_nutrition=true;
+    day.apple_health_active_saved_at=new Date().toISOString();
+    day.apple_health_source=String((opts&&opts.source)||day.apple_health_source||'apple_shortcut');
+    day.apple_health_received_at=String((opts&&opts.receivedAt)||day.apple_health_received_at||new Date().toISOString());
+    meta[d]=day;
+    nutritionHealthMetaSave(meta);
+  }catch(e){}
+}
+function healthActiveAlreadySavedToNutrition(date,val){
+  try{
+    var d=String(date||''),n=Math.round(healthActiveCleanNumber(val));
+    var meta=nutritionHealthMetaLoad();
+    var day=meta[d]||{};
+    return day.apple_health_active_saved_to_nutrition===true&&Math.round(healthActiveCleanNumber(day.apple_health_active_saved_value))===n;
+  }catch(e){return false;}
+}
+function healthPersistActiveCaloriesToNutrition(date,val,opts){
+  var d=String(date||''),n=Math.round(healthActiveCleanNumber(val));
+  if(!d||!n)return false;
+  if(opts&&opts.syncNutrition===false){
+    try{
+      var active=safeLsJson(NUT_ACTIVE_KEY,{},NUT_ACTIVE_KEY);
+      if(!active||typeof active!=='object')active={};
+      active[d]=n;
+      var s=JSON.stringify(active);
+      try{localStorage.setItem(NUT_ACTIVE_KEY,s);}catch(e){}
+      wtDB.set(NUT_ACTIVE_KEY,s);
+      appStateSave();
+    }catch(e2){}
+    return false;
+  }
+  if(typeof nutSetActiveCals==='function'){
+    nutSetActiveCals(d,n);
+  }else{
+    try{
+      var active2=safeLsJson(NUT_ACTIVE_KEY,{},NUT_ACTIVE_KEY);
+      if(!active2||typeof active2!=='object')active2={};
+      active2[d]=n;
+      var s2=JSON.stringify(active2);
+      try{localStorage.setItem(NUT_ACTIVE_KEY,s2);}catch(e3){}
+      wtDB.set(NUT_ACTIVE_KEY,s2);
+      appStateSave();
+    }catch(e4){}
+  }
+  healthMarkActiveNutritionSaved(d,n,opts||{});
+  return true;
+}
+function healthApplyActiveConflict(date,appleVal,opts){
   // Keep the greater value only: never let Health import lower active calories.
-  var cleanNumber=function(v){
-    if(v==null||v===''||isNaN(v))return 0;
-    return Math.max(0,Number(v)||0);
-  };
-  var incoming=cleanNumber(appleVal);
+  var incoming=Math.round(healthActiveCleanNumber(appleVal));
+  var d=String(date||'');
   var active=safeLsJson(NUT_ACTIVE_KEY,{},NUT_ACTIVE_KEY);
   if(!active||typeof active!=='object')active={};
-  var current=cleanNumber(active[date]);
+  var current=healthExistingActiveCaloriesForDate(d);
 
-  // 0/empty/null or lower/equal values never overwrite existing values.
+  // 0/empty/null or lower values never overwrite existing/manual values.
   if(!(incoming>current)){
-    healthStatusSet('Sync success','Kept active calories at '+current+' and ignored Apple value ('+incoming+') for '+date+'.');
-    return;
+    if(incoming>0&&incoming===current&&!healthActiveAlreadySavedToNutrition(d,incoming)){
+      healthPersistActiveCaloriesToNutrition(d,incoming,opts||{});
+      healthStatusSet('Sync success','Confirmed Apple active calories saved for '+d+' ('+incoming+').');
+      return {updated:false,synced:true,value:incoming,date:d};
+    }
+    healthStatusSet('Sync success','Kept active calories at '+current+' and ignored Apple value ('+incoming+') for '+d+'.');
+    return {updated:false,synced:false,value:current,date:d};
   }
 
-  active[date]=incoming;
-  try{localStorage.setItem(NUT_ACTIVE_KEY,JSON.stringify(active));}catch(e){}
-  wtDB.set(NUT_ACTIVE_KEY,JSON.stringify(active));
-  healthStatusSet('Sync success','Active calories updated from Apple ('+incoming+') for '+date+'.');
+  healthPersistActiveCaloriesToNutrition(d,incoming,opts||{});
+  healthStatusSet('Sync success','Active calories updated from Apple ('+incoming+') for '+d+'.');
+  return {updated:true,synced:true,value:incoming,date:d};
 }
 function progressWeightLoad(){
   try{
@@ -27372,13 +27554,47 @@ function getHealthStatusMessage(latestImport){
   if(HEALTH_TEST_STATUS.error)return 'Health connection test failed.';
   return 'No Apple Health import received yet.';
 }
+function healthMergeYesterdayActiveRecord(all,p){
+  if(!p||p.has_active_energy_yesterday!==true)return all;
+  var yActive=Math.round(healthActiveCleanNumber(p.active_energy_yesterday));
+  if(!(yActive>0))return all;
+  var yDate=nutShiftDate(String(p.date||''),-1);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(yDate))return all;
+  var map=(all&&typeof all==='object')?all:{};
+  var existing=(map[yDate]&&typeof map[yDate]==='object')?map[yDate]:{};
+  var existingActive=Math.round(healthActiveCleanNumber(existing.active_energy_calories));
+  var next=Object.assign({},existing,{
+    source:String(existing.source||p.source||'apple_shortcut'),
+    date:yDate,
+    timezone:String(existing.timezone||p.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone||'America/Los_Angeles'),
+    received_at:String(p.received_at||existing.received_at||new Date().toISOString()),
+    confidence:String(existing.confidence||'imported_yesterday_carryover'),
+    steps:Math.max(0,Math.round(nutSafeNum(existing.steps,0))),
+    active_energy_calories:Math.max(existingActive,yActive),
+    resting_energy_calories:Math.max(0,Math.round(nutSafeNum(existing.resting_energy_calories,0))),
+    workout_duration_min:Math.max(0,Math.round(nutSafeNum(existing.workout_duration_min,0))),
+    workout_type:String(existing.workout_type||''),
+    workout_active_energy_calories:Math.max(0,Math.round(nutSafeNum(existing.workout_active_energy_calories,0))),
+    body_weight_lb:nutRoundTo(Math.max(0,nutSafeNum(existing.body_weight_lb,0)),2),
+    sleep_hours:nutRoundTo(Math.max(0,nutSafeNum(existing.sleep_hours,0)),2),
+    resting_heart_rate:Math.max(0,Math.round(nutSafeNum(existing.resting_heart_rate,0))),
+    average_heart_rate:Math.max(0,Math.round(nutSafeNum(existing.average_heart_rate,0))),
+    workouts:Array.isArray(existing.workouts)?existing.workouts:[],
+    derived_from_payload_date:String(p.date||''),
+    derived_yesterday_active:true
+  });
+  map[yDate]=next;
+  return map;
+}
 function healthImportApply(payload,opts){
   var p=healthNormalizePayload(payload),all=healthImportsLoad();
   all[p.date]=p;
+  all=healthMergeYesterdayActiveRecord(all,p);
   healthImportsSave(all);
-  healthApplyActiveConflict(p.date,p.active_energy_calories);
+  var activeOpts={source:p.source,receivedAt:p.received_at,syncNutrition:!p.is_test};
+  healthApplyActiveConflict(p.date,p.active_energy_calories,activeOpts);
   if(p.has_active_energy_yesterday===true){
-    healthApplyActiveConflict(nutShiftDate(p.date,-1),p.active_energy_yesterday);
+    healthApplyActiveConflict(nutShiftDate(p.date,-1),p.active_energy_yesterday,activeOpts);
   }
   applyImportedBodyWeightToProgress(p);
   applyImportedActiveCaloriesToNutrition(p);
@@ -27865,6 +28081,63 @@ function calendarRulesSave(r){
   var val=JSON.stringify(calendarPlannerRulesNormalize(r||{}));
   try{localStorage.setItem(CAL_SYNC_RULES_KEY,val);}catch(e){}
   wtDB.set(CAL_SYNC_RULES_KEY,val);
+  try{if(typeof appStateSave==='function')appStateSave();}catch(e){}
+}
+function calendarPlannerRulesMerge(localRules,remoteRules){
+  var rawLocal=(localRules&&typeof localRules==='object')?localRules:{};
+  var rawRemote=(remoteRules&&typeof remoteRules==='object')?remoteRules:{};
+  var local=calendarPlannerRulesNormalize(localRules||{});
+  var remote=calendarPlannerRulesNormalize(remoteRules||{});
+  var out=Object.assign({},local);
+  function appendUniqueStrings(a,b,max){
+    var next=calendarPlannerParseList(a);
+    calendarPlannerParseList(b).forEach(function(x){
+      var s=String(x||'').trim();if(!s)return;
+      var hit=next.some(function(y){return String(y||'').toLowerCase()===s.toLowerCase();});
+      if(!hit)next.push(s);
+    });
+    return next.slice(0,max||80);
+  }
+  out.ignorePhrases=appendUniqueStrings(local.ignorePhrases,remote.ignorePhrases,80);
+  out.flightKeywords=appendUniqueStrings(local.flightKeywords,remote.flightKeywords,80);
+  out.layoverKeywords=appendUniqueStrings(local.layoverKeywords,remote.layoverKeywords,80);
+  out.hotelKeywords=appendUniqueStrings(local.hotelKeywords,remote.hotelKeywords,80);
+  var force=[];
+  function addForce(list){
+    (list||[]).forEach(function(r){
+      var phrase=String((r&&r.phrase)||'').trim();
+      var label=calendarPlannerValidLabel(r&&r.label);
+      if(!phrase||!label)return;
+      var sig=phrase.toLowerCase()+'|'+label;
+      if(force.some(function(x){return x.sig===sig;}))return;
+      force.push({sig:sig,phrase:phrase,label:label});
+    });
+  }
+  addForce(local.forceLabelRules);addForce(remote.forceLabelRules);
+  out.forceLabelRules=force.map(function(x){return {phrase:x.phrase,label:x.label};}).slice(-40);
+  var memories=[];
+  function memoryDates(r){
+    return calendarPlannerMemoryDates(r).map(function(d){return String(d||'').toLowerCase();}).sort();
+  }
+  function addMemory(list){
+    (list||[]).forEach(function(r){
+      var explicitId=String((r&&r.id)||'').trim();
+      var nr=calendarPlannerMemoryRuleNormalize(r);
+      if(!nr)return;
+      var sig=explicitId?('id:'+explicitId):('rule:'+nr.label+'|'+nr.matchMode+'|'+nr.matchPhrases.map(function(p){return String(p||'').toLowerCase();}).join('|')+'|dates:'+memoryDates(r).join('|'));
+      var idx=-1;
+      for(var i=0;i<memories.length;i++){if(memories[i]._sig===sig){idx=i;break;}}
+      nr._sig=sig;
+      if(idx<0){memories.push(nr);return;}
+      var old=memories[idx];
+      var oldTs=Date.parse(old.updatedAt||old.createdAt||'')||0;
+      var newTs=Date.parse(nr.updatedAt||nr.createdAt||'')||0;
+      if(newTs>=oldTs)memories[idx]=nr;
+    });
+  }
+  addMemory(rawLocal.calendarMemoryRules);addMemory(rawRemote.calendarMemoryRules);
+  out.calendarMemoryRules=memories.map(function(r){var c=Object.assign({},r);delete c._sig;return c;}).slice(-40);
+  return calendarPlannerRulesNormalize(out);
 }
 function calendarPlannerDefaultRules(){
   return {
@@ -27887,6 +28160,7 @@ function calendarPlannerDefaultRules(){
     layoverKeywords:['layover','overnight','day 2/2','trip continuation'],
     hotelKeywords:['hotel','check-in','check-out','away'],
     forceLabelRules:[],
+    calendarMemoryRules:[],
     manualLocksWin:true,
     autoRunEnabled:true,
     autoApplyUnlockedDays:false,
@@ -27939,7 +28213,68 @@ function calendarPlannerRulesNormalize(input){
   o.forceLabelRules=(Array.isArray(o.forceLabelRules)?o.forceLabelRules:[]).map(function(r){
     return {phrase:String((r&&r.phrase)||'').trim(),label:String((r&&r.label)||'').trim().toUpperCase()};
   }).filter(function(r){return r.phrase&&(r.label==='HOME'||r.label==='HOTEL'||r.label==='HIIT'||r.label==='TRAVEL'||r.label==='REST');});
+  o.calendarMemoryRules=(Array.isArray(o.calendarMemoryRules)?o.calendarMemoryRules:[]).map(function(r){
+    return calendarPlannerMemoryRuleNormalize(r);
+  }).filter(Boolean).slice(-40);
   return o;
+}
+function calendarPlannerValidLabel(label){
+  var u=String(label||'').trim().toUpperCase();
+  return (u==='HOME'||u==='HOTEL'||u==='HIIT'||u==='TRAVEL'||u==='REST')?u:'';
+}
+function calendarPlannerDateList(v){
+  var arr=[];
+  if(Array.isArray(v))arr=v;
+  else if(v!==undefined&&v!==null&&String(v||'').trim())arr=String(v||'').split(',');
+  return arr.map(function(x){
+    var m=String(x||'').trim().match(/\d{4}-\d{2}-\d{2}/);
+    return m?m[0]:'';
+  }).filter(Boolean).slice(0,12);
+}
+function calendarPlannerMemoryDates(rule){
+  if(!rule||typeof rule!=='object')return [];
+  var dates=[];
+  ['matchDates','match_dates','dates','targetDates','target_dates'].forEach(function(k){
+    dates=dates.concat(calendarPlannerDateList(rule[k]));
+  });
+  ['date','targetDate','target_date','appliesToDate','applies_to_date','correctDate','correct_date'].forEach(function(k){
+    dates=dates.concat(calendarPlannerDateList(rule[k]));
+  });
+  var seen={};
+  return dates.filter(function(d){if(seen[d])return false;seen[d]=true;return true;});
+}
+function calendarPlannerMemoryRuleNormalize(rule){
+  if(!rule||typeof rule!=='object')return null;
+  var label=calendarPlannerValidLabel(rule.label||rule.forceLabel||rule.recommended_label);
+  var phrases=calendarPlannerParseList(rule.matchPhrases||rule.phrases||rule.match_phrases||rule.triggerPhrases);
+  phrases=phrases.map(function(p){return String(p||'').trim();}).filter(function(p){return p.length>=3;}).slice(0,8);
+  var matchDates=calendarPlannerMemoryDates(rule);
+  if(!label||(!phrases.length&&!matchDates.length))return null;
+  var mode=String(rule.matchMode||rule.match_mode||'same_day').trim().toLowerCase();
+  if(['same_day','arrival_day','departure_day','any'].indexOf(mode)<0)mode='same_day';
+  var id=String(rule.id||'').trim();
+  if(!id)id='calmem_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+  var conf=String(rule.confidence||'medium').toLowerCase();
+  if(['low','medium','high'].indexOf(conf)<0)conf='medium';
+  return {
+    id:id,
+    createdAt:String(rule.createdAt||new Date().toISOString()),
+    updatedAt:String(rule.updatedAt||rule.createdAt||new Date().toISOString()),
+    summary:String(rule.summary||rule.title||'Calendar correction').trim().slice(0,180),
+    matchPhrases:phrases,
+    matchDates:matchDates,
+    label:label,
+    matchMode:mode,
+    reason:String(rule.reason||rule.explanation||'Learned calendar correction.').trim().slice(0,220),
+    confidence:conf
+  };
+}
+function calendarPlannerMemoryCount(){
+  try{return (calendarRulesLoad().calendarMemoryRules||[]).length;}catch(e){return 0;}
+}
+function calendarCorrectionRenderMemoryCount(){
+  var el=document.getElementById('calendarCorrectionMemoryCount');
+  if(el)el.textContent=calendarPlannerMemoryCount()+' learned';
 }
 function calendarPlannerToggleRules(forceOpen){
   var wrap=document.getElementById('calendarPlannerRulesWrap');
@@ -27992,7 +28327,8 @@ function calendarPlannerRulesSaveFromUi(){
     flightKeywords:gv('cpRuleFlightKeywords',''),
     layoverKeywords:gv('cpRuleLayoverKeywords',''),
     hotelKeywords:gv('cpRuleHotelKeywords',''),
-    forceLabelRules:prev.forceLabelRules||[]
+    forceLabelRules:prev.forceLabelRules||[],
+    calendarMemoryRules:prev.calendarMemoryRules||[]
   });
   calendarRulesSave(next);
   calendarPlannerRulesFillUi();
@@ -28000,7 +28336,7 @@ function calendarPlannerRulesSaveFromUi(){
   appToast('Calendar planner rules saved.','var(--green)');
 }
 function calendarPlannerRulesResetDefaults(){
-  if(!confirm('Reset calendar planner rules to defaults?'))return;
+  if(!confirm('Reset calendar planner rules and clear learned calendar corrections?'))return;
   calendarRulesSave(calendarPlannerDefaultRules());
   calendarPlannerRulesFillUi();
   calendarStatusRender('Planner rules reset.');
@@ -28016,6 +28352,7 @@ function calendarSummaryLoad(){
 }
 function calendarStatusRender(msg){
   try{wtPrefillCalendarInputsFromCfg();}catch(e){}
+  try{calendarCorrectionRenderMemoryCount();}catch(e){}
   var el=document.getElementById('calendarPlanStatus');
   if(!el)return;
   var cfg=calendarCfgLoad();
@@ -28369,6 +28706,56 @@ function calendarPlannerKeywordMatch(text,arr){
   var t=String(text||'').toLowerCase();
   return (arr||[]).some(function(k){return k&&t.indexOf(String(k).toLowerCase())>=0;});
 }
+function calendarPlannerDayMemoryText(day){
+  var parts=[];
+  ((day&&day.real_events_used)||[]).concat((day&&day.ignored_events)||[]).concat((day&&day.events)||[]).forEach(function(e){
+    if(!e)return;
+    parts.push(String(e.title||''),String(e.location||''),String(e.category||''),String(e.notes||''));
+  });
+  if(day&&day.reason)parts.push(String(day.reason));
+  return parts.join(' ').toLowerCase();
+}
+function calendarPlannerMemoryMatch(day,rules,analysis){
+  var list=(rules&&Array.isArray(rules.calendarMemoryRules))?rules.calendarMemoryRules:[];
+  if(!list.length)return null;
+  var text=calendarPlannerDayMemoryText(day);
+  var dayKey=calendarDayDateKey(day);
+  var a=analysis||{};
+  for(var i=list.length-1;i>=0;i--){
+    var r=calendarPlannerMemoryRuleNormalize(list[i]);
+    if(!r)continue;
+    if(dayKey&&(r.matchDates||[]).indexOf(dayKey)>=0){
+      return {
+        id:r.id,
+        label:r.label,
+        reason:r.reason||r.summary||'Learned date correction.',
+        summary:r.summary||'Calendar date correction',
+        confidence:r.confidence||'medium',
+        matchPhrase:dayKey,
+        matchMode:'date'
+      };
+    }
+    if(!text)continue;
+    var hit='';
+    for(var p=0;p<r.matchPhrases.length;p++){
+      var ph=String(r.matchPhrases[p]||'').toLowerCase();
+      if(ph&&text.indexOf(ph)>=0){hit=r.matchPhrases[p];break;}
+    }
+    if(!hit)continue;
+    if(r.matchMode==='arrival_day'&&!a.earlyArrival&&!/arriv|land|arrival/i.test(text))continue;
+    if(r.matchMode==='departure_day'&&!a.lateDeparture&&!/depart|departure|takeoff/i.test(text))continue;
+    return {
+      id:r.id,
+      label:r.label,
+      reason:r.reason||r.summary||'Learned calendar correction.',
+      summary:r.summary||'Calendar correction',
+      confidence:r.confidence||'medium',
+      matchPhrase:hit,
+      matchMode:r.matchMode
+    };
+  }
+  return null;
+}
 function calendarPlannerFreeWindow(day){
   var fw=(day&&day.free_windows)||[],longest=0;
   fw.forEach(function(w){
@@ -28525,6 +28912,17 @@ function calendarPlannerAnalyzeDay(day,rules){
   if(hardTravel)baseReason=(earlyArrivalBlocksTraining?'Early arrival day; no exercise after an early flight.':(overnightDepartureBlocksTraining?'Overnight travel departure/return day.':'Travel-dominated day without usable window.'));
   else if(away||layover)baseReason='Away/layover context with usable training window.';
   else if(lateDeparture)baseReason='Late departure still leaves earlier workout window.';
+  var memoryMatch=calendarPlannerMemoryMatch(day,rules,{
+    earlyArrival:earlyArrival,
+    lateDeparture:lateDeparture,
+    hardTravel:hardTravel,
+    away:away,
+    layover:layover,
+    hasFlight:hasFlight
+  });
+  if(memoryMatch){
+    baseReason='Calendar memory: '+(memoryMatch.reason||memoryMatch.summary||'learned correction');
+  }
   return {
     hardTravel:hardTravel,
     cleanOpen:cleanOpen,
@@ -28547,6 +28945,11 @@ function calendarPlannerAnalyzeDay(day,rules){
     hotelScore:Math.round(hotelScore),
     hiitScore:Math.round(hiitScore),
     reason:baseReason,
+    memoryLabel:memoryMatch?memoryMatch.label:'',
+    memoryReason:memoryMatch?memoryMatch.reason:'',
+    memoryRuleId:memoryMatch?memoryMatch.id:'',
+    memoryMatchPhrase:memoryMatch?memoryMatch.matchPhrase:'',
+    memoryConfidence:memoryMatch?memoryMatch.confidence:'',
     rawEvents:rawEvents,
     ignoredEvents:ignoredEvents
   };
@@ -28898,6 +29301,7 @@ function calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules,opts
         calendarClassification:recommended||'',
         detectedTravelBlocks:(hasDay&&dayAnalysis)?{earlyArrival:dayAnalysis.earlyArrival,overnightTravel:dayAnalysis.overnight,travelDominated:dayAnalysis.travelMinutes>=300}:{earlyArrival:false,overnightTravel:false,travelDominated:false},
         detectedLayoverBlocks:(hasDay&&dayAnalysis)?{awayDay:dayAnalysis.away,layoverDay:dayAnalysis.layover}:{awayDay:false,layoverDay:false},
+        calendarMemory:(hasDay&&dayAnalysis&&dayAnalysis.memoryLabel)?{id:dayAnalysis.memoryRuleId,label:dayAnalysis.memoryLabel,matchPhrase:dayAnalysis.memoryMatchPhrase,reason:dayAnalysis.memoryReason}:null,
         usableWorkoutWindowMin:(hasDay&&dayAnalysis)?dayAnalysis.longestWindow:0,
         overriddenByLock:locked,
         lockBlocked:(locked&&recommended&&recommended!==String(curLabel||'')),
@@ -28932,6 +29336,11 @@ function calendarPlannerBuildProposal(summary,prevSummary,nextSummary,rules,opts
       row.trace.targetContribution=pastDate?'past_preserved':'locked';
       if(pastDate)row.trace.keepCurrentReason='past_day_preserved';
       assigned[ds]=row.proposed;
+    } else if(dayAnalysis.memoryLabel){
+      row.proposed=dayAnalysis.memoryLabel;
+      row.ruleReason='Learned calendar correction: '+(dayAnalysis.memoryReason||'memory override')+'.';
+      row.trace.targetContribution='calendar_memory';
+      assigned[ds]=dayAnalysis.memoryLabel;
     } else if(dayAnalysis.hardTravel){
       row.proposed='TRAVEL';
       row.ruleReason='Hard TRAVEL day from arrival/travel-window rules.';
@@ -29636,6 +30045,203 @@ function calendarAnalyzeLastWeekFromCalendar(){
 }
 function calendarOpenRulesPrompt(){
   calendarPlannerToggleRules(true);
+}
+function calendarCorrectionSetStatus(msg,color){
+  var el=document.getElementById('calendarCorrectionStatus');
+  if(el){
+    el.textContent=String(msg||'');
+    el.style.color=color||'var(--muted)';
+  }
+}
+function calendarCorrectionSetBusy(on){
+  var btn=document.getElementById('calendarCorrectionLearnBtn');
+  if(btn){
+    btn.disabled=!!on;
+    btn.style.opacity=on?'0.55':'';
+    btn.textContent=on?'Teaching...':'Teach calendar';
+  }
+}
+function calendarCorrectionClearInput(){
+  var inp=document.getElementById('calendarCorrectionInput');
+  if(inp)inp.value='';
+  calendarCorrectionSetStatus('',null);
+}
+function calendarCorrectionCompactSummary(summary,weekStart){
+  var filtered=calendarFilterSummaryToWeek(summary,weekStart);
+  return {
+    weekStart:String((filtered&&filtered.weekStart)||weekStart||''),
+    days:(filtered&&Array.isArray(filtered.days)?filtered.days:[]).slice(0,7).map(function(d){
+      var events=((d&&d.real_events_used)||[]).concat((d&&d.ignored_events)||[]).slice(0,5).map(function(e){
+        return {
+          title:String(e&&e.title||'').slice(0,120),
+          location:String(e&&e.location||'').slice(0,80),
+          start:String(e&&e.start||''),
+          end:String(e&&e.end||''),
+          category:String(e&&e.category||'')
+        };
+      });
+      return {
+        date:calendarDayDateKey(d),
+        recommended_label:String((d&&d.recommended_label)||''),
+        reason:String((d&&d.reason)||'').slice(0,180),
+        events:events
+      };
+    })
+  };
+}
+function calendarCorrectionContextSnapshot(){
+  var thisWeek=calendarCurrentWeekStartStr();
+  var nextWeek=calendarNextWeekStartStr();
+  var cached=calendarSummaryLoad()||{};
+  function summaryFor(ws){
+    if(cached&&cached.horizonSummaries&&cached.horizonSummaries[ws])return cached.horizonSummaries[ws];
+    if(String(cached.weekStart||'')===ws)return cached;
+    return calendarPlannerSummaryFromCacheByWeek(ws)||null;
+  }
+  function planFor(ws){
+    var out={},dates=calendarPlannerDateSpan(ws);
+    dates.forEach(function(ds){
+      out[ds]=String(calendarPlannerExistingPlanForDate(ds)||_weekPlan[ds]||'');
+    });
+    return out;
+  }
+  var rules=calendarRulesLoad();
+  return {
+    today:localDateStr(),
+    timezone:(Intl.DateTimeFormat().resolvedOptions().timeZone||'America/Los_Angeles'),
+    thisWeekStart:thisWeek,
+    nextWeekStart:nextWeek,
+    thisWeekSummary:calendarCorrectionCompactSummary(summaryFor(thisWeek),thisWeek),
+    nextWeekSummary:calendarCorrectionCompactSummary(summaryFor(nextWeek),nextWeek),
+    currentPlans:{thisWeek:planFor(thisWeek),nextWeek:planFor(nextWeek)},
+    latestProposal:(_trainerProposal&&_trainerProposal.calendar)?{
+      createdAt:_trainerProposal.createdAt||0,
+      rows:((_trainerProposal.rows||[]).concat((_trainerProposal.weeks&&_trainerProposal.weeks.thisWeek&&_trainerProposal.weeks.thisWeek.rows)||[]).concat(((_trainerProposal.weeks&&_trainerProposal.weeks.nextWeek&&_trainerProposal.weeks.nextWeek.rows)||[]))).slice(0,14).map(function(r){
+        return {date:r.date,current:r.current,proposed:r.proposed,reason:String((r.calendarReason||'')+' '+(r.ruleReason||'')).slice(0,220)};
+      })
+    }:null,
+    currentRules:{
+      ignorePhrases:rules.ignorePhrases,
+      flightKeywords:rules.flightKeywords,
+      layoverKeywords:rules.layoverKeywords,
+      hotelKeywords:rules.hotelKeywords,
+      forceLabelRules:rules.forceLabelRules,
+      calendarMemoryRules:(rules.calendarMemoryRules||[]).slice(-12)
+    }
+  };
+}
+function calendarCorrectionAppendListUnique(base,extra,max){
+  var out=calendarPlannerParseList(base);
+  calendarPlannerParseList(extra).forEach(function(x){
+    var exists=out.some(function(y){return String(y).toLowerCase()===String(x).toLowerCase();});
+    if(!exists)out.push(String(x).trim());
+  });
+  return out.slice(0,max||60);
+}
+function calendarCorrectionApplyRulesPatch(rules,patch){
+  if(!patch||typeof patch!=='object')return rules;
+  var out=Object.assign({},rules||{});
+  ['ignorePhrases','flightKeywords','layoverKeywords','hotelKeywords'].forEach(function(k){
+    if(patch[k]!==undefined)out[k]=calendarCorrectionAppendListUnique(out[k],patch[k],80);
+  });
+  if(Array.isArray(patch.forceLabelRules)){
+    var force=(out.forceLabelRules||[]).slice(0);
+    patch.forceLabelRules.forEach(function(r){
+      var phrase=String((r&&r.phrase)||'').trim();
+      var label=calendarPlannerValidLabel(r&&r.label);
+      if(!phrase||!label)return;
+      var exists=force.some(function(x){return String(x.phrase||'').toLowerCase()===phrase.toLowerCase()&&String(x.label||'')===label;});
+      if(!exists)force.push({phrase:phrase,label:label});
+    });
+    out.forceLabelRules=force.slice(-40);
+  }
+  return out;
+}
+function calendarCorrectionSaveParsed(parsed,userText){
+  var p=parsed&&typeof parsed==='object'?parsed:{};
+  var rule=p.memoryRule||p.rule||p.calendarMemoryRule||p.dateRule||p.dateCorrection||p.calendarDateRule||null;
+  if(!rule&&p.label){
+    rule={label:p.label,matchPhrases:p.matchPhrases||p.phrases,matchDates:p.matchDates||p.dates||p.date,matchMode:p.matchMode,summary:p.summary,reason:p.reason,confidence:p.confidence};
+  }
+  if(rule){
+    rule=Object.assign({},rule,{
+      createdAt:new Date().toISOString(),
+      updatedAt:new Date().toISOString()
+    });
+  }
+  var normalized=calendarPlannerMemoryRuleNormalize(rule);
+  if(!normalized)throw new Error('AI could not produce a safe calendar rule. Try naming the event and the desired label.');
+  if(!normalized.summary||normalized.summary==='Calendar correction'){
+    normalized.summary=String((p.message||userText||'Calendar correction')).slice(0,160);
+  }
+  var rules=calendarRulesLoad();
+  rules=calendarCorrectionApplyRulesPatch(rules,p.rulesPatch||p.patch||null);
+  var list=(rules.calendarMemoryRules||[]).filter(function(r){
+    var nr=calendarPlannerMemoryRuleNormalize(r);
+    if(!nr)return false;
+    return !(nr.label===normalized.label&&nr.matchPhrases.join('|').toLowerCase()===normalized.matchPhrases.join('|').toLowerCase()&&(nr.matchDates||[]).join('|')===(normalized.matchDates||[]).join('|')&&nr.matchMode===normalized.matchMode);
+  });
+  list.push(normalized);
+  rules.calendarMemoryRules=list.slice(-40);
+  calendarRulesSave(rules);
+  calendarCorrectionRenderMemoryCount();
+  return normalized;
+}
+function calendarCorrectionLearn(){
+  var inp=document.getElementById('calendarCorrectionInput');
+  var text=String((inp&&inp.value)||'').trim();
+  if(!text){calendarCorrectionSetStatus('Type the correction first.','var(--orange)');return;}
+  if(!navigator.onLine){calendarCorrectionSetStatus('Online needed for the AI correction.','var(--orange)');return;}
+  calendarCorrectionSetBusy(true);
+  calendarCorrectionSetStatus('Reading calendar context...','var(--muted)');
+  var ctx=calendarCorrectionContextSnapshot();
+  var prompt=[
+    'You convert a workout calendar planning correction into one safe structured planning memory.',
+    'Return JSON only. Do not write code. Do not rewrite the whole schedule.',
+    'Allowed labels: HOME, HOTEL, HIIT, TRAVEL, REST.',
+    'Use TRAVEL or REST for "no workout" corrections. Use matchMode arrival_day for arrival/landing-day corrections and departure_day for departure-day corrections.',
+    'matchPhrases must be specific event-title/location phrases when possible. Avoid overly broad phrases unless the user clearly wants every event of that type.',
+    'If the user says a specific date/day is wrong, include matchDates with exact YYYY-MM-DD date(s) from the provided context. A date correction may omit matchPhrases.',
+    'If the correction teaches parsing categories/keywords, include rulesPatch for ignorePhrases, flightKeywords, layoverKeywords, hotelKeywords, or forceLabelRules.',
+    'Output format:',
+    '{"message":"short confirmation","memoryRule":{"summary":"...","matchPhrases":["..."],"matchDates":["YYYY-MM-DD"],"label":"TRAVEL","matchMode":"same_day|arrival_day|departure_day|any","reason":"...","confidence":"low|medium|high"},"rulesPatch":{},"shouldRebuild":true}',
+    '',
+    'USER CORRECTION:',
+    text,
+    '',
+    'CALENDAR CONTEXT JSON:',
+    JSON.stringify(ctx)
+  ].join('\n');
+  aiCoachOpenAICall({
+    model:'gpt-5.4-mini',
+    response_format:{type:'json_object'},
+    messages:[
+      {role:'system',content:'Return valid JSON only for a safe calendar planner memory.'},
+      {role:'user',content:prompt}
+    ],
+    max_tokens:900
+  },45000).then(function(data){
+    var raw=aiCoachChatDataText(data);
+    var parsed=aiCoachExtractJson(raw)||null;
+    if(!parsed)throw new Error('AI returned unreadable JSON.');
+    var saved=calendarCorrectionSaveParsed(parsed,text);
+    var msg=String(parsed.message||('Saved: '+saved.summary));
+    calendarCorrectionSetStatus(msg+' Rebuilding proposal...','var(--green)');
+    appToast('Calendar correction saved.','var(--green)');
+    try{if(inp)inp.value='';}catch(e){}
+    var cfg=calendarCfgLoad();
+    if(calendarIsValidIcalUrl(cfg&&cfg.icalUrl)){
+      return calendarBuildWeekFromCalendar({fromCorrection:true}).then(function(){
+        calendarCorrectionSetStatus(msg,'var(--green)');
+      });
+    }
+    calendarCorrectionSetStatus(msg+' Calendar link not connected yet.','var(--green)');
+    return null;
+  }).catch(function(err){
+    calendarCorrectionSetStatus(aiCoachFriendlyApiError((err&&err.message)||err||'Calendar correction failed.'),'var(--orange)');
+  }).then(function(){
+    calendarCorrectionSetBusy(false);
+  });
 }
 function calendarCopyPlannerDiagnostics(){
   try{
@@ -32786,6 +33392,37 @@ function nutGetActiveCals(date){
     return(v!==undefined&&v!==null)?parseFloat(v):null;
   }catch(e){return null;}
 }
+function nutActiveEntryForDate(date,val){
+  var d=String(date||_nutDate);
+  var n=parseFloat(val);
+  if(!d||!isFinite(n))return null;
+  return {date:d,meal:'_active',food:'AppleWatch',calories:n,
+    protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0,servings:1,
+    id:'active_'+d,updatedAt:Date.now()};
+}
+function nutSyncActiveCalsToSheet(date,val){
+  var d=String(date||_nutDate);
+  var entry=nutActiveEntryForDate(d,val);
+  if(!entry)return;
+  nutSyncAction({type:'deleteNutritionRow',date:d,meal:'_active',food:'AppleWatch'},null,function(){
+    nutSyncAction({type:'logNutrition',entries:[entry]},null,null);
+  });
+}
+function nutActiveRepairShouldQueue(date,val){
+  try{
+    var d=String(date||''),n=Math.round(Math.max(0,parseFloat(val)||0));
+    if(!d||!n)return false;
+    var key='wt_nut_active_repair_v1';
+    var m=safeLsJson(key,{},key)||{};
+    var sig=d+'|'+n,now=Date.now();
+    if(m[sig]&&(now-parseInt(m[sig],10))<60000)return false;
+    m[sig]=now;
+    Object.keys(m).forEach(function(k){if((now-parseInt(m[k],10))>24*60*60*1000)delete m[k];});
+    try{localStorage.setItem(key,JSON.stringify(m));}catch(e){}
+    wtDB.set(key,JSON.stringify(m));
+    return true;
+  }catch(e2){return true;}
+}
 function nutSetActiveCals(date,val){
   var d=date||_nutDate;
   // Remove from memory
@@ -32802,15 +33439,13 @@ function nutSetActiveCals(date,val){
   }catch(e){}
   // Always delete from sheet first (clears any old/duplicate rows for this date+_active)
   // then re-log if we have a value. Use a stable id so GAS upsert works correctly.
-  var stableId='active_'+d; // same id every time for this date — GAS will upsert
-  nutSyncAction({type:'deleteNutritionRow',date:d,meal:'_active',food:'AppleWatch'},null,function(){
-    if(isEmpty)return; // just delete, no re-log needed
-    var entry={date:d,meal:'_active',food:'AppleWatch',calories:parseFloat(val),
-      protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0,servings:1,
-      id:stableId,updatedAt:Date.now()};
-    if(_nutEntries)_nutEntries.push(entry);
-    nutSyncAction({type:'logNutrition',entries:[entry]},null,null);
-  });
+  if(isEmpty){
+    nutSyncAction({type:'deleteNutritionRow',date:d,meal:'_active',food:'AppleWatch'},null,null);
+    return;
+  }
+  var entry=nutActiveEntryForDate(d,val);
+  if(entry&&_nutEntries)_nutEntries.push(entry);
+  nutSyncActiveCalsToSheet(d,val);
 }
 function nutIsCheatDay(date){
   var d=date||_nutDate;
@@ -33004,6 +33639,7 @@ function appStateSave(){
     try{var sd=localStorage.getItem(SEQ_DEFAULTS_KEY);if(sd)state.seqDefaults=sd;}catch(e){}
     try{var vm=localStorage.getItem(VOICE_MINS_KEY);if(vm)state.voiceMins=vm;}catch(e){}
     try{var pr=localStorage.getItem('wt_profile');if(pr)state.profile=pr;}catch(e){}
+    try{var cr=localStorage.getItem(CAL_SYNC_RULES_KEY);if(cr)state.calendarRules=cr;}catch(e){}
     // AI coach state — synced so coach profile, mesocycle, notes survive device changes
     try{var aip=localStorage.getItem(AI_PROFILE_KEY);if(aip)state.aiProfile=aip;}catch(e){}
     try{var aim=localStorage.getItem(AI_MESOCYCLE_KEY);if(aim)state.aiMesocycle=aim;}catch(e){}
@@ -33057,6 +33693,21 @@ function appStateRestore(state){
   restoreKey(SEQ_DEFAULTS_KEY,'seqDefaults',SEQ_DEFAULTS_KEY);
   restoreKey(VOICE_MINS_KEY,'voiceMins',VOICE_MINS_KEY);
   restoreKey('wt_profile','profile','wt_profile');
+  try{
+    if(state.calendarRules!==undefined){
+      var remoteCalendarRules=(typeof state.calendarRules==='string')?JSON.parse(state.calendarRules||'{}'):(state.calendarRules||{});
+      var localCalendarRaw=localStorage.getItem(CAL_SYNC_RULES_KEY);
+      var localCalendarRulesRaw=localCalendarRaw?JSON.parse(localCalendarRaw||'{}'):{};
+      var nextCalendarRules=localCalendarRaw?calendarPlannerRulesMerge(localCalendarRulesRaw,remoteCalendarRules):calendarPlannerRulesNormalize(remoteCalendarRules);
+      var beforeCalendarRules=localCalendarRaw?JSON.stringify(calendarPlannerRulesNormalize(localCalendarRulesRaw)):'';
+      var afterCalendarRules=JSON.stringify(nextCalendarRules);
+      if(afterCalendarRules&&afterCalendarRules!==beforeCalendarRules){
+        try{localStorage.setItem(CAL_SYNC_RULES_KEY,afterCalendarRules);}catch(_ce0){}
+        wtDB.set(CAL_SYNC_RULES_KEY,afterCalendarRules).catch(function(){});
+        restored.push('calendarRules');
+      }
+    }
+  }catch(e){}
   // Restore AI coach state — coach profile, mesocycle, notes, cached workout
   restoreKey(AI_PROFILE_KEY,'aiProfile',AI_PROFILE_KEY);
   restoreKey(AI_MESOCYCLE_KEY,'aiMesocycle',AI_MESOCYCLE_KEY);
@@ -33936,10 +34587,14 @@ function nutFetchEntries(extendedFrom){
       try{localEntries=JSON.parse(localStorage.getItem(NUT_ENTRIES_KEY)||'[]');}catch(e){}
       var windowLocal=localEntries.filter(function(e){return e.date>=from&&e.date<=to&&e.meal!=='_active';});
       // Build lookup sets from sheet — by id AND by date|meal|food for legacy entries
-      var sheetIds={},sheetKeys={};
+      var sheetIds={},sheetKeys={},sheetActiveByDate={};
       sheetEntries.forEach(function(e){
         if(e.id)sheetIds[String(e.id)]=true;
         sheetKeys[e.date+'|'+e.meal+'|'+e.food]=true;
+        if(e.meal==='_active'&&e.food==='AppleWatch'){
+          var av=Math.max(0,parseFloat(e.calories)||0);
+          sheetActiveByDate[e.date]=Math.max(sheetActiveByDate[e.date]||0,av);
+        }
       });
       // Entry is missing if neither its id nor its legacy key is found in sheet
       var missing=windowLocal.filter(function(e){
@@ -33959,18 +34614,43 @@ function nutFetchEntries(extendedFrom){
         nutBadge('live','Live');
         nutMsg('');
       }
-      // Sheet is authoritative inside the window — merge with local outside window
-      var outsideWindow=localEntries.filter(function(e){return e.date<from||e.date>to;});
-      _nutEntries=outsideWindow.concat(sheetEntries);
-      nutEnsureIds();
-      // Sync _active entries back to NUT_ACTIVE_KEY cache for nutEffectiveBudget
+      // Merge _active rows carefully: Health/manual active calories can arrive before
+      // Sheets echoes the stable AppleWatch row back, so never let a stale Sheet value
+      // lower the local cache.
+      var activeRowsToPreserve=[],activeOverrideDates={};
       try{
         var activeStored=JSON.parse(localStorage.getItem(NUT_ACTIVE_KEY)||'{}');
+        if(!activeStored||typeof activeStored!=='object')activeStored={};
         sheetEntries.forEach(function(e){
-          if(e.meal==='_active'&&e.food==='AppleWatch')activeStored[e.date]=e.calories;
+          if(e.meal==='_active'&&e.food==='AppleWatch'){
+            var current=Math.max(0,parseFloat(activeStored[e.date])||0);
+            var sheetVal=Math.max(0,parseFloat(e.calories)||0);
+            activeStored[e.date]=Math.max(current,sheetVal);
+          }
+        });
+        Object.keys(activeStored).forEach(function(d){
+          if(d<from||d>to)return;
+          var n=Math.max(0,parseFloat(activeStored[d])||0);
+          if(!n)return;
+          var sheetVal=Math.max(0,parseFloat(sheetActiveByDate[d])||0);
+          if(n>sheetVal){
+            var row=nutActiveEntryForDate(d,n);
+            if(row){activeRowsToPreserve.push(row);activeOverrideDates[d]=true;}
+          }
         });
         localStorage.setItem(NUT_ACTIVE_KEY,JSON.stringify(activeStored));
       }catch(er){}
+      activeRowsToPreserve.forEach(function(r){
+        if(r&&nutActiveRepairShouldQueue(r.date,r.calories))nutSyncActiveCalsToSheet(r.date,r.calories);
+      });
+      // Sheet is authoritative inside the window, except for newer local active rows
+      // that must be preserved until the Sheet catches up.
+      var outsideWindow=localEntries.filter(function(e){return e.date<from||e.date>to;});
+      var sheetEntriesForMerge=sheetEntries.filter(function(e){
+        return !(e.meal==='_active'&&e.food==='AppleWatch'&&activeOverrideDates[e.date]);
+      });
+      _nutEntries=outsideWindow.concat(sheetEntriesForMerge).concat(activeRowsToPreserve);
+      nutEnsureIds();
       // Sync _cheat entries back to NUT_CHEAT_KEY cache
       try{
         var cheatStored=JSON.parse(localStorage.getItem(NUT_CHEAT_KEY)||'{}');
@@ -36407,7 +37087,7 @@ function connSetupLog(msg,obj){
   if(!el)return;
   var line='['+(new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'}))+'] '+msg;
   if(obj!==undefined){
-    try{line+='\n'+JSON.stringify(obj,null,2);}catch(e){line+='\n'+String(obj);}
+    try{line+='\n'+JSON.stringify(appDoctorRedactValue('log',obj),null,2);}catch(e){line+='\n'+appDoctorMaskSecretString(String(obj));}
   }
   el.textContent=(el.textContent?el.textContent+'\n\n':'')+line;
   el.scrollTop=el.scrollHeight;
@@ -36477,7 +37157,7 @@ function connResetConnectionDefaults(){
 }
 
 function connAiProxyAllowedOriginsText(){
-  return 'https://bananarama23.github.io,http://127.0.0.1:8765,http://localhost:8765,null,https://broken-surf-4390.philksmith.workers.dev';
+  return 'https://bananarama23.github.io,http://127.0.0.1:8765,http://localhost:8765,http://127.0.0.1:8777,http://localhost:8777,null,https://broken-surf-4390.philksmith.workers.dev';
 }
 function connAiProxyAppEnableUrl(){
   var base='https://bananarama23.github.io/workout-tracker/';
@@ -36486,9 +37166,14 @@ function connAiProxyAppEnableUrl(){
 }
 function connAiProxyRenderStatus(){
   var input=document.getElementById('connAiProxyUrlInput');
+  var tokenInput=document.getElementById('connAiProxyTokenInput');
   var status=document.getElementById('connAiProxyStatus');
   var origins=document.getElementById('connAiProxyOriginsText');
   if(input&&!String(input.value||'').trim()&&wtAiProxyBaseUrl())input.value=wtAiProxyBaseUrl();
+  if(tokenInput){
+    tokenInput.value='';
+    tokenInput.placeholder=(wtAiProxyBearerAuthEnabled()&&wtAiProxyToken())?'Proxy token saved locally':'Optional AI_PROXY_TOKEN';
+  }
   if(origins)origins.textContent=connAiProxyAllowedOriginsText();
   if(!status)return;
   var configured=wtAiProxyConfigured();
@@ -36501,7 +37186,8 @@ function connAiProxyRenderStatus(){
 	    var ncache=(st.d1Configured===true&&st.nutritionCacheRoutes===true)?' · Nutrition lookup cache: ready':'';
 	    function pstat(key){return Object.prototype.hasOwnProperty.call(st,key)?(st[key]?'ready':'missing'):'unknown';}
 	    var providers=' · OpenAI: '+pstat('openaiConfigured')+' · Gemini: '+pstat('geminiConfigured')+' · Claude: '+pstat('anthropicConfigured');
-	    status.innerHTML='AI Proxy: <strong style="color:var(--green);">configured</strong> · '+escHtml(wtAiProxyRedactedUrl())+providers+d1+ncache+' · Last status: '+escHtml(last)+(err?' · Error: '+escHtml(err):'');
+	    var auth=' · Auth: '+(wtAiProxyBearerAuthEnabled()&&wtAiProxyToken()?'bearer token saved':'origin allowlist');
+	    status.innerHTML='AI Proxy: <strong style="color:var(--green);">configured</strong> · '+escHtml(wtAiProxyRedactedUrl())+providers+d1+ncache+auth+' · Last status: '+escHtml(last)+(err?' · Error: '+escHtml(err):'');
 	  }else{
     status.innerHTML='AI Proxy: <strong style="color:var(--muted);">not configured</strong> · App is using Apps Script AI routes.';
   }
@@ -36524,12 +37210,16 @@ function connAiProxySave(){
 }
 function connAiProxyTest(enableOnSuccess){
   var input=document.getElementById('connAiProxyUrlInput');
+  var tokenInput=document.getElementById('connAiProxyTokenInput');
   var status=document.getElementById('connAiProxyStatus');
   var url=wtAiProxyNormalizeUrl(input&&input.value||wtAiProxyBaseUrl());
   if(!url){
     if(status)status.innerHTML='AI Proxy: <strong style="color:var(--orange);">paste Worker URL first</strong>';
     return;
   }
+  var typedToken=String((tokenInput&&tokenInput.value)||'').trim();
+  var existingToken=(wtAiProxyBearerAuthEnabled()?wtAiProxyToken():'');
+  var tokenForTest=typedToken||existingToken;
   if(status)status.innerHTML='AI Proxy: testing '+escHtml(url)+'...';
 	  wtAiProxyHealth(url,12000).then(function(res){
 	    var ok=res&&res.status==='ok';
@@ -36542,17 +37232,25 @@ function connAiProxyTest(enableOnSuccess){
 	    var nutritionRoutes=!!(res&&res.nutritionCacheRoutes);
 	    var providerRoutes=!!(res&&res.providerRoutes);
 	    var originAllowed=(res&&res.requestOriginAllowed)!==false;
-	    var ready=!!(ok&&openai&&origins&&originAllowed);
+	    var tokenAuth=!!(res&&res.tokenAuthEnabled);
+	    var authPromise=(ok&&tokenAuth)?(tokenForTest?wtAiProxyAuthCheck(url,tokenForTest,12000):Promise.reject(new Error('AI_PROXY_TOKEN is enabled in Cloudflare; paste the token before enabling.'))):Promise.resolve({status:'ok',skipped:true});
+	    return authPromise.then(function(authRes){
+	    var authOk=!tokenAuth||!!(authRes&&authRes.status==='ok');
+	    var ready=!!(ok&&openai&&origins&&originAllowed&&authOk);
     if(ok){
-      if(ready&&enableOnSuccess)wtAiProxySaveUrl(url);
+      if(ready&&enableOnSuccess)wtAiProxySaveUrl(url,{token:tokenForTest});
       if(input)input.value=url;
       var errMsg='';
       if(!openai)errMsg='OPENAI_API_KEY missing in Cloudflare Worker';
       else if(!origins)errMsg='ALLOWED_ORIGINS missing in Cloudflare Worker';
       else if(!originAllowed)errMsg='This app origin is not in ALLOWED_ORIGINS';
+      else if(tokenAuth&&!authOk)errMsg='AI_PROXY_TOKEN auth check failed';
       appDoctorPatchState('ai_proxy',{
         configured:wtAiProxyConfigured(),
         url:(ready&&enableOnSuccess)?wtAiProxyRedactedUrl():url.replace(/([?&](?:token|key|secret)=)[^&]+/ig,'$1REDACTED'),
+	        tokenConfigured:!!(tokenForTest&&tokenAuth),
+	        tokenAuthEnabled:tokenAuth,
+	        authMode:(tokenForTest&&tokenAuth)?'bearer':'none',
 	        lastRoute:'/health',
 	        lastStatus:ready?(enableOnSuccess?'ok':'test_ok'):(!openai?'openai_key_missing':(!origins?'allowed_origins_missing':'origin_not_allowed')),
 	        lastError:errMsg,
@@ -36566,13 +37264,14 @@ function connAiProxyTest(enableOnSuccess){
 	        providerRoutes:providerRoutes
 	      });
 	      if(status){
-	        status.innerHTML='AI Proxy: <strong style="color:'+(ready?'var(--green)':'var(--orange)')+';">'+(ready?(enableOnSuccess?'ready':'test passed, tap Test + Enable to save'):'Worker reachable, setup incomplete')+'</strong> · '+escHtml(url)+' · OpenAI: '+(openai?'ready':'missing')+' · Gemini: '+(gemini?'ready':'missing')+' · Claude: '+(anthropic?'ready':'missing')+' · provider routes: '+(providerRoutes?'ready':'not reported')+' · D1 trainer cache: '+(d1&&trainerRoutes?'ready':'not active')+' · Nutrition lookup cache: '+(d1&&nutritionRoutes?'ready':'not active')+(errMsg?' · '+escHtml(errMsg):'');
+	        status.innerHTML='AI Proxy: <strong style="color:'+(ready?'var(--green)':'var(--orange)')+';">'+(ready?(enableOnSuccess?'ready':'test passed, tap Test + Enable to save'):'Worker reachable, setup incomplete')+'</strong> · '+escHtml(url)+' · OpenAI: '+(openai?'ready':'missing')+' · Gemini: '+(gemini?'ready':'missing')+' · Claude: '+(anthropic?'ready':'missing')+' · Auth: '+(tokenAuth?(authOk?'bearer ready':'token required'):'origin allowlist')+' · provider routes: '+(providerRoutes?'ready':'not reported')+' · D1 trainer cache: '+(d1&&trainerRoutes?'ready':'not active')+' · Nutrition lookup cache: '+(d1&&nutritionRoutes?'ready':'not active')+(errMsg?' · '+escHtml(errMsg):'');
 	      }
       appToast(ready?(enableOnSuccess?'AI proxy is ready.':'AI proxy test passed.'):'Worker reachable, but setup is incomplete.',ready?'var(--green)':'var(--orange)');
       try{connSetupLog('AI proxy health response',res);}catch(e){}
       return;
     }
     throw new Error((res&&res.message)||'health_check_failed');
+    });
   }).catch(function(err){
     var msg=String(err&&err.message||err||'health_check_failed');
     appDoctorPatchState('ai_proxy',{
@@ -36591,8 +37290,15 @@ function connAiProxyDisable(){
   wtAiProxyClear();
   var input=document.getElementById('connAiProxyUrlInput');
   if(input)input.value='';
+  var tokenInput=document.getElementById('connAiProxyTokenInput');
+  if(tokenInput)tokenInput.value='';
   connAiProxyRenderStatus();
   appToast('AI proxy disabled. Apps Script fallback is active.','var(--green)');
+}
+function connAiProxyClearToken(){
+  try{localStorage.removeItem(WT_AI_PROXY_TOKEN_KEY);localStorage.removeItem(WT_AI_PROXY_AUTH_MODE_KEY);}catch(e){}
+  connAiProxyRenderStatus();
+  appToast('Proxy bearer token cleared. Origin allowlist mode remains active.','var(--green)');
 }
 function connAiProxyCopyOrigins(){
   wtCopyText(connAiProxyAllowedOriginsText(),'Cloudflare ALLOWED_ORIGINS');
@@ -36640,7 +37346,7 @@ function connCopyAppToken(){ wtCopyText('No APP_CLIENT_TOKEN needed. Backend run
 function connCopyScriptProps(){
   var hcfg=healthCfgLoad();
   var healthToken=hcfg.bridgeToken||'';
-  var txt='Cloudflare Worker secrets (primary fast AI path):\nOPENAI_API_KEY = required for workout/nutrition OpenAI calls\nGEMINI_API_KEY = optional Gemini AI gateway\nANTHROPIC_API_KEY = optional Claude AI gateway\n\nGoogle Apps Script properties (Sheet/backup/fallback path):\nHEALTH_BRIDGE_TOKEN = '+(healthToken||'<generated health bridge token>')+'\nOPENAI_API_KEY = optional fallback\nGEMINI_API_KEY = optional fallback\nANTHROPIC_API_KEY = optional fallback\n\nSave. For Apps Script changes: Deploy → Manage deployments → Edit → New version → Deploy.';
+  var txt='Cloudflare Worker secrets (primary fast AI path):\nOPENAI_API_KEY = required for workout/nutrition OpenAI calls\nGEMINI_API_KEY = optional Gemini AI gateway\nANTHROPIC_API_KEY = optional Claude AI gateway\nAI_PROXY_TOKEN = optional bearer token gate after the tokenless setup works\nMAX_REQUEST_BYTES = optional request cap; default is 16777216\n\nGoogle Apps Script properties (Sheet/backup/fallback path):\nHEALTH_BRIDGE_TOKEN = '+(healthToken||'<generated health bridge token>')+'\nOPENAI_API_KEY = optional fallback\nGEMINI_API_KEY = optional fallback\nANTHROPIC_API_KEY = optional fallback\n\nSave. For Apps Script changes: Deploy → Manage deployments → Edit → New version → Deploy.';
   wtCopyText(txt,'Apps Script setup instructions');
 }
 function connTestBackend(){
@@ -38184,7 +38890,8 @@ function progAIRunFeedback(btn,card,result){
     '2. AW baseline (currently '+activeBase+') — is this the right threshold?\n'+
     '3. Normal ratio (currently '+normalRatio+') — am I earning back the right amount?\n'+
     '4. Cheat ratio (currently '+cheatRatio+') — am I earning back the right amount on travel/cheat days? Remember: on cheat days a near-zero surplus or small surplus is the TARGET (maintenance), not a problem. Only suggest changing this if cheat days are causing an unhealthy surplus that\'s hurting the overall weight trend.\n'+
-    'Use my actual surplus/deficit numbers and weight trend. 4 short answers, one per number, specific values to change to if needed. Do not penalize cheat days for being near maintenance — that is intentional.';
+    'Use my actual surplus/deficit numbers and weight trend. Do not penalize cheat days for being near maintenance — that is intentional.\n\n'+
+    'Return one JSON object with keys summary and recommendations. recommendations must include baseCalories, activeBase, normalRatio, and cheatRatio. Each recommendation must be {current:number, recommended:number|null, action:"keep"|"change", reason:string}. Use recommended:null when keeping unchanged.';
 
   aiCoachOpenAICall({
     model:'gpt-5.4-mini',
@@ -38193,13 +38900,14 @@ function progAIRunFeedback(btn,card,result){
   },60000).then(function(data){
     var text=data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
     if(!text){if(result)result.textContent='No response — try again.';return;}
-    var readable=aiReadableFromJsonText(text);
+    var rawText=text;
+    var readable=aiReadableFromJsonText(rawText);
     if(readable)text=readable;
     if(result){
       result.innerHTML=text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
     }
     if(btn){btn.textContent='✦ REFRESH';btn.disabled=false;}
-    progAIParseResponse(text);
+    progAIParseResponse(text,rawText);
   }).catch(function(err){
     if(result)result.textContent=aiCoachFriendlyApiError(err);
     if(btn){btn.textContent='✦ ASK AI';btn.disabled=false;}
@@ -38209,7 +38917,9 @@ function progAIRunFeedback(btn,card,result){
 // ── Parse Gemini AI feedback for suggested target changes ──────────
 var _progAIParsed={};
 
-function progAIParseResponse(text){
+function progAIParseResponse(text,rawText){
+  text=String(text||'');
+  rawText=String(rawText||text||'');
   var parsed={};
   var wrap=document.getElementById('progAIParseWrap');
   var rows=document.getElementById('progAIParseRows');
@@ -38221,11 +38931,143 @@ function progAIParseResponse(text){
     cheatRatio:(_nutTargets&&_nutTargets.cheatRatio)||0.75
   };
   var SETTINGS=[
-    {key:'cal',         labels:['base calorie','base cal','daily calorie','calorie target','calories'],  type:'int',   min:1200,max:4000},
-    {key:'activeBase',  labels:['aw baseline','active baseline','active watch baseline','baseline'],     type:'int',   min:100, max:1000},
-    {key:'normalRatio', labels:['normal ratio','normal day ratio','non-cheat ratio'],                   type:'float', min:0.1, max:1.0},
-    {key:'cheatRatio',  labels:['cheat ratio','cheat day ratio'],                                       type:'float', min:0.1, max:1.0},
+    {key:'cal',         labels:['base calorie','base calories','base cal','daily calorie','daily calories','calorie target','calories'], type:'int',   min:1200,max:4000},
+    {key:'activeBase',  labels:['aw baseline','aw active baseline','active baseline','active calories baseline','apple watch baseline','active watch baseline','baseline'], type:'int',   min:100, max:1000},
+    {key:'normalRatio', labels:['normal ratio','normal day ratio','normal earn back','normal earn-back','non-cheat ratio','non cheat ratio'], type:'float', min:0.1, max:1.0},
+    {key:'cheatRatio',  labels:['cheat ratio','cheat day ratio','cheat earn back','cheat earn-back','travel ratio','travel day ratio'], type:'float', min:0.1, max:1.0},
   ];
+  function settingFromText(label){
+    var s=String(label||'').toLowerCase().replace(/[_-]+/g,' ');
+    var compact=s.replace(/[^a-z0-9]+/g,'');
+    if(/\bbase\s*(calorie|calories|kcal|cal)\b/.test(s)||compact==='cal'||compact==='calories'||compact==='basecalories'||compact==='basecalorie'||compact==='dailycalories'||compact==='calorietarget')return SETTINGS[0];
+    if(/\b(aw|active|apple watch)\s*(calorie|calories)?\s*(baseline|base)\b/.test(s)||compact==='activebase'||compact==='awbaseline'||compact==='awactivebaseline'||compact==='activebaseline'||compact==='activecaloriesbaseline'||compact==='applewatchbaseline')return SETTINGS[1];
+    if(/\b(normal|non cheat|noncheat)\s*(day\s*)?(ratio|earn back|earnback|earn back ratio|earnback ratio)\b/.test(s)||compact==='normalratio'||compact==='normaldayratio'||compact==='normalearnbackratio'||compact==='normaldayearnbackratio'||(compact.indexOf('normal')>=0&&compact.indexOf('earnback')>=0&&compact.indexOf('ratio')>=0))return SETTINGS[2];
+    if(/\b(cheat|travel)\s*(day\s*)?(ratio|earn back|earnback|earn back ratio|earnback ratio)\b/.test(s)||compact==='cheatratio'||compact==='cheatdayratio'||compact==='cheatearnbackratio'||compact==='cheatdayearnbackratio'||compact==='travelratio'||compact==='traveldayratio'||(compact.indexOf('cheat')>=0&&compact.indexOf('earnback')>=0&&compact.indexOf('ratio')>=0)||(compact.indexOf('travel')>=0&&compact.indexOf('earnback')>=0&&compact.indexOf('ratio')>=0))return SETTINGS[3];
+    for(var i=0;i<SETTINGS.length;i++){
+      for(var j=0;j<SETTINGS[i].labels.length;j++){
+        if(s.indexOf(SETTINGS[i].labels[j])>=0)return SETTINGS[i];
+      }
+    }
+    return null;
+  }
+  function normalizeValueForSetting(v,spec,sourceText){
+    var n=(spec.type==='float')?parseFloat(v):parseInt(v,10);
+    if(!isFinite(n))return null;
+    if(spec.type==='float'){
+      if((/%/.test(String(sourceText||''))||n>1)&&n<=100)n=n/100;
+      n=Math.round(n*100)/100;
+    }
+    if(n<spec.min||n>spec.max)return null;
+    return n;
+  }
+  function parseValueFromText(str,spec){
+    var sent=String(str||'').replace(/,/g,'').trim();
+    if(!sent)return null;
+    var lower=sent.toLowerCase();
+    var explicit=/(recommend|suggest|target|new|set|change|increase|decrease|reduce|lower|raise|move|adjust|bump|bring|try|use|should be|go to|proposed|apply|recommended)/i.test(sent);
+    if(/\bkeep\b|\bno change\b|\bstay\b|\bremain\b|\bunchanged\b|\bmaintain\b/.test(lower)&&!explicit)return null;
+    var patterns=[
+      /(?:recommended|recommendation|suggested|target|new|proposed|value)\s*(?:value)?\s*[:=]\s*(\d+(?:\.\d+)?)\s*%?/i,
+      /(?:change|increase|decrease|reduce|lower|raise|set|try|use|consider|suggest|recommend|move|adjust|bump|bring|go)\b[^.\n;|]*?(?:to|at|of|=|:)\s*(\d+(?:\.\d+)?)\s*%?/i,
+      /(?:should\s+be|could\s+be|would\s+be)\s*(\d+(?:\.\d+)?)\s*%?/i,
+      /(?:→|->|=>)\s*(\d+(?:\.\d+)?)\s*%?/,
+      /\bto\s+(\d+(?:\.\d+)?)\s*%?/i
+    ];
+    for(var i=0;i<patterns.length;i++){
+      var m=sent.match(patterns[i]);
+      if(m){
+        var n=normalizeValueForSetting(m[1],spec,sent);
+        if(n!==null)return n;
+      }
+    }
+    if(!/\bkeep\b|\bno change\b|\bstay\b|\bremain\b|\bunchanged\b|\bmaintain\b/.test(lower)&&sent.length<140){
+      var nums=sent.match(/\b\d+(?:\.\d+)?\s*%?\b/g)||[];
+      if(nums.length===1){
+        var only=normalizeValueForSetting(nums[0],spec,sent);
+        if(only!==null)return only;
+      }
+    }
+    return null;
+  }
+  function parseValueFromNode(node,spec,pathLabel){
+    if(node===null||node===undefined)return null;
+    if(typeof node==='number')return normalizeValueForSetting(node,spec,String(pathLabel||''));
+    if(typeof node==='string')return parseValueFromText(node,spec);
+    if(Array.isArray(node)){
+      for(var ai=0;ai<node.length;ai++){
+        var av=parseValueFromNode(node[ai],spec,pathLabel);
+        if(av!==null)return av;
+      }
+      return null;
+    }
+    if(typeof node==='object'){
+      var priority=['recommended','recommendation','recommendedValue','recommended_value','suggested','suggestedValue','suggested_value','new','newValue','new_value','target','targetValue','target_value','proposed','proposedValue','proposed_value','value','setTo','set_to','changeTo','change_to','adjustTo','adjust_to','to'];
+      for(var pi=0;pi<priority.length;pi++){
+        var pk=priority[pi];
+        if(Object.prototype.hasOwnProperty.call(node,pk)){
+          var pv=parseValueFromNode(node[pk],spec,pk);
+          if(pv!==null)return pv;
+        }
+      }
+      var joined=Object.keys(node).map(function(k){return k+': '+String(node[k]);}).join(' | ');
+      return parseValueFromText(joined,spec);
+    }
+    return null;
+  }
+  function parseStructured(raw){
+    if(!raw)return;
+    var obj=null;
+    try{if(typeof aiCoachExtractJson==='function')obj=aiCoachExtractJson(raw);}catch(e){}
+    if(!obj){
+      var s=String(raw||'').trim(),a=s.indexOf('{'),b=s.lastIndexOf('}');
+      if(a>=0&&b>a){try{obj=JSON.parse(s.slice(a,b+1));}catch(e2){}}
+    }
+    if(!obj||typeof obj!=='object')return;
+    function walk(node,path){
+      if(node===null||node===undefined)return;
+      var pathLabel=(path||[]).join(' ');
+      var spec=settingFromText(pathLabel);
+      if(node&&typeof node==='object'&&!Array.isArray(node)){
+        var ownLabel=[node.setting,node.metric,node.name,node.label,node.title,node.key,node.field].filter(Boolean).join(' ');
+        var ownSpec=settingFromText(ownLabel)||spec;
+        if(ownSpec){
+          var ov=parseValueFromNode(node,ownSpec,pathLabel+' '+ownLabel);
+          if(ov!==null&&ov!==current[ownSpec.key])parsed[ownSpec.key]=ov;
+        }
+        Object.keys(node).forEach(function(k){
+          var childSpec=settingFromText(k)||settingFromText(pathLabel+' '+k);
+          if(childSpec&&(typeof node[k]==='number'||typeof node[k]==='string')){
+            var cv=parseValueFromNode(node[k],childSpec,k);
+            if(cv!==null&&cv!==current[childSpec.key])parsed[childSpec.key]=cv;
+          }
+          walk(node[k],(path||[]).concat([k]));
+        });
+        return;
+      }
+      if(Array.isArray(node)){
+        node.forEach(function(x,idx){walk(x,(path||[]).concat(['item'+idx]));});
+        return;
+      }
+      if(spec){
+        var v=parseValueFromNode(node,spec,pathLabel);
+        if(v!==null&&v!==current[spec.key])parsed[spec.key]=v;
+      }
+    }
+    walk(obj,[]);
+  }
+  function parseReadableBlocks(txt){
+    var lines=String(txt||'').replace(/<br\s*\/?>/gi,'\n').split('\n').map(function(s){return s.trim();}).filter(Boolean);
+    for(var li=0;li<lines.length;li++){
+      var spec=settingFromText(lines[li]);
+      if(!spec)continue;
+      var block=lines.slice(li,Math.min(lines.length,li+6)).join(' | ');
+      var val=parseValueFromNode(block,spec,lines[li]);
+      if(val!==null&&val!==current[spec.key])parsed[spec.key]=val;
+    }
+  }
+
+  parseStructured(rawText||text);
+  parseReadableBlocks(text);
 
   // Split text into sentences for more precise per-sentence parsing
   var sentences=text.replace(/([.!?])\s+/g,'$1\n').split('\n').map(function(s){return s.trim();}).filter(Boolean);
@@ -38250,8 +39092,8 @@ function progAIParseResponse(text){
       if(!m&&sent.length<120)m=sent.match(/\b(\d+(?:\.\d+)?)\b/);
       if(!m)continue;
 
-      var val=s.type==='float'?parseFloat(m[1]):parseInt(m[1]);
-      if(isNaN(val)||val<s.min||val>s.max)continue;
+      var val=normalizeValueForSetting(m[1],s,sent);
+      if(val===null)continue;
       if(val===current[s.key])continue;
 
       parsed[s.key]=val;
@@ -38262,6 +39104,8 @@ function progAIParseResponse(text){
   _progAIParsed=parsed;
   var keys=Object.keys(parsed);
   if(!keys.length){wrap.style.display='none';return;}
+  var msg=document.getElementById('progAIApplyMsg');
+  if(msg){msg.textContent='';msg.style.color='var(--muted)';}
   var LABELS={cal:'Base Calories',activeBase:'AW Baseline',normalRatio:'Normal Ratio',cheatRatio:'Cheat Ratio'};
   var UNITS={cal:'kcal',activeBase:'kcal',normalRatio:'',cheatRatio:''};
   rows.innerHTML=keys.map(function(k){
@@ -38303,6 +39147,7 @@ function progAIApplyParsed(){
   if(msg){msg.textContent='\u2713 Applied \u2014 targets updated';msg.style.color='var(--green)';}
   if(wrap){setTimeout(function(){wrap.style.display='none';},2500);}
   if(typeof nutRenderDay==='function')nutRenderDay();
+  if(typeof nutRenderTargetInputs==='function')nutRenderTargetInputs();
   _progAIParsed={};
 }
 
@@ -38322,6 +39167,7 @@ function exportAllData(){
     mealTemplates: _nutMealTemplates||[],
     healthImports: healthImportsLoad()||{},
     healthSync: _hcfgSafe,
+    calendarRules:(typeof calendarRulesLoad==='function'?calendarRulesLoad():{}),
     bodyWeight: _bodyWeightData||[],
     cholesterol: _cholReadings||[],
     goals: _goals,
@@ -38348,7 +39194,8 @@ function exportSafeBackup(){
     notEaten:safeLsJson(NUT_NOT_EATEN_KEY,{},NUT_NOT_EATEN_KEY),
     profile:safeLsJson('wt_profile',{},'wt_profile'),
     voiceMins:safeLsJson(VOICE_MINS_KEY,{},VOICE_MINS_KEY),
-    sequenceDefaults:safeLsJson(SEQ_DEFAULTS_KEY,{},SEQ_DEFAULTS_KEY)
+    sequenceDefaults:safeLsJson(SEQ_DEFAULTS_KEY,{},SEQ_DEFAULTS_KEY),
+    calendarRules:(typeof calendarRulesLoad==='function'?calendarRulesLoad():{})
   };
   var _hcfg=healthCfgLoad();
   var _hcfgSafe={mode:_hcfg.mode||'not_connected',activePref:_hcfg.activePref||'ask',lastSync:_hcfg.lastSync||'',lastPayloadDate:_hcfg.lastPayloadDate||'',status:_hcfg.status||''};
@@ -41804,14 +42651,16 @@ function nutMealScanToggleClaudeFullPass(){
       <div id="connHealthTokenStatus" style="font-size:0.68rem;color:var(--muted);line-height:1.5;margin-top:4px;">Health token: not saved · iCal URL: not saved</div>
       <div id="connAiProxySetupCard" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;scroll-margin-top:70px;">
         <div style="font-size:0.72rem;font-weight:700;color:var(--text2);margin-bottom:6px;">AI Proxy Setup (Cloudflare fast path)</div>
-        <div style="font-size:0.66rem;color:var(--muted);line-height:1.45;margin-bottom:8px;">Paste your Cloudflare Worker URL here. AI uses Cloudflare first, trainer state caches to D1 when available, and Apps Script/Sheets remains the backup.</div>
+        <div style="font-size:0.66rem;color:var(--muted);line-height:1.45;margin-bottom:8px;">Paste your Cloudflare Worker URL here. AI uses Cloudflare first, trainer state caches to D1 when available, and Apps Script/Sheets remains the backup. Optional bearer token only applies if AI_PROXY_TOKEN is set in Cloudflare.</div>
         <input id="connAiProxyUrlInput" type="text" placeholder="https://plusultra-ai-proxy.YOUR.workers.dev" autocorrect="off" autocapitalize="none" spellcheck="false" style="width:100%;margin-bottom:8px;padding:9px 10px;background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:0.72rem;box-sizing:border-box;">
+        <input id="connAiProxyTokenInput" type="password" placeholder="Optional AI_PROXY_TOKEN" autocorrect="off" autocapitalize="none" spellcheck="false" autocomplete="off" style="width:100%;margin-bottom:8px;padding:9px 10px;background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:0.72rem;box-sizing:border-box;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <button type="button" onclick="connAiProxySave()" style="padding:9px;background:var(--green-dim);border:1px solid rgba(76,217,100,0.35);border-radius:8px;color:var(--green);font-size:0.68rem;font-weight:800;">Test + Enable</button>
           <button type="button" onclick="connAiProxyTest()" style="padding:9px;background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:0.68rem;font-weight:700;">Test Only</button>
           <button type="button" onclick="connAiProxyCopyOrigins()" style="padding:9px;background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:0.68rem;font-weight:700;">Copy Allowed Origins</button>
           <button type="button" onclick="connAiProxyCopyEnableUrl()" style="padding:9px;background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:0.68rem;font-weight:700;">Copy Enable Link</button>
-          <button type="button" onclick="connAiProxyDisable()" style="padding:9px;background:var(--red-dim);border:1px solid rgba(255,58,92,0.35);border-radius:8px;color:var(--red);font-size:0.68rem;font-weight:700;grid-column:1 / span 2;">Disable AI Proxy</button>
+          <button type="button" onclick="connAiProxyClearToken()" style="padding:9px;background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:0.68rem;font-weight:700;">Clear Proxy Token</button>
+          <button type="button" onclick="connAiProxyDisable()" style="padding:9px;background:var(--red-dim);border:1px solid rgba(255,58,92,0.35);border-radius:8px;color:var(--red);font-size:0.68rem;font-weight:700;">Disable AI Proxy</button>
         </div>
         <div id="connAiProxyStatus" style="font-size:0.68rem;color:var(--muted);line-height:1.5;margin-top:6px;">AI Proxy: not configured</div>
         <div style="margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;">
