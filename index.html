@@ -3561,8 +3561,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-		var WT_FRONTEND_VERSION='19.11.69-d1-origin-deploy-ready';
-		var WT_SW_VERSION='wt-shell-v89-d1-origin-deploy-ready';
+		var WT_FRONTEND_VERSION='19.11.71-sheet-skip-sanitize';
+		var WT_SW_VERSION='wt-shell-v91-sheet-skip-sanitize';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4433,12 +4433,17 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.69-d1-origin-deploy-ready';
+var APP_VERSION='v19.11.71-sheet-skip-sanitize';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v98-d1-origin-deploy-ready';
+var CACHE_VERSION='wt-cache-v100-sheet-skip-sanitize';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
+  'Bug sweep: imported Sheet/D1 workout rows now sanitize skipped exercise fields so session IDs cannot be mistaken for skipped movements',
+  'Bug sweep: nutrition validation now rejects real NaN/invalid numeric payloads instead of silently converting them to zero',
+  'Bug sweep: Weight & Calories AI Apply now extracts multiple target changes from one prose sentence, including active-calorie baseline and earn-back ratios',
+  'Bug sweep: calendar force-label correction rules now apply even when no ignore phrases are configured',
+  'Bug sweep: workout audio/speech setup is guarded so unsupported audio APIs cannot crash app startup',
   'Cloudflare AI proxy setup instructions now include the 8777 local test origin so local browser runs can use the fast helper without CORS surprises',
   'Cloudflare AI proxy setup now supports optional AI_PROXY_TOKEN bearer auth with a safe auth-check route, while preserving tokenless fallback behavior',
   'Trainer D1 reads now ignore diagnostic fallback-check artifacts such as sess_d1_fallback_check_* so App Doctor smoke data cannot become the real latest workout',
@@ -5547,6 +5552,7 @@ function coachMergeSessions(list){
     var seen={};
     _cachedSessions.forEach(function(s){seen[_sessionSig(s)]=true;});
     list.forEach(function(s){
+      s=workoutSanitizeSessionExerciseSkips(s);
       if(!coachIsValidWorkout(s))return;
       s.date=coachNormalizeDate(s.date||s.workoutDate||s.normalizedWorkoutDate||s.timestamp);
       s.workoutType=s.workoutType||s.type||s.workout||s.label||'Workout';
@@ -5810,7 +5816,7 @@ function workoutVisibleSessions(sessions,opts){
     if(type&&!workoutSessionHasDisplayableContent(s,type))return false;
     if(!type&&String(s.workoutType||'').indexOf('Strength')>=0&&!workoutSessionHasDisplayableContent(s,'strength'))return false;
     return true;
-  });
+  }).map(function(s){return workoutSanitizeSessionExerciseSkips(s);});
   var out=[];
   rows.forEach(function(s){
     var sid=String(s.sessionId||'').trim();
@@ -5943,17 +5949,24 @@ document.addEventListener('visibilitychange',function(){
 document.addEventListener('click',function(){if(!wl)reqWL();},{once:true});
 
 // ─── AUDIO ────────────────────────────────────────────────────────
-var AC=new(window.AudioContext||window.webkitAudioContext)();
+var AC=(function(){
+  try{
+    var Ctx=window.AudioContext||window.webkitAudioContext;
+    return Ctx?new Ctx():null;
+  }catch(e){return null;}
+})();
 
 // ─── SPEECH (workout cues only) ───────────────────────────────────────────
-var syn=window.speechSynthesis;var vcs=[];
+var syn=window.speechSynthesis||{speaking:false,cancel:function(){},speak:function(){},getVoices:function(){return [];}};
+var vcs=[];
 var _speechBusyUntil=0;
-syn.onvoiceschanged=function(){vcs=syn.getVoices();};
+try{syn.onvoiceschanged=function(){vcs=syn.getVoices?syn.getVoices():[];};}catch(e){}
 function speak(txt,rate,delay){
   delay=delay||0;
   rate=rate||0.92;
   var doSpeak=function(){
-    syn.cancel();
+    if(!window.SpeechSynthesisUtterance||!syn||!syn.speak)return;
+    if(syn.cancel)syn.cancel();
     var u=new SpeechSynthesisUtterance(txt);
     u.rate=rate;u.pitch=1.0;u.volume=vol;
     var pv=null;for(var i=0;i<vcs.length;i++){if(vcs[i].lang.indexOf('en')===0&&vcs[i].localService){pv=vcs[i];break;}}
@@ -5976,13 +5989,14 @@ function speakNow(txt,rate){speak(txt,rate);}
 var vol=1.0;
 function setVol(v){vol=parseFloat(v);}
 // resAC handles both 'suspended' (autoplay policy) and 'interrupted' (iOS phone call / screen lock / audio session conflict)
-function resAC(){var s=AC.state;if(s==='suspended'||s==='interrupted')return AC.resume();return Promise.resolve();}
+function resAC(){if(!AC)return Promise.resolve();var s=AC.state;if(s==='suspended'||s==='interrupted')return AC.resume();return Promise.resolve();}
 document.addEventListener('touchstart',resAC,{passive:true});
 document.addEventListener('click',resAC,{passive:true});
 // _nbAt = next available beep time in AC clock. Prevents multiple beeps that fired while AC
 // was suspended/interrupted from all computing the same frozen currentTime and collapsing into one sound.
 var _nbAt=0;
 function beep(f,d,delay){
+  if(!AC)return;
   delay=delay||0;
   function _beepReady(){return !((syn&&syn.speaking)||Date.now()<_speechBusyUntil);}
   function _play(){
@@ -6565,6 +6579,31 @@ function wtLogEvent(name,meta){
     localStorage.setItem(WORKOUT_OBS_KEY,JSON.stringify(a));
   }catch(e){}
 }
+function workoutNormalizeExerciseSkipFields(ex){
+  if(!ex||typeof ex!=='object')return ex;
+  var out=Object.assign({},ex);
+  var raw=String(out.skipped||'').trim();
+  var reason=String(out.skipReason||'').trim();
+  var flag=raw.toLowerCase();
+  var trueSkip=(flag==='yes'||flag==='true'||flag==='1'||flag==='skipped');
+  if(trueSkip){
+    out.skipped='yes';
+    out.skipReason=reason;
+  }else{
+    out.skipped='';
+    out.skipReason='';
+  }
+  return out;
+}
+function workoutNormalizeSessionExercises(list){
+  return (Array.isArray(list)?list:[]).map(function(ex){return workoutNormalizeExerciseSkipFields(ex);});
+}
+function workoutSanitizeSessionExerciseSkips(s){
+  if(!s||typeof s!=='object'||!Array.isArray(s.exercises))return s;
+  var out=Object.assign({},s);
+  out.exercises=workoutNormalizeSessionExercises(s.exercises);
+  return out;
+}
 function workoutNormalizeSession(sd,opts){
   var o=Object.assign({},sd||{});
   var now=wtNowIso();
@@ -6591,6 +6630,7 @@ function workoutNormalizeSession(sd,opts){
     var wt=String(o.workoutType||'').toLowerCase();
     o.targetType=wt.indexOf('hotel')>=0?'HOTEL':(wt.indexOf('home')>=0?'HOME':String(o.targetType||''));
   }
+  o.exercises=workoutNormalizeSessionExercises(o.exercises);
   if(!Array.isArray(o.targets))o.targets=[];
   if(!Array.isArray(o.actuals))o.actuals=[];
   o.sourceRuntime=o.sourceRuntime||appDoctorRuntimeLabel();
@@ -16661,7 +16701,7 @@ function trainerRetryNormalizeSessionCandidate(raw,sourceTag,forceTargetType){
     week:String(base.week||('Week '+getWeekNum(date||localDateStr()))),
     workoutType:String(base.workoutType||base.type||base.workout||base.label||'Strength Session'),
     targetType:target,
-    exercises:Array.isArray(base.exercises)?base.exercises:[],
+    exercises:workoutNormalizeSessionExercises(base.exercises),
     targets:Array.isArray(base.targets)?base.targets:[],
     actuals:Array.isArray(base.actuals)?base.actuals:[],
     notes:String(base.notes||''),
@@ -21882,7 +21922,7 @@ function wtTestHealthMock(){
     var d=localDateStr();
     var p={source:'test',is_test:true,date:d,timezone:'America/Los_Angeles',steps:1234,active_energy_calories:333,sleep_hours:0,body_weight_lb:0,workouts:[{type:'strength_training',duration_min:45,active_energy_calories:280}]};
     var n=healthNormalizePayload(p);
-    out.push(wtTestResult('Health payload normalize',n&&n.steps===8500&&n.active_energy_calories===620,'Valid payload normalized'));
+    out.push(wtTestResult('Health payload normalize',n&&n.steps===1234&&n.active_energy_calories===333,'Valid payload normalized'));
     healthImportApply(n,false);
     var got=healthImportedForDate(d);
     out.push(wtTestResult('Health import apply',!!got,'Import stored safely'));
@@ -21913,6 +21953,8 @@ function wtTestStorageCompat(){
     out.push(wtTestResult('Old logged entry shape',!!oldLog.date&&!isNaN(oldLog.calories),'Legacy logged entry parses'));
     var oldWorkout={date:localDateStr(),workoutType:'Home Strength',duration:40,exercises:[]};
     out.push(wtTestResult('Old workout shape',!!oldWorkout.workoutType,'Legacy workout shape parses'));
+    var polluted=workoutNormalizeSession({date:localDateStr(),workoutType:'Hotel Strength',sessionId:'sess_real_skip_cleanup',exercises:[{name:'BRIDGES',sets:['30'],skipped:'sess_32c13ceb-6865-4d42-b5d8-58e48e59ebd1',skipReason:'mut_6f27d058-0feb-46c6-8ece-3aff40da2d28'}]});
+    out.push(wtTestResult('Imported skip field cleanup',polluted.exercises[0].skipped===''&&polluted.exercises[0].skipReason==='','Session/mutation IDs are not treated as skipped exercises'));
   }catch(err){
     out.push(wtTestResult('Storage compatibility',false,err&&err.message||String(err)));
   }
@@ -28795,7 +28837,6 @@ function _calendarApplyRules_(summary){
   if(!summary||!Array.isArray(summary.days))return summary;
   var ignores=(rules.ignorePhrases||[]).map(function(x){return String(x||'').toLowerCase();}).filter(Boolean);
   var force=(rules.forceLabelRules||[]).filter(function(r){return r&&r.phrase&&r.label;});
-  if(!ignores.length)return summary;
   summary.days.forEach(function(d){
     var real=(d.real_events_used||[]);
     var kept=[];
@@ -32636,9 +32677,19 @@ function nutRoundTo(v,dp){
 }
 function nutValidateNutritionPayload(x){
   var out=Object.assign({},x||{});
+  function invalidProvidedNumber(v){
+    if(v===undefined||v===null||v==='')return false;
+    if(typeof v==='number')return !isFinite(v);
+    return !isFinite(parseFloat(v));
+  }
+  if(invalidProvidedNumber(out.servings))return {ok:false,msg:'Serving amount must be a valid number.'};
   out.servings=nutSafeNum(out.servings,1);
   if(!(out.servings>0))return {ok:false,msg:'Serving amount must be greater than 0.'};
-  ['calories','protein','carbs','fat','fibre','satFat','sodium'].forEach(function(k){out[k]=Math.max(0,nutSafeNum(out[k],0));});
+  for(var vi=0;vi<['calories','protein','carbs','fat','fibre','satFat','sodium'].length;vi++){
+    var k=['calories','protein','carbs','fat','fibre','satFat','sodium'][vi];
+    if(invalidProvidedNumber(out[k]))return {ok:false,msg:k+' must be a valid number.'};
+    out[k]=Math.max(0,nutSafeNum(out[k],0));
+  }
   if(out.satFat>out.fat){
     return {ok:false,msg:'Saturated fat cannot be greater than total fat.'};
   }
@@ -39065,6 +39116,21 @@ function progAIParseResponse(text,rawText){
       if(val!==null&&val!==current[spec.key])parsed[spec.key]=val;
     }
   }
+  function settingSegmentFromSentence(sentence,spec){
+    var sent=String(sentence||'');
+    var low=sent.toLowerCase();
+    var labels=(spec.labels||[]).slice(0).sort(function(a,b){return String(b).length-String(a).length;});
+    for(var i=0;i<labels.length;i++){
+      var label=String(labels[i]||'').toLowerCase();
+      var idx=label?low.indexOf(label):-1;
+      if(idx<0)continue;
+      var rest=sent.slice(idx);
+      var cut=rest.search(/[,;|]/);
+      if(cut>=0)rest=rest.slice(0,cut);
+      return rest.slice(0,120);
+    }
+    return '';
+  }
 
   parseStructured(rawText||text);
   parseReadableBlocks(text);
@@ -39082,6 +39148,13 @@ function progAIParseResponse(text,rawText){
 
       // Skip sentences that say to keep it unchanged
       if(/\bkeep\b|\bno change\b|\bstay\b|\bremain\b|\bunchanged\b|\bmaintain\b/.test(sent))continue;
+
+      var segment=settingSegmentFromSentence(sent,s);
+      var segmentVal=segment?parseValueFromNode(segment,s,segment):null;
+      if(segmentVal!==null&&segmentVal!==current[s.key]){
+        parsed[s.key]=segmentVal;
+        break;
+      }
 
       // Try to extract a recommended number from this sentence
       // Pattern 1: "change/increase/reduce/set/try/suggest X to N" or "recommend N"
