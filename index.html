@@ -3561,8 +3561,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-		var WT_FRONTEND_VERSION='19.11.71-sheet-skip-sanitize';
-		var WT_SW_VERSION='wt-shell-v91-sheet-skip-sanitize';
+		var WT_FRONTEND_VERSION='19.11.72-calendar-force-events';
+		var WT_SW_VERSION='wt-shell-v92-calendar-force-events';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4433,12 +4433,13 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.71-sheet-skip-sanitize';
+var APP_VERSION='v19.11.72-calendar-force-events';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v100-sheet-skip-sanitize';
+var CACHE_VERSION='wt-cache-v101-calendar-force-events';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
+  'Bug sweep: calendar force-label corrections now also match proposal days that carry events under events instead of real_events_used',
   'Bug sweep: imported Sheet/D1 workout rows now sanitize skipped exercise fields so session IDs cannot be mistaken for skipped movements',
   'Bug sweep: nutrition validation now rejects real NaN/invalid numeric payloads instead of silently converting them to zero',
   'Bug sweep: Weight & Calories AI Apply now extracts multiple target changes from one prose sentence, including active-calorie baseline and earn-back ratios',
@@ -21888,6 +21889,18 @@ function wtTestTrainerMock(){
   var cal='Mon early arrival 05:33 TRAVEL; Fri late flight 19:30 morning free HIIT; Jumpseat Reminder ignored; Sat layover HOTEL; Sun early arrival 07:08 TRAVEL';
   var noReminder=(cal.toLowerCase().indexOf('jumpseat reminder ignored')>=0);
   out.push(wtTestResult('Calendar compatibility mock',noReminder,'Jumpseat reminder ignored in mock summary'));
+  var oldRules=null;
+  try{
+    oldRules=calendarRulesLoad();
+    calendarRulesSave(Object.assign({},oldRules,{ignorePhrases:[],forceLabelRules:[{phrase:'AA123',label:'TRAVEL'}]}));
+    var forced=_calendarApplyRules_({days:[{date:localDateStr(),label:'HOTEL',events:[{title:'AA123 arrival'}]}]});
+    var day=forced&&forced.days&&forced.days[0];
+    out.push(wtTestResult('Calendar force-label events fallback',day&&day.label==='TRAVEL'&&day.recommended_label==='TRAVEL','Force-label rules work with events-only proposal rows'));
+  }catch(err){
+    out.push(wtTestResult('Calendar force-label events fallback',false,err&&err.message||String(err)));
+  }finally{
+    if(oldRules)calendarRulesSave(oldRules);
+  }
   return out;
 }
 function wtTestUnifiedCoach(){
@@ -28838,7 +28851,7 @@ function _calendarApplyRules_(summary){
   var ignores=(rules.ignorePhrases||[]).map(function(x){return String(x||'').toLowerCase();}).filter(Boolean);
   var force=(rules.forceLabelRules||[]).filter(function(r){return r&&r.phrase&&r.label;});
   summary.days.forEach(function(d){
-    var real=(d.real_events_used||[]);
+    var real=Array.isArray(d.real_events_used)?d.real_events_used:(Array.isArray(d.events)?d.events:[]);
     var kept=[];
     real.forEach(function(e){
       var text=(String(e.title||'')+' '+String(e.location||'')).toLowerCase();
@@ -28862,6 +28875,7 @@ function _calendarApplyRules_(summary){
           var lbl=String(r.label||'').toUpperCase();
           if(lbl==='HOME'||lbl==='HOTEL'||lbl==='HIIT'||lbl==='TRAVEL'||lbl==='REST'){
             d.recommended_label=lbl;
+            d.label=lbl;
             d.reason='Rule override: "'+r.phrase+'" => '+lbl+'.';
             d.confidence='medium';
           }
