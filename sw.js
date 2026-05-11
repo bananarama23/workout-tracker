@@ -1,4 +1,4 @@
-const SW_VERSION = 'wt-shell-v89-d1-origin-deploy-ready';
+const SW_VERSION = 'wt-shell-v100-trainer-brain-run';
 const SHELL_CACHE = `wt-shell-${SW_VERSION}`;
 const OFFLINE_URLS = [
   './',
@@ -7,7 +7,8 @@ const OFFLINE_URLS = [
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
-  './icon-maskable-512.png'
+  './icon-maskable-512.png',
+  './favicon.ico'
 ];
 
 self.addEventListener('install', (event) => {
