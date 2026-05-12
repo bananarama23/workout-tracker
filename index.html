@@ -3919,8 +3919,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.11.134-plan-secure-sync';
-			var WT_SW_VERSION='wt-shell-v152-plan-secure-sync';
+			var WT_FRONTEND_VERSION='19.11.135-nutrition-insight-date-safe';
+			var WT_SW_VERSION='wt-shell-v153-nutrition-insight-date-safe';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4792,10 +4792,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.134-plan-secure-sync';
+var APP_VERSION='v19.11.135-nutrition-insight-date-safe';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v161-plan-secure-sync';
+var CACHE_VERSION='wt-cache-v162-nutrition-insight-date-safe';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Calendar auto-check now records the planned horizon and blocks overlapping foreground checks, so manual refreshes do not cause redundant automatic rebuilds',
@@ -37443,7 +37443,7 @@ function nutTemplateLog(id){
     nutFoodMetaTouchLog(e.food,e.servings,e.meal,e.date);
     nutMemoryLearnFromLoggedEntry(e,{source:'meal_template'});
   });
-  nutPersistEntries();nutRenderDay();
+  nutPersistEntries();nutScoreInvalidateDate(_nutDate,{skipRender:true});nutRenderDay();
   nutSyncAction({type:'logNutrition',entries:entries},null,function(){});
   appToast('Template logged.','var(--green)');
 }
@@ -37467,6 +37467,13 @@ var _nutFetchSeq=0; // ignores slow stale Sheet reads after a newer reload start
 var DAY_DONE_KEY='wt_daydone';
 function dayDoneGet(){
   try{var d=JSON.parse(localStorage.getItem(DAY_DONE_KEY)||'{}');return d[localDateStr()]===true;}catch(e){return false;}
+}
+function dayDoneGetForDate(dateStr){
+  try{
+    var ds=String(dateStr||localDateStr()).slice(0,10);
+    var d=JSON.parse(localStorage.getItem(DAY_DONE_KEY)||'{}');
+    return d[ds]===true;
+  }catch(e){return false;}
 }
 function dayDoneSet(val){
   try{var d=JSON.parse(localStorage.getItem(DAY_DONE_KEY)||'{}');d[localDateStr()]=val;var _ddv=JSON.stringify(d);localStorage.setItem(DAY_DONE_KEY,_ddv);wtDB.set(DAY_DONE_KEY,_ddv);}catch(e){}
@@ -37728,11 +37735,13 @@ function nutSetActiveCals(date,val){
   // Always delete from sheet first (clears any old/duplicate rows for this date+_active)
   // then re-log if we have a value. Use a stable id so GAS upsert works correctly.
   if(isEmpty){
+    nutScoreInvalidateDate(d,{skipRender:true});
     nutSyncAction({type:'deleteNutritionRow',date:d,meal:'_active',food:'AppleWatch'},null,null);
     return;
   }
   var entry=nutActiveEntryForDate(d,val);
   if(entry&&_nutEntries)_nutEntries.push(entry);
+  nutScoreInvalidateDate(d,{skipRender:true});
   nutSyncActiveCalsToSheet(d,val);
 }
 function nutIsCheatDay(date){
@@ -37755,6 +37764,7 @@ function nutSetCheatDay(date,on){
     return !(e.date===d&&e.meal==='_cheat'&&e.food==='CheatDay');
   });
   if(!on){
+    nutScoreInvalidateDate(d,{skipRender:true});
     nutSyncAction({type:'deleteNutritionRow',date:d,meal:'_cheat',food:'CheatDay'},null,null);
     return;
   }
@@ -37762,11 +37772,13 @@ function nutSetCheatDay(date,on){
     protein:0,carbs:0,fat:0,fibre:0,satFat:0,sodium:0,servings:1,
     id:'cheat_'+d,updatedAt:Date.now()};
   if(_nutEntries)_nutEntries.push(entry);
+  nutScoreInvalidateDate(d,{skipRender:true});
   nutSyncAction({type:'logNutrition',entries:[entry]},null,null);
 }
 function nutToggleCheatDay(){
   var isOn=nutIsCheatDay(_nutDate);
   nutSetCheatDay(_nutDate,!isOn);
+  nutScoreInvalidateDate(_nutDate,{skipRender:true});
   nutRenderDay();
   nutRenderWeek();
 }
@@ -37845,6 +37857,7 @@ function nutActiveBlur(){
   if(!inp)return;
   var val=inp.value.trim();
   nutSetActiveCals(_nutDate,val===''?null:parseFloat(val));
+  nutScoreInvalidateDate(_nutDate,{skipRender:true});
   nutRenderDay();
 }
 
@@ -39312,6 +39325,52 @@ function nutScoreIsUsable(result){
   var insight=String(result.insight||'').trim();
   return isFinite(score)&&score>=0&&score<=100&&/^[ABCDF]$/.test(grade)&&insight.length>=8;
 }
+function nutScorePersistCache(){
+  try{localStorage.setItem(NUT_SCORE_KEY,JSON.stringify(_nutScoreCache||{}));}catch(e){}
+  try{wtDB.set(NUT_SCORE_KEY,JSON.stringify(_nutScoreCache||{}));}catch(e2){}
+}
+function nutScoreInvalidateDate(dateStr,opts){
+  var ds=String(dateStr||_nutDate||localDateStr()).slice(0,10);
+  if(!ds)return;
+  try{
+    if(_nutScoreCache&&_nutScoreCache[ds])delete _nutScoreCache[ds];
+    nutScorePersistCache();
+    localStorage.removeItem('wt_nut_insight_pending_'+ds);
+  }catch(e){}
+  if(ds===_nutDate){
+    var circle=document.getElementById('nutQualityCircle');
+    var gradeEl=document.getElementById('nutQualityGrade');
+    var insightCard=document.getElementById('nutInsightCard');
+    var insightText=document.getElementById('nutInsightText');
+    if(circle){circle.style.display='none';circle.style.animation='';}
+    if(gradeEl)gradeEl.textContent='';
+    if(insightText)insightText.textContent='';
+    if(insightCard)insightCard.style.display='none';
+  }
+  if(!(opts&&opts.skipRender)&&ds===_nutDate&&dayDoneGetForDate(ds)){
+    setTimeout(function(){try{nutRenderDay();}catch(e){}},0);
+  }
+}
+function nutScoreDaySignature(dateStr,entries){
+  var ds=String(dateStr||_nutDate||localDateStr()).slice(0,10);
+  var list=(Array.isArray(entries)?entries:nutDayEntries(ds)).filter(function(e){
+    return e&&e.date===ds&&e.meal!=='_active'&&e.meal!=='_cheat';
+  }).map(function(e){
+    return [
+      String(e.id||''),
+      String(e.meal||''),
+      String(e.food||''),
+      String(e.servings||''),
+      Math.round(parseFloat(e.calories)||0),
+      Math.round(parseFloat(e.protein)||0),
+      Math.round(parseFloat(e.fibre)||0),
+      Math.round(parseFloat(e.satFat)||0),
+      Math.round(parseFloat(e.sodium)||0),
+      String(e.updatedAt||'')
+    ].join(':');
+  }).sort();
+  return ds+'|'+list.join('|');
+}
 function nutScoreGradeFromScore(score){
   score=Math.max(0,Math.min(100,parseInt(score,10)||0));
   return score>=85?'A':score>=70?'B':score>=55?'C':score>=40?'D':'F';
@@ -39402,6 +39461,7 @@ function nutRenderQualityScore(tot){
   var circle=document.getElementById('nutQualityCircle');
   var gradeEl=document.getElementById('nutQualityGrade');
   if(!circle||!gradeEl)return;
+  var scoreDate=String(_nutDate||localDateStr()).slice(0,10);
   // Always reset first so stale text never bleeds into a new day
   var insightEl=document.getElementById('nutQualityInsight');
   circle.style.display='none';
@@ -39411,23 +39471,23 @@ function nutRenderQualityScore(tot){
   var _ic=document.getElementById('nutInsightCard');if(_ic)_ic.style.display='none';
 
   if(tot.calories<=10){return;}
-  if(_nutDate===localDateStr()&&!dayDoneGet()){return;}
+  if(scoreDate===localDateStr()&&!dayDoneGetForDate(scoreDate)){return;}
 
   // Already scored this date — just show cached result, unless an old cache only has a grade.
-  if(_nutScoreCache[_nutDate]){
-    if(nutScoreIsUsable(_nutScoreCache[_nutDate])){
-      nutApplyScore(_nutScoreCache[_nutDate]);
+  if(_nutScoreCache[scoreDate]){
+    if(nutScoreIsUsable(_nutScoreCache[scoreDate])){
+      nutApplyScore(_nutScoreCache[scoreDate]);
       return;
     }
-    try{delete _nutScoreCache[_nutDate];}catch(e){}
-    try{localStorage.setItem(NUT_SCORE_KEY,JSON.stringify(_nutScoreCache));}catch(e2){}
-    try{wtDB.set(NUT_SCORE_KEY,JSON.stringify(_nutScoreCache));}catch(e3){}
+    try{delete _nutScoreCache[scoreDate];nutScorePersistCache();}catch(e){}
   }
 
-  var entries=nutDayEntries(_nutDate);
+  var entries=nutDayEntries(scoreDate);
+  var scoreSig=nutScoreDaySignature(scoreDate,entries);
   var fallback=nutLocalDayDoneFeedback(tot,entries,_nutTargets||{});
+  fallback.date=scoreDate;
   if(wtNetworkOffline()){
-    nutScoreSave(_nutDate,fallback);
+    nutScoreSave(scoreDate,fallback);
     nutApplyScore(fallback);
     return;
   }
@@ -39449,7 +39509,7 @@ function nutRenderQualityScore(tot){
 
   // Build 7-day trend context so the insight can say "better/worse than usual"
   var _recentDays=[];
-  for(var _ri=1;_ri<=7;_ri++){_recentDays.push(nutShiftDate(_nutDate,-_ri));}
+  for(var _ri=1;_ri<=7;_ri++){_recentDays.push(nutShiftDate(scoreDate,-_ri));}
   var _recentTot={cal:0,prot:0,satFat:0,sodium:0,n:0};
   _recentDays.forEach(function(d){
     var de=(_nutEntries||[]).filter(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});
@@ -39505,13 +39565,18 @@ function nutRenderQualityScore(tot){
     var raw=(data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content)||'{"score":50,"grade":"C","insight":""}';
     var result=nutNormalizeDayDoneFeedback(aiCoachExtractJson(raw),fallback);
     try{result.route=String(data&&data._wtRoute||result.route||'');result.model=String(data&&data._wtModel||'');}catch(e){}
-    nutScoreSave(_nutDate,result);
+    result.date=scoreDate;
+    if(nutScoreDaySignature(scoreDate)!==scoreSig)return;
+    nutScoreSave(scoreDate,result);
+    if(String(_nutDate||'').slice(0,10)!==scoreDate)return;
     circle.style.animation='';
     nutApplyScore(result);
   }).catch(function(){
-    circle.style.animation='';
     fallback.source='local_fallback_after_ai_error';
-    nutScoreSave(_nutDate,fallback);
+    if(nutScoreDaySignature(scoreDate)!==scoreSig)return;
+    nutScoreSave(scoreDate,fallback);
+    if(String(_nutDate||'').slice(0,10)!==scoreDate)return;
+    circle.style.animation='';
     nutApplyScore(fallback);
   });
 }
@@ -42467,6 +42532,7 @@ function nutCopyFrom(offset,mealFilter){
   });
   newEntries.forEach(function(e){_nutEntries.push(e);});
   nutPersistEntries();
+  nutScoreInvalidateDate(_nutDate,{skipRender:true});
   nutRenderDay();
   var msg=document.getElementById('nutCopyMsg');
   if(msg){msg.textContent='✓ Copied '+newEntries.length+' items from '+(offset===-1?'yesterday':'last week');msg.style.color='var(--green)';}
@@ -43043,6 +43109,8 @@ function nutConfirmServing(){
   }
   // Persist immediately
   nutPersistEntries();
+  if(isEdit&&oldEntry&&oldEntry.date!==entry.date)nutScoreInvalidateDate(oldEntry.date,{skipRender:true});
+  nutScoreInvalidateDate(entry.date,{skipRender:true});
   nutFoodMetaTouchLog(entry.food,entry.servings,entry.meal,entry.date);
   nutMemoryLearnFromLoggedEntry(entry,{source:entry.was_user_edited?'user_correction':'manual'});
 
@@ -43304,6 +43372,7 @@ function nutMoveToMeal(idx,newMeal){
   var oldEntry=JSON.parse(JSON.stringify(e));
   e.meal=newMeal;e.updatedAt=Date.now();
   nutPersistEntries();
+  nutScoreInvalidateDate(oldEntry.date,{skipRender:true});
   nutRenderDay();
   nutBadge('load','Saving');
   var steps=[
@@ -43342,6 +43411,7 @@ function nutDelEntry(idx){
   var action={type:'deleteNutritionRow',date:e.date,meal:e.meal,food:e.food,id:e.id};
   _nutEntries.splice(idx,1);
   nutPersistEntries();
+  nutScoreInvalidateDate(deleted.date,{skipRender:true});
   nutRenderDay();
   _nutDeleteUndo={entry:deleted,action:action};
   var undoEl=document.getElementById('nutUndoToast');
@@ -43363,6 +43433,7 @@ function nutDelUndo(){
   _nutEntries.push(_nutDeleteUndo.entry);
   nutPersistEntries();
   var restoredEntry=_nutDeleteUndo?_nutDeleteUndo.entry:null;
+  if(restoredEntry)nutScoreInvalidateDate(restoredEntry.date,{skipRender:true});
   _nutDeleteUndo=null;nutRenderDay();
   nutMsg('Restored ✓','var(--green)');setTimeout(function(){nutMsg('');},2000);
   // Re-sync the restored entry in case the 4s commit already fired
@@ -47328,6 +47399,8 @@ function nutMealScanSave(){
   });
   _msiEditingEntryId=null;
   nutPersistEntries();
+  if(_replacedOld)nutScoreInvalidateDate(_replacedOld.date,{skipRender:true});
+  entries.forEach(function(e){nutScoreInvalidateDate(e.date,{skipRender:true});});
 
   // Explicit-only save-to-foods: never silently save one-off scan foods.
   var userWantsSave=(((document.getElementById('nutSaveToFoodsCheck')||document.getElementById('nutSaveToFoodsCheckEmpty')||{}).checked)===true);
