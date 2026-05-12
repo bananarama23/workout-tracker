@@ -1,4 +1,4 @@
-const SW_VERSION = 'wt-shell-v116-backend-capability-gate';
+const SW_VERSION = 'wt-shell-v148-ship-clean';
 const SHELL_CACHE = `wt-shell-${SW_VERSION}`;
 const OFFLINE_URLS = [
   './',
