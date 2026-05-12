@@ -1,5 +1,6 @@
-const SW_VERSION = 'wt-shell-v148-ship-clean';
+const SW_VERSION = 'wt-shell-v150-github-host-block';
 const SHELL_CACHE = `wt-shell-${SW_VERSION}`;
+const WT_BLOCK_PUBLIC_GITHUB_PAGES = /\.github\.io$/i.test((self.location && self.location.hostname) || '');
 const OFFLINE_URLS = [
   './',
   './index.html',
@@ -11,8 +12,24 @@ const OFFLINE_URLS = [
   './favicon.ico'
 ];
 
+function wtBlockedGithubPagesResponse() {
+  return new Response('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="robots" content="noindex,nofollow"><title>Workout Tracker</title><style>html,body{margin:0;min-height:100%;background:#07090c;color:#ecf0f5;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;}main{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px;text-align:center;}section{max-width:420px;}h1{font-size:1.35rem;margin:0 0 10px;}p{color:#8a95a8;line-height:1.5;margin:0;}</style></head><body><main><section><h1>Private app moved</h1><p>This GitHub Pages address no longer serves the Workout Tracker. Open the Cloudflare-protected app instead.</p></section></main></body></html>', {
+    status: 410,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store'
+    }
+  });
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
+    if (WT_BLOCK_PUBLIC_GITHUB_PAGES) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+      await self.skipWaiting();
+      return;
+    }
     const cache = await caches.open(SHELL_CACHE);
     await Promise.all(OFFLINE_URLS.map(async (url) => {
       try {
@@ -27,7 +44,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.map((k) => (k.startsWith('wt-shell-') && k !== SHELL_CACHE) ? caches.delete(k) : Promise.resolve()));
+    await Promise.all(keys.map((k) => (WT_BLOCK_PUBLIC_GITHUB_PAGES || (k.startsWith('wt-shell-') && k !== SHELL_CACHE)) ? caches.delete(k) : Promise.resolve()));
     await self.clients.claim();
   })());
 });
@@ -56,6 +73,10 @@ function isSensitiveRequest(reqUrl) {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
+  if (WT_BLOCK_PUBLIC_GITHUB_PAGES) {
+    event.respondWith(wtBlockedGithubPagesResponse());
+    return;
+  }
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
