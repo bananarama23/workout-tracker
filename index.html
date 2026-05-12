@@ -3919,8 +3919,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.11.133-pages-api-lock';
-			var WT_SW_VERSION='wt-shell-v151-pages-api-lock';
+			var WT_FRONTEND_VERSION='19.11.134-plan-secure-sync';
+			var WT_SW_VERSION='wt-shell-v152-plan-secure-sync';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4792,10 +4792,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.133-pages-api-lock';
+var APP_VERSION='v19.11.134-plan-secure-sync';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v160-pages-api-lock';
+var CACHE_VERSION='wt-cache-v161-plan-secure-sync';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Calendar auto-check now records the planned horizon and blocks overlapping foreground checks, so manual refreshes do not cause redundant automatic rebuilds',
@@ -29569,6 +29569,7 @@ function coachUniqueHiitSessions(arr){
 var _allWeekPlans={};
 // Split a flat {date->type} plan object into _allWeekPlans keyed by week Monday
 function _populateAllWeekPlans(plan){
+  plan=plan||{};
   Object.keys(plan).forEach(function(k){
     // Only process date keys (YYYY-MM-DD), not _extra/_note suffixes
     if(!/^\d{4}-\d{2}-\d{2}$/.test(k))return;
@@ -29581,6 +29582,19 @@ function _populateAllWeekPlans(plan){
     ['_extra','_note'].forEach(function(suf){
       if(plan[k+suf]!==undefined)_allWeekPlans[monKey][k+suf]=plan[k+suf];
     });
+  });
+}
+
+function fetchWeekPlanSecure(opts){
+  var o=opts&&typeof opts==='object'?opts:{};
+  return wtBackendPost({
+    type:'getWeekPlan',
+    weekOffset:parseInt(o.weekOffset||0,10)||0,
+    _nonce:Date.now(),
+    timeoutMs:parseInt(o.timeoutMs||20000,10)||20000
+  }).then(function(result){
+    if(result&&result.status==='ok')return result;
+    throw new Error(String((result&&(result.message||result.error))||'getWeekPlan failed'));
   });
 }
 
@@ -29613,9 +29627,7 @@ function switchPlanWeek(offset){
   } else {
     // Fetch this week's plan from sheet
     _weekPlan={};renderPlanGrid(days,today);planHorizonRender(); // render empty immediately
-    var cbW='wt_planw_'+Date.now();
-    window[cbW]=function(result){
-      wtReleaseJsonpCallback(cbW,'s_'+cbW,60000);
+    fetchWeekPlanSecure({weekOffset:offset}).then(function(result){
       var planData=result&&result.plan?result.plan:{};
       _populateAllWeekPlans(planData);
       if(!_allWeekPlans[monKey])_allWeekPlans[monKey]={};
@@ -29623,11 +29635,11 @@ function switchPlanWeek(offset){
       var pd=overlayCompletedWorkouts(JSON.parse(JSON.stringify(_allWeekPlans[monKey]||{})),_cachedSessions||[],offset);
       _weekPlan=pd;renderPlanGrid(getWeekDates(_planWeekOffset),today);planHorizonRender();
       if(offset===0)updateTodayCard(today);
-    };
-    var sc=document.createElement('script');sc.id='s_'+cbW;
-    sc.src=CLOUD_URL+'?type=getWeekPlan&weekOffset='+offset+'&callback='+cbW;
-    sc.onerror=function(){wtReleaseJsonpCallback(cbW,'s_'+cbW,60000);};
-    document.head.appendChild(sc);
+    }).catch(function(){
+      var pd=overlayCompletedWorkouts(JSON.parse(JSON.stringify(_allWeekPlans[monKey]||{})),_cachedSessions||[],offset);
+      _weekPlan=pd;renderPlanGrid(getWeekDates(_planWeekOffset),today);planHorizonRender();
+      if(offset===0)updateTodayCard(today);
+    });
   }
 }
 
@@ -29986,9 +29998,7 @@ function loadWeekPlan(){
     renderPlanGrid(getWeekDates(_planWeekOffset),today);updateTodayCard(today);
     if((Date.now()-pc.ts)<CACHE_MAX_AGE)return;
   }
-  var cbP='wt_plan_'+Date.now();
-  window[cbP]=function(result){
-    wtReleaseJsonpCallback(cbP,'s_'+cbP,60000);
+  fetchWeekPlanSecure().then(function(result){
     var planData=result&&result.plan?result.plan:{};
     savePlanCache(planData);
     _populateAllWeekPlans(planData); // split flat plan into per-week cache
@@ -30006,19 +30016,10 @@ function loadWeekPlan(){
         renderPlanGrid(getWeekDates(_planWeekOffset),today);updateTodayCard(today);
       });
     }
-  };
-  var script=document.createElement('script');script.id='s_'+cbP;
-  script.src=CLOUD_URL+'?type=getWeekPlan&callback='+cbP;
-  script.onerror=function(){
-    wtReleaseJsonpCallback(cbP,'s_'+cbP,60000);
+  }).catch(function(){
     if(!pc){var pd=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=pd;_cachedPlan=pd;
     renderPlanGrid(getWeekDates(_planWeekOffset),today);updateTodayCard(today);}
-  };
-  document.head.appendChild(script);
-  setTimeout(function(){if(!window[cbP])return;wtReleaseJsonpCallback(cbP,'s_'+cbP,60000);
-    if(!pc){var pd=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=pd;_cachedPlan=pd;
-    renderPlanGrid(getWeekDates(_planWeekOffset),today);updateTodayCard(today);}
-  },5000);
+  });
 }
 
 function renderPlanGrid(days,today){
@@ -30249,7 +30250,8 @@ function saveWeekPlan(){
   var displayedWeekStart=fmtDate(getWeekDates(_planWeekOffset||0)[0]);
   var planToSave=trainerMergedPlanForSave();
   wtBackendPost({type:'setWeekPlan',plan:planToSave,_nonce:Date.now()})
-  .then(function(){
+  .then(function(result){
+    if(!result||result.status!=='ok')throw new Error(String((result&&(result.message||result.error))||'Failed to save'));
     _cachedPlan=JSON.parse(JSON.stringify(planToSave||{}));
     _populateAllWeekPlans(_cachedPlan);
     var displayedWeek=JSON.parse(JSON.stringify((_allWeekPlans&&_allWeekPlans[displayedWeekStart])||{}));
@@ -30260,7 +30262,7 @@ function saveWeekPlan(){
     setTimeout(function(){if(msg)msg.textContent='';},2000);
     updateTodayCard(fmtDate(new Date()));loadHomeData();
   })
-  .catch(function(){if(msg){msg.textContent='Failed to save';msg.style.color='var(--red)';}});
+  .catch(function(err){if(msg){msg.textContent='Failed to save'+(err&&err.message?': '+err.message:'');msg.style.color='var(--red)';}});
   // Copy button visibility handled by switchPlanWeek
 }
 
@@ -34683,15 +34685,23 @@ function calendarPlannerPersistMergedPlan(planObj){
   var msg=document.getElementById('planMsg');
   if(msg){msg.textContent='Saving...';msg.style.color='var(--muted)';}
   wtBackendPost({type:'setWeekPlan',plan:planObj,_nonce:Date.now()})
-    .then(function(){
+    .then(function(result){
+      if(!result||result.status!=='ok')throw new Error(String((result&&(result.message||result.error))||'Failed to save'));
+      _cachedPlan=JSON.parse(JSON.stringify(planObj||{}));
+      _populateAllWeekPlans(_cachedPlan);
+      var displayedWeekStart=fmtDate(getWeekDates(_planWeekOffset||0)[0]);
+      var displayedWeek=JSON.parse(JSON.stringify((_allWeekPlans&&_allWeekPlans[displayedWeekStart])||{}));
+      _weekPlan=overlayCompletedWorkouts(displayedWeek,_cachedSessions||[],_planWeekOffset||0);
+      renderPlanGrid(getWeekDates(_planWeekOffset||0),fmtDate(new Date()));
+      planHorizonRender();
       savePlanCache(planObj||{});
       if(msg){msg.textContent='Saved';msg.style.color='var(--green)';}
       setTimeout(function(){if(msg)msg.textContent='';},2000);
       updateTodayCard(fmtDate(new Date()));
       loadHomeData();
     })
-    .catch(function(){
-      if(msg){msg.textContent='Failed to save';msg.style.color='var(--red)';}
+    .catch(function(err){
+      if(msg){msg.textContent='Failed to save'+(err&&err.message?': '+err.message:'');msg.style.color='var(--red)';}
     });
 }
 function calendarPlannerApplyWeekBlock(weekData,unlockedOnly){
@@ -34973,20 +34983,18 @@ function loadTodayPlan(){
     _weekPlan=overlayCompletedWorkouts({},_cachedSessions||[]);
     updateTodayCard(today);
   }
-  var cbName='wt_tp_'+Date.now();
-  window[cbName]=function(result){
-    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
+  fetchWeekPlanSecure({timeoutMs:16000}).then(function(result){
     var rawPlan=(result&&result.plan)?result.plan:{};
     _cachedPlan=JSON.parse(JSON.stringify(rawPlan));
     savePlanCache(rawPlan);
     var plan=overlayCompletedWorkouts(rawPlan,_cachedSessions||[]);
     _weekPlan=plan;updateTodayCard(today);
-  };
-  var script=document.createElement('script');script.id='s_'+cbName;
-  script.src=CLOUD_URL+'?type=getWeekPlan&callback='+cbName;
-  script.onerror=function(){wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);var plan=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=plan;updateTodayCard(today);};
-  document.head.appendChild(script);
-  setTimeout(function(){if(window[cbName]){wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);var plan=overlayCompletedWorkouts({},_cachedSessions||[]);_weekPlan=plan;updateTodayCard(today);}},5000);
+  }).catch(function(){
+    if(!_cachedPlan){
+      var plan=overlayCompletedWorkouts({},_cachedSessions||[]);
+      _weekPlan=plan;updateTodayCard(today);
+    }
+  });
 }
 
 // ─── PROGRESS ─────────────────────────────────────────────────────
@@ -41826,7 +41834,12 @@ function connResetConnectionDefaults(){
 }
 
 function connAiProxyAllowedOriginsText(){
-  return 'https://YOUR-PROJECT.pages.dev,http://127.0.0.1:8777,http://localhost:8777';
+  var live='https://workout-tracker-4oz.pages.dev';
+  try{
+    var o=String(location.origin||'').trim();
+    if(/^https:\/\/[^\/]+\.pages\.dev$/i.test(o))live=o;
+  }catch(e){}
+  return live+',http://127.0.0.1:8777,http://localhost:8777';
 }
 function connAiProxyAppEnableUrl(){
   var base=String(location.href||'').split('#')[0].split('?')[0];
@@ -47813,7 +47826,7 @@ function nutMealScanToggleClaudeFullPass(){
         <div id="connAiProxyStatus" style="font-size:0.68rem;color:var(--muted);line-height:1.5;margin-top:6px;">AI Proxy: not configured</div>
         <div style="margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;">
           <div style="font-size:0.62rem;color:var(--muted);font-weight:800;letter-spacing:0.8px;margin-bottom:4px;">Cloudflare ALLOWED_ORIGINS</div>
-          <div id="connAiProxyOriginsText" style="font-size:0.62rem;color:var(--text2);line-height:1.45;word-break:break-word;">https://YOUR-PROJECT.pages.dev,http://127.0.0.1:8777,http://localhost:8777</div>
+          <div id="connAiProxyOriginsText" style="font-size:0.62rem;color:var(--text2);line-height:1.45;word-break:break-word;">https://workout-tracker-4oz.pages.dev,http://127.0.0.1:8777,http://localhost:8777</div>
         </div>
       </div>
       <div id="connCalendarSetupCard" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;scroll-margin-top:70px;">
