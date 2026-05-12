@@ -1,4 +1,4 @@
-const SW_VERSION = 'wt-shell-v150-github-host-block';
+const SW_VERSION = 'wt-shell-v151-pages-api-lock';
 const SHELL_CACHE = `wt-shell-${SW_VERSION}`;
 const WT_BLOCK_PUBLIC_GITHUB_PAGES = /\.github\.io$/i.test((self.location && self.location.hostname) || '');
 const OFFLINE_URLS = [
