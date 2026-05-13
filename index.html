@@ -3920,7 +3920,7 @@ function aiBackendStatusTest(){
 }
 
 			var WT_FRONTEND_VERSION='19.11.135-nutrition-insight-date-safe';
-			var WT_SW_VERSION='wt-shell-v155-budget-secure-sync';
+			var WT_SW_VERSION='wt-shell-v157-secure-route-cleanup';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4792,10 +4792,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.137-budget-secure-sync';
+var APP_VERSION='v19.11.139-secure-route-cleanup';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v164-budget-secure-sync';
+var CACHE_VERSION='wt-cache-v166-secure-route-cleanup';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Calendar auto-check now records the planned horizon and blocks overlapping foreground checks, so manual refreshes do not cause redundant automatic rebuilds',
@@ -5519,9 +5519,7 @@ function getSheetSessions(cb){
   var fetchGeneration=_sheetFetchGeneration;
   var readStarted=Date.now();
   setSyncBadges('syncing');
-  var cbName='wt_sess_'+Date.now();
-  window[cbName]=function(result){
-    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
+  function finish(result,err){
     if(fetchGeneration!==_sheetFetchGeneration)return;
     _fetchInProgress=false;
     if(result&&result.sessions&&result.sessions.length){
@@ -5531,40 +5529,16 @@ function getSheetSessions(cb){
       var c=loadCache();
       if(c){_sheetSessions=c.sessions;setSyncBadges('cached',cacheAgeStr(c.ts));}
       else{_sheetSessions=[];setSyncBadges('offline');}
-      appDoctorPatchState('sheet',{lastReadStatus:'error',lastReadTime:Date.now(),lastError:'empty_or_cached'});
-      appDoctorTrackError('sheet_read_empty','getSheetSessions returned empty/cached',{durationMs:Date.now()-readStarted});
+      var errMsg=String(err&&err.message||err||'empty_or_cached');
+      appDoctorPatchState('sheet',{lastReadStatus:'error',lastReadTime:Date.now(),lastError:errMsg});
+      appDoctorTrackError('sheet_read_empty','getSheetSessions returned empty/cached',{durationMs:Date.now()-readStarted,message:errMsg});
     }
     var cbs=_fetchCbs.slice();_fetchCbs=[];
     cbs.forEach(function(fn){fn(_sheetSessions);});
-  };
-  var script=document.createElement('script');script.id='s_'+cbName;
-  script.src=CLOUD_URL+'?type=getHistory&callback='+cbName;
-  script.onerror=function(){
-    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
-    if(fetchGeneration!==_sheetFetchGeneration)return;
-    _fetchInProgress=false;
-    var c=loadCache();
-    if(c){_sheetSessions=c.sessions;setSyncBadges('cached',cacheAgeStr(c.ts));}
-    else{_sheetSessions=[];setSyncBadges('offline');}
-    appDoctorPatchState('sheet',{lastReadStatus:'error',lastReadTime:Date.now(),lastError:'network_error'});
-    appDoctorTrackError('sheet_read_network','getSheetSessions network error',{durationMs:Date.now()-readStarted});
-    var cbs=_fetchCbs.slice();_fetchCbs=[];
-    cbs.forEach(function(fn){fn(_sheetSessions);});
-  };
-  document.head.appendChild(script);
-  setTimeout(function(){
-    if(!window[cbName])return;
-    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
-    if(fetchGeneration!==_sheetFetchGeneration)return;
-    _fetchInProgress=false;
-    var c=loadCache();
-    if(c){_sheetSessions=c.sessions;setSyncBadges('cached',cacheAgeStr(c.ts));}
-    else{_sheetSessions=[];setSyncBadges('offline');}
-    appDoctorPatchState('sheet',{lastReadStatus:'error',lastReadTime:Date.now(),lastError:'timeout'});
-    appDoctorTrackError('sheet_read_timeout','getSheetSessions timed out',{durationMs:Date.now()-readStarted});
-    var cbs=_fetchCbs.slice();_fetchCbs=[];
-    cbs.forEach(function(fn){fn(_sheetSessions);});
-  },5000);
+  }
+  wtBackendPost({type:'getHistory',timeoutMs:45000,_nonce:Date.now()})
+    .then(function(result){finish(result,null);})
+    .catch(function(err){finish(null,err);});
 }
 
 function fetchHistory(cb){
@@ -12102,15 +12076,7 @@ function syncData(payload,msgId){
   var action=wtAttachBackendToken(payload||{});
   if(!action.type&&coachIsValidWorkout(action))action.type='logWorkout';
   function attempt(n){
-    return new Promise(function(resolve,reject){
-      var enc=encodeURIComponent(JSON.stringify(Object.assign({},action,{_nonce:Date.now()})));
-      var cbName='wt_cb_'+Date.now()+'_'+n;
-      var done=false;
-      function cleanup(){
-        wtReleaseJsonpCallback(cbName,'wts_'+cbName,60000);
-      }
-      window[cbName]=function(result){
-        if(done)return;done=true;cleanup();
+    return wtBackendPost(Object.assign({},action,{_nonce:Date.now(),timeoutMs:45000})).then(function(result){
         var ok=!!(result&&(result.success===true||result.status==='ok'));
         if(ok){
           if(el){el.textContent='Saved to Google Sheets';el.style.background='var(--green-dim)';el.style.color='var(--green)';}
@@ -12122,28 +12088,12 @@ function syncData(payload,msgId){
             lastError:'',
             lastSyncedSessionId:String((payload&&payload.sessionId)||'')
           });
-          resolve(result);
+          return result;
         }else{
           appDoctorPatchState('sheet',{lastWriteStatus:'error',lastWriteTime:Date.now(),lastError:String((result&&(result.error||result.message))||'sheet_sync_failed')});
           appDoctorTrackError('sheet_write_error',String((result&&(result.error||result.message))||'sheet_sync_failed'),{type:action.type||'unknown'});
-          reject(new Error((result&&(result.error||result.message))||'Sheet sync failed'));
+          throw new Error((result&&(result.error||result.message))||'Sheet sync failed');
         }
-      };
-      var script=document.createElement('script');script.id='wts_'+cbName;
-      script.src=CLOUD_URL+'?payload='+enc+'&callback='+cbName;
-      script.onerror=function(){
-        if(done)return;done=true;cleanup();
-        appDoctorPatchState('sheet',{lastWriteStatus:'error',lastWriteTime:Date.now(),lastError:'sheet_sync_network_error'});
-        appDoctorTrackError('sheet_write_network','Sheet sync network error',{type:action.type||'unknown'});
-        reject(new Error('Sheet sync network error'));
-      };
-      document.head.appendChild(script);
-      setTimeout(function(){
-        if(done)return;done=true;cleanup();
-        appDoctorPatchState('sheet',{lastWriteStatus:'error',lastWriteTime:Date.now(),lastError:'sheet_sync_timeout'});
-        appDoctorTrackError('sheet_write_timeout','Sheet sync timed out',{type:action.type||'unknown'});
-        reject(new Error('Sheet sync timed out'));
-      },14000);
     }).catch(function(err){
       if(n<2)return coachDelay(700+n*500).then(function(){return attempt(n+1);});
       if(el){el.textContent='Saved locally';el.style.background='var(--yellow-dim)';el.style.color='var(--yellow)';}
@@ -21294,20 +21244,13 @@ function trainerDashboardRemoteSync(opts){
       try{trainerDashboardSaveLocalSnapshotToCloud(merged?'dashboard_remote_merge':'dashboard_remote_check');}catch(_saveErr){}
       return;
     }
-    // Compatibility fallback: old backend path.
-    var cb='wt_dash_state_'+Date.now();
-    window[cb]=function(legacy){
-      wtReleaseJsonpCallback(cb,'s_'+cb,60000);
+    // Compatibility fallback: old app-state snapshot, still through secure gateway.
+    wtBackendPost({type:'getAppState',timeoutMs:20000,_nonce:Date.now()}).then(function(legacy){
       if(legacy&&legacy.status==='ok'&&legacy.state&&trainerDashboardMergeRemoteState(legacy.state)){
         trainerDashboardRender(trainerDashboardBuildSnapshot());
         try{trainerDashboardSaveLocalSnapshotToCloud('dashboard_legacy_merge');}catch(_saveErr){}
       }
-    };
-    var sc=document.createElement('script');
-    sc.id='s_'+cb;
-    sc.src=CLOUD_URL+'?type=getAppState&callback='+cb;
-    sc.onerror=function(){wtReleaseJsonpCallback(cb,'s_'+cb,60000);};
-    document.head.appendChild(sc);
+    }).catch(function(){});
   }).catch(function(){
     _trainerDashboardRemoteSyncInFlight=false;
   });
@@ -22333,9 +22276,7 @@ function tryLoadWorkout(){
   document.getElementById('currentWorkoutInfo').textContent='Checking sheet...';
   document.getElementById('homeLoadedBadge').classList.add('hidden');
   document.getElementById('hotelLoadedBadge').classList.add('hidden');
-  var cbName='wt_load_'+Date.now();
-  window[cbName]=function(result){
-    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
+  function applySheetWorkoutResult(result){
     if(result&&result.status==='ok'&&result.exercises&&result.exercises.length){
       sheetWorkout=result;
       var wt=(result.workoutType||'').toLowerCase();
@@ -22363,11 +22304,8 @@ function tryLoadWorkout(){
       updateWorkoutCoachPulse();
       try{trainerDashboardRefresh({background:false});}catch(e){}
     }
-  };
-  var url=CLOUD_URL+'?type=getWorkout&callback='+cbName;
-  var script=document.createElement('script');script.id='s_'+cbName;script.src=url;
-  script.onerror=function(){
-    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
+  }
+  wtBackendPost({type:'getWorkout',timeoutMs:25000,_nonce:Date.now()}).then(applySheetWorkoutResult).catch(function(){
     sheetWorkout=null;
     var aiw3=aiWorkoutLoad()||{};
     var aiParts3=[];
@@ -22376,8 +22314,7 @@ function tryLoadWorkout(){
     document.getElementById('currentWorkoutInfo').textContent=appendVerdictLine(aiParts3.length?aiParts3.join(' · '):'Using built-in defaults for both');
     updateWorkoutCoachPulse();
     try{trainerDashboardRefresh({background:false});}catch(e){}
-  };
-  document.head.appendChild(script);
+  });
   updateWorkoutCoachPulse();
   try{trainerDashboardRefresh({background:false});}catch(e){}
   if(!window._coachPulsePendingDetailed){
@@ -23219,13 +23156,7 @@ function loadSeqDefaults(){
 
 function fetchSeqDefaultsFromSheet(){
   // Fetch once on startup — merges sheet into localStorage so new browsers pick up saved sequences
-  var cb='wt_seqd_'+Date.now();
-  function cleanupSeqCb(){
-    window[cb]=function(){};
-    var s=document.getElementById('s_'+cb);
-    if(s&&s.parentNode)s.parentNode.removeChild(s);
-  }
-  window[cb]=function(result){
+  wtBackendPost({type:'getSeqDefaults',timeoutMs:20000,_nonce:Date.now()}).then(function(result){
     if(result&&result.status==='ok'&&result.defaults&&Object.keys(result.defaults).length){
       try{
         var local=JSON.parse(localStorage.getItem(SEQ_DEFAULTS_KEY)||'{}');
@@ -23233,13 +23164,9 @@ function fetchSeqDefaultsFromSheet(){
         var _sdv2=JSON.stringify(merged);try{localStorage.setItem(SEQ_DEFAULTS_KEY,_sdv2);}catch(e){}wtDB.set(SEQ_DEFAULTS_KEY,_sdv2);
       }catch(e){}
     }
-    cleanupSeqCb();
-  };
-  var sc=document.createElement('script');sc.id='s_'+cb;
-  sc.onerror=function(){cleanupSeqCb();};
-  sc.src=CLOUD_URL+'?type=getSeqDefaults&callback='+cb;
-  document.head.appendChild(sc);
-  setTimeout(function(){if(window[cb])cleanupSeqCb();},10000);
+  }).catch(function(err){
+    try{appLogEvent('warn','seq_defaults_fetch_failed',{message:String(err&&err.message||err||'')});}catch(e){}
+  });
 }
 
 function applySeqDefaults(exercises){
@@ -29063,9 +28990,7 @@ function initEditTab(){
   var picker=document.getElementById('editDatePicker');
   if(picker)picker.innerHTML='<option value="">Loading...</option>';
   document.getElementById('editSessionContent').innerHTML='<div style="color:var(--muted);font-size:0.85rem;padding:20px 0;text-align:center;">Loading sessions...</div>';
-  var cbName='wt_edit_'+Date.now();
-  window[cbName]=function(result){
-    wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);
+  wtBackendPost({type:'getHistory',timeoutMs:45000,_nonce:Date.now()}).then(function(result){
     if(el){el.textContent='Synced (tap to refresh)';el.style.color='var(--muted)';}
     if(result&&result.sessions&&result.sessions.length){
       var editSessions=workoutVisibleSessions(result.sessions,{type:'strength'}).filter(function(sess){
@@ -29086,12 +29011,10 @@ function initEditTab(){
       if(el){el.textContent='No sessions found';el.style.color='var(--red)';}
       if(picker)picker.innerHTML='<option value="">No sessions found</option>';
     }
-  };
-  var script=document.createElement('script');script.id='s_'+cbName;
-  script.src=CLOUD_URL+'?type=getHistory&callback='+cbName;
-  script.onerror=function(){wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);if(el){el.textContent='Failed (tap to retry)';el.style.color='var(--red)';}};
-  document.head.appendChild(script);
-  setTimeout(function(){if(window[cbName]){wtReleaseJsonpCallback(cbName,'s_'+cbName,60000);if(el){el.textContent='Timed out (tap to retry)';el.style.color='var(--red)';}}},5000);
+  }).catch(function(){
+    if(el){el.textContent='Failed (tap to retry)';el.style.color='var(--red)';}
+    if(picker)picker.innerHTML='<option value="">Load failed</option>';
+  });
 }
 
 function editSessionAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -35010,24 +34933,7 @@ function progressUpdateVersionLabel(){
   if(el)el.textContent='Progress routes · '+String(WT_FRONTEND_VERSION||'');
 }
 function progressJsonpRead(type,timeoutMs){
-  return new Promise(function(resolve,reject){
-    if(!CLOUD_URL){reject(new Error('no backend url'));return;}
-    var clean=String(type||'read').replace(/[^a-zA-Z0-9_]/g,'');
-    var cb='wt_pr_'+clean+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
-    var done=false;
-    function finish(ok,val){
-      if(done)return;
-      done=true;
-      wtRetireJsonpCallback(cb);
-      ok?resolve(val):reject(val);
-    }
-    window[cb]=function(res){finish(true,res||{});};
-    var sc=document.createElement('script');sc.id='s_'+cb;
-    sc.onerror=function(){finish(false,new Error(clean+' JSONP failed'));};
-    sc.src=CLOUD_URL+'?type='+encodeURIComponent(clean)+'&callback='+encodeURIComponent(cb);
-    document.head.appendChild(sc);
-    setTimeout(function(){finish(false,new Error(clean+' JSONP timeout'));},Math.max(5000,parseInt(timeoutMs||12000,10)||12000));
-  });
+  return Promise.reject(new Error(String(type||'read')+' legacy JSONP disabled; secure backend required'));
 }
 function progressSheetRead(type,timeoutMs){
   if(!navigator.onLine)return Promise.reject(new Error('offline'));
@@ -36735,20 +36641,12 @@ function initShareMode(){
   renderShareView(cached?cached.sessions:[]);
 
   // Then fetch live data and re-render if it differs
-  var cbName='wt_share_'+Date.now();
-  window[cbName]=function(result){
-    wtRetireJsonpCallback(cbName);
+  wtBackendPost({type:'getHistory',timeoutMs:45000,_nonce:Date.now()}).then(function(result){
     if(result&&result.sessions&&result.sessions.length){
       saveCache(result.sessions);
       renderShareView(result.sessions);
     }
-  };
-  var script=document.createElement('script');script.id='s_'+cbName;
-  script.src=CLOUD_URL+'?type=getHistory&callback='+cbName;
-  script.onerror=function(){/* already rendered with cache */};
-  document.head.appendChild(script);
-  // Hard timeout — give up after 12s, leave existing render as-is
-  setTimeout(function(){if(window[cbName])wtRetireJsonpCallback(cbName);},12000);
+  }).catch(function(){/* already rendered with cache */});
 }
 
 function renderShareView(sessions){
@@ -37100,6 +36998,8 @@ var NUT_FOOD_ROLLBACK_KEY='wt_food_rollback_v1';
 var _nutFoodMemory=[];
 var _nutMealTemplates=[];
 var _nutFoodLibraryMeta={};
+var _nutFoodsLoading=false;
+var _nutFoodsLastError='';
 function nutPersistFoods(){
   var v=JSON.stringify(_nutFoods||[]);
   wtDB.set(NUT_FOODS_KEY,v);
@@ -38118,15 +38018,11 @@ function appStateRestore(state){
 
 function appStateLoad(){
   // Always fetch from sheet and restore any keys missing locally
-  var cbA='wt_appstate_'+Date.now();
-  window[cbA]=function(result){
-    wtRetireJsonpCallback(cbA);
+  wtBackendPost({type:'getAppState',timeoutMs:22000,_nonce:Date.now()}).then(function(result){
     if(result&&result.status==='ok'&&result.state)appStateRestore(result.state);
-  };
-  var sc=document.createElement('script');sc.id='s_'+cbA;
-  sc.src=CLOUD_URL+'?type=getAppState&callback='+cbA;
-  sc.onerror=function(){wtRetireJsonpCallback(cbA);};
-  document.head.appendChild(sc);
+  }).catch(function(err){
+    try{appLogEvent('warn','app_state_load_failed',{message:String(err&&err.message||err||'')});}catch(e){}
+  });
 }
 
 function nutSyncAction(action,msgEl,cb){
@@ -38808,9 +38704,7 @@ function nutCoachEditItem(idx){
 function nutFetchCholForWeekTab(){
   if(nutIsOffline()){nutOfflineNotice('cholesterol refresh');return;}
   // Lightweight fetch — updates _cholReadings then re-renders week tab
-  var cb='wt_wchol_'+Date.now();
-  window[cb]=function(result){
-    wtRetireJsonpCallback(cb);
+  wtBackendPost({type:'getCholesterol',timeoutMs:25000,_nonce:Date.now()}).then(function(result){
     var rows=(result&&result.rows)?result.rows:[];
     if(!rows.length)return;
     var fresh=[];
@@ -38833,12 +38727,9 @@ function nutFetchCholForWeekTab(){
         if(_nutTab==='week')nutRenderWeek();
       }
     }
-  };
-  var sc=document.createElement('script');sc.id='s_'+cb;
-  sc.onerror=function(){wtRetireJsonpCallback(cb);};
-  sc.src=CLOUD_URL+'?type=getCholesterol&callback='+cb;
-  document.head.appendChild(sc);
-  setTimeout(function(){if(window[cb])wtRetireJsonpCallback(cb);},10000);
+  }).catch(function(err){
+    try{appLogEvent('warn','nutrition_cholesterol_fetch_failed',{message:String(err&&err.message||err||'')});}catch(e){}
+  });
 }
 
 function nutPrevDay(){_nutDate=nutShiftDate(_nutDate,-1);nutSetDateLabel();nutRenderDay();}
@@ -38916,23 +38807,33 @@ function nutRetireJsonpCallback(cb){
 }
 function nutFetchFoods(){
   if(nutIsOffline()){nutOfflineNotice('food sync');return;}
-  var cb='wt_gf_'+Date.now();
-  window[cb]=function(res){
-    nutRetireJsonpCallback(cb);
-    if(res&&res.status==='ok'&&res.foods){
-      _nutFoods=res.foods;
-      wtDB.set(NUT_FOODS_KEY,JSON.stringify(_nutFoods));
-      try{localStorage.setItem(NUT_FOODS_KEY,JSON.stringify(_nutFoods));}catch(e){}
-      // Always re-render wherever foods are shown
+  _nutFoodsLoading=true;
+  _nutFoodsLastError='';
+  if(_nutTab==='foods')nutRenderFoodList();
+  wtBackendPost({type:'getFoods',_nonce:Date.now()})
+    .then(function(res){
+      _nutFoodsLoading=false;
+      if(res&&res.status==='ok'&&Array.isArray(res.foods)){
+        _nutFoods=res.foods;
+        nutPersistFoods();
+        nutBadge('live','Live');
+        _nutFoodsLastError='';
+      }else{
+        _nutFoodsLastError=String((res&&(res.message||res.error))||'Food database returned no foods');
+        nutBadge((_nutFoods&&_nutFoods.length)?'cached':'warn',(_nutFoods&&_nutFoods.length)?'Cached':'Food DB');
+      }
+      // Always re-render wherever foods are shown.
       if(_nutTab==='foods')nutRenderFoodList();
       nutFilterAddList(); // refresh add overlay if open
-    }
-  };
-  var sc=document.createElement('script');sc.id='s_'+cb;
-  sc.onerror=function(){nutRetireJsonpCallback(cb);};
-  sc.src=CLOUD_URL+'?type=getFoods&callback='+cb;
-  document.head.appendChild(sc);
-  setTimeout(function(){if(window[cb]){nutRetireJsonpCallback(cb);}},12000);
+    })
+    .catch(function(err){
+      _nutFoodsLoading=false;
+      _nutFoodsLastError=String(err&&err.message||err||'Food database unavailable');
+      nutBadge((_nutFoods&&_nutFoods.length)?'cached':'offline',(_nutFoods&&_nutFoods.length)?'Cached':'Offline');
+      if(_nutTab==='foods')nutRenderFoodList();
+      nutFilterAddList();
+      try{appLogEvent('warn','food_fetch_failed',{message:_nutFoodsLastError});}catch(e){}
+    });
 }
 
 function nutFetchEntries(extendedFrom,opts){
@@ -39084,45 +38985,16 @@ function nutFetchEntries(extendedFrom,opts){
     appLogEvent('warn','nutrition_sheet_read_fallback','Nutrition Sheet read used phone cache.',{route:String(label||''),message:String(err&&err.message||err||'')});
     finishRender();
   }
-  function jsonpFallback(reason){
-    if(!current())return;
-    var cb='wt_gn_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
-    var settled=false;
-    var timer=null;
-    window[cb]=function(res){
-      if(settled)return;
-      settled=true;
-      if(timer)clearTimeout(timer);
-      nutRetireJsonpCallback(cb);
-      applyResponse(res,'jsonp');
-    };
-    var sc=document.createElement('script');sc.id='s_'+cb;
-    sc.onerror=function(){
-      if(settled)return;
-      settled=true;
-      if(timer)clearTimeout(timer);
-      nutRetireJsonpCallback(cb);
-      failRead('Offline',reason);
-    };
-    sc.src=CLOUD_URL+'?type=getNutrition&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to)+'&callback='+cb;
-    document.head.appendChild(sc);
-    timer=setTimeout(function(){
-      if(!window[cb]||settled)return;
-      settled=true;
-      nutRetireJsonpCallback(cb);
-      failRead('Timeout',reason);
-    },jsonpTimeout);
-  }
   nutBadge('load','Syncing');
   if(typeof wtBackendPost==='function'){
     wtBackendPost({type:'getNutrition',from:from,to:to,_nonce:Date.now(),timeoutMs:postTimeout}).then(function(res){
       applyResponse(res,'post');
     }).catch(function(err){
       if(!current())return;
-      jsonpFallback(err);
+      failRead(String(err&&err.message||'Offline').toLowerCase().indexOf('timeout')>=0?'Timeout':'Offline',err);
     });
   }else{
-    jsonpFallback('post_unavailable');
+    failRead('Offline','post_unavailable');
   }
 }
 
@@ -40094,6 +39966,14 @@ function nutRenderFoodList(){
     }
     return false;
   });
+  if(!_nutFoods.length&&_nutFoodsLoading){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">Loading food database...</div>';
+    return;
+  }
+  if(!_nutFoods.length&&_nutFoodsLastError){
+    el.innerHTML='<div style="text-align:center;color:var(--orange);padding:20px;font-size:0.85rem;">Food database unavailable. '+escHtml(_nutFoodsLastError)+'</div>';
+    return;
+  }
   if(qNorm){
     list=list.sort(function(a,b){
       function score(f){
@@ -41320,22 +41200,12 @@ function _fetchAllSources(query, serving){
 }
 
 function _claudeFetchJsonp(query, serving){
-  return new Promise(function(resolve){
-    var cbName='_claudeCb_'+Date.now();
-    var timeout=setTimeout(function(){
-      wtRetireJsonpCallback(cbName);
-      resolve({source:'Claude',status:'timeout'});
-    },20000);
-    window[cbName]=function(result){
-      clearTimeout(timeout);wtRetireJsonpCallback(cbName);
-      if(result&&result.message&&(result.message.indexOf('credit')>=0||result.message.indexOf('billing')>=0))
-        resolve({source:'Claude',status:'credits'});
-      else resolve(result||{source:'Claude',status:'error'});
-    };
-    var s=document.createElement('script');s.id='s_'+cbName;
-    s.src=CLOUD_URL+'?type=callClaude&query='+encodeURIComponent(query)+'&serving='+encodeURIComponent(serving)+'&callback='+cbName;
-    s.onerror=function(){clearTimeout(timeout);wtRetireJsonpCallback(cbName);resolve({source:'Claude',status:'error'});};
-    document.head.appendChild(s);
+  return wtBackendPost({type:'callClaude',query:query,serving:serving,timeoutMs:24000,_nonce:Date.now()}).then(function(result){
+    if(result&&result.message&&(result.message.indexOf('credit')>=0||result.message.indexOf('billing')>=0))
+      return {source:'Claude',status:'credits'};
+    return result||{source:'Claude',status:'error'};
+  }).catch(function(){
+    return {source:'Claude',status:'error'};
   });
 }
 function _claudeFetch(query, serving){
@@ -42654,6 +42524,10 @@ function nutFilterAddList(){
   var el=document.getElementById('nutAddList');if(!el)return;
 
   var html='';
+  if(!_nutFoods.length&&_nutFoodsLoading&&!q){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">Loading food database...</div>';
+    return;
+  }
 
   // Recent foods — top 8 distinct food names from last 14 days, no filter when no query
   if(!q){
