@@ -3920,7 +3920,7 @@ function aiBackendStatusTest(){
 }
 
 			var WT_FRONTEND_VERSION='19.11.135-nutrition-insight-date-safe';
-			var WT_SW_VERSION='wt-shell-v153-nutrition-insight-date-safe';
+			var WT_SW_VERSION='wt-shell-v155-budget-secure-sync';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4792,10 +4792,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.135-nutrition-insight-date-safe';
+var APP_VERSION='v19.11.137-budget-secure-sync';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v162-nutrition-insight-date-safe';
+var CACHE_VERSION='wt-cache-v164-budget-secure-sync';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Calendar auto-check now records the planned horizon and blocks overlapping foreground checks, so manual refreshes do not cause redundant automatic rebuilds',
@@ -31239,7 +31239,14 @@ function healthImportApply(payload,opts){
 }
 function healthTestImport(){
   var cfg=healthCfgLoad();
-  if(!cfg.bridgeToken){cfg.bridgeToken=healthBridgeTokenNew();cfg.mode='shortcut';healthCfgSave(cfg);}
+  if(!cfg.bridgeToken){
+    HEALTH_TEST_STATUS.ok=false;HEALTH_TEST_STATUS.error='missing health bridge token';
+    healthStatusSet('Missing token','Paste the same Health Bridge Token used by Apps Script and the iPhone Shortcut, then test again.');
+    try{connRenderHealthLatestPreview();}catch(_e0){}
+    try{connRenderStatuses();}catch(_e1){}
+    appToast('Paste Health Bridge Token first.','var(--orange)');
+    return;
+  }
   var d=localDateStr();
   var sample={source:'test',is_test:true,bridge_token:cfg.bridgeToken,date:d,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'America/Los_Angeles',steps:0,active_energy_calories:0,active_energy_yesterday:0,resting_energy_calories:0,sleep_hours:0,body_weight_lb:0,resting_heart_rate:0,average_heart_rate:0,workouts:[]};
   HEALTH_TEST_STATUS.lastAttemptAt=new Date().toISOString();
@@ -36093,6 +36100,7 @@ var BUD_DEFAULT_HOURS=[70.46,95.11,79.43,65.14,66,70,70,70,70,70,70,70];
 
 // Sheet data: only monthRows needed (equity/bank per month for dropdown)
 var _budSheetData={monthRows:[]};
+var _budOriginalMonthHours=[];
 var _budSelectedMonthIdx=-1;
 var _budPhase='pre'; // 'pre' = pre-purchase (B31 bills), 'post' = post-purchase (H20 bills)
 function budSetPhase(phase){
@@ -36168,8 +36176,15 @@ function budSaveEquity(){
     while(_budSheetData.monthRows.length<=idx)_budSheetData.monthRows.push({label:'',equity:null,bank:null});
     _budSheetData.monthRows[idx].equity=newEquity;
   }
-  // Persist in localStorage fallback
-  try{var st=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');st.lastEquity=newEquity;localStorage.setItem(BUD_KEY,JSON.stringify(st));}catch(e){}
+  // Persist in localStorage fallback and queue the selected month for the next sheet save.
+  try{
+    var st=JSON.parse(localStorage.getItem(BUD_KEY)||'{}');
+    st.lastEquity=newEquity;
+    if(!st.monthEquityEdits||typeof st.monthEquityEdits!=='object'||Array.isArray(st.monthEquityEdits))st.monthEquityEdits={};
+    st.monthEquityEdits[String(idx)]=newEquity;
+    localStorage.setItem(BUD_KEY,JSON.stringify(st));
+    wtDB.set(BUD_KEY,JSON.stringify(st));
+  }catch(e){}
   budUpdateEquityBank(_budSheetData.monthRows,idx);
   budCalc();
   budSetStatus('edited');
@@ -36351,9 +36366,7 @@ function budLoad(){
 }
 
 function budFetchFromSheet(){
-  var cbName='wt_bud_'+Date.now();
-  window[cbName]=function(result){
-    wtRetireJsonpCallback(cbName);
+  function applyBudgetResult(result){
     if(result&&result.status==='ok'&&result.data){
       var d=result.data;
       var isDirty=false;try{isDirty=localStorage.getItem('wt_budget_dirty')==='1';}catch(e){}
@@ -36368,7 +36381,11 @@ function budFetchFromSheet(){
           });
           // Store B31 (pre-purchase bills) as read-only — not editable
           if(d.bPreBills!==null&&d.bPreBills!==undefined)stored.bPreBills=d.bPreBills;
-          if(Array.isArray(d.monthHours))stored.monthHours=d.monthHours;
+          if(Array.isArray(d.monthHours)){
+            stored.monthHours=d.monthHours;
+            _budOriginalMonthHours=d.monthHours.map(function(v){return parseFloat(v)||0;});
+            delete stored.monthEquityEdits;
+          }
           var _bkv2=JSON.stringify(stored);try{localStorage.setItem(BUD_KEY,_bkv2);}catch(e){}wtDB.set(BUD_KEY,_bkv2);
         }catch(e){}
         budApplyStored();
@@ -36378,6 +36395,14 @@ function budFetchFromSheet(){
 
       // Store read-only sheet values (month dropdown data only — not used in calc)
       _budSheetData.monthRows=Array.isArray(d.monthRows)?d.monthRows:[];
+      if(!_budSheetData.monthRows.length&&Array.isArray(d.monthHours)){
+        _budSheetData.monthRows=BUD_MONTHS.map(function(label,i){
+          return {label:label,equity:null,hours:parseFloat(d.monthHours[i])||0};
+        });
+      }
+      if(!_budOriginalMonthHours.length&&Array.isArray(d.monthHours)){
+        _budOriginalMonthHours=d.monthHours.map(function(v){return parseFloat(v)||0;});
+      }
 
       // Build month dropdown
       budBuildMonthDropdown(_budSheetData.monthRows);
@@ -36388,12 +36413,20 @@ function budFetchFromSheet(){
     }else{
       budSyncBadge('cached','local');
     }
-  };
-  var script=document.createElement('script');script.id='s_'+cbName;
-  script.src=CLOUD_URL+'?type=getBudget&callback='+cbName;
-  script.onerror=function(){budSyncBadge('offline');};
-  document.head.appendChild(script);
-  setTimeout(function(){if(window[cbName]){wtRetireJsonpCallback(cbName);budSyncBadge('cached','local');}},12000);
+  }
+  wtBackendPost({type:'getBudget',_nonce:Date.now()})
+    .then(applyBudgetResult)
+    .catch(function(err){
+      budSyncBadge('cached','local');
+      var el=document.getElementById('budMsg');
+      if(el){
+        el.textContent='Budget sheet unavailable — showing local values';
+        el.style.background='var(--yellow-dim)';
+        el.style.color='var(--yellow)';
+        setTimeout(function(){if(el&&el.textContent.indexOf('Budget sheet unavailable')===0)el.textContent='';},4000);
+      }
+      try{appLogEvent('warn','budget_fetch_failed',{message:String(err&&err.message||err||'')});}catch(e){}
+    });
 }
 
 function budReset(){
@@ -36426,12 +36459,18 @@ function budSave(){
       data.bThisMonth=tmEl.value;
       try{localStorage.setItem('wt_thismonth',tmEl.value);}catch(e){}wtDB.set('wt_thismonth',tmEl.value);
     }
-    // Only persist monthHours that the user has explicitly entered (non-empty inputs)
-    // This avoids overwriting sheet formula values for months the user hasn't touched
-    var monthHoursEdited={};
+    // Only persist month hours that differ from the sheet baseline.
+    // This avoids rewriting untouched sheet values as static app-side numbers.
+    var monthHoursEdited=(data.monthHours&&typeof data.monthHours==='object'&&!Array.isArray(data.monthHours))?data.monthHours:{};
     BUD_MONTHS.forEach(function(_,i){
       var el=document.getElementById('bHours_'+i);
-      if(el&&el.value!==''){monthHoursEdited[i]=parseFloat(el.value)||0;}
+      if(el&&el.value!==''){
+        var val=parseFloat(el.value)||0;
+        var baseline=Array.isArray(_budOriginalMonthHours)&&_budOriginalMonthHours.length?_budOriginalMonthHours[i]:BUD_DEFAULT_HOURS[i];
+        baseline=parseFloat(baseline)||0;
+        if(Math.abs(val-baseline)>0.005)monthHoursEdited[String(i)]=val;
+        else if(monthHoursEdited&&Object.prototype.hasOwnProperty.call(monthHoursEdited,String(i)))delete monthHoursEdited[String(i)];
+      }
     });
     data.monthHours=monthHoursEdited;
     var _bkv=JSON.stringify(data);try{localStorage.setItem(BUD_KEY,_bkv);}catch(e){}wtDB.set(BUD_KEY,_bkv);
@@ -36448,46 +36487,32 @@ function budSaveToSheet(){
   // monthHours as JSON string so it survives URL encoding
   var sheetData={};
   Object.keys(stored).forEach(function(k){
-    if(k==='monthHours'){
+    if(k==='monthHours'||k==='monthEquityEdits'){
       // Send as JSON string — object with only explicitly-edited months
       sheetData[k]=JSON.stringify(stored[k]);
     } else {
       sheetData[k]=stored[k];
     }
   });
-  var payload=wtAttachBackendToken({type:'budget',data:sheetData});
-  var enc=encodeURIComponent(JSON.stringify(payload));
-  var cbName='wt_budsave_'+Date.now();
-  window[cbName]=function(result){
-    wtRetireJsonpCallback(cbName);
+  wtBackendPost({type:'budget',data:sheetData,_nonce:Date.now()}).then(function(result){
     if(btn)btn.disabled=false;
     if(result&&result.status==='ok'){
       if(el){el.textContent='Saved to Google Sheets \u2713';el.style.background='var(--green-dim)';el.style.color='var(--green)';}
       budSyncBadge('live');
       budSetStatus('saved');
+      setTimeout(function(){budFetchFromSheet();},250);
     }else{
       if(el){el.textContent='Failed \u2014 saved locally only';el.style.background='var(--yellow-dim)';el.style.color='var(--yellow)';}
       budSyncBadge('offline');
     }
     setTimeout(function(){if(el)el.textContent='';},4000);
-  };
-  var script=document.createElement('script');script.id='s_'+cbName;
-  script.src=CLOUD_URL+'?payload='+enc+'&callback='+cbName;
-  script.onerror=function(){
+  }).catch(function(err){
     if(btn)btn.disabled=false;
     if(el){el.textContent='Offline \u2014 saved locally only';el.style.background='var(--yellow-dim)';el.style.color='var(--yellow)';}
     budSyncBadge('offline');
+    try{appLogEvent('warn','budget_save_failed',{message:String(err&&err.message||err||'')});}catch(e){}
     setTimeout(function(){if(el)el.textContent='';},4000);
-  };
-  document.head.appendChild(script);
-  setTimeout(function(){
-    if(window[cbName]){
-      wtRetireJsonpCallback(cbName);
-      if(btn)btn.disabled=false;
-      if(el){el.textContent='Timed out \u2014 saved locally';el.style.background='var(--yellow-dim)';el.style.color='var(--yellow)';}
-      budSyncBadge('cached','local');
-    }
-  },5000);
+  });
 }
 
 function fmt(n,prefix){
@@ -42078,6 +42103,8 @@ function connRenderStatuses(){
   try{
     var hcfg=healthCfgLoad();
     if(htk)htk.innerHTML='Health token: <strong>'+escHtml(wtMaskSecret(hcfg.bridgeToken||'','wt_health_'))+'</strong> · iCal URL: <strong>'+escHtml(wtMaskUrl(cfg.icalUrl||'')||'not saved')+'</strong>';
+    var healthTokenInput=document.getElementById('connHealthTokenInput');
+    if(healthTokenInput&&!healthTokenInput.value&&hcfg.bridgeToken)healthTokenInput.value=hcfg.bridgeToken;
   }catch(e){}
   if(pwa){
     var sw=('serviceWorker' in navigator)?'registered':'unsupported';
@@ -42175,6 +42202,29 @@ function connRunCalendarSampleTest(){
 }
 function connGenerateHealthToken(){ healthRegenerateToken(); connRenderStatuses(); }
 function connCopyHealthToken(){ var c=healthCfgLoad(); wtCopyText(c.bridgeToken||'','Health Bridge Token'); }
+function connSaveHealthToken(){
+  var input=document.getElementById('connHealthTokenInput');
+  var token=String(input&&input.value||'').trim();
+  if(!token){
+    appToast('Paste the Health Bridge Token first.','var(--orange)');
+    healthStatusSet('Missing token','Paste the same Health Bridge Token used by Apps Script and the iPhone Shortcut.');
+    return;
+  }
+  if(/\s/.test(token)||token.length<16){
+    appToast('That token looks too short or has spaces.','var(--orange)');
+    healthStatusSet('Token not saved','Health Bridge Token must be one unbroken value.');
+    return;
+  }
+  var cfg=healthCfgLoad();
+  cfg.bridgeToken=token;
+  cfg.mode='shortcut';
+  cfg.status='Health token saved';
+  healthCfgSave(cfg);
+  healthSyncRender();
+  connRenderStatuses();
+  healthStatusSet('Ready','Health Bridge Token saved. Now run Health token test.');
+  appToast('Health Bridge Token saved.','var(--green)');
+}
 function connCopyShortcutJsonTemplate(){
   var c=healthCfgLoad();
   var d=localDateStr();
@@ -47916,6 +47966,10 @@ function nutMealScanToggleClaudeFullPass(){
       <div id="connHealthSetupCard" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;scroll-margin-top:70px;">
         <div style="font-size:0.72rem;font-weight:700;color:var(--text2);margin-bottom:6px;">Apple Health Bridge Setup</div>
         <div id="healthSyncStatus" style="font-size:0.72rem;color:var(--muted);line-height:1.55;margin-bottom:8px;">Not connected</div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px;">
+          <input id="connHealthTokenInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste Health Bridge Token" style="min-width:0;padding:10px;background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:0.72rem;">
+          <button type="button" onclick="connSaveHealthToken()" style="padding:9px 12px;background:var(--green-dim);border:1px solid rgba(76,217,100,0.35);border-radius:8px;color:var(--green);font-size:0.68rem;font-weight:800;">Save</button>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <button type="button" onclick="healthCopyWebhook()" style="padding:9px;background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:0.68rem;font-weight:700;">Copy webhook URL</button>
           <button type="button" onclick="connGenerateHealthToken()" style="padding:9px;background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:0.68rem;font-weight:700;">Generate Health Token</button>
