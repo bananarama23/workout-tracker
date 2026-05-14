@@ -1,4 +1,4 @@
-const SW_VERSION = 'wt-shell-v157-secure-route-cleanup';
+const SW_VERSION = 'wt-shell-v158-nutrition-macro-screenshot';
 const SHELL_CACHE = `wt-shell-${SW_VERSION}`;
 const WT_BLOCK_PUBLIC_GITHUB_PAGES = /\.github\.io$/i.test((self.location && self.location.hostname) || '');
 const OFFLINE_URLS = [
