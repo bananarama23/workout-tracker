@@ -2068,7 +2068,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     </div>
   </div>
   <!-- Footer — fixed at bottom, always visible, keyboard-aware -->
-  <div id="nutFoodFormFooter" style="background:var(--bg);padding:12px 16px calc(var(--nav-h) + var(--safe-b) + 12px);border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;position:sticky;bottom:0;z-index:10;">
+  <div id="nutFoodFormFooter" style="background:var(--bg);padding:12px 16px var(--nff-footer-pad-bottom, calc(var(--nav-h) + var(--safe-b) + 12px));border-top:1px solid var(--border);display:flex;gap:8px;position:fixed;left:0;right:0;bottom:var(--nff-keyboard-bottom, 0px);z-index:960;box-sizing:border-box;">
     <button type="button" onclick="nutSaveFood()" style="flex:1;padding:14px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;font-weight:900;cursor:pointer;">Save to My Foods</button>
     <button type="button" id="nutDeleteFoodBtn" onclick="nutDeleteFood()" style="display:none;padding:14px 18px;background:var(--red-dim);color:var(--red);border:1px solid var(--red);border-radius:var(--r);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;cursor:pointer;">Delete saved food</button>
   </div>
@@ -3919,8 +3919,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.11.136-nutrition-macro-screenshot';
-			var WT_SW_VERSION='wt-shell-v158-nutrition-macro-screenshot';
+			var WT_FRONTEND_VERSION='19.11.137-food-form-keyboard-footer';
+			var WT_SW_VERSION='wt-shell-v159-food-form-keyboard-footer';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4792,10 +4792,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.140-nutrition-macro-screenshot';
+var APP_VERSION='v19.11.141-food-form-keyboard-footer';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v167-nutrition-macro-screenshot';
+var CACHE_VERSION='wt-cache-v168-food-form-keyboard-footer';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Calendar auto-check now records the planned horizon and blocks overlapping foreground checks, so manual refreshes do not cause redundant automatic rebuilds',
@@ -40139,22 +40139,42 @@ var _nutFoodFormPrevPage='nutrition';
 var _nffVpHandler=null;
 function nutCloseFoodForm(){
   var ov=document.getElementById('nutFoodFormOverlay');
-  if(ov){ov.style.display='none';ov.style.height='';}
+  var body=document.getElementById('nutFoodFormBody');
+  if(ov){ov.style.display='none';ov.style.height='';ov.style.top='';ov.style.removeProperty('--nff-keyboard-bottom');ov.style.removeProperty('--nff-footer-pad-bottom');}
+  if(body)body.style.paddingBottom='';
   if(_nffVpHandler&&window.visualViewport){window.visualViewport.removeEventListener('resize',_nffVpHandler);_nffVpHandler=null;}
   navTo(_nutFoodFormPrevPage||'nutrition');
 }
 function _nffSyncViewport(){
   var ov=document.getElementById('nutFoodFormOverlay');
   if(!ov||ov.style.display==='none')return;
-  if(window.visualViewport){
-    ov.style.height=window.visualViewport.height+'px';
-    ov.style.top=window.visualViewport.offsetTop+'px';
+  var body=document.getElementById('nutFoodFormBody');
+  var footer=document.getElementById('nutFoodFormFooter');
+  var vv=window.visualViewport||null;
+  var layoutH=window.innerHeight||document.documentElement.clientHeight||0;
+  var kb=0;
+  if(vv){
+    kb=Math.max(0,Math.round(layoutH-vv.height-vv.offsetTop));
+    ov.style.height='100%';
+    ov.style.top='0px';
+  }
+  var keyboardOpen=kb>80;
+  ov.style.setProperty('--nff-keyboard-bottom',kb+'px');
+  ov.style.setProperty('--nff-footer-pad-bottom',keyboardOpen?'12px':'calc(var(--nav-h) + var(--safe-b) + 12px)');
+  if(body&&footer){
+    window.setTimeout(function(){
+      if(!body||!footer||!ov||ov.style.display==='none')return;
+      body.style.paddingBottom=(footer.offsetHeight+12)+'px';
+    },0);
   }
 }
 (function(){
   if(!window.visualViewport)return;
   // Attach once on page load — will fire whenever keyboard opens/closes
   window.visualViewport.addEventListener('resize',function(){
+    _nffSyncViewport();
+  });
+  window.visualViewport.addEventListener('scroll',function(){
     _nffSyncViewport();
   });
 })();
