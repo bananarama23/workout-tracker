@@ -2171,7 +2171,6 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         </div>
       </div>
       <div id="wgAllDone" style="display:none;font-size:0.72rem;font-weight:700;color:var(--green);letter-spacing:0.5px;">WEEK MET ✓</div>
-      <button onclick="settingsGo('training')" style="background:none;border:none;color:var(--muted);font-size:1.1rem;padding:4px;cursor:pointer;flex-shrink:0;" title="Settings"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="2.5"/><path d="M9 2v1.5M9 14.5V16M2 9h1.5M14.5 9H16M4.1 4.1l1 1M12.9 12.9l1 1M12.9 4.1l1-1M4.1 12.9l1-1"/></svg></button>
     </div>
     <div class="plan-grid" id="planGrid">
       <div style="text-align:center;color:var(--muted);padding:40px 0;">Loading plan...</div>
@@ -2472,9 +2471,6 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
   <button class="nav-btn" id="nav-budget" onclick="navTo('budget')"><span class="ni"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="16" height="11" rx="2"/><line x1="2" y1="9" x2="18" y2="9"/><line x1="6" y1="13" x2="8" y2="13"/></svg></span><span class="nl">Budget</span></button>
   <button class="nav-btn" id="nav-plan" onclick="navTo('plan')"><span class="ni"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="13" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="7" y1="4" x2="7" y2="8"/><line x1="13" y1="4" x2="13" y2="8"/><line x1="6" y1="12" x2="9" y2="12"/><line x1="6" y1="14.5" x2="11" y2="14.5"/></svg></span><span class="nl">Plan</span></button>
 </nav>
-<button type="button" class="settings-fab" id="settingsFab" onclick="settingsGo('top')" aria-label="Settings">
-  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="2.4"/><path d="M10 2.8v2M10 15.2v2M4.9 4.9l1.4 1.4M13.7 13.7l1.4 1.4M2.8 10h2M15.2 10h2M4.9 15.1l1.4-1.4M13.7 6.3l1.4-1.4"/></svg>
-</button>
 
 <!-- OVERLAYS -->
 <div id="historyOverlay" class="hist-overlay">
@@ -3919,8 +3915,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.11.137-food-form-keyboard-footer';
-			var WT_SW_VERSION='wt-shell-v159-food-form-keyboard-footer';
+			var WT_FRONTEND_VERSION='19.11.143-coach-preferences';
+			var WT_SW_VERSION='wt-shell-v165-coach-preferences';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4792,10 +4788,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.141-food-form-keyboard-footer';
+var APP_VERSION='v19.11.147-coach-preferences';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v168-food-form-keyboard-footer';
+var CACHE_VERSION='wt-cache-v174-coach-preferences';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Calendar auto-check now records the planned horizon and blocks overlapping foreground checks, so manual refreshes do not cause redundant automatic rebuilds',
@@ -9972,6 +9968,31 @@ function artifactQueueJobSessionId(job){
   var payload=(job&&job.payload&&typeof job.payload==='object')?job.payload:{};
   return String((job&&job.sourceSessionId)||payload.sessionId||'');
 }
+function artifactQueueJobIsPlanGeneration(job){
+  var jt=String((job&&job.jobType)||'');
+  return jt==='generate_home_next'||jt==='generate_hotel_next';
+}
+function artifactQueueJobUnlocksPlanGeneration(job,jobs){
+  if(!job||!job.jobId)return false;
+  var id=String(job.jobId||'');
+  var list=Array.isArray(jobs)?jobs:[];
+  var direct=list.some(function(j){
+    return j&&artifactQueueJobIsOpen(j)&&artifactQueueJobIsPlanGeneration(j)
+      &&Array.isArray(j.dependsOn)&&j.dependsOn.indexOf(id)>=0;
+  });
+  if(direct)return true;
+  return list.some(function(j){
+    return j&&artifactQueueJobIsOpen(j)&&String(j.jobType||'')==='update_coach_state'
+      &&Array.isArray(j.dependsOn)&&j.dependsOn.indexOf(id)>=0
+      &&artifactQueueJobUnlocksPlanGeneration(j,list);
+  });
+}
+function artifactQueueJobPriority(job,jobs){
+  if(artifactQueueJobIsPlanGeneration(job))return 0;
+  if(artifactQueueJobUnlocksPlanGeneration(job,jobs))return 1;
+  if(String((job&&job.jobType)||'')==='sync_generated_plan')return 3;
+  return 5;
+}
 function artifactQueueGeneralJobSignature(job){
   if(!job||typeof job!=='object')return '';
   var jt=String(job.jobType||'');
@@ -10360,6 +10381,9 @@ function artifactQueuePickNext(store){
   if(dirty)artifactQueueSaveStore(st);
   if(!candidates.length)return null;
   candidates.sort(function(a,b){
+    var pa=artifactQueueJobPriority(a,jobs);
+    var pb=artifactQueueJobPriority(b,jobs);
+    if(pa!==pb)return pa-pb;
     var na=artifactQueueToMs(a.nextRunAt||a.createdAt);
     var nb=artifactQueueToMs(b.nextRunAt||b.createdAt);
     if(na!==nb)return na-nb;
@@ -11761,7 +11785,12 @@ function artifactQueuePump(force){
           row.maxAttempts=Math.max(parseInt(row.maxAttempts||0,10)||0,row.attempts+4,8);
         }
         row.status='failed_retryable';
-        row.nextRunAt=artifactQueueNow()+artifactQueueBackoffMs(row.attempts);
+        if(String(msg||'').indexOf('ai_generation_busy')>=0){
+          row.maxAttempts=Math.max(parseInt(row.maxAttempts||0,10)||0,row.attempts+20,24);
+          row.nextRunAt=artifactQueueNow()+3500;
+        }else{
+          row.nextRunAt=artifactQueueNow()+artifactQueueBackoffMs(row.attempts);
+        }
       }else{
         row.status='failed_final';
       }
@@ -13535,7 +13564,7 @@ function startFromPreview(){
   // Initialise logs
   logs=[];
   exs.forEach(function(ex){
-    var lg={sets:[],feel:'',notes:'',skipped:false,skipReason:''};
+    var lg={sets:[],feel:'',notes:'',skipped:false,skipReason:'',autoAdvance:false};
     for(var j=0;j<ex.sets;j++)lg.sets.push({reps:'',time:'',feel:''});
     logs.push(lg);
   });
@@ -13569,10 +13598,11 @@ function aiProfileDefault(){
     hotelDipOptionAvailable:false,
     hotelBandsAvailable:false,
     hotelWeightsAvailable:false,
-    hotelFloorSpaceAvailable:true,
-    progressionStyle:'intensity-first',
-    maxRepsPerSet:{},    // keyed by slot name e.g. {'Vertical Pull': 6}
-    feedbackScore:null,
+	    hotelFloorSpaceAvailable:true,
+	    progressionStyle:'intensity-first',
+	    maxRepsPerSet:{},    // keyed by slot name e.g. {'Vertical Pull': 6}
+	    coachPreferences:[], // durable exercise agreements Coach must obey when generating
+	    feedbackScore:null,
     feedbackBottleneck:null,  // slot that limited last session, e.g. 'Vertical Pull'
     nextTestDate:''      // upcoming blood test date (YYYY-MM-DD) — drives HDL urgency
   };
@@ -13582,8 +13612,8 @@ function aiProfileStripRemovedInputs(p){
   if(!p||typeof p!=='object')return p;
   [String.fromCharCode(115,111,114,101,110,101,115,115,70,108,97,103,115),String.fromCharCode(115,111,114,101,110,101,115,115,84,115)].forEach(function(k){
     try{delete p[k];}catch(e){}
-  });
-  return p;
+	  });
+	  return p;
 }
 
 function aiProfileLoad(){
@@ -13622,11 +13652,270 @@ function _prDiff(base,val){
 function aiProfileSave(p){
   // Save only overrides vs defaults to keep payload minimal and resilient.
   p=aiProfileStripRemovedInputs(p||{});
+  p.coachPreferences=aiCoachPreferenceRulesForProfile(p);
   var compact=_prDiff(aiProfileDefault(),p)||{};
   aiVersionPush(AI_PROFILE_VERS_KEY,compact,30);
   try{localStorage.setItem(AI_PROFILE_KEY,JSON.stringify(compact));}catch(e){}
   try{coachEquipmentProfileRefreshFromProfile(p);}catch(e){}
   appStateSave();
+}
+
+function aiCoachPreferenceCanonicalExerciseName(raw,type){
+  var txt=String(raw||'').trim();
+  if(!txt)return '';
+  var firstType=String(type||'').toLowerCase()==='hotel'?'hotel':'home';
+  var first=workoutCanonicalExerciseMatch(txt,firstType);
+  if(first&&first.name&&first.name!=='WALK'&&first.name!=='HIIT')return String(first.name||'').toUpperCase();
+  var second=workoutCanonicalExerciseMatch(txt,firstType==='hotel'?'home':'hotel');
+  if(second&&second.name&&second.name!=='WALK'&&second.name!=='HIIT')return String(second.name||'').toUpperCase();
+  return txt.toUpperCase().replace(/\s+/g,' ').trim();
+}
+function aiCoachPreferenceRuleKey(rule){
+  var r=rule||{};
+  return workoutExerciseNameComparable(r.exerciseName||r.name||'')+'|'+String(r.appliesTo||'both').toLowerCase();
+}
+function aiCoachPreferenceRawFromLine(line){
+  var s=String(line||'').replace(/^[\s\-*]+/,'').trim();
+  if(!s)return null;
+  var enabled=!/^\s*(?:off|disabled|inactive)\b/i.test(s);
+  s=s.replace(/^\s*(?:on|off|enabled|disabled|inactive)\s*[:\-]\s*/i,'').trim();
+  var appliesTo='both';
+  var bracket=s.match(/\[(home|hotel|both)\]/i);
+  if(bracket){
+    appliesTo=String(bracket[1]||'both').toLowerCase();
+    s=s.replace(bracket[0],'').trim();
+  }
+  var namePart='',body=s;
+  var colon=s.indexOf(':');
+  if(colon>0){
+    namePart=s.slice(0,colon).trim();
+    body=s.slice(colon+1).trim();
+  }else{
+    var m=workoutCanonicalExerciseMatch(s,'home');
+    if(!(m&&m.name))m=workoutCanonicalExerciseMatch(s,'hotel');
+    if(m&&m.name)namePart=m.name;
+  }
+  var maxSets=null;
+  var maxMatch=body.match(/\b(?:max(?:imum)?|cap|limit(?:ed)?\s*to|no\s+more\s+than|up\s+to)\s*(\d+)\s*sets?\b/i)
+    ||body.match(/\b(\d+)\s*sets?\s*(?:max|maximum|cap|limit)\b/i);
+  if(maxMatch)maxSets=parseInt(maxMatch[1],10);
+  var notMatch=body.match(/\b(?:do\s+not|don't|dont|avoid|no)\s+(?:do(?:ing)?\s+)?(\d+)\s*sets?\b/i);
+  if(notMatch&&!maxSets)maxSets=Math.max(1,(parseInt(notMatch[1],10)||1)-1);
+  var harder=/\b(harder|difficulty|difficult|lever|leverage|tempo|hold|holds|squeeze|elevat|load|harder\s+variation)\b/i.test(body)
+    ||/\b(before|instead\s+of|rather\s+than)\b.{0,36}\b(add(?:ing)?|more|extra)\s+sets?\b/i.test(body)
+    ||/\b(add(?:ing)?|more|extra)\s+sets?\b.{0,36}\b(before|instead\s+of|rather\s+than)\b/i.test(body);
+  return {
+    exerciseName:namePart,
+    appliesTo:appliesTo,
+    enabled:enabled,
+    maxSets:maxSets,
+    preferHarderBeforeMoreSets:harder,
+    difficultyNote:harder?'Harder lever or 3s squeeze, not extra sets':'',
+    note:body
+  };
+}
+function aiCoachNormalizePreferenceRule(raw,type){
+  var r=(typeof raw==='string')?aiCoachPreferenceRawFromLine(raw):(raw&&typeof raw==='object'?Object.assign({},raw):null);
+  if(!r)return null;
+  var ex=aiCoachPreferenceCanonicalExerciseName(r.exerciseName||r.exercise||r.name||r.movement||'',type||r.appliesTo);
+  if(!ex)return null;
+  var applies=String(r.appliesTo||r.environment||r.type||'both').toLowerCase();
+  if(applies!=='home'&&applies!=='hotel')applies='both';
+  var maxSets=parseInt(r.maxSets||r.setCap||r.max_sets||0,10)||0;
+  if(maxSets<1)maxSets=0;
+  maxSets=maxSets?Math.max(1,Math.min(8,maxSets)):null;
+  var note=String(r.note||r.reason||r.preference||r.text||'').trim();
+  var harder=!!(r.preferHarderBeforeMoreSets||r.harderBeforeMoreSets||r.makeHarderBeforeMoreSets||r.intensityBeforeVolume);
+  if(!harder){
+    harder=/\b(harder|difficulty|difficult|lever|leverage|tempo|hold|holds|squeeze|elevat|load)\b/i.test(note)
+      ||/\b(before|instead\s+of|rather\s+than)\b.{0,36}\b(add(?:ing)?|more|extra)\s+sets?\b/i.test(note);
+  }
+  var difficultyNote=String(r.difficultyNote||r.harderCue||r.progressionCue||'').trim();
+  if(harder&&!difficultyNote)difficultyNote='Harder lever or 3s squeeze, not extra sets';
+  return {
+    id:String(r.id||('pref_'+workoutExerciseNameComparable(ex).toLowerCase().replace(/[^a-z0-9]+/g,'_')+'_'+applies)),
+    exerciseName:ex,
+    appliesTo:applies,
+    enabled:r.enabled!==false&&r.disabled!==true,
+    maxSets:maxSets,
+    preferHarderBeforeMoreSets:harder,
+    difficultyNote:difficultyNote.slice(0,120),
+    note:note.slice(0,220),
+    updatedAt:String(r.updatedAt||wtNowIso())
+  };
+}
+function aiCoachPreferenceRulesForProfile(profile){
+  var p=profile||aiProfileLoad();
+  var raw=p&&p.coachPreferences;
+  var arr=[];
+  if(Array.isArray(raw))arr=raw;
+  else if(raw&&typeof raw==='object')arr=Object.keys(raw).map(function(k){
+    var v=raw[k];
+    if(v&&typeof v==='object')return Object.assign({exerciseName:k},v);
+    return String(k)+': '+String(v||'');
+  });
+  else if(typeof raw==='string')arr=raw.split(/\n+/);
+  var seen={},out=[];
+  arr.forEach(function(item){
+    var r=aiCoachNormalizePreferenceRule(item);
+    if(!r||!r.enabled)return;
+    var key=aiCoachPreferenceRuleKey(r);
+    if(!key||seen[key])return;
+    seen[key]=1;
+    out.push(r);
+  });
+  return out.slice(0,40);
+}
+function aiCoachPreferenceRulesFromText(text){
+  return String(text||'').split(/\n+/).map(function(line){return aiCoachNormalizePreferenceRule(line);}).filter(Boolean).slice(0,40);
+}
+function aiCoachPreferenceRuleToLine(rule){
+  var r=aiCoachNormalizePreferenceRule(rule);
+  if(!r)return '';
+  var parts=[];
+  if(r.maxSets)parts.push('max '+r.maxSets+' sets');
+  if(r.preferHarderBeforeMoreSets)parts.push('make harder before adding sets');
+  if(r.difficultyNote)parts.push(r.difficultyNote);
+  if(r.note&&parts.join(' ').toLowerCase().indexOf(r.note.toLowerCase())<0)parts.push(r.note);
+  return r.exerciseName+' ['+r.appliesTo+']: '+(parts.length?parts.join('; '):'obey saved preference');
+}
+function aiCoachPreferenceRulesToText(rules){
+  return (Array.isArray(rules)?rules:aiCoachPreferenceRulesForProfile()).map(aiCoachPreferenceRuleToLine).filter(Boolean).join('\n');
+}
+function aiCoachPreferenceRulesPromptLine(profile){
+  var rules=aiCoachPreferenceRulesForProfile(profile);
+  if(!rules.length)return '';
+  return 'COACH AGREEMENTS (MUST obey before returning any workout): '+rules.map(aiCoachPreferenceRuleToLine).filter(Boolean).join(' | ');
+}
+function aiCoachPreferencePatchAsArray(v){
+  if(v===undefined||v===null||v==='')return [];
+  return Array.isArray(v)?v:[v];
+}
+function aiCoachPreferencePatchItems(patch){
+  if(!patch)return [];
+  if(Array.isArray(patch)||typeof patch==='string')return aiCoachPreferencePatchAsArray(patch);
+  if(typeof patch!=='object')return [];
+  if(patch.exerciseName||patch.exercise||patch.name||patch.movement)return [patch];
+  var items=[];
+  ['add','adds','upsert','upserts','update','updates','rules','preferences','coachPreferences'].forEach(function(k){
+    aiCoachPreferencePatchAsArray(patch[k]).forEach(function(v){items.push(v);});
+  });
+  Object.keys(patch).forEach(function(k){
+    if({add:1,adds:1,upsert:1,upserts:1,update:1,updates:1,rules:1,preferences:1,coachPreferences:1,remove:1,removes:1,delete:1,deletes:1,set:1,replace:1}[k])return;
+    var v=patch[k];
+    if(v&&typeof v==='object')items.push(Object.assign({exerciseName:k},v));
+    else if(typeof v==='string')items.push(k+': '+v);
+  });
+  return items;
+}
+function aiCoachApplyPreferencePatchToProfile(profile,patch,saveNote){
+  var p=Object.assign({},profile||aiProfileLoad());
+  var current=aiCoachPreferenceRulesForProfile(p);
+  var next=current.slice();
+  function removeBy(raw){
+    var r=aiCoachNormalizePreferenceRule(raw);
+    var id=String((raw&&raw.id)||raw||'');
+    var key=r?aiCoachPreferenceRuleKey(r):'';
+    next=next.filter(function(item){
+      return !(key&&aiCoachPreferenceRuleKey(item)===key)&&!(id&&String(item.id||'')===id);
+    });
+  }
+  if(patch&&typeof patch==='object'&&!Array.isArray(patch)&&patch.set!==undefined){
+    next=aiCoachPreferencePatchAsArray(patch.set).map(function(v){return aiCoachNormalizePreferenceRule(v);}).filter(Boolean);
+  }else if(patch&&typeof patch==='object'&&!Array.isArray(patch)&&patch.replace!==undefined){
+    next=aiCoachPreferencePatchAsArray(patch.replace).map(function(v){return aiCoachNormalizePreferenceRule(v);}).filter(Boolean);
+  }else{
+    if(patch&&typeof patch==='object'&&!Array.isArray(patch)){
+      ['remove','removes','delete','deletes'].forEach(function(k){
+        aiCoachPreferencePatchAsArray(patch[k]).forEach(removeBy);
+      });
+    }
+    aiCoachPreferencePatchItems(patch).forEach(function(item){
+      var r=aiCoachNormalizePreferenceRule(item);
+      if(!r)return;
+      var key=aiCoachPreferenceRuleKey(r);
+      next=next.filter(function(old){return aiCoachPreferenceRuleKey(old)!==key;});
+      next.push(r);
+    });
+  }
+  if(saveNote){
+    String(saveNote||'').split(/\n+|\s+\|\s+/).forEach(function(line){
+      var r=aiCoachNormalizePreferenceRule(line);
+      if(!r||(!r.maxSets&&!r.preferHarderBeforeMoreSets))return;
+      var key=aiCoachPreferenceRuleKey(r);
+      next=next.filter(function(old){return aiCoachPreferenceRuleKey(old)!==key;});
+      next.push(r);
+    });
+  }
+  next=next.filter(Boolean).slice(0,40);
+  var before=JSON.stringify(current);
+  var after=JSON.stringify(next);
+  p.coachPreferences=next;
+  return {profile:p,changed:before!==after,rules:next};
+}
+function aiCoachPreferenceAppliesToType(rule,type){
+  var applies=String((rule&&rule.appliesTo)||'both').toLowerCase();
+  var t=String(type||'home').toLowerCase()==='hotel'?'hotel':'home';
+  return applies==='both'||applies===t;
+}
+function aiCoachPreferenceExerciseMatches(rule,exerciseName,type){
+  var a=aiCoachPreferenceCanonicalExerciseName(rule&&rule.exerciseName,type);
+  var b=aiCoachPreferenceCanonicalExerciseName(exerciseName,type);
+  return !!(a&&b&&workoutExerciseNameComparable(a)===workoutExerciseNameComparable(b));
+}
+function aiCoachPreferenceMergeCue(existing,cue){
+  var base=String(existing||'').trim();
+  var add=String(cue||'').trim();
+  if(!add)return base;
+  if(base.toLowerCase().indexOf(add.toLowerCase())>=0)return base;
+  return (add+(base?' | '+base:'')).slice(0,120);
+}
+function aiCoachPreferenceHardenExercise(ex,rule,plan){
+  if(!ex||!rule||!rule.preferHarderBeforeMoreSets)return;
+  var cue=rule.difficultyNote||'Harder lever or 3s squeeze, not extra sets';
+  ex.tweak=aiCoachPreferenceMergeCue(ex.tweak,cue);
+  ex.goal=aiCoachPreferenceMergeCue(ex.goal,'Three hard quality sets');
+  ex.rationale='Coach preference: harder before volume';
+  var up=String(ex.name||'').toUpperCase();
+  if(/GLUTE|BRIDGE|HIP/.test(up)){
+    plan.seqOverrides=plan.seqOverrides&&typeof plan.seqOverrides==='object'?JSON.parse(JSON.stringify(plan.seqOverrides)):{};
+    plan.seqOverrides[up]=plan.seqOverrides[up]||{};
+    plan.seqOverrides[up].Squeeze=Math.max(parseInt(plan.seqOverrides[up].Squeeze||0,10)||0,3000);
+    plan.seqOverrides[up].Down=Math.max(parseInt(plan.seqOverrides[up].Down||0,10)||0,3000);
+    plan.seqOverrides=normalizeSeqOverrides(plan.seqOverrides)||plan.seqOverrides;
+  }
+}
+function aiCoachApplyPreferenceRulesToPlan(plan,type,ctx){
+  if(!plan||!Array.isArray(plan.exercises))return plan;
+  var p=JSON.parse(JSON.stringify(plan));
+  var profile=(ctx&&ctx.profile)?ctx.profile:aiProfileLoad();
+  var rules=aiCoachPreferenceRulesForProfile(profile).filter(function(r){return aiCoachPreferenceAppliesToType(r,type);});
+  if(!rules.length)return p;
+  var applied=[];
+  p.exercises=p.exercises.map(function(ex){
+    var e=Object.assign({},ex);
+    rules.forEach(function(rule){
+      if(!aiCoachPreferenceExerciseMatches(rule,e.name,type))return;
+      if(rule.maxSets&&Array.isArray(e.repTargets)&&e.repTargets.length>rule.maxSets){
+        e.repTargets=e.repTargets.slice(0,rule.maxSets);
+        applied.push(rule.exerciseName+' capped at '+rule.maxSets+' sets');
+      }
+      if(rule.preferHarderBeforeMoreSets){
+        aiCoachPreferenceHardenExercise(e,rule,p);
+        applied.push(rule.exerciseName+' intensity before volume');
+      }
+    });
+    return e;
+  });
+  if(applied.length){
+    p.changeLog=Array.isArray(p.changeLog)?p.changeLog.slice(0):[];
+    applied.filter(function(v,i,a){return a.indexOf(v)===i;}).slice(0,2).reverse().forEach(function(line){
+      var msg='Applied coach preference: '+line;
+      if(p.changeLog.indexOf(msg)<0)p.changeLog.unshift(msg);
+    });
+    p.changeLog=p.changeLog.slice(0,4);
+  }
+  return p;
 }
 
 // Mesocycle tracking
@@ -14233,7 +14522,7 @@ function aiCoachBuildContext(){
   return {sessCtx:sessCtx,bodyCtx:bodyCtx,cholCtx:cholCtx,activityCtx:activityCtx,bfCtx:bfCtx,
           volumeCtx:volumeCtx,completionCtx:completionCtx,hiitThisWeek:hiitThisWeek,
           nutCtx:nutCtx,seqDefaults:seqDefaults.join('; '),
-          goals:goals,hardCount:hardCount,coachNotes:coachNotes,nutAvg:nutAvg,
+	          goals:goals,hardCount:hardCount,coachNotes:coachNotes,coachPreferenceRules:aiCoachPreferenceRulesForProfile(profile),nutAvg:nutAvg,
           profile:profile,mesoStr:mesoStr,dataAlerts:dataAlerts,
           equipmentProfile:equipmentProfile,
           adherence:adherence,autoPhase:autoPhase,travelCtx:travelCtx,coachConfidence:coachConfidence,slotLedgerCtx:slotLedgerCtx,anchorDue:anchorDue,pendingTargets:pendingTargets,
@@ -14286,9 +14575,10 @@ function aiCoachBuildPrompt(type,ctx,chatHistory,priorWorkouts){
       ):'');
   var progressionNote='PROGRESSION STYLE: '+(profile.progressionStyle||'intensity-first')+
     '. Add reps first within range. Tempo/holds are technical levers, not default progression. Max +1 rep per exercise per session.';
-  var maxRepsNote=Object.keys(profile.maxRepsPerSet||{}).length?
-    'REP CAPS: '+Object.keys(profile.maxRepsPerSet).map(function(k){return k+' max '+profile.maxRepsPerSet[k]+'/set';}).join(', '):'';
-  var durationNote='TARGET: home='+profile.homeDuration+'min hotel='+profile.hotelDuration+'min. Shorten rest before cutting exercises.';
+	  var maxRepsNote=Object.keys(profile.maxRepsPerSet||{}).length?
+	    'REP CAPS: '+Object.keys(profile.maxRepsPerSet).map(function(k){return k+' max '+profile.maxRepsPerSet[k]+'/set';}).join(', '):'';
+	  var preferenceNote=aiCoachPreferenceRulesPromptLine(profile);
+	  var durationNote='TARGET: home='+profile.homeDuration+'min hotel='+profile.hotelDuration+'min. Shorten rest before cutting exercises.';
 
   var targetDuration=isHome?profile.homeDuration:profile.hotelDuration;
   var priorStr=isHome?priorHomeStr:priorHotelStr;
@@ -14317,9 +14607,10 @@ function aiCoachBuildPrompt(type,ctx,chatHistory,priorWorkouts){
     (ctx.anchorDue?'ANCHOR TEST DUE: include one measurable checkpoint target this week (pull/push/core/HIIT marker).':''),
     window._aiCoachRegenerationCorrection?'REGENERATION RULE: correct from actual performance, equipment, time, profile, RPE/failure, bodyweight, and missed sessions.':'PILOT TRAVEL RULE: travel changes location/equipment/time, not fatigue by default. Do not regress, downgrade, or excuse performance solely because a session is near travel. Only treat travel as fatigue if the workout notes/bodyFeel explicitly say tired, poor, sleep-deprived, pain, or similar. Otherwise use completed reps, form quality, and tempo.',
     'Do-not-repeat rule: avoid repeating identical rep/rest pattern for same slot more than 2 sessions unless deload/recovery required.',
-    'Struggling (pause this slot): '+struggleList+'.',
-    maxRepsNote,
-    '',
+	    'Struggling (pause this slot): '+struggleList+'.',
+	    maxRepsNote,
+	    preferenceNote,
+	    '',
     '## THIS SESSION',
     'Type: '+type.toUpperCase()+'. Duration: '+targetDuration+' min. '+meso+'.',
     (ctx.pendingTargets&&(
@@ -14515,9 +14806,10 @@ function aiCoachWorkoutEditResponseFormat(){
               additionalProperties:{type:'integer'}
             }
           },
-          saveNote:{anyOf:[{type:'string'},{type:'null'}]},
-          profilePatch:{type:'object',additionalProperties:true},
-          goalsPatch:{type:'object',additionalProperties:true},
+	          saveNote:{anyOf:[{type:'string'},{type:'null'}]},
+	          profilePatch:{type:'object',additionalProperties:true},
+	          preferencePatch:{type:'object',additionalProperties:true},
+	          goalsPatch:{type:'object',additionalProperties:true},
           voiceMinsPatch:{type:'object',additionalProperties:true}
         }
       }
@@ -15424,7 +15716,7 @@ function aiCoachApplyGuardrails(plan,type,ctx,recoveryFeel){
   }
   var isDeload=String((ctx&&ctx.mesoStr)||'').indexOf('DELOAD')>=0;
   var ledger=aiSlotLedgerLoad();
-  p.exercises=p.exercises.map(function(ex){
+	  p.exercises=p.exercises.map(function(ex){
     var e=Object.assign({},ex);
     var reps=(e.repTargets||[]).map(function(r){return Math.max(1,parseInt(r)||1);});
     if(isDeload)reps=reps.map(function(r){return Math.max(1,Math.round(r*0.85));});
@@ -15453,7 +15745,7 @@ function aiCoachApplyGuardrails(plan,type,ctx,recoveryFeel){
     if(isDeload)e.withinSetRestSecs=Math.max(parseInt(e.withinSetRestSecs)||60,75);
     return e;
   });
-  return p;
+	  return aiCoachApplyPreferenceRulesToPlan(p,type,ctx);
 }
 
 function aiCoachSetGenerateButtonsDisabled(disabled){
@@ -15613,10 +15905,11 @@ function aiCoachGenerate(type,onDone,opts){
     plan.targetType=String(plan.targetType||type).toLowerCase();
     plan.generatedAt=plan.generatedAt||wtNowIso();
     plan.schemaVersion=WORKOUT_SCHEMA_VERSION;
-    plan.promptVersion=AI_GENERATION_PROMPT_VERSION;
-    plan.generationId=generationId;
-    plan.generationState=plan.generationState||'generation_complete';
-    plan=aiCoachEnrichPlanNarrative(plan,type,ctx,cached);
+	    plan.promptVersion=AI_GENERATION_PROMPT_VERSION;
+	    plan.generationId=generationId;
+	    plan.generationState=plan.generationState||'generation_complete';
+	    plan=aiCoachApplyPreferenceRulesToPlan(plan,type,ctx);
+	    plan=aiCoachEnrichPlanNarrative(plan,type,ctx,cached);
     plan=aiCoachSanitizePlanForEnvironment(plan,type,ctx);
     plan.coachStateSnapshot={trainingPhase:(ctx.coachState&&ctx.coachState.trainingPhase)||'',mesocycleWeek:(ctx.coachState&&ctx.coachState.mesocycleWeek)||'',behavioralState:(ctx.coachState&&ctx.coachState.behavioralState)||'',progressionDebt:(ctx.coachState&&ctx.coachState.progressionDebt)||[]};
     if(ctx.coachState&&ctx.coachState.progressionDebt&&ctx.coachState.progressionDebt.length){
@@ -15859,9 +16152,10 @@ function aiCoachChat(userMsg,currentWorkout,chatHistory,onDone){
     'Latest Post-Workout Review: '+(ctx.postWorkoutReviewCtx||'none')+'.',
     'Autopilot: adherence '+((ctx.adherence&&ctx.adherence.score)||0)+'/100, phase '+(ctx.autoPhase||'build')+'.',
     'Pilot travel context: '+((ctx.travelCtx&&ctx.travelCtx.summary)||'none')+'. Use travel for location/equipment/schedule only; do not infer fatigue from travel alone.',
-    'Coach confidence: '+((ctx.coachConfidence&&ctx.coachConfidence.score)||0)+'/100 ('+((ctx.coachConfidence&&ctx.coachConfidence.band)||'unknown')+').',
-    (ctx.dataAlerts&&ctx.dataAlerts.length)?('Data quality alerts: '+ctx.dataAlerts.join(' | ')):'',
-    'Coach notes: '+(ctx.coachNotes||'none'),
+	    'Coach confidence: '+((ctx.coachConfidence&&ctx.coachConfidence.score)||0)+'/100 ('+((ctx.coachConfidence&&ctx.coachConfidence.band)||'unknown')+').',
+	    (ctx.dataAlerts&&ctx.dataAlerts.length)?('Data quality alerts: '+ctx.dataAlerts.join(' | ')):'',
+	    'Coach notes: '+(ctx.coachNotes||'none'),
+	    aiCoachPreferenceRulesPromptLine(profile)||'Coach agreements: none',
     '',
     '## SLOT LADDERS (for swaps)',
     '[VERTICAL PULL] Pull-Ups → Supinated → Archer → L-sit',
@@ -15916,14 +16210,14 @@ function aiCoachChat(userMsg,currentWorkout,chatHistory,onDone){
     (_aiCoachMode==='why'
       ?'6. Format: {"message":"clear coach answer, up to ~160 words","evidence":[],"changes":[],"seqOverrides":{},"saveNote":null}'
       :_aiCoachMode==='global'
-      ?'6. Format: {"message":"clear coach reply, up to ~140 words","changes":[],"seqOverrides":{},"saveNote":null,"profilePatch":{},"goalsPatch":{},"voiceMinsPatch":{}}'
+	      ?'6. Format: {"message":"clear coach reply, up to ~140 words","changes":[],"seqOverrides":{},"saveNote":null,"profilePatch":{},"preferencePatch":{},"goalsPatch":{},"voiceMinsPatch":{}}'
       :'6. Format: {"message":"one sentence under 20 words","changes":[{"name":"EXERCISE NAME IN CAPS","repTargets":[8,5],"withinSetRestSecs":90,"betweenExRestSecs":90,"tweak":"short cue","goal":"short goal"}],"seqOverrides":{"EXERCISE NAME":{"StepLabel":milliseconds}},"saveNote":null}'),
     '   changes[] lists only exercises you modified, with only the fields that changed.',
     '   Valid fields: repTargets(int[]), withinSetRestSecs(int), betweenExRestSecs(int), tweak(string max 8 words), goal(string max 8 words).',
     (function(){var vm=voiceMinsLoad();return '   seqOverrides is optional and only for explicit tempo/hold timing edits. Use milliseconds. Respect current coach cue minima: explosive >='+Math.round(vm.concentric*1000)+', eccentric >='+Math.round(vm.eccentric*1000)+', hold/squeeze >='+Math.round(vm.isometric*1000)+', default >='+Math.round(vm.defaultMin*1000)+'.';}()),
-    (_aiCoachMode==='global'
-      ?'   In global mode, use optional profilePatch/goalsPatch/voiceMinsPatch only when confident and keep patches minimal.'
-      :'')
+	    (_aiCoachMode==='global'
+	      ?'   In global mode, use optional profilePatch/goalsPatch/voiceMinsPatch only when confident; use preferencePatch.add for durable exercise agreements the athlete accepts, e.g. {"exerciseName":"SINGLE-LEG GLUTE BRIDGES","appliesTo":"both","maxSets":3,"preferHarderBeforeMoreSets":true,"note":"Make harder instead of adding a fourth set"}.'
+	      :'')
   ].filter(Boolean).join('\n');
 
   var timeout=setTimeout(function(){onDone(null,'Timed out.');},45000);
@@ -17016,7 +17310,7 @@ function aiCoachApplyGlobalPatches(parsed,opts){
   }
   var options=opts&&typeof opts==='object'?opts:{};
   var changed=false;
-  var profileChanged=false,goalsChanged=false,voiceChanged=false,movementPriorityChanged=false;
+  var profileChanged=false,goalsChanged=false,voiceChanged=false,movementPriorityChanged=false,preferenceChanged=false;
   var profileChangedFields=[],goalsChangedFields=[],voiceChangedFields=[],movementPriorityChangedFields=[];
   var beforeProfile=null,beforeGoals=null,beforeVoice=null;
   try{
@@ -17027,7 +17321,7 @@ function aiCoachApplyGlobalPatches(parsed,opts){
   try{
     var p=aiProfileLoad();
     var pp=parsed.profilePatch&&typeof parsed.profilePatch==='object'?parsed.profilePatch:null;
-    if(pp){
+	    if(pp){
       var allowed=[
         'goals','goalNote','progressionStyle','nextTestDate','homeDuration','hotelDuration','homeEquip','hotelEquip',
         'homeDipStationAvailable','homeBandsAvailable','homeWeightsAvailable',
@@ -17056,9 +17350,20 @@ function aiCoachApplyGlobalPatches(parsed,opts){
           movementPriorityChanged=true;
           movementPriorityChangedFields.push('struggleFlags');
         }
-      }
-    }
-    if(profileChanged)aiProfileSave(p);
+	      }
+	    }
+	    var prefPatch=parsed.preferencePatch||parsed.coachPreferencesPatch||parsed.exercisePreferencePatch||parsed.preferencesPatch||null;
+	    if(pp&&pp.coachPreferences!==undefined&&!prefPatch)prefPatch={set:pp.coachPreferences};
+	    var prefRes=aiCoachApplyPreferencePatchToProfile(p,prefPatch,parsed.saveNote);
+	    if(prefRes&&prefRes.changed){
+	      p=prefRes.profile;
+	      profileChanged=true;
+	      preferenceChanged=true;
+	      if(profileChangedFields.indexOf('coachPreferences')<0)profileChangedFields.push('coachPreferences');
+	      if(movementPriorityChangedFields.indexOf('coachPreferences')<0)movementPriorityChangedFields.push('coachPreferences');
+	      movementPriorityChanged=true;
+	    }
+	    if(profileChanged)aiProfileSave(p);
   }catch(e){}
   try{
     var gp=parsed.goalsPatch&&typeof parsed.goalsPatch==='object'?parsed.goalsPatch:null;
@@ -17099,7 +17404,7 @@ function aiCoachApplyGlobalPatches(parsed,opts){
       if(voiceChanged)voiceMinsSave(cur);
     }
   }catch(e){}
-  changed=profileChanged||goalsChanged||voiceChanged||movementPriorityChanged;
+	  changed=profileChanged||goalsChanged||voiceChanged||movementPriorityChanged||preferenceChanged;
   if(changed){
     var patchTs=Date.now();
     _aiCoachLastAutoPatch={profile:beforeProfile,goals:beforeGoals,voiceMins:beforeVoice,ts:patchTs};
@@ -17113,9 +17418,9 @@ function aiCoachApplyGlobalPatches(parsed,opts){
     };
     var affectsGeneration=aiAutopilotGenerationImpact(patchMeta);
     var staleRes={plansMarkedStale:0,regenerationJobsEnqueued:0,slots:[]};
-    if(options.origin==='autopilot'&&affectsGeneration){
-      staleRes=aiAutopilotMarkPlansStaleAndQueueRegeneration({
-        patchId:patchMeta.patchId,
+	    if(options.origin==='autopilot'&&affectsGeneration){
+	      staleRes=aiAutopilotMarkPlansStaleAndQueueRegeneration({
+	        patchId:patchMeta.patchId,
         reason:patchMeta.reason,
         profileChangedFields:patchMeta.profileChangedFields,
         goalsChangedFields:patchMeta.goalsChangedFields,
@@ -17132,10 +17437,33 @@ function aiCoachApplyGlobalPatches(parsed,opts){
             goalsChangedFields:patchMeta.goalsChangedFields,
             movementPriorityChangedFields:patchMeta.movementPriorityChangedFields
           },
-          delayMs:1600
-        });
-      }catch(e){}
-    }
+	          delayMs:1600
+	        });
+	      }catch(e){}
+	    }else if(affectsGeneration){
+	      staleRes=aiAutopilotMarkPlansStaleAndQueueRegeneration({
+	        patchId:patchMeta.patchId,
+	        reason:patchMeta.reason,
+	        profileChangedFields:patchMeta.profileChangedFields,
+	        goalsChangedFields:patchMeta.goalsChangedFields,
+	        movementPriorityChangedFields:patchMeta.movementPriorityChangedFields,
+	        allowPlanGeneration:true,
+	        manualRefresh:true
+	      });
+	      try{
+	        trainerBrainRunSoon('global_coach_settings_changed',{
+	          allowPlanGeneration:true,
+	          reason:patchMeta.reason,
+	          context:{
+	            patchId:patchMeta.patchId,
+	            profileChangedFields:patchMeta.profileChangedFields,
+	            goalsChangedFields:patchMeta.goalsChangedFields,
+	            movementPriorityChangedFields:patchMeta.movementPriorityChangedFields
+	          },
+	          delayMs:1200
+	        });
+	      }catch(e){}
+	    }
     appDoctorPatchState('autopilot',{
       lastPatchTs:patchTs,
       lastPatchKind:String(options.kind||options.origin||'manual'),
@@ -17460,6 +17788,43 @@ function aiPostWorkoutOpen(){
     '<button onclick="aiPostRecoveryAndGenerate(\'normal\',\''+nextType+'\')" style="width:100%;padding:12px;background:var(--accent);border:1px solid var(--accent);border-radius:var(--r-sm);color:#000;font-weight:900;font-size:0.82rem;cursor:pointer;">Generate next '+nextLabel+' session</button>';
 }
 
+function aiPostWorkoutWakePeerPlan(nextType){
+  try{
+    var peerType=String(nextType||'home').toLowerCase()==='home'?'hotel':'home';
+    var peerSlot=generatedPlanSlotFromType(peerType);
+    var latest=(typeof appDoctorLatestSession==='function')?appDoctorLatestSession():null;
+    var sid=String((latest&&latest.sessionId)||_completedSessionId||'');
+    var active=generatedPlanActiveForSlot(peerSlot);
+    var status=String((active&&active.status)||'').toLowerCase();
+    var valid=!!(active&&generatedPlanIsActiveStatus(active.status)&&String(active.validationStatus||'').indexOf('invalid')<0);
+    var sourceMismatch=!!(active&&sid&&String(active.sourceSessionId||'')&&String(active.sourceSessionId||'')!==sid);
+    var needsRefresh=!valid||status==='stale'||sourceMismatch;
+    if(!needsRefresh)return;
+    var store=artifactQueueLoadStore();
+    var open=artifactQueueFindOpenGenerationForSlotSession(peerSlot,sid,store);
+    if(!open)return;
+    var row=(store.jobs||[]).find(function(j){return j&&j.jobId===open.jobId;});
+    if(!row||String(row.status||'')==='running')return;
+    var now=artifactQueueNow();
+    row.status='pending';
+    row.nextRunAt=now;
+    row.updatedAt=now;
+    row.maxAttempts=Math.max(parseInt(row.maxAttempts||0,10)||0,(parseInt(row.attempts||0,10)||0)+12,18);
+    if(String(row.lastError||'').indexOf('ai_generation_busy')>=0)row.lastError='woken_after_peer_generation';
+    artifactQueueSaveStore(store);
+    wtLogEvent('post_workout_peer_generation_woken',{
+      sessionId:sid,
+      sourceSessionId:sid,
+      targetType:peerType,
+      requestedTargetType:peerType,
+      cacheKey:String(row.idempotencyKey||row.jobId||'')
+    });
+    artifactQueuePump(true);
+  }catch(e){
+    try{wtLogEvent('post_workout_peer_generation_wake_failed',{errorCode:String(e&&e.message||e||'wake_failed')});}catch(_e){}
+  }
+}
+
 function aiPostRecoveryAndGenerate(feel,nextType){
   var nextLabel=nextType==='home'?'Home':'Hotel';
   if(_aiCoachGeneratingBusy){
@@ -17479,6 +17844,7 @@ function aiPostRecoveryAndGenerate(feel,nextType){
     var t=result[nextType];
     _aiCoachCurrentWorkout=t;
     _aiCoachCurrentType=nextType;
+    aiPostWorkoutWakePeerPlan(nextType);
     aiPreWorkoutShowPlan(t,nextType,feel);
     var actEl=document.getElementById('aiCoachActions');
     actEl.style.display='flex';
@@ -18117,9 +18483,10 @@ function aiCoachSendChat(){
     if(_aiCoachMode==='why'){
       result.changes=[];
       result.seqOverrides={};
-      result.updatedWorkout=null;
-      result.profilePatch=null;
-      result.goalsPatch=null;
+	      result.updatedWorkout=null;
+	      result.profilePatch=null;
+	      result.preferencePatch=null;
+	      result.goalsPatch=null;
       result.voiceMinsPatch=null;
     }
 
@@ -18350,7 +18717,7 @@ function aiCoachLoadAndStart(){
 
   logs=exs.map(function(ex){
     var setCount=Math.max(2,Math.min(12,parseInt(ex&&ex.sets,10)||2));
-    return {sets:Array(setCount).fill(null).map(function(){return {reps:'',time:'',feel:''};}),feel:'',notes:'',skipped:false};
+    return {sets:Array(setCount).fill(null).map(function(){return {reps:'',time:'',feel:''};}),feel:'',notes:'',skipped:false,autoAdvance:false};
   });
   curEx=0;curSet=0;phase='idle';
   aiCoachClose();
@@ -22504,6 +22871,11 @@ function renderEx(){
   h+='</div><div class="feel-confirm" id="feelConf">Logged!</div>';
   h+='<textarea class="notes-inp" id="notesInp" placeholder="Notes..." oninput="saveNotes()">'+(logs[curEx].notes||'')+'</textarea>';
   h+='</div>';
+  var autoOn=exerciseAutoAdvanceEnabled(curEx);
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 4px;padding:9px 10px;background:var(--card2);border:1px solid '+(autoOn?'rgba(200,255,0,0.45)':'var(--border)')+';border-radius:var(--r-sm);">';
+  h+='<div style="font-size:0.62rem;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:'+(autoOn?'var(--accent)':'var(--muted)')+';">Auto sets</div>';
+  h+='<button id="exerciseAutoBtn" type="button" onclick="toggleExerciseAutoAdvance()" aria-pressed="'+(autoOn?'true':'false')+'" style="min-width:72px;padding:8px 12px;border-radius:999px;border:1px solid '+(autoOn?'var(--accent)':'var(--border2)')+';background:'+(autoOn?'var(--accent)':'var(--card)')+';color:'+(autoOn?'#000':'var(--text2)')+';font-size:0.7rem;font-weight:900;letter-spacing:0.6px;cursor:pointer;">'+(autoOn?'ON':'OFF')+'</button>';
+  h+='</div>';
   h+='<div class="phase-row"><span class="ph-badge phb-ready" id="phBadge">READY</span><div class="set-dots">';
   for(var di=0;di<ex.sets;di++){h+='<div class="set-dot'+(di<curSet?' dn':di===curSet?' cu':'')+'" onclick="jumpToSet('+di+')"></div>';}
   h+='</div></div>';
@@ -22576,6 +22948,43 @@ function deloadConfirm(wasDeload,btn){
   }
 }
 function saveNotes(){var n=document.getElementById('notesInp');if(n)logs[curEx].notes=n.value;}
+function exerciseAutoAdvanceEnabled(idx){
+  var i=(idx==null?curEx:idx);
+  return !!(logs&&logs[i]&&logs[i].autoAdvance===true);
+}
+function updateExerciseAutoAdvanceButton(){
+  var btn=document.getElementById('exerciseAutoBtn');
+  if(!btn)return;
+  var on=exerciseAutoAdvanceEnabled(curEx);
+  btn.textContent=on?'ON':'OFF';
+  btn.setAttribute('aria-pressed',on?'true':'false');
+  btn.style.borderColor=on?'var(--accent)':'var(--border2)';
+  btn.style.background=on?'var(--accent)':'var(--card)';
+  btn.style.color=on?'#000':'var(--text2)';
+  var wrap=btn.parentNode;
+  if(wrap){
+    wrap.style.borderColor=on?'rgba(200,255,0,0.45)':'var(--border)';
+    var lbl=wrap.querySelector('div');
+    if(lbl)lbl.style.color=on?'var(--accent)':'var(--muted)';
+  }
+}
+function toggleExerciseAutoAdvance(){
+  if(!logs||!logs[curEx])return;
+  logs[curEx].autoAdvance=!logs[curEx].autoAdvance;
+  if(phase==='active'||phase==='resting'||phase==='between')updateExerciseAutoAdvanceButton();
+  else renderEx();
+}
+function maybeAutoStartCurrentExerciseSet(){
+  if(!exerciseAutoAdvanceEnabled(curEx))return;
+  var ex=exs&&exs[curEx];
+  if(!ex||phase!=='idle'||curSet>=ex.sets)return;
+  var targetEx=curEx,targetSet=curSet;
+  setTimeout(function(){
+    if(curEx!==targetEx||curSet!==targetSet)return;
+    if(!exerciseAutoAdvanceEnabled(curEx)||phase!=='idle')return;
+    if(validateCurrentExerciseTiming())startRC();
+  },450);
+}
 function autoLog(idx){
   var ex=exs[curEx];
   if(!ex.isPlank){var inp=document.getElementById('si0');if(inp&&!inp.value){inp.value=ex.rc[idx];logs[curEx].sets[idx].reps=String(ex.rc[idx]);}else if(inp)logs[curEx].sets[idx].reps=inp.value;}
@@ -23425,7 +23834,7 @@ function restDone(){
     else{finishWorkout();}
     return;
   }
-  phase='idle';updBtn();renderEx();
+  phase='idle';updBtn();renderEx();maybeAutoStartCurrentExerciseSet();
 }
 
 function showBetweenPrompt(){
@@ -23535,10 +23944,11 @@ function aiSetBottleneck(slot){
 
 // ─── COACH PROFILE PAGE ──────────────────────────────────────────────────────
 function openCoachProfile(){
-  var p=aiProfileLoad();
-  var meso=aiMesocycleLoad();
-  var notes=aiCoachNotesLoad();
-  var adh=aiCoachAdherenceScore();
+	  var p=aiProfileLoad();
+	  var meso=aiMesocycleLoad();
+	  var notes=aiCoachNotesLoad();
+	  var prefText=aiCoachPreferenceRulesToText(aiCoachPreferenceRulesForProfile(p));
+	  var adh=aiCoachAdherenceScore();
 
   var GOALS=['strength','size','fat loss','endurance','cholesterol'];
   var goalBtns=GOALS.map(function(g){
@@ -23689,8 +24099,11 @@ function openCoachProfile(){
     +'<div style="font-size:0.65rem;color:var(--muted);font-weight:700;letter-spacing:1px;margin-top:16px;margin-bottom:6px;">NEXT BLOOD TEST</div>'
     +'<div style="font-size:0.62rem;color:var(--muted);margin-bottom:8px;">Coach will escalate HIIT and sat fat focus as the date approaches.</div>'
     +'<input type="date" id="cpNextTestDate" value="'+escHtml(p.nextTestDate||'')+'" style="width:100%;background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.9rem;padding:9px 10px;outline:none;margin-bottom:16px;">'
-    +'<div style="font-size:0.65rem;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:4px;">COACH MEMORY</div>'    +'<div style="font-size:0.62rem;color:var(--muted);margin-bottom:6px;">Injuries, preferences, anything Coach should always know.</div>'    +'<textarea id="cpCoachNotes" style="width:100%;height:72px;background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.75rem;padding:8px 10px;resize:none;outline:none;">'+escHtml((function(){var b=(notes||'').split(' || ');return b.filter(function(x){return x.indexOf('EXERCISE STATE')<0&&x.indexOf('NEXT CYCLE HANDOFF')<0;}).join(' | ');})())+'</textarea>'    +(notes&&notes.indexOf('EXERCISE STATE')>=0?'<div style="margin-top:6px;padding:8px 10px;background:var(--card3);border-radius:8px;border:1px solid var(--border);"><div style="font-size:0.58rem;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:3px;">LAST CYCLE HANDOFF (auto)</div><div style="font-size:0.65rem;color:var(--text2);line-height:1.55;">'+escHtml((function(){var b=(notes||'').split(' || ');return b.filter(function(x){return x.indexOf('EXERCISE STATE')>=0||x.indexOf('NEXT CYCLE HANDOFF')>=0;}).slice(-2).join(' | ');})())+'</div></div>':'')
-    +'<div style="height:16px;"></div>';
+	    +'<div style="font-size:0.65rem;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:4px;">COACH MEMORY</div>'    +'<div style="font-size:0.62rem;color:var(--muted);margin-bottom:6px;">Injuries, context, anything Coach should always know.</div>'    +'<textarea id="cpCoachNotes" style="width:100%;height:72px;background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.75rem;padding:8px 10px;resize:none;outline:none;">'+escHtml((function(){var b=(notes||'').split(' || ');return b.filter(function(x){return x.indexOf('EXERCISE STATE')<0&&x.indexOf('NEXT CYCLE HANDOFF')<0;}).join(' | ');})())+'</textarea>'    +(notes&&notes.indexOf('EXERCISE STATE')>=0?'<div style="margin-top:6px;padding:8px 10px;background:var(--card3);border-radius:8px;border:1px solid var(--border);"><div style="font-size:0.58rem;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:3px;">LAST CYCLE HANDOFF (auto)</div><div style="font-size:0.65rem;color:var(--text2);line-height:1.55;">'+escHtml((function(){var b=(notes||'').split(' || ');return b.filter(function(x){return x.indexOf('EXERCISE STATE')>=0||x.indexOf('NEXT CYCLE HANDOFF')>=0;}).slice(-2).join(' | ');})())+'</div></div>':'')
+	    +'<div style="font-size:0.65rem;color:var(--muted);font-weight:700;letter-spacing:1px;margin-top:16px;margin-bottom:4px;">COACH AGREEMENTS</div>'
+	    +'<div style="font-size:0.62rem;color:var(--muted);margin-bottom:6px;">Exercise preferences Coach must obey when generating workouts.</div>'
+	    +'<textarea id="cpCoachPrefs" placeholder="SINGLE-LEG GLUTE BRIDGES [both]: max 3 sets; make harder before adding sets" style="width:100%;height:92px;background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.75rem;padding:8px 10px;resize:none;outline:none;">'+escHtml(prefText||'')+'</textarea>'
+	    +'<div style="height:16px;"></div>';
 
   var ov=document.getElementById('coachProfileOverlay');
   if(!ov){
@@ -23754,11 +24167,12 @@ function saveCoachProfile(){
   // Rep caps — keyed by slot name
   if(!p.maxRepsPerSet)p.maxRepsPerSet={};
   var SLOTS_FOR_SAVE=['Vertical Pull','Horizontal Push','Dip/Vertical Push','Core Anti-Extension','Posterior Chain'];
-  SLOTS_FOR_SAVE.forEach(function(slot){
-    var inp=document.getElementById('cpCap_'+slot.replace(/[^a-z0-9]/gi,'_'));
-    if(inp){var v=parseInt(inp.value);if(v>0)p.maxRepsPerSet[slot]=v;else delete p.maxRepsPerSet[slot];}
-  });
-  aiProfileSave(p);
+	  SLOTS_FOR_SAVE.forEach(function(slot){
+	    var inp=document.getElementById('cpCap_'+slot.replace(/[^a-z0-9]/gi,'_'));
+	    if(inp){var v=parseInt(inp.value);if(v>0)p.maxRepsPerSet[slot]=v;else delete p.maxRepsPerSet[slot];}
+	  });
+	  p.coachPreferences=aiCoachPreferenceRulesFromText((document.getElementById('cpCoachPrefs')||{}).value||'');
+	  aiProfileSave(p);
   var existingNotes=aiCoachNotesLoad()||'';
   var userNotes=(document.getElementById('cpCoachNotes')||{}).value||'';
   // Preserve automated cycle handoff blocks — user edits the free-form section only
@@ -23773,7 +24187,7 @@ function saveCoachProfile(){
       var b=p?p[k]:undefined;
       if(JSON.stringify(a)!==JSON.stringify(b))changedFields.push(k);
     }
-    ['goalNote','homeDuration','hotelDuration','nextTestDate','progressionStyle','maxRepsPerSet'].forEach(profileChanged);
+	    ['goalNote','homeDuration','hotelDuration','nextTestDate','progressionStyle','maxRepsPerSet','coachPreferences'].forEach(profileChanged);
     var afterVoice=voiceMinsLoad();
     if(JSON.stringify(beforeVoice||{})!==JSON.stringify(afterVoice||{}))changedFields.push('voiceMins');
     if(String(existingNotes||'')!==String(combined||''))changedFields.push('coachNotes');
@@ -23966,7 +24380,74 @@ function wtTestTrainerMock(){
       && generatedPlanIsActiveStatus('user_modified')
       && trainerDashboardPlanSourceLabel({source:'user_modified'})==='USER EDITED',
     'Edited plans stay active, local-only capable, and labeled for the dashboard'));
-  var richerLocal=JSON.parse(JSON.stringify(goodSheet));
+  try{
+    var qNow=artifactQueueNow();
+    function qJob(spec){
+      return artifactQueueNormalizeJob(Object.assign({
+        status:'pending',
+        createdAt:qNow,
+        updatedAt:qNow,
+        nextRunAt:qNow,
+        attempts:0,
+        maxAttempts:6,
+        sourceSessionId:'sess_qprio',
+        payload:{sessionId:'sess_qprio'},
+        idempotencyKey:'qprio_'+String(spec.jobId||spec.jobType||Math.random())
+      },spec||{}));
+    }
+    var qSync=qJob({jobId:'qprio_sync',jobType:'sync_session_to_sheet'});
+    var qHome=qJob({jobId:'qprio_home',jobType:'generate_home_next',payload:{sessionId:'sess_qprio',planSlot:'HOME_NEXT'}});
+    var qHotel=qJob({jobId:'qprio_hotel',jobType:'generate_hotel_next',payload:{sessionId:'sess_qprio',planSlot:'HOTEL_NEXT'}});
+    var qPicked=artifactQueuePickNext({jobs:[qSync,qHotel,qHome],updatedAt:qNow});
+    out.push(wtTestResult('Plan generation queue priority',qPicked&&artifactQueueJobIsPlanGeneration(qPicked)&&artifactQueueJobPriority(qHome,[qSync,qHotel,qHome])===0&&artifactQueueJobPriority(qHotel,[qSync,qHotel,qHome])===0,'Ready HOME/HOTEL generation jobs outrank ordinary sync work'));
+    var qReview=qJob({jobId:'qprio_review',jobType:'create_post_workout_review'});
+    var qCoach=qJob({jobId:'qprio_coach',jobType:'update_coach_state',dependsOn:['qprio_review']});
+    var qGen=qJob({jobId:'qprio_gen',jobType:'generate_hotel_next',dependsOn:['qprio_coach'],payload:{sessionId:'sess_qprio',planSlot:'HOTEL_NEXT'}});
+    var qOther=qJob({jobId:'qprio_other',jobType:'sync_post_workout_review'});
+    var qDeps=[qOther,qReview,qCoach,qGen];
+    var qPickedDep=artifactQueuePickNext({jobs:qDeps,updatedAt:qNow});
+    out.push(wtTestResult('Plan generation dependency priority',qPickedDep&&qPickedDep.jobId==='qprio_review'&&artifactQueueJobPriority(qReview,qDeps)===1&&artifactQueueJobPriority(qCoach,qDeps)===1,'Review/coach jobs that unblock generation move ahead of unrelated work'));
+	  }catch(qErr){
+	    out.push(wtTestResult('Plan generation queue priority',false,qErr&&qErr.message||String(qErr)));
+	  }
+		  var savedProfileForPrefs=null;
+		  try{
+		    savedProfileForPrefs=aiProfileLoad();
+		    var savedProfile=savedProfileForPrefs;
+	    var prefProfile=Object.assign({},savedProfile,{
+	      coachPreferences:[{
+	        exerciseName:'SINGLE-LEG GLUTE BRIDGES',
+	        appliesTo:'both',
+	        maxSets:3,
+	        preferHarderBeforeMoreSets:true,
+	        note:'Make harder instead of adding a fourth set'
+	      }]
+	    });
+	    var prefPlan={
+	      changeLog:[],
+	      exercises:[
+	        {name:'CLOSE-GRIP PUSH-UPS',repTargets:[10,10],withinSetRestSecs:90,betweenExRestSecs:90},
+	        {name:'DIPS',repTargets:[12,12],withinSetRestSecs:90,betweenExRestSecs:90},
+	        {name:'LEG RAISES',repTargets:[20,20],withinSetRestSecs:60,betweenExRestSecs:90},
+	        {name:'SINGLE-LEG GLUTE BRIDGES',repTargets:[15,15,15,15],withinSetRestSecs:45,betweenExRestSecs:90},
+	        {name:'SIDE PLANKS',repTargets:[60,60],withinSetRestSecs:30,betweenExRestSecs:90,isPlank:true}
+	      ]
+	    };
+	    var prefApplied=aiCoachApplyPreferenceRulesToPlan(prefPlan,'hotel',{profile:prefProfile});
+	    var bridge=(prefApplied.exercises||[]).find(function(e){return String(e.name||'')==='SINGLE-LEG GLUTE BRIDGES';});
+	    var seq=prefApplied.seqOverrides&&prefApplied.seqOverrides['SINGLE-LEG GLUTE BRIDGES'];
+	    out.push(wtTestResult('Coach preference caps bridge sets',bridge&&bridge.repTargets.length===3&&seq&&seq.Squeeze>=3000&&seq.Down>=3000,'Persistent bridge preference enforces 3 harder sets after generation'));
+		    var promptLine=aiCoachPreferenceRulesPromptLine(prefProfile);
+		    out.push(wtTestResult('Coach preference prompt memory',/MUST obey/.test(promptLine)&&/SINGLE-LEG GLUTE BRIDGES/.test(promptLine)&&/max 3 sets/.test(promptLine),'Generation prompt includes visible durable agreements'));
+		    var prefPatchRes=aiCoachApplyPreferencePatchToProfile(savedProfile,{add:{exerciseName:'glute bridges',appliesTo:'both',maxSets:3,preferHarderBeforeMoreSets:true,note:'Make harder instead of four sets'}},null);
+		    var saveNoteRes=aiCoachApplyPreferencePatchToProfile(savedProfile,null,'SINGLE-LEG GLUTE BRIDGES: do not do 4 sets; make harder instead');
+		    out.push(wtTestResult('Global coach preference patch parser',prefPatchRes&&prefPatchRes.changed&&saveNoteRes&&saveNoteRes.changed&&saveNoteRes.rules&&saveNoteRes.rules.some(function(r){return r.exerciseName==='SINGLE-LEG GLUTE BRIDGES'&&r.maxSets===3&&r.preferHarderBeforeMoreSets;}),'Global coach can save durable exercise agreements'));
+		  }catch(prefErr){
+		    out.push(wtTestResult('Coach preference caps bridge sets',false,prefErr&&prefErr.message||String(prefErr)));
+		  }finally{
+		    if(savedProfileForPrefs)aiProfileSave(savedProfileForPrefs);
+		  }
+	  var richerLocal=JSON.parse(JSON.stringify(goodSheet));
   richerLocal.sessionId='sess_local_richer_guard';
   richerLocal.exercises[0].notes='Fresh offline workout detail';
   richerLocal.exercises[1].goal='Fresh goal';
@@ -31085,6 +31566,30 @@ function applyImportedActiveCaloriesToNutrition(importObj){
   }
   nutritionHealthMetaSave(meta);
 }
+function nutritionRefreshAfterActiveCaloriesChanged(dates,opts){
+  var seen={},list=[];
+  (Array.isArray(dates)?dates:[dates]).forEach(function(d){
+    var ds=String(d||'').slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(ds)||seen[ds])return;
+    seen[ds]=true;list.push(ds);
+  });
+  if(!list.length)return;
+  list.forEach(function(ds){
+    try{nutScoreInvalidateDate(ds,{skipRender:true});}catch(e){}
+  });
+  try{if(typeof homeRenderCommandCenter==='function')homeRenderCommandCenter(localDateStr());}catch(e1){}
+  try{if(typeof renderHomeData==='function')renderHomeData(_cachedSessions||[]);}catch(e2){}
+  try{if(currentPage==='progress'&&typeof buildProgressInsights==='function')buildProgressInsights(_cachedSessions||[]);}catch(e3){}
+  try{
+    if(currentPage==='nutrition'){
+      if(typeof nutRenderDay==='function')nutRenderDay();
+      if(typeof nutRenderWeek==='function'&&_nutTab==='week')nutRenderWeek();
+    }
+  }catch(e4){}
+  if(opts&&opts.toast){
+    appToast('Active calories refreshed for '+list.join(', ')+'.','var(--green)');
+  }
+}
 function getHealthStatusMessage(latestImport){
   if(latestImport){
     if(HEALTH_LATEST_STATUS.error)return 'Latest sync failed — showing saved Apple Health data.';
@@ -31133,12 +31638,17 @@ function healthImportApply(payload,opts){
   all=healthMergeYesterdayActiveRecord(all,p);
   healthImportsSave(all);
   var activeOpts={source:p.source,receivedAt:p.received_at,syncNutrition:!p.is_test};
-  healthApplyActiveConflict(p.date,p.active_energy_calories,activeOpts);
+  var activeDates=[];
+  var todayActiveResult=healthApplyActiveConflict(p.date,p.active_energy_calories,activeOpts);
+  if(todayActiveResult&&todayActiveResult.updated)activeDates.push(p.date);
   if(p.has_active_energy_yesterday===true){
-    healthApplyActiveConflict(nutShiftDate(p.date,-1),p.active_energy_yesterday,activeOpts);
+    var yDate=nutShiftDate(p.date,-1);
+    var yActiveResult=healthApplyActiveConflict(yDate,p.active_energy_yesterday,activeOpts);
+    if(yActiveResult&&yActiveResult.updated)activeDates.push(yDate);
   }
   applyImportedBodyWeightToProgress(p);
   applyImportedActiveCaloriesToNutrition(p);
+  nutritionRefreshAfterActiveCaloriesChanged(activeDates,{source:'healthImport'});
   var cfg=healthCfgLoad();
   cfg.mode=(p.source==='apple_health_companion')?'companion':'shortcut';
   cfg.lastSync=p.received_at;
