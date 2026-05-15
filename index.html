@@ -3915,8 +3915,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.11.144-coach-preferences-sw';
-			var WT_SW_VERSION='wt-shell-v166-coach-preferences-sw';
+			var WT_FRONTEND_VERSION='19.11.145-edited-plan-memory';
+			var WT_SW_VERSION='wt-shell-v167-edited-plan-memory';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4788,10 +4788,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.148-coach-preferences-sw';
+var APP_VERSION='v19.11.149-edited-plan-memory';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v175-coach-preferences-sw';
+var CACHE_VERSION='wt-cache-v176-edited-plan-memory';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Calendar auto-check now records the planned horizon and blocks overlapping foreground checks, so manual refreshes do not cause redundant automatic rebuilds',
@@ -8369,9 +8369,11 @@ function postWorkoutReviewPrompt(sd,base,facts){
     +'Use evidence from hitPct, hit/missed sets, skipped slots, dropoffs, and movement-slot trends. '
     +'Each item in whatImproved/whatStalled/watchNextSession must name a movement slot or exercise and the concrete reason. '
     +'Progression decision must be yes|no|hold|unclear and the reason must cite evidence thresholds, not vibes. '
+    +'If Session includes plan edit before start, judge whether the user-chosen edit worked from objective completion facts; do not assume motive beyond the edit note. '
     +'If evidence is mixed, choose hold; do not overreact to one good or bad set. '
     +'Schema: {"sessionVerdict":"","whatImproved":[],"whatStalled":[],"mainAdaptation":"","mainLimiter":"","progressionEarned":{"decision":"yes|no|hold|unclear","reason":""},"nextChange":"push|repeat|reduce|change variant|add set|add reps|hold tempo|simplify|deload|use fallback","watchNextSession":[],"confidence":0,"confidenceReason":"","missingData":[]} . '
     +'Session: '+JSON.stringify({id:sd.sessionId,type:sd.workoutType,date:sd.date,duration:sd.duration,targetType:sd.targetType,exercises:sd.exercises})+'. '
+    +'Plan edit before start: '+JSON.stringify(generatedPlanSessionEditContext(sd)||'none')+'. '
     +'Rule facts: '+JSON.stringify(facts)+'. '
     +'Rule draft: '+JSON.stringify(base)+'.';
 }
@@ -8796,7 +8798,12 @@ function generatedPlanNormalizeArtifact(plan){
     confidenceReason:String(src.confidenceReason||'').slice(0,260),
     source:String(src.source||'fallback'),
     cacheKey:String(src.cacheKey||('plan_cache_'+slot+'_'+String(src.sourceSessionId||'none')+'_'+String(src.reviewId||'none'))),
-    seqOverrides:(src.seqOverrides&&typeof src.seqOverrides==='object')?normalizeSeqOverrides(src.seqOverrides):null
+    seqOverrides:(src.seqOverrides&&typeof src.seqOverrides==='object')?normalizeSeqOverrides(src.seqOverrides):null,
+    editedFromPlanId:String(src.editedFromPlanId||src.sourcePlanId||'').slice(0,100),
+    editOrigin:String(src.editOrigin||'').slice(0,80),
+    editReason:String(src.editReason||src.planEditReason||'').slice(0,240),
+    editSummary:generatedPlanEditCleanItems(src.editSummary||src.planEditSummary||[]),
+    editHypothesis:String(src.editHypothesis||src.planEditHypothesis||'').slice(0,300)
   };
   var fallbackSignal=[
     out.source,
@@ -8864,7 +8871,12 @@ function generatedPlanParseStore(raw){
           confidenceReason:p.confidenceReason||'',
           source:p.source||'sync_restore',
           cacheKey:p.cacheKey||('sync_restore_'+String(p.planSlot||'HOME_NEXT')+'_'+String(p.planId||'')),
-          seqOverrides:p.seqOverrides||null
+          seqOverrides:p.seqOverrides||null,
+          editedFromPlanId:p.editedFromPlanId||'',
+          editOrigin:p.editOrigin||'',
+          editReason:p.editReason||p.planEditReason||'',
+          editSummary:p.editSummary||p.planEditSummary||[],
+          editHypothesis:p.editHypothesis||p.planEditHypothesis||''
         }));
       });
     }
@@ -9081,8 +9093,16 @@ function generatedPlanArtifactToLegacyWorkout(plan){
     generatedAt:String(plan.updatedAt||plan.createdAt||wtNowIso()),
     generationState:plan.fallbackUsed?'generation_fallback_used':'generation_complete',
     promptVersion:String(plan.generationPromptVersion||AI_GENERATION_PROMPT_VERSION),
+    source:String(plan.source||''),
+    planSlot:String(plan.planSlot||''),
+    planStatus:String(plan.status||''),
     sourceSessionId:String(plan.sourceSessionId||''),
     cacheKey:String(plan.cacheKey||''),
+    editedFromPlanId:String(plan.editedFromPlanId||''),
+    editOrigin:String(plan.editOrigin||''),
+    editReason:String(plan.editReason||''),
+    editSummary:generatedPlanEditCleanItems(plan.editSummary||[]),
+    editHypothesis:String(plan.editHypothesis||''),
     coachingTitle:'NEXT '+String(plan.targetType||'HOME')+' PLAN',
     coachingIntro:String(plan.rationale||''),
     bottomLine:String(plan.nextAction||'Execute with clean reps and progression discipline.'),
@@ -9155,9 +9175,14 @@ function generatedPlanBuildArtifactFromLegacy(legacy,type,meta){
     watchpoints:Array.isArray(source.technicalWatchpoints)?source.technicalWatchpoints.slice(0,8):[],
     confidence:String(source.confidence||'medium'),
     confidenceReason:String(source.confidenceReason||''),
-    source:source.generationState==='generation_fallback_used'?'fallback':'ai',
+    source:String(m.source||source.source||(source.generationState==='generation_fallback_used'?'fallback':'ai')),
     cacheKey:String(source.cacheKey||('plan_cache_'+slot+'_'+String(m.sourceSessionId||source.sourceSessionId||'none')+'_'+String(m.reviewId||''))),
-    seqOverrides:(source.seqOverrides&&typeof source.seqOverrides==='object')?normalizeSeqOverrides(source.seqOverrides):null
+    seqOverrides:(source.seqOverrides&&typeof source.seqOverrides==='object')?normalizeSeqOverrides(source.seqOverrides):null,
+    editedFromPlanId:String(m.editedFromPlanId||source.editedFromPlanId||source.sourcePlanId||''),
+    editOrigin:String(m.editOrigin||source.editOrigin||''),
+    editReason:String(m.editReason||source.editReason||source.planEditReason||''),
+    editSummary:generatedPlanEditCleanItems(m.editSummary||source.editSummary||source.planEditSummary||[]),
+    editHypothesis:String(m.editHypothesis||source.editHypothesis||source.planEditHypothesis||'')
   });
 }
 function generatedPlanBuildSyncStateValue(){
@@ -9178,7 +9203,12 @@ function generatedPlanBuildSyncStateValue(){
       validationStatus:p.validationStatus,
       fallbackUsed:!!p.fallbackUsed,
       createdAt:p.createdAt,
-      updatedAt:p.updatedAt
+      updatedAt:p.updatedAt,
+      editedFromPlanId:p.editedFromPlanId||'',
+      editOrigin:p.editOrigin||'',
+      editReason:p.editReason||'',
+      editSummary:(p.editSummary||[]).slice(0,6),
+      editHypothesis:p.editHypothesis||''
     };
   });
   function pack(activeA,activeB,hist){
@@ -9227,7 +9257,12 @@ function generatedPlanBuildSyncStateValue(){
         confidence:p.confidence,
         confidenceReason:p.confidenceReason,
         source:p.source,
-        cacheKey:p.cacheKey
+        cacheKey:p.cacheKey,
+        editedFromPlanId:p.editedFromPlanId||'',
+        editOrigin:p.editOrigin||'',
+        editReason:p.editReason||'',
+        editSummary:(p.editSummary||[]).slice(0,6),
+        editHypothesis:p.editHypothesis||''
       };
     }
     payload=pack(slimActive(activeHome),slimActive(activeHotel),history.slice(0,4));
@@ -9269,6 +9304,143 @@ function generatedPlanEditorSetStatus(msg,color){
     el.style.color=color||'var(--text2)';
     el.textContent=String(msg||'');
   }
+}
+function generatedPlanEditCleanItems(items){
+  var out=[];
+  (Array.isArray(items)?items:[items]).forEach(function(v){
+    var s=String(v||'').replace(/\s+/g,' ').trim();
+    if(!s)return;
+    s=s.slice(0,180);
+    if(out.indexOf(s)<0)out.push(s);
+  });
+  return out.slice(0,8);
+}
+function generatedPlanMergeEditItems(a,b){
+  return generatedPlanEditCleanItems((Array.isArray(a)?a:[]).concat(Array.isArray(b)?b:[]));
+}
+function generatedPlanEditTargets(ex){
+  var reps=Array.isArray(ex&&ex.repTargets)?ex.repTargets:[];
+  return reps.map(function(v){return String(parseInt(v,10)||v||'');}).filter(Boolean).join('/');
+}
+function generatedPlanEditRestLabel(ex){
+  if(!ex)return '';
+  return String(parseInt(ex.withinSetRestSecs||ex.restSecs||60,10)||60)+'/'+String(parseInt(ex.betweenExRestSecs||90,10)||90)+'s';
+}
+function generatedPlanEditExerciseMap(plan){
+  var map={};
+  (Array.isArray(plan&&plan.exercises)?plan.exercises:[]).forEach(function(ex){
+    var row=generatedPlanNormalizeExercise(ex);
+    if(row&&row.name&&!map[row.name])map[row.name]=row;
+  });
+  return map;
+}
+function generatedPlanBuildEditSummary(originalPlan,editedPlan,reason){
+  var cleanReason=generatedPlanEditorCleanText(reason||'',240);
+  var before=generatedPlanEditExerciseMap(originalPlan||{});
+  var after=generatedPlanEditExerciseMap(editedPlan||{});
+  var items=[];
+  function add(line){
+    line=String(line||'').replace(/\s+/g,' ').trim();
+    if(line&&items.indexOf(line)<0)items.push(line.slice(0,180));
+  }
+  Object.keys(after).forEach(function(name){
+    var a=after[name], b=before[name];
+    if(!b){
+      add('Added '+name+(generatedPlanEditTargets(a)?' targets '+generatedPlanEditTargets(a):''));
+      return;
+    }
+    var changes=[];
+    var bt=generatedPlanEditTargets(b), at=generatedPlanEditTargets(a);
+    if(bt!==at)changes.push('targets '+(bt||'?')+' -> '+(at||'?'));
+    var br=generatedPlanEditRestLabel(b), ar=generatedPlanEditRestLabel(a);
+    if(br!==ar)changes.push('rest '+br+' -> '+ar);
+    if(String(b.tempo||'')!==String(a.tempo||''))changes.push('tempo changed');
+    if(String(b.rpeTarget||'')!==String(a.rpeTarget||''))changes.push('effort target changed');
+    if(String(b.formCheckpoint||b.watchFor||'')!==String(a.formCheckpoint||a.watchFor||''))changes.push('cue changed');
+    if(String(b.goal||'')!==String(a.goal||''))changes.push('goal changed');
+    if(String(b.startSide||'')!==String(a.startSide||''))changes.push('start side '+(b.startSide||'none')+' -> '+(a.startSide||'none'));
+    if(changes.length)add(name+': '+changes.slice(0,4).join(', '));
+  });
+  Object.keys(before).forEach(function(name){
+    if(!after[name])add('Removed '+name);
+  });
+  if(!items.length&&cleanReason)add('No exercise field changes; user edit note recorded.');
+  if(!items.length&&!originalPlan)add('User edited generated plan before starting; original snapshot unavailable.');
+  var hypothesis=/chatgpt/i.test(cleanReason)
+    ?'User may have copied an outside ChatGPT workout. Treat it as user preference evidence only after comparing completed reps, misses, feel, and form notes.'
+    :'User changed the generated workout before starting. Infer the likely preference from edit note, changed targets/rest/tempo/cues, and completed performance.';
+  return {
+    edited:items.length>0||!!cleanReason,
+    sourcePlanId:String((originalPlan&&originalPlan.planId)||''),
+    editedPlanId:String((editedPlan&&editedPlan.planId)||''),
+    reason:cleanReason,
+    items:generatedPlanEditCleanItems(items),
+    hypothesis:hypothesis.slice(0,300)
+  };
+}
+function generatedPlanEditSummaryLine(meta){
+  var m=meta&&typeof meta==='object'?meta:{};
+  var items=generatedPlanEditCleanItems(m.editSummary||m.planEditSummary||[]);
+  var reason=String(m.editReason||m.planEditReason||'').replace(/\s+/g,' ').trim();
+  var from=String(m.editedFromPlanId||m.sourcePlanId||'').trim();
+  if(!items.length&&!reason&&!from)return '';
+  var parts=[];
+  if(from)parts.push('from '+from);
+  if(reason)parts.push('reason: '+reason.slice(0,220));
+  if(items.length)parts.push('changes: '+items.slice(0,4).join('; '));
+  return parts.join(' | ').slice(0,560);
+}
+function generatedPlanWorkoutEditMeta(workout){
+  var w=workout&&typeof workout==='object'?workout:{};
+  var items=generatedPlanEditCleanItems(w.editSummary||w.planEditSummary||[]);
+  var edited=String(w.source||'').toLowerCase()==='user_modified'
+    || String(w.planStatus||w.status||'').toLowerCase()==='user_modified'
+    || !!String(w.editedFromPlanId||'')
+    || !!String(w.editReason||'')
+    || items.length>0;
+  return {
+    edited:!!edited,
+    generatedPlanId:String(w.planId||''),
+    generatedPlanSource:String(w.source||''),
+    generatedPlanStatus:String(w.planStatus||w.status||''),
+    editedFromPlanId:String(w.editedFromPlanId||w.sourcePlanId||''),
+    editOrigin:String(w.editOrigin||''),
+    editReason:String(w.editReason||w.planEditReason||'').slice(0,240),
+    editSummary:items,
+    editHypothesis:String(w.editHypothesis||w.planEditHypothesis||'').slice(0,300)
+  };
+}
+function generatedPlanSessionEditNote(meta){
+  var m=meta&&typeof meta==='object'?meta:{};
+  if(!m.edited)return '';
+  var line=generatedPlanEditSummaryLine({
+    editedFromPlanId:m.editedFromPlanId,
+    editReason:m.editReason,
+    editSummary:m.editSummary
+  });
+  return line?('PLAN EDIT BEFORE START: '+line).slice(0,700):'';
+}
+function generatedPlanSessionEditContext(sd){
+  var s=sd&&typeof sd==='object'?sd:{};
+  var note=String(s.notes||'');
+  var noteIdx=note.indexOf('PLAN EDIT BEFORE START:');
+  var items=generatedPlanEditCleanItems(s.planEditSummary||s.editSummary||[]);
+  var edited=String(s.editedGeneratedPlan||'').toLowerCase()==='yes'
+    || !!String(s.editedFromPlanId||'')
+    || !!String(s.planEditReason||s.editReason||'')
+    || items.length>0;
+  if(!edited&&noteIdx>=0){
+    return note.slice(noteIdx+'PLAN EDIT BEFORE START:'.length).replace(/\s+/g,' ').trim().slice(0,700);
+  }
+  if(!edited)return '';
+  var line=generatedPlanEditSummaryLine({
+    editedFromPlanId:s.editedFromPlanId||s.sourcePlanId,
+    editReason:s.planEditReason||s.editReason,
+    editSummary:items
+  });
+  var hypo=String(s.planEditHypothesis||s.editHypothesis||'').replace(/\s+/g,' ').trim();
+  if(hypo)line=(line?line+' | ':'')+'trainer inference: '+hypo.slice(0,220);
+  return line.slice(0,760);
 }
 function generatedPlanEditorRowsHtml(plan){
   var rows=Array.isArray(plan&&plan.exercises)?plan.exercises:[];
@@ -9347,6 +9519,7 @@ function generatedPlanOpenSafeEditor(slot,legacyPlan){
   summaryEl.style.display='block';
   summaryEl.innerHTML=''
     +'<div style="font-size:0.74rem;color:var(--text2);line-height:1.45;margin-bottom:10px;">This creates a local edited copy for the workout you are about to start. The trainer still learns from the completed workout log after you finish, so you can safely correct a bad suggestion without poisoning autopilot.</div>'
+    +'<label style="display:block;margin-bottom:10px;font-size:0.62rem;color:var(--muted);font-weight:800;letter-spacing:0.5px;">WHY DID YOU CHANGE IT? (OPTIONAL)<textarea id="gpeEditReason" rows="2" placeholder="Copied from ChatGPT, too much volume, harder variation..." style="margin-top:4px;width:100%;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);resize:vertical;">'+escHtml(clone.editReason||'')+'</textarea></label>'
     +generatedPlanEditorRowsHtml(clone);
   var actEl=document.getElementById('aiCoachActions');
   actEl.style.display='flex';
@@ -9359,6 +9532,7 @@ function generatedPlanEditorReadDraft(){
   var draft=_generatedPlanEditDraft;
   if(!draft||!draft.sourcePlan)return null;
   var source=JSON.parse(JSON.stringify(draft.sourcePlan));
+  var original=JSON.parse(JSON.stringify(source));
   var now=wtNowIso();
   var rows=[];
   (source.exercises||[]).forEach(function(ex,i){
@@ -9397,8 +9571,16 @@ function generatedPlanEditorReadDraft(){
   source.source='user_modified';
   source.cacheKey='user_modified_'+draft.slot+'_'+String(source.sourceSessionId||'none')+'_'+String(source.planId||Date.now());
   source.exercises=rows;
+  var reasonEl=document.getElementById('gpeEditReason');
+  var edit=generatedPlanBuildEditSummary(original,source,reasonEl?reasonEl.value:source.editReason);
+  source.editedFromPlanId=String(original.editedFromPlanId||original.planId||'');
+  source.editOrigin='safe_editor';
+  source.editReason=edit.reason||String(original.editReason||'');
+  source.editSummary=generatedPlanMergeEditItems(original.editSummary||[],edit.items||[]);
+  source.editHypothesis=edit.hypothesis||String(original.editHypothesis||'');
+  var editLine=generatedPlanEditSummaryLine(source);
   var note='User edited pending plan before starting. Completed workout log remains source of truth.';
-  source.whatChanged=[note].concat(Array.isArray(source.whatChanged)?source.whatChanged:[]).filter(Boolean).slice(0,8);
+  source.whatChanged=[editLine?('Edited-plan memory: '+editLine):'',note].concat(Array.isArray(source.whatChanged)?source.whatChanged:[]).filter(Boolean).slice(0,8);
   return generatedPlanNormalizeArtifact(source);
 }
 function generatedPlanStoreEditedArtifact(plan,type,reason){
@@ -9464,6 +9646,14 @@ function generatedPlanSaveEditedLegacyWorkout(legacy,type,reason){
     validationErrors:[],
     cacheKey:'user_modified_'+slot+'_'+String((active&&active.sourceSessionId)||(legacy&&legacy.sourceSessionId)||'none')+'_'+planId
   });
+  var edit=generatedPlanBuildEditSummary(active,built,reason||legacy.editReason||'User adjusted pending workout in coach chat.');
+  built.editedFromPlanId=String((active&&active.editedFromPlanId)||(active&&active.planId)||legacy.editedFromPlanId||'');
+  built.editOrigin=String(legacy.editOrigin||'coach_chat');
+  built.editReason=edit.reason||String(legacy.editReason||reason||'User adjusted pending workout in coach chat.');
+  built.editSummary=generatedPlanMergeEditItems((active&&active.editSummary)||legacy.editSummary||[],edit.items||[]);
+  built.editHypothesis=edit.hypothesis||String(legacy.editHypothesis||'');
+  var editLine=generatedPlanEditSummaryLine(built);
+  if(editLine)built.whatChanged=[('Edited-plan memory: '+editLine)].concat(Array.isArray(built.whatChanged)?built.whatChanged:[]).filter(Boolean).slice(0,8);
   var saved=generatedPlanStoreEditedArtifact(built,t,reason||'User adjusted pending workout before starting.');
   if(saved&&saved.ok){
     var legacySaved=generatedPlanArtifactToLegacyWorkout(saved.plan);
@@ -14191,12 +14381,15 @@ function aiCoachBuildContext(){
     }).join('; ');
     var out='['+s.date+' '+type+' dur:'+s.duration+'min] '+exLines;
     if(s.notes)out+=' | SESSION NOTE: '+s.notes;
+    var editCtx=generatedPlanSessionEditContext(s);
+    if(editCtx&&String(s.notes||'').indexOf('PLAN EDIT BEFORE START')<0)out+=' | PLAN EDIT BEFORE START: '+editCtx;
     return out;
   }
 
   var recentSess=allSess.slice(0,10);
   var olderSess=allSess.slice(10);
   var sessCtx=recentSess.map(fmtSess).join(' | ');
+  var planEditCtx=recentSess.map(generatedPlanSessionEditContext).filter(Boolean).slice(0,5).join(' | ');
   if(olderSess.length){
     var olderHomeCount=olderSess.filter(function(s){return s.workoutType.indexOf('Home')>=0;}).length;
     var olderHotelCount=olderSess.length-olderHomeCount;
@@ -14519,7 +14712,7 @@ function aiCoachBuildContext(){
     }
   })();
 
-  return {sessCtx:sessCtx,bodyCtx:bodyCtx,cholCtx:cholCtx,activityCtx:activityCtx,bfCtx:bfCtx,
+  return {sessCtx:sessCtx,planEditCtx:planEditCtx,bodyCtx:bodyCtx,cholCtx:cholCtx,activityCtx:activityCtx,bfCtx:bfCtx,
           volumeCtx:volumeCtx,completionCtx:completionCtx,hiitThisWeek:hiitThisWeek,
           nutCtx:nutCtx,seqDefaults:seqDefaults.join('; '),
 	          goals:goals,hardCount:hardCount,coachNotes:coachNotes,coachPreferenceRules:aiCoachPreferenceRulesForProfile(profile),nutAvg:nutAvg,
@@ -14682,6 +14875,7 @@ function aiCoachBuildPrompt(type,ctx,chatHistory,priorWorkouts){
     '',
     '## HISTORY',
     'Sessions (most recent first, feel: Medium=2+ RIR, Med-hard=1 RIR, Hard=0 RIR): '+(ctx.sessCtx||'none'),
+    ctx.planEditCtx?'User-edited generated plan evidence: '+ctx.planEditCtx:'',
     ctx.slotLedgerCtx?'Long-term slot ledger: '+ctx.slotLedgerCtx:'',
     ctx.coachStateCtx?'Longitudinal coach state: '+ctx.coachStateCtx:'',
     ctx.postWorkoutReviewCtx?'Latest post-workout review: '+ctx.postWorkoutReviewCtx:'',
@@ -14703,6 +14897,7 @@ function aiCoachBuildPrompt(type,ctx,chatHistory,priorWorkouts){
     '## CONTINUITY',
     priorStr,
     'Required continuity source: prior plan for this same target only. Cross-type memory is optional and must never block generation.',
+    'Edited-plan learning rule: when a completed session includes PLAN EDIT BEFORE START, compare the user edit note/changes with actual hit/miss and feel data. Infer likely preference cautiously, keep successful user-chosen structure, and improve failed edits instead of copying them blindly.',
     isHome?'NOTE: Keep push/core/posterior continuity while preserving true slot availability and debt priorities.':
            'NOTE: Hotel vertical pull is allowed only when an explicit pull-up option exists; otherwise defer vertical pull to the next HOME session. '+(equipmentProfile.hotel.rowSetupAvailable?'Hotel may still include horizontal pull (Australian Pull-Ups) when row setup is available.':'No stable row setup means horizontal pull is also deferred.')+' Keep all non-deferred slots aligned with current progression.',
     'Rationale quality rule: explain exactly what changed from the prior same-type plan, what stayed the same, and why each main target changed.',
@@ -24381,6 +24576,65 @@ function wtTestTrainerMock(){
       && trainerDashboardPlanSourceLabel({source:'user_modified'})==='USER EDITED',
     'Edited plans stay active, local-only capable, and labeled for the dashboard'));
   try{
+    var editSource=generatedPlanNormalizeArtifact({
+      planId:'plan_ai_edit_memory_src',
+      planSlot:'HOTEL_NEXT',
+      targetType:'HOTEL',
+      source:'ai',
+      status:'active',
+      exercises:[
+        {name:'CLOSE-GRIP PUSH-UPS',repTargets:[10,10],withinSetRestSecs:90,betweenExRestSecs:90},
+        {name:'SINGLE-LEG GLUTE BRIDGES',repTargets:[15,15,15,15],withinSetRestSecs:45,betweenExRestSecs:90},
+        {name:'SIDE PLANKS',repTargets:[60,60],withinSetRestSecs:30,betweenExRestSecs:90,isPlank:true}
+      ]
+    });
+    var editPlan=generatedPlanNormalizeArtifact(Object.assign({},editSource,{
+      planId:'plan_user_edit_memory',
+      source:'user_modified',
+      status:'user_modified',
+      exercises:[
+        {name:'CLOSE-GRIP PUSH-UPS',repTargets:[10,10],withinSetRestSecs:90,betweenExRestSecs:90},
+        {name:'SINGLE-LEG GLUTE BRIDGES',repTargets:[15,15,15],withinSetRestSecs:60,betweenExRestSecs:90,tempo:'3 sec squeeze'},
+        {name:'SIDE PLANKS',repTargets:[60,60],withinSetRestSecs:30,betweenExRestSecs:90,isPlank:true}
+      ]
+    }));
+    var editSummary=generatedPlanBuildEditSummary(editSource,editPlan,'Copied from ChatGPT and bridge volume was too much');
+    var editNorm=generatedPlanNormalizeArtifact(Object.assign({},editPlan,{
+      editedFromPlanId:editSource.planId,
+      editOrigin:'safe_editor',
+      editReason:editSummary.reason,
+      editSummary:editSummary.items,
+      editHypothesis:editSummary.hypothesis
+    }));
+    var editLegacy=generatedPlanArtifactToLegacyWorkout(editNorm);
+    var editSess=workoutNormalizeSession({
+      sessionId:'sess_edit_memory_test',
+      date:'2026-05-14',
+      workoutType:'Hotel Strength',
+      targetType:'HOTEL',
+      editedGeneratedPlan:'yes',
+      editedFromPlanId:editLegacy.editedFromPlanId,
+      planEditOrigin:editLegacy.editOrigin,
+      planEditReason:editLegacy.editReason,
+      planEditSummary:editLegacy.editSummary,
+      planEditHypothesis:editLegacy.editHypothesis,
+      exercises:[{name:'SINGLE-LEG GLUTE BRIDGES',targetReps:'15/15/15',sets:['15','15','15'],feel:'Medium'}]
+    });
+    var editLine=generatedPlanSessionEditContext(editSess);
+    var editJoined=(editSummary.items||[]).join(' | ');
+    out.push(wtTestResult('Edited generated plan diff memory',
+      /SINGLE-LEG GLUTE BRIDGES/.test(editJoined)
+        && /15\/15\/15\/15 -> 15\/15\/15/.test(editJoined)
+        && /ChatGPT/i.test(editLine),
+      'Edited plan carries reason and exact target diffs into completed-session context'));
+    var editReviewPrompt=postWorkoutReviewPrompt(editSess,postWorkoutDeterministicReview(editSess),postWorkoutFacts(editSess));
+    out.push(wtTestResult('Edited plan session prompt context',
+      /Plan edit before start/.test(editReviewPrompt)&&/ChatGPT/i.test(editReviewPrompt),
+      'Post-workout review can evaluate whether user-chosen edits worked'));
+  }catch(editErr){
+    out.push(wtTestResult('Edited generated plan diff memory',false,editErr&&editErr.message||String(editErr)));
+  }
+  try{
     var qNow=artifactQueueNow();
     function qJob(spec){
       return artifactQueueNormalizeJob(Object.assign({
@@ -29080,6 +29334,9 @@ function finishWorkout(){
   // Grab session note typed on done screen if already entered (user might type before copying)
   var _sessionNoteEl=document.getElementById('sessionNote');
   var _sessionNoteVal=_sessionNoteEl?_sessionNoteEl.value.trim():'';
+  var _planEditMeta=generatedPlanWorkoutEditMeta(_aiCoachCurrentWorkout);
+  var _planEditNote=generatedPlanSessionEditNote(_planEditMeta);
+  var _sessionNotes=[_sessionNoteVal,_planEditNote].filter(Boolean).join(' | ');
   var targetType=(wType==='hotel'?'HOTEL':'HOME');
   var sd=workoutNormalizeSession({
     artifactType:'session',
@@ -29089,7 +29346,16 @@ function finishWorkout(){
     targetType:targetType,
     bodyFeel:bodyFeel,
     duration:dur,
-    notes:_sessionNoteVal,
+    notes:_sessionNotes,
+    generatedPlanId:String((_aiCoachCurrentWorkout&&_aiCoachCurrentWorkout.planId)||''),
+    generatedPlanSource:String((_aiCoachCurrentWorkout&&_aiCoachCurrentWorkout.source)||''),
+    generatedPlanStatus:String((_aiCoachCurrentWorkout&&(_aiCoachCurrentWorkout.planStatus||_aiCoachCurrentWorkout.status))||''),
+    editedGeneratedPlan:_planEditMeta.edited?'yes':'',
+    editedFromPlanId:String(_planEditMeta.editedFromPlanId||''),
+    planEditOrigin:String(_planEditMeta.editOrigin||''),
+    planEditReason:String(_planEditMeta.editReason||''),
+    planEditSummary:generatedPlanEditCleanItems(_planEditMeta.editSummary||[]),
+    planEditHypothesis:String(_planEditMeta.editHypothesis||''),
     exercises:[],
     targets:[],
     actuals:[],
