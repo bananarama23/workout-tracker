@@ -251,10 +251,6 @@ html.ios-standalone-working .nl{
 .settings-btn.blue{background:var(--blue-dim);border-color:rgba(59,131,246,0.35);color:var(--blue);}
 .settings-btn.green{background:var(--green-dim);border-color:rgba(0,212,138,0.35);color:var(--green);}
 .settings-btn.orange{background:var(--orange-dim);border-color:rgba(255,104,48,0.35);color:var(--orange);}
-.settings-fab{position:fixed;right:12px;bottom:calc(var(--nav-h) + var(--safe-b) + 12px);z-index:180;width:42px;height:42px;border-radius:999px;border:1px solid var(--border2);background:rgba(18,23,31,0.94);color:var(--text2);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 28px rgba(0,0,0,0.42);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);cursor:pointer;transition:transform 0.16s,color 0.16s,border-color 0.16s,background 0.16s;}
-.settings-fab:active{transform:scale(0.94);}
-.settings-fab.active{color:#000;background:var(--accent);border-color:var(--accent);}
-.settings-fab svg{display:block;width:20px;height:20px;}
 .settings-top-save{position:absolute;top:calc(var(--safe-t) + 14px);right:16px;min-height:34px;padding:7px 10px;border:1px solid rgba(200,255,0,0.35);border-radius:999px;background:var(--accent-dim);color:var(--accent);font-size:0.62rem;font-weight:900;letter-spacing:0.7px;text-transform:uppercase;}
 .settings-exit-bar{position:sticky;bottom:10px;z-index:30;margin-top:2px;background:rgba(13,17,23,0.94);border:1px solid var(--border2);border-radius:10px;padding:10px;box-shadow:0 12px 30px rgba(0,0,0,0.38);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);}
 .settings-save-exit{width:100%;min-height:48px;border-radius:8px;background:var(--accent);color:#000;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.8px;font-weight:900;}
@@ -265,7 +261,6 @@ html.ios-standalone-working .nl{
   .settings-actions,.settings-actions.three{grid-template-columns:1fr;}
   .nav-btn{padding-left:1px;padding-right:1px;}
   .nl{font-size:6.8px;letter-spacing:0.25px;}
-  .settings-fab{right:10px;bottom:calc(var(--nav-h) + var(--safe-b) + 8px);width:40px;height:40px;}
 }
 
 /* PAGE HEADER */
@@ -1000,7 +995,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       <div class="week-stat" onclick="showHistory('walk')" style="cursor:pointer;">
         <div class="ws-num c-accent" id="wkWalkKm">-</div>
         <div class="ws-lbl">Walk</div>
-        <div class="ws-sub" id="wkWalkSub">km</div>
+        <div class="ws-sub" id="wkWalkSub">mi</div>
       </div>
       <div class="week-stat" onclick="showStreakHistory()">
         <div class="ws-num c-accent" id="wkStreak">-</div>
@@ -1328,7 +1323,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <input type="number" inputmode="numeric" class="log-input log-input-big" id="walkDur" placeholder="45">
         </div>
         <div class="log-field">
-          <label>Distance (km)</label>
+          <label>Distance (mi)</label>
           <input type="number" inputmode="decimal" class="log-input log-input-big" id="walkDist" placeholder="3.5">
         </div>
       </div>
@@ -1337,7 +1332,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         <textarea class="log-input" id="walkNotes" placeholder="Route, pace, how it felt..." rows="2"></textarea>
       </div>
       <div class="log-msg" id="walkMsg"></div>
-      <button class="log-save-btn lsb-walk" onclick="saveWalk()">SAVE WALK</button>
+      <button class="log-save-btn lsb-walk" id="walkSaveBtn" onclick="saveWalk()">SAVE WALK</button>
+      <button type="button" id="walkCancelEditBtn" onclick="cancelEditWalk()" style="display:none;width:100%;margin-top:8px;padding:10px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--muted);font-size:0.72rem;font-weight:700;letter-spacing:1px;">CANCEL EDIT</button>
     </div>
 
     <!-- EDIT SESSION -->
@@ -3915,8 +3911,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.11.145-edited-plan-memory';
-			var WT_SW_VERSION='wt-shell-v167-edited-plan-memory';
+			var WT_FRONTEND_VERSION='19.11.150-nut-scan-detail-day';
+			var WT_SW_VERSION='wt-shell-v172-nut-scan-detail-day';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4788,12 +4784,22 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.149-edited-plan-memory';
+var APP_VERSION='v19.11.154-nut-scan-detail-day';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v176-edited-plan-memory';
+var CACHE_VERSION='wt-cache-v181-nut-scan-detail-day';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
+  'Today\'s photo-scan food breakdown now survives nutrition Sheet refreshes, so reopening the same-day entry keeps the scanned item detail',
+  'Walk, streak, trainer feedback, progress, edit-session, and coach-context logic now share the same strength-session rules after QA',
+  'Walk logging now treats distance as miles, shows walk history in miles, and lets saved walks be edited from history',
+  'Walk history rows now parse duration and distance separately instead of mistaking minutes for distance',
+  'Home streak now uses real Monday-anchored weeks and counts only strength plus HIIT goal sessions',
+  'Last Workout Feedback now opens as a personal-trainer breakdown with what went well, what went badly, likely why, and what changed in HOME/HOTEL next plans',
+  'Apple Health active-calorie imports now only update nutrition budget rows when they exceed the active baseline, while raw Health data still saves for review',
+  'Active-calorie changes now refresh calorie budgets and averages without invalidating the food-only nutrition score',
+  'Completed-day food edits, deletes, restores, template logs, copies, and meal scans now refresh Home/Progress/week averages for the changed date instead of only checking today',
+  'Per-exercise automatic set mode now respects workout pause and will not auto-start a set while paused',
   'Calendar auto-check now records the planned horizon and blocks overlapping foreground checks, so manual refreshes do not cause redundant automatic rebuilds',
   'Calendar planner now auto-checks on startup, foreground, online return, Plan-page open, and periodic foreground intervals, then rebuilds only when the calendar signature changes',
   'Trainer prompts and coach chat now use the saved weekly goal targets instead of hard-coded HIIT counts, and pilot travel is treated as logistics rather than automatic fatigue',
@@ -6256,7 +6262,7 @@ function workoutVisibleSessions(sessions,opts){
     if(!appDoctorIsTestModeActive()&&!appDoctorIncludeArtifactRow(s,{includeTest:false}))return false;
     if(workoutSessionIsInternalSeed(s))return false;
     if(type&&!workoutSessionHasDisplayableContent(s,type))return false;
-    if(!type&&String(s.workoutType||'').indexOf('Strength')>=0&&!workoutSessionHasDisplayableContent(s,'strength'))return false;
+    if(!type&&sessionCountsAsStrengthGoal(s)&&!workoutSessionHasDisplayableContent(s,'strength'))return false;
     return true;
   }).map(function(s){return workoutSanitizeSessionExerciseSkips(s);});
   var out=[];
@@ -6946,11 +6952,6 @@ function navTo(page){
   var pg=document.getElementById('page-'+page);
   if(pg){pg.classList.add('active');pg.classList.remove('hidden');}
   var nb=document.getElementById('nav-'+page);if(nb)nb.classList.add('active');
-  var sf=document.getElementById('settingsFab');
-  if(sf){
-    sf.classList.toggle('active',page==='settings');
-    sf.style.display=(page==='settings')?'none':'';
-  }
   var prevPage=currentPage;
   currentPage=page;
   if(page==='workout'){
@@ -7283,7 +7284,7 @@ function workoutRefreshAfterSheetReload_(sessions){
 function workoutSheetAuthorityLatestSession_(sessions){
   try{
     var rows=workoutVisibleSessions(sessions||[],{}).filter(function(s){
-      return s&&String(s.workoutType||'').indexOf('Strength')>=0;
+      return sessionCountsAsStrengthGoal(s);
     });
     if(!rows.length)rows=workoutVisibleSessions(sessions||[],{});
     rows=rows.filter(function(s){return s&&trainerRetryIsUsableSessionId(s.sessionId);});
@@ -8072,7 +8073,7 @@ function recSession(sd){
   Object.keys(h).forEach(function(k){if(new Date(k)<cut)delete h[k];});
   saveHist(h);
   // Invalidate cached workout whenever a strength session is logged — body state changed
-  if(!derivedOnly&&sd.workoutType&&sd.workoutType.indexOf('Strength')>=0){
+  if(!derivedOnly&&sessionCountsAsStrengthGoal(sd)){
     try{localStorage.removeItem(AI_WORKOUT_KEY);}catch(e){}
   }
 }
@@ -8604,6 +8605,89 @@ function postWorkoutReviewRender(sessionId){
   if(!box)return;
   var review=postWorkoutReviewLoad(sessionId);
   if(review){box.style.display='block';box.style.color='var(--text2)';box.innerHTML=postWorkoutReviewHtml(review);}
+}
+function postWorkoutExerciseCoachRows(sd){
+  return ((sd&&sd.exercises)||[]).map(function(ex){
+    var targets=postWorkoutTargets(ex),actuals=postWorkoutActuals(ex);
+    var n=Math.min(targets.length,actuals.length),hit=0,miss=0;
+    for(var i=0;i<n;i++){
+      if((actuals[i]||0)>=(targets[i]||0))hit++;
+      else miss++;
+    }
+    var first=actuals[0]||0,last=actuals.length?actuals[actuals.length-1]:0;
+    var drop=actuals.length>=2&&first>0&&last/first<0.7;
+    var targetTotal=targets.reduce(function(a,v){return a+(parseFloat(v)||0);},0);
+    var actualTotal=actuals.reduce(function(a,v){return a+(parseFloat(v)||0);},0);
+    var skipped=String(ex&&ex.skipped||'')==='yes';
+    return {name:String((ex&&ex.name)||'Exercise'),slot:coachSlotLabel(postWorkoutSlotFromExercise(ex&&ex.name)||'Other'),targets:targets,actuals:actuals,n:n,hit:hit,miss:miss,dropoff:drop,targetTotal:targetTotal,actualTotal:actualTotal,skipped:skipped,feel:String((ex&&ex.feel)||''),notes:String((ex&&ex.notes)||''),skipReason:String((ex&&ex.skipReason)||'')};
+  });
+}
+function postWorkoutCoachListHtml(title,items,color){
+  var rows=(Array.isArray(items)?items:[]).filter(Boolean).slice(0,5);
+  if(!rows.length)rows=['No clear signal yet.'];
+  return '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">'
+    +'<div style="font-size:0.64rem;color:'+color+';font-weight:900;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">'+escHtml(title)+'</div>'
+    +rows.map(function(x){return '<div style="font-size:0.74rem;color:var(--text2);line-height:1.55;margin-bottom:4px;">'+escHtml(String(x))+'</div>';}).join('')
+    +'</div>';
+}
+function postWorkoutCoachPlanChangeItems(slot,sourceSessionId){
+  var plan=null;
+  try{plan=generatedPlanActiveForSlot(slot);}catch(e){plan=null;}
+  if(!plan)return ['No active '+(slot==='HOTEL_NEXT'?'HOTEL':'HOME')+' plan is available yet.'];
+  var out=[];
+  var sameSource=!sourceSessionId||String(plan.sourceSessionId||'')===String(sourceSessionId||'');
+  if(!sameSource)out.push('Current plan is from a different source workout ('+String(plan.sourceSessionId||'unknown')+'), so retry AI if you want it rebuilt from this exact session.');
+  (plan.whatChanged||[]).slice(0,3).forEach(function(x){out.push(String(x));});
+  if(String(plan.rationale||'').trim())out.push(String(plan.rationale).trim());
+  (plan.exercises||[]).slice(0,5).forEach(function(ex){
+    var rationale=String((ex&&ex.rationale)||'').trim();
+    var goal=String((ex&&ex.goal)||'').trim();
+    if(rationale||goal)out.push(String(ex.name||'Exercise')+': '+(rationale||goal));
+  });
+  (plan.deferredSlots||[]).slice(0,3).forEach(function(d){
+    out.push('Deferred '+coachSlotLabel(String((d&&d.slot)||''))+': '+String((d&&d.reason)||'environment or recovery constraint')+'. Next action: '+String((d&&d.nextAction)||'bring it back when available')+'.');
+  });
+  return out.length?out:['No specific change note was stored; view the plan details for exercises and targets.'];
+}
+function postWorkoutCoachDetailHtml(review,session){
+  var sd=session||{};
+  var facts=(review&&review.facts)||postWorkoutFacts(sd);
+  var rows=postWorkoutExerciseCoachRows(sd);
+  var well=[];
+  (review.whatImproved||[]).forEach(function(x){if(x)well.push(String(x));});
+  rows.forEach(function(r){
+    if(r.skipped)return;
+    if(r.n&&r.hit===r.n)well.push(r.name+': hit '+r.hit+'/'+r.n+' target sets'+(r.actuals.length?' ('+r.actuals.join('/')+').':'.'));
+  });
+  if(!well.length&&facts.hitSets)well.push('You hit '+facts.hitSets+' of '+facts.totalSets+' target sets. That is the base we build from.');
+  var bad=[];
+  rows.forEach(function(r){
+    if(r.skipped)bad.push(r.name+': skipped'+(r.skipReason?' because '+r.skipReason:'.'));
+    else if(r.miss>0)bad.push(r.name+': missed '+r.miss+' of '+r.n+' target sets; target '+(r.targets.join('/')||'unknown')+', actual '+(r.actuals.join('/')||'unknown')+'.');
+    if(r.dropoff)bad.push(r.name+': late-set dropoff from '+r.actuals[0]+' to '+r.actuals[r.actuals.length-1]+'.');
+  });
+  (review.whatStalled||review.whatRegressed||[]).forEach(function(x){if(x&&bad.indexOf(String(x))<0)bad.push(String(x));});
+  var why=[];
+  if(rows.some(function(r){return r.miss>0;}))why.push('The missed sets say the prescribed target was slightly ahead of repeatable capacity for at least one slot, so the next plan should consolidate instead of blindly adding volume.');
+  if(rows.some(function(r){return r.dropoff;}))why.push('The dropoff pattern points to set endurance or tempo control breaking late, so the fix is cleaner pacing or smaller jumps before more reps.');
+  if(rows.some(function(r){return r.skipped;}))why.push('A skipped slot means the next plan should recover that movement pattern before treating the week as balanced.');
+  if(facts.actualOnly)why.push('This workout has imported reps but not full target-vs-actual metadata, so I can use it as a baseline but not as a perfect progression verdict.');
+  if(!why.length)why.push('Nothing obvious went badly in the logged data. The correct move is to keep the useful structure and make only small progressions.');
+  var sourceId=String((review&&review.sourceSessionId)||((session&&session.sessionId)||''));
+  var metaSource=(String((review&&review.source)||'').toLowerCase()==='ai'&&!review.fallbackUsed)?'AI coach review':'Local coach review';
+  return ''
+    +'<div style="font-size:0.72rem;color:var(--muted);line-height:1.55;margin-bottom:8px;">'+escHtml(String((sd&&sd.workoutType)||'Workout'))+' · '+escHtml(String((sd&&sd.date)||'—'))+' · '+escHtml(metaSource)+'</div>'
+    +'<div style="font-size:0.88rem;color:var(--text);font-weight:900;line-height:1.35;text-transform:capitalize;">'+escHtml(String((review&&review.sessionVerdict)||'hold steady'))+'</div>'
+    +'<div style="font-size:0.72rem;color:var(--text2);line-height:1.55;margin-top:5px;">This is what I would tell you as your trainer from the logged sets, not just a status dump.</div>'
+    +postWorkoutCoachListHtml('What went well',well,'var(--green)')
+    +postWorkoutCoachListHtml('What went badly',bad,'var(--orange)')
+    +postWorkoutCoachListHtml('Why it probably went badly',why,'var(--blue)')
+    +postWorkoutCoachListHtml('What I changed in next HOME',postWorkoutCoachPlanChangeItems('HOME_NEXT',sourceId),'var(--accent)')
+    +postWorkoutCoachListHtml('What I changed in next HOTEL',postWorkoutCoachPlanChangeItems('HOTEL_NEXT',sourceId),'var(--accent)')
+    +postWorkoutCoachListHtml('What to watch next time',(review&&review.watchNextSession)||[],'var(--yellow)')
+    +'<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:0.66rem;color:var(--muted);line-height:1.55;">'
+    +'ReviewId: '+escHtml(String((review&&review.reviewId)||'—'))+' · Source session: '+escHtml(sourceId||'—')+' · Confidence: '+escHtml(String((review&&review.confidence)||'—'))+'/100'
+    +'</div>';
 }
 function generatedPlanSlotFromType(type){
   return String(type||'home').toLowerCase()==='hotel'?'HOTEL_NEXT':'HOME_NEXT';
@@ -9419,6 +9503,28 @@ function generatedPlanSessionEditNote(meta){
     editSummary:m.editSummary
   });
   return line?('PLAN EDIT BEFORE START: '+line).slice(0,700):'';
+}
+function generatedPlanSessionEditNoteFromSession(sd){
+  var s=sd&&typeof sd==='object'?sd:{};
+  var items=generatedPlanEditCleanItems(s.planEditSummary||s.editSummary||[]);
+  var edited=String(s.editedGeneratedPlan||'').toLowerCase()==='yes'
+    || !!String(s.editedFromPlanId||'')
+    || !!String(s.planEditReason||s.editReason||'')
+    || items.length>0;
+  if(!edited)return '';
+  var line=generatedPlanEditSummaryLine({
+    editedFromPlanId:s.editedFromPlanId||s.sourcePlanId,
+    editReason:s.planEditReason||s.editReason,
+    editSummary:items
+  });
+  return line?('PLAN EDIT BEFORE START: '+line).slice(0,700):'';
+}
+function generatedPlanMergeSessionNoteWithEdit(sd,note){
+  var base=String(note||'').trim();
+  if(base.indexOf('PLAN EDIT BEFORE START:')>=0)return base;
+  var edit=generatedPlanSessionEditNoteFromSession(sd);
+  if(!edit)return base;
+  return [base,edit].filter(Boolean).join(' | ');
 }
 function generatedPlanSessionEditContext(sd){
   var s=sd&&typeof sd==='object'?sd:{};
@@ -12264,7 +12370,7 @@ function updateSessionNote(sessionId,note,noteRevision){
   var sd=workoutFindLocal(sessionId);
   if(!sd)return Promise.resolve({status:'error',success:false,message:'session_missing'});
   sd=workoutNormalizeSession(sd);
-  sd.notes=String(note||'');
+  sd.notes=generatedPlanMergeSessionNoteWithEdit(sd,note);
   sd.noteRevision=noteRevision||((parseInt(sd.noteRevision||0,10)||0)+1);
   sd.sessionRevision=(parseInt(sd.sessionRevision||1,10)||1)+1;
   sd.clientMutationId=wtNewId('mut');
@@ -12326,6 +12432,40 @@ function syncData(payload,msgId){
 }
 
 // ─── HOME DATA ────────────────────────────────────────────────────
+function sessionCountsAsStrengthGoal(s){
+  if(!s||!s.workoutType)return false;
+  if(isHIIT(s.workoutType)||String(s.workoutType)==='Walk'||String(s.workoutType)==='Body')return false;
+  var pt=_sessionPlanTypeFromWorkoutType(s.workoutType||'');
+  return pt==='Home'||pt==='Hotel'||String(s.workoutType||'').indexOf('Strength')>=0;
+}
+function weekGoalSummaryForDates(sessions,dates){
+  var set={};(dates||[]).forEach(function(d){set[String(d)]=true;});
+  var strDates={},hiitByDate={},effort=0,dur=0,hasEffortData=false;
+  (sessions||[]).forEach(function(s){
+    if(!s||!s.date||!set[String(s.date)])return;
+    if(sessionCountsAsStrengthGoal(s)){strDates[s.date]=true;return;}
+    if(isHIIT(s.workoutType)){
+      if(!hiitByDate[s.date])hiitByDate[s.date]=workoutChooseHiitForDate(null,s);
+      else hiitByDate[s.date]=workoutChooseHiitForDate(hiitByDate[s.date],s);
+    }
+  });
+  Object.keys(hiitByDate).forEach(function(d){
+    var h=hiitByDate[d]||{};
+    var e=parseInt(h.effort,10)||0,m=parseInt(h.duration,10)||0;
+    effort+=e;dur+=m;
+    if(e>0||m>0)hasEffortData=true;
+  });
+  return {strength:Object.keys(strDates).length,hiit:Object.keys(hiitByDate).length,effort:effort,duration:dur,hasEffortData:hasEffortData};
+}
+function weekGoalSummaryMeetsTargets(sum){
+  var s=sum||{};
+  var strTarget=Math.max(1,parseInt((_goals&&_goals.strGoal)||2,10)||2);
+  var hiitTarget=Math.max(0,parseInt((_goals&&_goals.hiitSessions)||0,10)||0);
+  var strOk=(parseInt(s.strength,10)||0)>=strTarget;
+  var hiitOk=(parseInt(s.hiit,10)||0)>=hiitTarget;
+  var effortOk=!s.hasEffortData||((parseInt(s.effort,10)||0)>=((_goals&&_goals.effortGoal)||13)&&(parseInt(s.duration,10)||0)>=((_goals&&_goals.durGoal)||28));
+  return strOk&&hiitOk&&effortOk;
+}
 function loadHomeData(){
   var now=new Date(),h=now.getHours();
   var _grEl=document.getElementById('greeting');if(_grEl)_grEl.textContent=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
@@ -12362,8 +12502,7 @@ function renderHomeData(sessions){
   var strDaysSeen={},wkStr=0;
   weekSessions.forEach(function(s){
     if(!s||!s.date)return;
-    var pt=_sessionPlanTypeFromWorkoutType(s.workoutType||'');
-    if(pt!=='Home'&&pt!=='Hotel')return;
+    if(!sessionCountsAsStrengthGoal(s))return;
     if(strDaysSeen[s.date])return;
     strDaysSeen[s.date]=true;
     wkStr++;
@@ -12441,24 +12580,20 @@ function renderHomeData(sessions){
     }catch(e){nutStreakEl.textContent='-';}
   }
 
-  // Walk km this week
+  // Walk miles this week
   var walkEl=document.getElementById('wkWalkKm');
   var walkSubEl=document.getElementById('wkWalkSub');
   if(walkEl){
-    var weekStr='Week '+getWeekNum();
-    var walkKm=0,walkCount=0;
-    sessions.forEach(function(s){
-      if(s.week===weekStr&&s.workoutType==='Walk'){
+    var walkMiles=0,walkCount=0;
+    weekSessions.forEach(function(s){
+      if(s.workoutType==='Walk'){
         walkCount++;
-        // Distance stored in exercises[0].result or notes
-        var ex=(s.exercises||[])[0]||{};
-        var dist=parseFloat(ex.result||ex.notes||'0');
-        if(!isNaN(dist))walkKm+=dist;
+        walkMiles+=walkDistanceMilesFromSession(s);
       }
     });
-    walkEl.textContent=walkKm>0?walkKm.toFixed(1):walkCount>0?walkCount:'-';
-    walkEl.className='ws-num '+(walkKm>=10?'c-green':walkKm>=5?'c-yellow':'c-muted');
-    if(walkSubEl)walkSubEl.textContent=walkKm>0?'km this wk':walkCount>0?'walk'+(walkCount>1?'s':''):' km';
+    walkEl.textContent=walkMiles>0?walkMiles.toFixed(1):walkCount>0?walkCount:'-';
+    walkEl.className='ws-num '+(walkMiles>=6?'c-green':walkMiles>=3?'c-yellow':'c-muted');
+    if(walkSubEl)walkSubEl.textContent=walkMiles>0?'mi this wk':walkCount>0?'walk'+(walkCount>1?'s':''):' mi';
   }
 
   // Last session
@@ -12471,9 +12606,8 @@ function renderHomeData(sessions){
     // Find highlight: PR, walk distance, or HIIT effort
     var highlight='';
     if(last.workoutType==='Walk'){
-      var wex=(last.exercises||[])[0]||{};
-      var wkm=parseFloat(wex.result||0);
-      if(wkm>0)highlight=wkm.toFixed(1)+' km';
+      var wmi=walkDistanceMilesFromSession(last);
+      if(wmi>0)highlight=wmi.toFixed(1)+' mi';
     } else if(isHIIT(last.workoutType)){
       if(last.effort)highlight='Effort '+last.effort+' \u00b7 '+(last.duration||'?')+' min';
     } else if(last.exercises&&last.exercises.length){
@@ -12517,7 +12651,7 @@ function renderHomeData(sessions){
     if(d2<cut)return;
     if(!weekCounts[s.week])weekCounts[s.week]={str:0,hiit:0};
     if(isHIIT(s.workoutType))weekCounts[s.week].hiit++;
-    else if(s.workoutType!=='Walk')weekCounts[s.week].str++;
+    else if(sessionCountsAsStrengthGoal(s))weekCounts[s.week].str++;
   });
   var wks=Object.keys(weekCounts);
   var hiitWks=wks.filter(function(w){return weekCounts[w].hiit>=_goals.hiitSessions;}).length;
@@ -12538,27 +12672,16 @@ function renderHomeData(sessions){
 }
 
 function calcStreak(sessions){
-  var wc={};
-  sessions.forEach(function(s){
-    if(!wc[s.week])wc[s.week]={str:0,hiit:0,effort:0,dur:0,hasEffortData:false};
-    if(isHIIT(s.workoutType)){
-      wc[s.week].hiit++;
-      var eff=parseInt(s.effort)||0,dur=parseInt(s.duration)||0;
-      wc[s.week].effort+=eff;wc[s.week].dur+=dur;
-      if(eff>0||dur>0)wc[s.week].hasEffortData=true;
-    } else if(s.workoutType!=='Walk')wc[s.week].str++;
-  });
-  var currentWeek='Week '+getWeekNum();
-  var weeks=Object.keys(wc).sort().reverse(),streak=0;
-  for(var w=0;w<weeks.length;w++){
-    if(weeks[w]===currentWeek)continue;
-    var wk=wc[weeks[w]];
-    var strOk=wk.str>=_goals.strGoal;
-    var hiitOk=wk.hiit>=_goals.hiitSessions;
-    // Only check effort/duration if this week has effort data (new sessions)
-    // Old sessions without effort stored just need session count
-    var effortOk=!wk.hasEffortData||(wk.effort>=_goals.effortGoal&&wk.dur>=_goals.durGoal);
-    if(strOk&&hiitOk&&effortOk)streak++;
+  sessions=sessions||[];
+  var today=new Date();today.setHours(0,0,0,0);
+  var dow=(today.getDay()+6)%7;
+  var thisMon=new Date(today);thisMon.setDate(today.getDate()-dow);
+  var streak=0;
+  for(var w=1;w<=104;w++){
+    var mon=new Date(thisMon);mon.setDate(thisMon.getDate()-(w*7));
+    var dates=[];for(var i=0;i<7;i++){var dd=new Date(mon);dd.setDate(mon.getDate()+i);dates.push(fmtDate(dd));}
+    var sum=weekGoalSummaryForDates(sessions,dates);
+    if(weekGoalSummaryMeetsTargets(sum))streak++;
     else break;
   }
   return streak;
@@ -13691,7 +13814,7 @@ function renderPreview(){
   var activeCount=exs.filter(function(_,ei){return !_previewSkipped[ei];}).length;
   var timeEst='';
   if(_cachedSessions&&_cachedSessions.length){
-    var strSess=_cachedSessions.filter(function(s){return s.workoutType&&s.workoutType.indexOf('Strength')!==-1&&parseInt(s.duration)>0;});
+    var strSess=_cachedSessions.filter(function(s){return sessionCountsAsStrengthGoal(s)&&parseInt(s.duration)>0;});
     if(strSess.length){var recent=strSess.slice(-6);var avgMin=Math.round(recent.reduce(function(a,s){return a+(parseInt(s.duration)||0);},0)/recent.length);if(avgMin>0)timeEst=' · ~'+avgMin+' min';}
   }
   html+='<button class="preview-start-btn" onclick="startFromPreview()">START WORKOUT &nbsp;('+activeCount+' exercises'+timeEst+')</button>';
@@ -14307,7 +14430,9 @@ function aiCoachAdherenceScore(){
     var days=getWeekDates(0).map(function(d){return fmtDate(d);});
     var wStart=days[0],wEnd=days[6];
     var s=(_cachedSessions||[]).filter(function(x){return x&&x.date>=wStart&&x.date<=wEnd;});
-    var strength=s.filter(function(x){return x.workoutType&&x.workoutType.indexOf('Strength')>=0;}).length;
+    var strengthDays={};
+    s.forEach(function(x){if(x&&x.date&&sessionCountsAsStrengthGoal(x))strengthDays[x.date]=true;});
+    var strength=Object.keys(strengthDays).length;
     var hiit=coachUniqueHiitSessions(s.filter(function(x){return isHIIT(x.workoutType);})).length;
     var doneDays=days.filter(function(d){return (_nutEntries||[]).some(function(e){return e.date===d&&e.meal!=='_active'&&e.meal!=='_cheat';});}).length;
     var sg=Math.max(1,parseInt((_goals||{}).strGoal||2,10));
@@ -14340,7 +14465,7 @@ var HOTEL_EXERCISES=[
 function aiCoachBuildContext(){
   // Gather last 90 days of strength sessions
   var allSess=(_cachedSessions||[])
-    .filter(function(s){return s.workoutType&&(s.workoutType.indexOf('Strength')>=0);})
+    .filter(function(s){return sessionCountsAsStrengthGoal(s);})
     .sort(function(a,b){return a.date<b.date?1:-1;});
 
   // Body metrics (last 3)
@@ -14524,7 +14649,7 @@ function aiCoachBuildContext(){
     var recentNonStrength=(_cachedSessions||[])
       .filter(function(s){
         return s.date>=sinceLastStr&&s.date<=localDateStr()&&
-               s.workoutType&&s.workoutType.indexOf('Strength')<0;
+               s.workoutType&&!sessionCountsAsStrengthGoal(s);
       });
     var hiitSinceLast=recentNonStrength.filter(function(s){return isHIIT(s.workoutType);});
     var walksSinceLast=recentNonStrength.filter(function(s){return s.workoutType==='Walk';});
@@ -14538,11 +14663,10 @@ function aiCoachBuildContext(){
       out+=', '+hiitSinceLast.length+' HIIT since ('+hiitDetails.join(', ')+')';
     }
     if(walksSinceLast.length){
-      var walkKm=walksSinceLast.reduce(function(acc,s){
-        var ex=(s.exercises||[])[0];
-        return acc+(ex?parseFloat(ex.result)||0:0);
+      var walkMiles=walksSinceLast.reduce(function(acc,s){
+        return acc+walkDistanceMilesFromSession(s);
       },0);
-      out+=', '+(Math.round(walkKm*10)/10)+'km walked since';
+      out+=', '+(Math.round(walkMiles*10)/10)+'mi walked since';
     }
     // HIIT frequency this week
     var _wd=getWeekDates(0).map(function(d){return fmtDate(d);});
@@ -15246,7 +15370,7 @@ function coachDataQualityAlerts(sessions){
     if(!wt)unknownTypes++;
     var key=s.date+'|'+wt.toUpperCase();
     mapByDayType[key]=(mapByDayType[key]||0)+1;
-    if(wt&&wt!=='Walk'&&wt!=='Body'&&!isHIIT(wt)&&wt.indexOf('Strength')<0)unknownTypes++;
+    if(wt&&wt!=='Walk'&&wt!=='Body'&&!isHIIT(wt)&&!sessionCountsAsStrengthGoal(s))unknownTypes++;
   });
   var dupKeys=Object.keys(mapByDayType).filter(function(k){return mapByDayType[k]>1;});
   if(dupKeys.length)alerts.push('Duplicate session rows detected: '+dupKeys.length+' day/type duplicates in logs.');
@@ -18175,7 +18299,7 @@ function aiCoachSlotLabelFromName(n){
 }
 function aiCoachBuildSlotDashboard(plan){
   try{
-    var hist=(_cachedSessions||[]).filter(function(s){return s&&s.workoutType&&s.workoutType.indexOf('Strength')>=0;});
+    var hist=(_cachedSessions||[]).filter(function(s){return sessionCountsAsStrengthGoal(s);});
     var lines=[];
     (plan.exercises||[]).forEach(function(ex){
       var rows=[];
@@ -19005,23 +19129,27 @@ var _paused=false,_pauseEndWall=0;
 function togglePause(){
   var btn=document.getElementById('footerPause');
   if(!_paused){
-    // Pause — save remaining time
+    var wasActive=(phase==='active');
     _paused=true;
-    _pauseEndWall=_timerEndWall; // save wall target
+    _pauseEndWall=_timerEndWall;
     clearInterval(timerInt);stopMetro();
+    if(wasActive){
+      mRun=false;
+      phase='ready';
+      var tl=document.getElementById('timerLbl');if(tl)tl.textContent='SET PAUSED';
+      var tc=document.getElementById('tCount');if(tc)tc.textContent='...';
+      var ts=document.getElementById('tSub');if(ts)ts.textContent='tap start to restart';
+    }
     if(btn)btn.textContent='Resume';
     var pb=document.getElementById('phBadge');
     if(pb){pb.textContent='PAUSED';pb.className='ph-badge';}
+    updBtn();
     haptic('medium');
   } else {
-    // Resume — shift wall target by paused duration
     _paused=false;
-    var pausedFor=Date.now()-(_timerEndWall-tLeft*1000+(_pauseEndWall-_timerEndWall));
-    // Simpler: just set new wall target from tLeft
     _timerEndWall=Date.now()+tLeft*1000;
     if(btn)btn.textContent='Pause';
     haptic('light');
-    // Restart appropriate timer
     if(phase==='resting'){runRestTimer(tLeft);}
     else if(phase==='between'){
       // Re-attach between timer without resetting tLeft
@@ -19038,7 +19166,12 @@ function togglePause(){
           phase='idle';updBtn();
         }
       },500);
+    } else if(phase==='ready'||phase==='idle'){
+      var pb2=document.getElementById('phBadge');if(pb2){pb2.textContent='READY';pb2.className='ph-badge phb-ready';}
+      var tl2=document.getElementById('timerLbl');if(tl2)tl2.textContent='TAP TO START';
+      var ts2=document.getElementById('tSub');if(ts2)ts2.textContent='set '+(curSet+1);
     }
+    updBtn();
   }
   updateSessionPauseUI();
 }
@@ -22083,27 +22216,7 @@ function trainerDashboardOpenReviewDetail(){
     return;
   }
   var session=trainerDashboardSessionRowById(review.sessionId)||latest||null;
-  var watch=(review.watchNextSession||[]).map(function(x){return '• '+escHtml(String(x));}).join('<br>');
-  var isLegacyReview=!!(review&&String(review.fallbackReason||'').indexOf('legacy')>=0);
-  if(String((review&&review.source)||'').toLowerCase()==='legacy_import')isLegacyReview=true;
-  body.innerHTML=''
-    +'<div><strong>Workout:</strong> '+escHtml(String((session&&session.workoutType)||'Workout'))+' · '+escHtml(String((session&&session.date)||'—'))+'</div>'
-    +'<div><strong>Workout time:</strong> '+escHtml(trainerDashboardFmtTs((session&&session.completedAt)||((session&&session.updatedAt)||0)))+'</div>'
-    +'<div><strong>Review generated:</strong> '+escHtml(trainerDashboardFmtTs(review.updatedAt||review.createdAt))+'</div>'
-    +'<div><strong>Source sessionId:</strong> '+escHtml(String(review.sourceSessionId||review.sessionId||'—'))+'</div>'
-    +'<div><strong>ReviewId:</strong> '+escHtml(String(review.reviewId||'—'))+'</div>'
-    +'<div><strong>Source:</strong> '+escHtml(isLegacyReview?'IMPORTED BASELINE':((review.fallbackUsed||String(review.source||'').toLowerCase()!=='ai')?'FALLBACK':'AI REVIEW'))+'</div>'
-    +'<div><strong>Session verdict:</strong> '+escHtml(String(review.sessionVerdict||'—'))+'</div>'
-    +'<div><strong>What improved:</strong> '+escHtml(((review.whatImproved||[])[0]||'—'))+'</div>'
-    +'<div><strong>What stalled:</strong> '+escHtml(((review.whatStalled||review.whatRegressed||[])[0]||'—'))+'</div>'
-    +'<div><strong>Main adaptation:</strong> '+escHtml(String(review.mainAdaptation||'—'))+'</div>'
-    +'<div><strong>Main limiter:</strong> '+escHtml(String(review.mainLimiter||'—'))+'</div>'
-    +'<div><strong>Progression earned:</strong> '+escHtml(String(postWorkoutProgressionDecision(review)||'—'))+' · '+escHtml(String(postWorkoutProgressionReason(review)||''))+'</div>'
-    +'<div><strong>What should change next time:</strong> '+escHtml(String(review.nextChange||'—'))+'</div>'
-    +'<div><strong>Watchpoints:</strong><br>'+(watch||'—')+'</div>'
-    +'<div><strong>Confidence:</strong> '+escHtml(String(review.confidence||'—'))+'</div>'
-    +'<div><strong>Confidence reason:</strong> '+escHtml(String(review.confidenceReason||'—'))+'</div>'
-    +'<div><strong>Sync status:</strong> '+escHtml(String(review.syncState||'unknown'))+'</div>';
+  body.innerHTML=postWorkoutCoachDetailHtml(review,session);
   ov.style.display='flex';
 }
 function trainerDashboardOpenPlanDetail(slot){
@@ -23171,12 +23284,13 @@ function toggleExerciseAutoAdvance(){
 }
 function maybeAutoStartCurrentExerciseSet(){
   if(!exerciseAutoAdvanceEnabled(curEx))return;
+  if(_paused)return;
   var ex=exs&&exs[curEx];
   if(!ex||phase!=='idle'||curSet>=ex.sets)return;
   var targetEx=curEx,targetSet=curSet;
   setTimeout(function(){
     if(curEx!==targetEx||curSet!==targetSet)return;
-    if(!exerciseAutoAdvanceEnabled(curEx)||phase!=='idle')return;
+    if(_paused||!exerciseAutoAdvanceEnabled(curEx)||phase!=='idle')return;
     if(validateCurrentExerciseTiming())startRC();
   },450);
 }
@@ -23403,6 +23517,10 @@ function runSeq(repNum,total,onDone){
 }
 
 function startRC(){
+  if(_paused){
+    _paused=false;
+    try{updateSessionPauseUI();}catch(e){}
+  }
   var ex=exs[curEx];phase='active';updBtn();
   if(ex.isPlank){
     clearMTOs();mRun=true;
@@ -24474,6 +24592,17 @@ function wtTestNutritionMath(){
   var fb=nutLocalDayDoneFeedback({calories:2332,protein:175,fibre:17,satFat:12,sodium:2865},[{food:'Chiquita bananas',protein:2,fibre:5,satFat:0,sodium:2}],{cal:2100,prot:175,fib:30,satfat:14,sodium:3000});
   out.push(wtTestResult('Day-done local feedback fallback',nutScoreIsUsable(fb)&&/fibre|protein|tomorrow|carried/i.test(fb.insight),'Food log complete always has written feedback even if AI fails'));
   out.push(wtTestResult('Day-done stale score rejected',!nutScoreIsUsable({score:72,grade:'C',insight:''})&&nutScoreIsUsable({score:72,grade:'C',insight:'Specific feedback exists.'}),'Old grade-only nutrition scores regenerate'));
+  var sigFood=[{id:'food1',date:'2026-05-14',meal:'Lunch',food:'Chicken',servings:1,calories:400,protein:45,fibre:2,satFat:2,sodium:500,updatedAt:1}];
+  var sigActive=sigFood.concat([{id:'active_2026-05-14',date:'2026-05-14',meal:'_active',food:'AppleWatch',servings:1,calories:900,protein:0,fibre:0,satFat:0,sodium:0,updatedAt:2}]);
+  out.push(wtTestResult('Active calories do not change food score signature',nutScoreDaySignature('2026-05-14',sigFood)===nutScoreDaySignature('2026-05-14',sigActive),'Active-calorie rows are budget inputs, not food-quality score inputs'));
+  var savedTargetsForActive=JSON.parse(JSON.stringify(_nutTargets||{}));
+  try{
+    _nutTargets=Object.assign({},_nutTargets||{},{activeBase:390,normalRatio:0.5,cheatRatio:0.75});
+    out.push(wtTestResult('Active calories budget threshold',nutritionActiveCaloriesAffectBudget('2026-05-14',390)===false&&nutritionActiveCaloriesAffectBudget('2026-05-14',391)===true,'Shortcut active calories refresh budget only above active baseline'));
+  }finally{
+    _nutTargets=savedTargetsForActive;
+  }
+  out.push(wtTestResult('Done-date nutrition refresh wired',String(nutConfirmServing).indexOf('nutritionRefreshAfterDoneFoodChanged')>=0&&String(nutritionRefreshAfterDoneFoodChanged).indexOf('dayDoneGetForDate')>=0,'Food changes refresh completed-date averages using the changed date, not only today'));
   return out;
 }
 function wtTestSavedVsLogged(){
@@ -24627,13 +24756,17 @@ function wtTestTrainerMock(){
         && /15\/15\/15\/15 -> 15\/15\/15/.test(editJoined)
         && /ChatGPT/i.test(editLine),
       'Edited plan carries reason and exact target diffs into completed-session context'));
-    var editReviewPrompt=postWorkoutReviewPrompt(editSess,postWorkoutDeterministicReview(editSess),postWorkoutFacts(editSess));
-    out.push(wtTestResult('Edited plan session prompt context',
-      /Plan edit before start/.test(editReviewPrompt)&&/ChatGPT/i.test(editReviewPrompt),
-      'Post-workout review can evaluate whether user-chosen edits worked'));
-  }catch(editErr){
-    out.push(wtTestResult('Edited generated plan diff memory',false,editErr&&editErr.message||String(editErr)));
-  }
+	    var editReviewPrompt=postWorkoutReviewPrompt(editSess,postWorkoutDeterministicReview(editSess),postWorkoutFacts(editSess));
+	    out.push(wtTestResult('Edited plan session prompt context',
+	      /Plan edit before start/.test(editReviewPrompt)&&/ChatGPT/i.test(editReviewPrompt),
+	      'Post-workout review can evaluate whether user-chosen edits worked'));
+	    var mergedEditNote=generatedPlanMergeSessionNoteWithEdit(editSess,'Felt good. Keep this.');
+	    out.push(wtTestResult('Edited plan note update preserves memory',
+	      /Felt good/.test(mergedEditNote)&&/PLAN EDIT BEFORE START/.test(mergedEditNote)&&/SINGLE-LEG GLUTE BRIDGES/.test(mergedEditNote),
+	      'Later note edits keep the trainer-learning marker for Sheet round trips'));
+	  }catch(editErr){
+	    out.push(wtTestResult('Edited generated plan diff memory',false,editErr&&editErr.message||String(editErr)));
+	  }
   try{
     var qNow=artifactQueueNow();
     function qJob(spec){
@@ -24661,6 +24794,7 @@ function wtTestTrainerMock(){
     var qDeps=[qOther,qReview,qCoach,qGen];
     var qPickedDep=artifactQueuePickNext({jobs:qDeps,updatedAt:qNow});
     out.push(wtTestResult('Plan generation dependency priority',qPickedDep&&qPickedDep.jobId==='qprio_review'&&artifactQueueJobPriority(qReview,qDeps)===1&&artifactQueueJobPriority(qCoach,qDeps)===1,'Review/coach jobs that unblock generation move ahead of unrelated work'));
+    out.push(wtTestResult('Exercise auto mode respects pause',String(maybeAutoStartCurrentExerciseSet).indexOf('_paused')>=0&&String(startRC).indexOf('_paused')>=0,'Per-exercise auto-start will not fire while paused, and manual start clears the pause flag safely'));
 	  }catch(qErr){
 	    out.push(wtTestResult('Plan generation queue priority',false,qErr&&qErr.message||String(qErr)));
 	  }
@@ -24888,7 +25022,12 @@ function wtTestUnifiedCoach(){
 function wtTestHealthMock(){
   var out=[];
   var b=JSON.parse(JSON.stringify(healthImportsLoad()||{}));
+  var savedActiveRaw=null,savedMetaRaw=null,savedEntries=null,savedTargets=null;
   try{
+    try{savedActiveRaw=localStorage.getItem(NUT_ACTIVE_KEY);}catch(e0){}
+    try{savedMetaRaw=localStorage.getItem(NUT_HEALTH_META_KEY);}catch(e1){}
+    savedEntries=JSON.parse(JSON.stringify(_nutEntries||[]));
+    savedTargets=JSON.parse(JSON.stringify(_nutTargets||{}));
     var d=localDateStr();
     var p={source:'test',is_test:true,date:d,timezone:'America/Los_Angeles',steps:1234,active_energy_calories:333,sleep_hours:0,body_weight_lb:0,workouts:[{type:'strength_training',duration_min:45,active_energy_calories:280}]};
     var n=healthNormalizePayload(p);
@@ -24898,10 +25037,38 @@ function wtTestHealthMock(){
     out.push(wtTestResult('Health import apply',!!got,'Import stored safely'));
     var bad=healthNormalizePayload({source:'apple_shortcut',date:d,steps:-20,active_energy_calories:-5});
     out.push(wtTestResult('Health bad numeric sanitize',bad.steps===0&&bad.active_energy_calories===0,'Negative values sanitized'));
+    _nutTargets=Object.assign({},_nutTargets||{},{activeBase:390,normalRatio:0.5});
+    _nutEntries=[];
+    try{localStorage.setItem(NUT_ACTIVE_KEY,'{}');}catch(e2){}
+    nutritionHealthMetaSave({});
+    var low=healthApplyActiveConflict('2026-05-01',300,{syncNutrition:false,source:'test'});
+    var lowActive=safeLsJson(NUT_ACTIVE_KEY,{},NUT_ACTIVE_KEY)||{};
+    var high=healthApplyActiveConflict('2026-05-01',500,{syncNutrition:false,source:'test'});
+    var highActive=safeLsJson(NUT_ACTIVE_KEY,{},NUT_ACTIVE_KEY)||{};
+    out.push(wtTestResult('Health active calories ignore below baseline',low&&low.ignoredBelowTarget===true&&!lowActive['2026-05-01'],'Shortcut active calories below the active baseline do not refresh nutrition budget rows'));
+    out.push(wtTestResult('Health active calories save above baseline',high&&high.budgetChanged===true&&Math.round(highActive['2026-05-01'])===500,'Shortcut active calories above the active baseline update the budget row'));
   }catch(err){
     out.push(wtTestResult('Health tests',false,err&&err.message||String(err)));
   }finally{
     healthImportsSave(b);
+    if(savedEntries)_nutEntries=savedEntries;
+    if(savedTargets)_nutTargets=savedTargets;
+    try{
+      if(savedActiveRaw===null)localStorage.removeItem(NUT_ACTIVE_KEY);
+      else localStorage.setItem(NUT_ACTIVE_KEY,savedActiveRaw);
+    }catch(e3){}
+    try{
+      if(savedActiveRaw===null&&wtDB&&wtDB.del)wtDB.del(NUT_ACTIVE_KEY);
+      else if(wtDB&&wtDB.set)wtDB.set(NUT_ACTIVE_KEY,savedActiveRaw);
+    }catch(e4){}
+    try{
+      if(savedMetaRaw===null)localStorage.removeItem(NUT_HEALTH_META_KEY);
+      else localStorage.setItem(NUT_HEALTH_META_KEY,savedMetaRaw);
+    }catch(e5){}
+    try{
+      if(savedMetaRaw===null&&wtDB&&wtDB.del)wtDB.del(NUT_HEALTH_META_KEY);
+      else if(wtDB&&wtDB.set)wtDB.set(NUT_HEALTH_META_KEY,savedMetaRaw);
+    }catch(e6){}
   }
   return out;
 }
@@ -29300,11 +29467,11 @@ function aiProfileSetRPE(ex,val){
   aiProfileSave(p);
 }
 function aiCoach4WeekSummaryHtml(){
-  var sess=(_cachedSessions||[]).filter(function(s){return s&&s.workoutType&&s.workoutType.indexOf('Strength')>=0;});
+  var sess=(_cachedSessions||[]).filter(function(s){return sessionCountsAsStrengthGoal(s);});
   var from=nutShiftDate(localDateStr(),-27);
   sess=sess.filter(function(s){return s.date>=from;});
-  var home=sess.filter(function(s){return s.workoutType.indexOf('Home')>=0;}).length;
-  var hotel=sess.filter(function(s){return s.workoutType.indexOf('Hotel')>=0;}).length;
+  var home=sess.filter(function(s){return _sessionPlanTypeFromWorkoutType(s.workoutType||'')==='Home';}).length;
+  var hotel=sess.filter(function(s){return _sessionPlanTypeFromWorkoutType(s.workoutType||'')==='Hotel';}).length;
   var done=sess.length;
   var planned=12; // 3/week target for 4 weeks
   var adherence=Math.round((done/Math.max(1,planned))*100);
@@ -29706,6 +29873,120 @@ function saveBody(){
 }
 
 // ─── WALK LOG ─────────────────────────────────────────────────────
+var _editingWalkSession=null;
+var _walkHistorySessions=[];
+function walkCleanDistanceMiles(v){
+  if(v===null||v===undefined||v==='')return 0;
+  var n=parseFloat(String(v).replace(/[^\d. -]/g,''));
+  return isFinite(n)&&n>0?Math.round(n*100)/100:0;
+}
+function walkDistanceMilesFromSession(s){
+  if(!s)return 0;
+  var direct=walkCleanDistanceMiles(s.distanceMiles||s.distance_miles||s.distanceMi||s.distance);
+  if(direct>0)return direct;
+  var ex=(s.exercises||[])[0]||{};
+  direct=walkCleanDistanceMiles(ex.distanceMiles||ex.distance||'');
+  if(direct>0)return direct;
+  var txt=String(ex.result||ex.notes||s.notes||'');
+  var m=txt.match(/(\d+(?:\.\d+)?)\s*(?:mi|mile|miles|km)\b/i);
+  if(m)return walkCleanDistanceMiles(m[1]);
+  return 0;
+}
+function walkDurationMinutesFromSession(s){
+  if(!s)return 0;
+  var d=parseInt(s.duration,10)||0;
+  if(d>0)return d;
+  var ex=(s.exercises||[])[0]||{};
+  d=parseInt((ex.sets&&ex.sets[0])||ex.duration||'',10)||0;
+  if(d>0)return d;
+  var m=String(ex.result||'').match(/(\d+)\s*min/i);
+  return m?(parseInt(m[1],10)||0):0;
+}
+function walkPaceText(minutes,miles){
+  var min=parseInt(minutes,10)||0,mi=walkCleanDistanceMiles(miles);
+  if(!(min>0&&mi>0))return '';
+  var pace=min/mi;
+  var pMin=Math.floor(pace);
+  var pSec=Math.round((pace-pMin)*60);
+  if(pSec>=60){pMin++;pSec-=60;}
+  return pMin+':'+String(pSec).padStart(2,'0')+' min/mi';
+}
+function walkSessionKey(s){
+  if(!s)return '';
+  if(s.sessionId)return String(s.sessionId);
+  return ['walk',s.sourceSheetName||'Walks',s.sourceRow||s.rowNumber||'',s.date||'',walkDurationMinutesFromSession(s),walkDistanceMilesFromSession(s)].join('|');
+}
+function walkBuildLocalSession(date,dur,dist,notes,base){
+  var b=base&&typeof base==='object'?base:{};
+  var d=String(date||localDateStr()).slice(0,10);
+  var mins=Math.max(0,parseInt(dur,10)||0);
+  var miles=walkCleanDistanceMiles(dist);
+  var week='Week '+getWeekNum(parseLocalDate(d));
+  var sid=String(b.sessionId||'');
+  if(!sid&&b.sourceRow)sid='walk_row_'+String(b.sourceRow);
+  if(!sid)sid=wtNewId('walk');
+  var result=(mins?mins+'min':'')+(miles?((mins?' ':'')+miles.toFixed(2).replace(/\.?0+$/,'')+'mi'):'');
+  return {
+    date:d,
+    week:week,
+    workoutType:'Walk',
+    sessionId:sid,
+    duration:mins,
+    distance:miles,
+    distanceMiles:miles,
+    notes:String(notes||''),
+    rowNumber:b.rowNumber||b.sourceRow||0,
+    sourceRow:b.sourceRow||b.rowNumber||0,
+    lastRow:b.lastRow||b.sourceRow||b.rowNumber||0,
+    sourceSheetName:b.sourceSheetName||'Walks',
+    source:b.source||'walk_log',
+    timestamp:d,
+    exercises:[{name:'Walk',feel:'',notes:String(notes||''),sets:mins?[String(mins)]:[],result:result,isPlank:'no',distanceMiles:miles}]
+  };
+}
+function walkSessionsSame(a,b){
+  if(!a||!b)return false;
+  var ar=parseInt(a.sourceRow||a.rowNumber||0,10)||0,br=parseInt(b.sourceRow||b.rowNumber||0,10)||0;
+  if(ar&&br&&ar===br)return true;
+  var as=String(a.sessionId||''),bs=String(b.sessionId||'');
+  return !!(as&&bs&&as===bs);
+}
+function walkUpsertCachedSession(sd){
+  if(!sd)return;
+  if(!_cachedSessions)_cachedSessions=[];
+  _cachedSessions=_cachedSessions.filter(function(s){return !(s&&s.workoutType==='Walk'&&walkSessionsSame(s,sd));});
+  _cachedSessions.push(JSON.parse(JSON.stringify(sd)));
+  saveCache(_cachedSessions);
+  _sheetSessions=_cachedSessions;
+}
+function setWalkEditMode(sess){
+  _editingWalkSession=sess?JSON.parse(JSON.stringify(sess)):null;
+  var save=document.getElementById('walkSaveBtn');
+  var cancel=document.getElementById('walkCancelEditBtn');
+  if(save)save.textContent=_editingWalkSession?'UPDATE WALK':'SAVE WALK';
+  if(cancel)cancel.style.display=_editingWalkSession?'block':'none';
+}
+function cancelEditWalk(){
+  setWalkEditMode(null);
+  ['walkDur','walkDist','walkNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  var d=document.getElementById('walkDate');if(d)d.value=localDateStr();
+  var msg=document.getElementById('walkMsg');if(msg){msg.textContent='';msg.style.background='';msg.style.color='';}
+}
+function editWalkFromHistory(idx){
+  var sess=(_walkHistorySessions||[])[parseInt(idx,10)];
+  if(!sess)return;
+  closeHistory();
+  navTo('log');
+  switchLogTab('walk');
+  var date=document.getElementById('walkDate'),dur=document.getElementById('walkDur'),dist=document.getElementById('walkDist'),notes=document.getElementById('walkNotes');
+  if(date)date.value=String(sess.date||localDateStr()).slice(0,10);
+  if(dur)dur.value=walkDurationMinutesFromSession(sess)||'';
+  if(dist){var miles=walkDistanceMilesFromSession(sess);dist.value=miles?String(miles):'';}
+  if(notes)notes.value=String(sess.notes||(((sess.exercises||[])[0]||{}).notes)||'');
+  setWalkEditMode(sess);
+  var msg=document.getElementById('walkMsg');
+  if(msg){msg.textContent='Editing saved walk. Update when ready.';msg.style.background='var(--blue-dim)';msg.style.color='var(--blue)';}
+}
 function saveWalk(){
   var _btn=document.querySelector('.lsb-walk');
   if(!uiActionBegin('saveWalk',_btn,'SAVING...'))return;
@@ -29715,16 +29996,32 @@ function saveWalk(){
   var date=document.getElementById('walkDate').value||localDateStr();
   var el=document.getElementById('walkMsg');
   if(!dur&&!dist){if(el){el.textContent='Enter duration or distance';el.style.background='var(--red-dim)';el.style.color='var(--red)';}uiActionEnd('saveWalk',200);return;}
-  var walkPayload={type:'walk',date:date,duration:dur,distance:dist,notes:notes};
-  var localSdWalk={date:date,workoutType:'Walk',duration:parseInt(dur)||0,distance:dist,notes:notes};
+  var editing=_editingWalkSession?JSON.parse(JSON.stringify(_editingWalkSession)):null;
+  var localSdWalk=walkBuildLocalSession(date,dur,dist,notes,editing||{});
+  var walkPayload={type:'walk',date:date,duration:localSdWalk.duration||'',distance:localSdWalk.distanceMiles||'',distanceMiles:localSdWalk.distanceMiles||'',notes:notes,unit:'mi'};
+  if(editing){
+    walkPayload.mode='update';
+    walkPayload.sessionId=localSdWalk.sessionId;
+    walkPayload.rowNumber=editing.rowNumber||editing.sourceRow||0;
+    walkPayload.sourceRow=editing.sourceRow||editing.rowNumber||0;
+    walkPayload.sourceSheetName=editing.sourceSheetName||'Walks';
+  }
   recSession(localSdWalk);
-  if(_cachedSessions)_cachedSessions.push(localSdWalk);
-  syncData(walkPayload,'walkMsg');
+  walkUpsertCachedSession(localSdWalk);
+  renderHomeData(_cachedSessions||[localSdWalk]);
+  syncData(walkPayload,'walkMsg').then(function(res){
+    if(res&&(res.rowNumber||res.data&&res.data.rowNumber)){
+      var row=(res.rowNumber||(res.data&&res.data.rowNumber));
+      localSdWalk.rowNumber=row;localSdWalk.sourceRow=row;localSdWalk.lastRow=row;localSdWalk.sessionId=localSdWalk.sessionId||('walk_row_'+row);
+      walkUpsertCachedSession(localSdWalk);
+    }
+  });
   setTimeout(function(){
     document.getElementById('walkDur').value='';
     document.getElementById('walkDist').value='';
     document.getElementById('walkNotes').value='';
     document.getElementById('walkDate').value=localDateStr();
+    setWalkEditMode(null);
     uiActionEnd('saveWalk',0);
   },3500);
   setTimeout(function(){uiActionEnd('saveWalk',0);},1200);
@@ -29741,7 +30038,7 @@ function initEditTab(){
     if(el){el.textContent='Synced (tap to refresh)';el.style.color='var(--muted)';}
     if(result&&result.sessions&&result.sessions.length){
       var editSessions=workoutVisibleSessions(result.sessions,{type:'strength'}).filter(function(sess){
-        return sess&&sess.workoutType&&sess.workoutType.indexOf('Strength')>=0;
+        return sessionCountsAsStrengthGoal(sess);
       }).sort(function(a,b){return coachWorkoutSortValue(a)<coachWorkoutSortValue(b)?1:-1;});
       if(picker){
         picker.innerHTML='<option value="">Select a session...</option>';
@@ -29804,7 +30101,7 @@ function workoutPrepareEditedSessionForSave(sd){
 }
 function workoutShouldRefreshTrainerForEditedSession(sd){
   if(!sd||typeof sd!=='object')return false;
-  if(String(sd.workoutType||'').indexOf('Strength')<0)return false;
+  if(!sessionCountsAsStrengthGoal(sd))return false;
   if(workoutDeletedSessionIdExists(sd.sessionId))return false;
   var d=coachNormalizeDate(sd.date||sd.workoutDate||sd.normalizedWorkoutDate||sd.completedAt||sd.updatedAt);
   if(d&&d===localDateStr())return true;
@@ -29844,7 +30141,7 @@ function loadEditSessionFromData(key,sessions){
   var found=null;
   for(var i=0;i<sessions.length;i++){
     if(editSessionKey(sessions[i])===String(key)||sessions[i].date===String(key)){
-      if(sessions[i].workoutType&&sessions[i].workoutType.indexOf('Strength')>=0){found=sessions[i];break;}
+      if(sessionCountsAsStrengthGoal(sessions[i])){found=sessions[i];break;}
     }
   }
   var el=document.getElementById('editSessionContent'),btn=document.getElementById('editSaveBtn'),delBtn=document.getElementById('editDeleteBtn');
@@ -29972,7 +30269,7 @@ function openLastSession(){
   var visible=workoutVisibleSessions(_cachedSessions,{});
   for(var i=visible.length-1;i>=0;i--){
     var wt=visible[i].workoutType||'';
-    if(wt.indexOf('Strength')>=0||isHIIT(wt)){found=visible[i];break;}
+    if(sessionCountsAsStrengthGoal(visible[i])||isHIIT(wt)){found=visible[i];break;}
   }
   if(!found){
     document.getElementById('historyTitle').textContent='LAST SESSION';
@@ -30016,32 +30313,37 @@ function showHistory(type){
   function render(sessions){
     try{workoutCleanupVisibleHistoryCache('show_history_'+String(type||''));}catch(e){}
     var filtered=workoutVisibleSessions(sessions||[],{type:type}).filter(function(s){
-      if(type==='strength')return s.workoutType&&s.workoutType.indexOf('Strength')>=0;
+      if(type==='strength')return sessionCountsAsStrengthGoal(s);
       if(type==='walk')return s.workoutType==='Walk';
       return isHIIT(s.workoutType);
     }).slice().sort(function(a,b){return coachWorkoutSortValue(a)<coachWorkoutSortValue(b)?1:-1;}).slice(0,30);
     if(!filtered.length){document.getElementById('historyContent').innerHTML='<div style="color:var(--muted);text-align:center;padding:20px;">No sessions found</div>';return;}
     var html='';
     if(type==='walk'){
-      var totalKm=0;
-      filtered.forEach(function(sess){
+      var totalMiles=0;
+      _walkHistorySessions=filtered.slice();
+      filtered.forEach(function(sess,idx){
         var ex=(sess.exercises||[])[0]||{};
-        var km=parseFloat(ex.result||ex.notes||0)||0;
-        totalKm+=km;
+        var miles=walkDistanceMilesFromSession(sess);
+        totalMiles+=miles;
         var dt=parseLocalDate(sess.date),ds=dt.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
-        html+='<div style="border-bottom:1px solid var(--border);padding:10px 0;display:flex;justify-content:space-between;align-items:center;">';
+        var dur=walkDurationMinutesFromSession(sess);
+        var pace=walkPaceText(dur,miles);
+        html+='<div style="border-bottom:1px solid var(--border);padding:10px 0;">';
+        html+='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">';
         html+='<div><div style="font-weight:700;font-size:0.85rem;">'+ds+'</div>';
-        if(ex.notes&&isNaN(parseFloat(ex.notes)))html+='<div style="font-size:0.68rem;color:var(--muted);">'+ex.notes+'</div>';
+        if(ex.notes||sess.notes)html+='<div style="font-size:0.68rem;color:var(--muted);">'+escHtml(String(ex.notes||sess.notes||''))+'</div>';
         html+='</div>';
         html+='<div style="text-align:right;">';
-        if(km>0)html+='<div style="font-size:1.3rem;color:var(--accent);font-weight:700;">'+km.toFixed(1)+'<span style="font-size:0.7rem;color:var(--muted);"> km</span></div>';
-        var dur=parseInt(sess.duration)||0;
-        if(dur>0)html+='<div style="font-size:0.65rem;color:var(--muted);">'+dur+' min'+(km>0?' · '+Math.round(km/(dur/60)*10)/10+' km/h':'')+'</div>';
+        if(miles>0)html+='<div style="font-size:1.3rem;color:var(--accent);font-weight:700;">'+miles.toFixed(1)+'<span style="font-size:0.7rem;color:var(--muted);"> mi</span></div>';
+        if(dur>0)html+='<div style="font-size:0.65rem;color:var(--muted);">'+dur+' min'+(pace?' · '+pace:'')+'</div>';
         html+='</div></div>';
+        html+='<button type="button" onclick="editWalkFromHistory('+idx+')" style="margin-top:8px;width:100%;padding:8px;background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:0.66rem;font-weight:700;letter-spacing:1px;">EDIT WALK</button>';
+        html+='</div>';
       });
       html='<div style="display:flex;justify-content:space-between;padding:6px 0 12px;border-bottom:1px solid var(--border);margin-bottom:4px;">'+
         '<div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Last '+filtered.length+' walks</div>'+
-        '<div style="font-size:0.62rem;font-weight:700;color:var(--accent);">'+totalKm.toFixed(1)+' km total</div>'+
+        '<div style="font-size:0.62rem;font-weight:700;color:var(--accent);">'+totalMiles.toFixed(1)+' mi total</div>'+
       '</div>'+html;
     } else {
       filtered.forEach(function(sess){
@@ -30102,19 +30404,18 @@ function showStreakHistory(){
 
     var html='<div style="padding:4px 0 8px;">';
     weeks.forEach(function(wk){
-      var str=0,hiit=0,effort=0,dur=0,types=[];
+      var sum=weekGoalSummaryForDates(sessions||[],wk.dates);
+      var str=sum.strength,hiit=sum.hiit,effort=sum.effort,dur=sum.duration,types=[];
       wk.dates.forEach(function(d){
         (byDate[d]||[]).forEach(function(s){
           var wt=s.workoutType||'';
-          if(wt.indexOf('Strength')>=0){str++;}
-          else if(isHIIT(wt)){hiit++;effort+=parseInt(s.effort)||0;dur+=parseInt(s.duration)||0;}
           if(wt&&types.indexOf(wt)<0)types.push(wt);
         });
       });
 
       // Goal status
       var strOk=str>=_goals.strGoal,hiitOk=hiit>=_goals.hiitSessions;
-      var effortOk=effort>=_goals.effortGoal,durOk=dur>=_goals.durGoal;
+      var effortOk=!sum.hasEffortData||effort>=_goals.effortGoal,durOk=!sum.hasEffortData||dur>=_goals.durGoal;
       var allOk=strOk&&hiitOk&&effortOk&&durOk;
       var anyDone=str>0||hiit>0;
 
@@ -30533,7 +30834,7 @@ function planHorizonWeekStats(weekStart){
     (_cachedSessions||[]).forEach(function(s){
       if(!s||s.date!==ds)return;
       var wt=String(s.workoutType||'');
-      if(wt.indexOf('Strength')>=0&&!doneStrengthDays[ds]){
+      if(sessionCountsAsStrengthGoal(s)&&!doneStrengthDays[ds]){
         doneStrengthDays[ds]=true;completedStrength++;
       }else if(isHIIT(wt)&&!doneHiitDays[ds]){
         doneHiitDays[ds]=true;completedHiit++;
@@ -30844,29 +31145,13 @@ function debounceSavePlan(){
 }
 
 function updateWeekGoalBar(days){
-  var strDone=0,hiitEffort=0,hiitDuration=0;
   var STR_GOAL=_goals.strGoal,EFFORT_GOAL=_goals.effortGoal,DUR_GOAL=_goals.durGoal;
-  var strDaysSeen={};
-  days.forEach(function(d){
-    var ds=fmtDate(d);
-    (_cachedSessions||[]).forEach(function(s){
-      if(s.date!==ds)return;
-      var wt=s.workoutType||'';
-      if(wt.indexOf('Strength')>=0){
-        if(strDaysSeen[ds])return;
-        strDaysSeen[ds]=true;
-        strDone++;
-      }
-      else if(isHIIT(wt)){
-        hiitEffort+=parseInt(s.effort)||0;
-        hiitDuration+=parseInt(s.duration)||0;
-      }
-    });
-  });
-  var effortCapped=Math.min(hiitEffort,EFFORT_GOAL);
-  var durCapped=Math.min(hiitDuration,DUR_GOAL);
-
-  var strOk=strDone>=STR_GOAL,effortOk=hiitEffort>=EFFORT_GOAL,durOk=hiitDuration>=DUR_GOAL;
+  var weekDates=(days||[]).map(function(d){return fmtDate(d);});
+  var sum=weekGoalSummaryForDates(_cachedSessions||[],weekDates);
+  var strDone=sum.strength||0,hiitEffort=sum.effort||0,hiitDuration=sum.duration||0,hiitCount=sum.hiit||0;
+  var strOk=strDone>=STR_GOAL;
+  var effortOk=sum.hasEffortData?hiitEffort>=EFFORT_GOAL:hiitCount>=((_goals&&_goals.hiitSessions)||0);
+  var durOk=sum.hasEffortData?hiitDuration>=DUR_GOAL:hiitCount>=((_goals&&_goals.hiitSessions)||0);
   var hiitOk=effortOk&&durOk;
   var allDone=strOk&&hiitOk;
 
@@ -31054,7 +31339,7 @@ function weeklyFeedbackGenerate(silent){
   var lastWeekSun=lastWeekDays[6];
 
   var strSessions=(_cachedSessions||[]).filter(function(s){
-    return lastWeekDays.indexOf(s.date)>=0&&s.workoutType&&s.workoutType.indexOf('Strength')>=0;
+    return lastWeekDays.indexOf(s.date)>=0&&sessionCountsAsStrengthGoal(s);
   });
   var hiitSessions=(_cachedSessions||[]).filter(function(s){
     return lastWeekDays.indexOf(s.date)>=0&&isHIIT(s.workoutType);
@@ -31074,7 +31359,7 @@ function weeklyFeedbackGenerate(silent){
     return s.date+' HIIT '+(ex.result||'');
   }).join('; ');
   var walkCtx=walkSessions.map(function(s){
-    return s.date+' Walk dur:'+(s.duration||'')+'min dist:'+(s.distance||'');
+    return s.date+' Walk dur:'+walkDurationMinutesFromSession(s)+'min dist:'+walkDistanceMilesFromSession(s)+'mi';
   }).join('; ');
 
   // Nutrition for last week
@@ -31257,7 +31542,7 @@ function copyWeekSummary(){
 
     // Check what actually happened — use filter not find to catch multiple sessions
     var hiitSessions=sessions.filter(function(s){return isHIIT(s.workoutType);});
-    var strSessions=sessions.filter(function(s){return s.workoutType&&s.workoutType.indexOf('Strength')>=0;});
+    var strSessions=sessions.filter(function(s){return sessionCountsAsStrengthGoal(s);});
     var walkSessions=sessions.filter(function(s){return s.workoutType==='Walk';});
 
     var parts=[];
@@ -31694,6 +31979,20 @@ function healthExistingActiveCaloriesForDate(date){
   }catch(e2){}
   return current;
 }
+function nutritionActiveBaseTarget(){
+  var fallback=(typeof NUT_ACTIVE_BASE==='number'&&isFinite(NUT_ACTIVE_BASE)&&NUT_ACTIVE_BASE>0)?NUT_ACTIVE_BASE:390;
+  var configured=NaN;
+  try{configured=parseFloat((typeof _nutTargets==='object'&&_nutTargets)?_nutTargets.activeBase:NaN);}catch(e){}
+  return (isFinite(configured)&&configured>0)?configured:fallback;
+}
+function nutritionActiveCaloriesAffectBudget(date,val){
+  var n=Math.round(healthActiveCleanNumber(val));
+  if(!(n>nutritionActiveBaseTarget()))return false;
+  try{
+    var ratio=nutIsCheatDay(date||_nutDate)?((_nutTargets&&_nutTargets.cheatRatio)||0.75):((_nutTargets&&_nutTargets.normalRatio)||0.5);
+    return (parseFloat(ratio)||0)>0;
+  }catch(e){return true;}
+}
 function healthMarkActiveNutritionSaved(date,val,opts){
   try{
     var d=String(date||''),n=Math.round(healthActiveCleanNumber(val));
@@ -31750,27 +32049,34 @@ function healthPersistActiveCaloriesToNutrition(date,val,opts){
   return true;
 }
 function healthApplyActiveConflict(date,appleVal,opts){
-  // Keep the greater value only: never let Health import lower active calories.
+  // Keep the greater budget-relevant value only: never let Health import lower active calories.
   var incoming=Math.round(healthActiveCleanNumber(appleVal));
   var d=String(date||'');
   var active=safeLsJson(NUT_ACTIVE_KEY,{},NUT_ACTIVE_KEY);
   if(!active||typeof active!=='object')active={};
   var current=healthExistingActiveCaloriesForDate(d);
+  var activeBase=nutritionActiveBaseTarget();
+  var budgetRelevant=nutritionActiveCaloriesAffectBudget(d,incoming);
 
   // 0/empty/null or lower values never overwrite existing/manual values.
   if(!(incoming>current)){
-    if(incoming>0&&incoming===current&&!healthActiveAlreadySavedToNutrition(d,incoming)){
+    if(incoming>0&&incoming===current&&budgetRelevant&&!healthActiveAlreadySavedToNutrition(d,incoming)){
       healthPersistActiveCaloriesToNutrition(d,incoming,opts||{});
       healthStatusSet('Sync success','Confirmed Apple active calories saved for '+d+' ('+incoming+').');
-      return {updated:false,synced:true,value:incoming,date:d};
+      return {updated:false,synced:true,budgetChanged:false,value:incoming,date:d};
     }
     healthStatusSet('Sync success','Kept active calories at '+current+' and ignored Apple value ('+incoming+') for '+d+'.');
-    return {updated:false,synced:false,value:current,date:d};
+    return {updated:false,synced:false,budgetChanged:false,value:current,date:d};
+  }
+
+  if(!budgetRelevant){
+    healthStatusSet('Sync success','Apple active calories '+incoming+' for '+d+' are at or below the active baseline ('+Math.round(activeBase)+'), so the calorie budget was unchanged.');
+    return {updated:false,synced:false,budgetChanged:false,value:current,date:d,ignoredBelowTarget:true};
   }
 
   healthPersistActiveCaloriesToNutrition(d,incoming,opts||{});
   healthStatusSet('Sync success','Active calories updated from Apple ('+incoming+') for '+d+'.');
-  return {updated:true,synced:true,value:incoming,date:d};
+  return {updated:true,synced:true,budgetChanged:true,value:incoming,date:d};
 }
 function progressWeightLoad(){
   try{
@@ -31832,17 +32138,19 @@ function applyImportedActiveCaloriesToNutrition(importObj){
   }
   nutritionHealthMetaSave(meta);
 }
-function nutritionRefreshAfterActiveCaloriesChanged(dates,opts){
+function nutritionUniqueDateList(dates){
   var seen={},list=[];
   (Array.isArray(dates)?dates:[dates]).forEach(function(d){
     var ds=String(d||'').slice(0,10);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(ds)||seen[ds])return;
     seen[ds]=true;list.push(ds);
   });
+  return list;
+}
+function nutritionRefreshAfterActiveCaloriesChanged(dates,opts){
+  var list=nutritionUniqueDateList(dates);
   if(!list.length)return;
-  list.forEach(function(ds){
-    try{nutScoreInvalidateDate(ds,{skipRender:true});}catch(e){}
-  });
+  // Active calories only change calorie budgets/averages. Food quality scores intentionally ignore _active rows.
   try{if(typeof homeRenderCommandCenter==='function')homeRenderCommandCenter(localDateStr());}catch(e1){}
   try{if(typeof renderHomeData==='function')renderHomeData(_cachedSessions||[]);}catch(e2){}
   try{if(currentPage==='progress'&&typeof buildProgressInsights==='function')buildProgressInsights(_cachedSessions||[]);}catch(e3){}
@@ -31854,6 +32162,20 @@ function nutritionRefreshAfterActiveCaloriesChanged(dates,opts){
   }catch(e4){}
   if(opts&&opts.toast){
     appToast('Active calories refreshed for '+list.join(', ')+'.','var(--green)');
+  }
+}
+function nutritionRefreshAfterDoneFoodChanged(dates,opts){
+  var list=nutritionUniqueDateList(dates);
+  if(!list.length)return;
+  var hasDone=list.some(function(ds){return dayDoneGetForDate(ds);});
+  if(!hasDone)return;
+  try{if(typeof nutRenderWeek==='function')nutRenderWeek();}catch(e1){}
+  try{if(typeof renderHomeCholCard==='function')renderHomeCholCard();}catch(e2){}
+  try{if(typeof homeRenderCommandCenter==='function')homeRenderCommandCenter(localDateStr());}catch(e3){}
+  try{if(typeof renderHomeData==='function')renderHomeData(_cachedSessions||[]);}catch(e4){}
+  try{if(currentPage==='progress'&&typeof buildProgressInsights==='function')buildProgressInsights(_cachedSessions||[]);}catch(e5){}
+  if(opts&&opts.toast){
+    appToast('Nutrition averages refreshed for '+list.join(', ')+'.','var(--green)');
   }
 }
 function getHealthStatusMessage(latestImport){
@@ -31925,7 +32247,7 @@ function healthImportApply(payload,opts){
   if(Array.isArray(p.workouts)&&p.workouts.length&&Array.isArray(_cachedSessions)){
     var overlaps=p.workouts.filter(function(w){
       var wd=(w.started_at&&String(w.started_at).slice(0,10))||p.date;
-      return _cachedSessions.some(function(s){return s&&s.date===wd&&String(s.workoutType||'').indexOf('Strength')>=0;});
+      return _cachedSessions.some(function(s){return s&&s.date===wd&&sessionCountsAsStrengthGoal(s);});
     });
     if(overlaps.length)appToast('Apple workout overlap found: review in Health Sync.','var(--yellow)');
   }
@@ -32146,8 +32468,7 @@ function trainerRecentStrengthSessions(daysBack){
   var from=nutShiftDate(localDateStr(),-(daysBack||21));
   return (_cachedSessions||[]).filter(function(s){
     if(!s||!s.date||s.date<from)return false;
-    var wt=String(s.workoutType||'');
-    return wt.indexOf('Strength')>=0;
+    return sessionCountsAsStrengthGoal(s);
   });
 }
 function trainerFatigueScore(){
@@ -32164,10 +32485,10 @@ function trainerFatigueScore(){
       if(!s||!s.date||s.date<from||s.date>today)return false;
       if(typeof appDoctorRecordIsTestArtifact==='function'&&appDoctorRecordIsTestArtifact(s))return false;
       var wt=String(s.workoutType||'');
-      return wt.indexOf('Strength')>=0||isHIIT(wt);
+      return sessionCountsAsStrengthGoal(s)||isHIIT(wt);
     }
     var sessions=(_cachedSessions||[]).filter(sessionIsReal);
-    var strength=sessions.filter(function(s){return String(s.workoutType||'').indexOf('Strength')>=0;});
+    var strength=sessions.filter(function(s){return sessionCountsAsStrengthGoal(s);});
     var hiitList=coachUniqueHiitSessions(sessions.filter(function(s){return isHIIT(s.workoutType);}));
     var hardUnits=0,hardSessions=0,missedExercises=0,dropoffExercises=0,totalExercises=0;
     strength.forEach(function(sd){
@@ -32265,7 +32586,7 @@ function trainerCompletionSummary(offset){
   recent.forEach(function(s){
     var ds=String(s&&s.date||'');
     var t=trainerWorkoutTypeLabel(s);
-    if(!t&&String((s&&s.workoutType)||'').indexOf('Strength')>=0)t='HOME';
+    if(!t&&sessionCountsAsStrengthGoal(s))t='HOME';
     if(t==='HOME'||t==='HOTEL'){
       if(!strengthDoneByDate[ds]){
         strengthDoneByDate[ds]=1;
@@ -35871,9 +36192,13 @@ function buildProgressInsights(sessions){
   var dayMap={};days.forEach(function(d){dayMap[d]=true;});
 
   var wkSessions=(sessions||[]).filter(function(s){return s&&s.date&&dayMap[s.date];});
-  var strength=wkSessions.filter(function(s){return s.workoutType&&s.workoutType.indexOf('Strength')>=0;});
+  var strengthDays={};
+  wkSessions.forEach(function(s){
+    if(s&&s.date&&sessionCountsAsStrengthGoal(s))strengthDays[s.date]=true;
+  });
+  var strengthCount=Object.keys(strengthDays).length;
   var hiit=coachUniqueHiitSessions(wkSessions.filter(function(s){return isHIIT(s.workoutType);})).length;
-  var skipped=Math.max(0,((_goals&&_goals.strGoal)||2)-strength.length)+Math.max(0,((_goals&&_goals.hiitSessions)||2)-hiit);
+  var skipped=Math.max(0,((_goals&&_goals.strGoal)||2)-strengthCount)+Math.max(0,((_goals&&_goals.hiitSessions)||2)-hiit);
 
   var doneDays=0,nutLoggedDays=0;
   var sum={calories:0,protein:0,satFat:0,fat:0,carbs:0};
@@ -37436,7 +37761,7 @@ function renderShareView(sessions){
   var wkHIIT=coachUniqueHiitSessions(weekSessions).length;
   var strDaysSeen={},wkStr=0;
   weekSessions.forEach(function(s){
-    if(!s||!s.date||isHIIT(s.workoutType)||s.workoutType==='Walk')return;
+    if(!s||!s.date||!sessionCountsAsStrengthGoal(s))return;
     if(strDaysSeen[s.date])return;
     strDaysSeen[s.date]=true;
     wkStr++;
@@ -37460,11 +37785,11 @@ function renderShareView(sessions){
   // Last session
   var lastStrength=null;
   for(var i=sessions.length-1;i>=0;i--){
-    if(sessions[i].workoutType&&sessions[i].workoutType.indexOf('Strength')>=0){lastStrength=sessions[i];break;}
+    if(sessionCountsAsStrengthGoal(sessions[i])){lastStrength=sessions[i];break;}
   }
 
   // Total sessions
-  var totalStr=sessions.filter(function(s){return s.workoutType&&s.workoutType.indexOf('Strength')>=0;}).length;
+  var totalStr=sessions.filter(function(s){return sessionCountsAsStrengthGoal(s);}).length;
   var totalHIIT=sessions.filter(function(s){return isHIIT(s.workoutType);}).length;
 
   var strPct=Math.min(100,Math.round((wkStr/_goals.strGoal)*100));
@@ -37606,6 +37931,96 @@ function nutSafeNum(v,def){
 function nutRoundTo(v,dp){
   var p=Math.pow(10,dp||0);
   return Math.round((nutSafeNum(v,0)+Number.EPSILON)*p)/p;
+}
+function nutTodayScanDetailsAllowed(e){
+  return !!(e&&e.date===localDateStr()&&(e.source==='ai_food_scan'||e._src==='AI food scan'||e.scanItems||e.original_scan_estimate));
+}
+function nutEntryMergeKey(e){
+  if(!e)return '';
+  if(e.id)return 'id:'+String(e.id);
+  return 'row:'+String(e.date||'')+'|'+String(e.meal||'')+'|'+String(e.food||'');
+}
+function nutBuildTodayScanDetailLookup(entries){
+  var map={};
+  (entries||[]).forEach(function(e){
+    if(!nutTodayScanDetailsAllowed(e))return;
+    if(e.id)map['id:'+String(e.id)]=e;
+    map['row:'+String(e.date||'')+'|'+String(e.meal||'')+'|'+String(e.food||'')]=e;
+  });
+  return map;
+}
+function nutCloneScanValue(v){
+  if(v===undefined)return undefined;
+  if(v===null)return null;
+  try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}
+}
+function nutNormalizeScanPart(it,entry,idx,useEntryTotals){
+  it=it&&typeof it==='object'?it:{};
+  entry=entry&&typeof entry==='object'?entry:{};
+  var qty=Math.max(0.25,nutSafeNum(it.qty!=null?it.qty:(it.servings!=null?it.servings:(useEntryTotals?entry.servings:1)),1));
+  var hasTotals=(it.calories!=null||it.protein!=null||it.carbs!=null||it.fibre!=null||it.satFat!=null||it.sodium!=null);
+  function total(totalKey,baseKey,entryKey,roundDp){
+    var val;
+    if(useEntryTotals)val=nutSafeNum(entry[entryKey],0);
+    else if(hasTotals)val=nutSafeNum(it[totalKey],nutSafeNum(it[baseKey],0));
+    else val=nutSafeNum(it[baseKey],0)*qty;
+    return roundDp>0?nutRoundTo(val,roundDp):Math.round(val);
+  }
+  return {
+    name:String(it.name||it.food||entry.food||('Item '+((idx||0)+1))),
+    qty:qty,
+    calories:total('calories','cal','calories',0),
+    protein:total('protein','prot','protein',1),
+    carbs:total('carbs','carb','carbs',1),
+    fat:total('fat','fat','fat',1),
+    fibre:total('fibre','fib','fibre',1),
+    satFat:total('satFat','sat','satFat',1),
+    sodium:total('sodium','sod','sodium',0),
+    confidence:String(it.confidence||entry.confidence||'medium'),
+    source:String(it.source||entry._src||entry.source_basis||'GPT Vision'),
+    weight_g:Math.max(0,Math.round(nutSafeNum(it.weight_g,0)))
+  };
+}
+function nutEntryScanParts(entry){
+  entry=entry&&typeof entry==='object'?entry:{};
+  var raw=entry.scanItems,parts=[];
+  if(Array.isArray(raw))parts=raw;
+  else if(typeof raw==='string'){
+    try{var parsed=JSON.parse(raw);if(Array.isArray(parsed))parts=parsed;}catch(e){}
+  }
+  if(parts.length)return parts.map(function(it,idx){return nutNormalizeScanPart(it,entry,idx,false);});
+  var original=entry.original_scan_estimate;
+  if(typeof original==='string'){
+    try{original=JSON.parse(original);}catch(e){}
+  }
+  if(Array.isArray(original)&&original.length){
+    return original.map(function(it,idx){return nutNormalizeScanPart(it,entry,idx,false);});
+  }
+  if(original&&typeof original==='object'){
+    return [nutNormalizeScanPart(original,entry,0,true)];
+  }
+  if(entry.source==='ai_food_scan'||entry._src==='AI food scan'){
+    return [nutNormalizeScanPart({},entry,0,true)];
+  }
+  return [];
+}
+function nutHydrateTodayScanDetails(sheetEntry,lookup){
+  if(!sheetEntry||!lookup)return sheetEntry;
+  var local=lookup[nutEntryMergeKey(sheetEntry)]||lookup['row:'+String(sheetEntry.date||'')+'|'+String(sheetEntry.meal||'')+'|'+String(sheetEntry.food||'')];
+  if(!nutTodayScanDetailsAllowed(local))return sheetEntry;
+  var out=Object.assign({},sheetEntry);
+  ['source','_src','scan_type','confidence','portion_confidence','source_basis','review_reason','warnings','was_user_edited','original_scan_estimate','final_logged_macros','scanItems','snapshot'].forEach(function(k){
+    if(local[k]!==undefined&&local[k]!==null&&local[k]!=='')out[k]=nutCloneScanValue(local[k]);
+  });
+  if(!nutEntryScanParts(out).length){
+    var rebuilt=nutEntryScanParts(local);
+    if(rebuilt.length)out.scanItems=rebuilt;
+  }
+  return out;
+}
+function nutHydrateTodayScanDetailsFromLocal(sheetEntries,localEntries){
+  var lookup=nutBuildTodayScanDetailLookup(localEntries||[]);
+  return (sheetEntries||[]).map(function(e){return nutHydrateTodayScanDetails(e,lookup);});
 }
 function nutValidateNutritionPayload(x){
   var out=Object.assign({},x||{});
@@ -38145,6 +38560,7 @@ function nutTemplateLog(id){
     nutMemoryLearnFromLoggedEntry(e,{source:'meal_template'});
   });
   nutPersistEntries();nutScoreInvalidateDate(_nutDate,{skipRender:true});nutRenderDay();
+  nutritionRefreshAfterDoneFoodChanged(_nutDate,{source:'templateLog'});
   nutSyncAction({type:'logNutrition',entries:entries},null,function(){});
   appToast('Template logged.','var(--green)');
 }
@@ -38436,13 +38852,11 @@ function nutSetActiveCals(date,val){
   // Always delete from sheet first (clears any old/duplicate rows for this date+_active)
   // then re-log if we have a value. Use a stable id so GAS upsert works correctly.
   if(isEmpty){
-    nutScoreInvalidateDate(d,{skipRender:true});
     nutSyncAction({type:'deleteNutritionRow',date:d,meal:'_active',food:'AppleWatch'},null,null);
     return;
   }
   var entry=nutActiveEntryForDate(d,val);
   if(entry&&_nutEntries)_nutEntries.push(entry);
-  nutScoreInvalidateDate(d,{skipRender:true});
   nutSyncActiveCalsToSheet(d,val);
 }
 function nutIsCheatDay(date){
@@ -38549,6 +38963,8 @@ function nutActiveChanged(){
   _nutActiveTimer=setTimeout(function(){
     var val=inp.value.trim();
     nutSetActiveCals(_nutDate,val===''?null:parseFloat(val));
+    nutRenderDay();
+    nutritionRefreshAfterActiveCaloriesChanged([_nutDate],{source:'manualActiveCalories'});
   },1500);
 }
 function nutActiveBlur(){
@@ -38558,8 +38974,8 @@ function nutActiveBlur(){
   if(!inp)return;
   var val=inp.value.trim();
   nutSetActiveCals(_nutDate,val===''?null:parseFloat(val));
-  nutScoreInvalidateDate(_nutDate,{skipRender:true});
   nutRenderDay();
+  nutritionRefreshAfterActiveCaloriesChanged([_nutDate],{source:'manualActiveCalories'});
 }
 
 // ── Sync queue — persists failed GAS calls and retries on next open ──────────
@@ -39703,9 +40119,9 @@ function nutFetchEntries(extendedFrom,opts){
       // Sheet is authoritative inside the window, except for newer local active rows
       // that must be preserved until the Sheet catches up.
       var outsideWindow=localEntries.filter(function(e){return e.date<from||e.date>to;});
-      var sheetEntriesForMerge=sheetEntries.filter(function(e){
+      var sheetEntriesForMerge=nutHydrateTodayScanDetailsFromLocal(sheetEntries.filter(function(e){
         return !(e.meal==='_active'&&e.food==='AppleWatch'&&activeOverrideDates[e.date]);
-      });
+      }),localEntries);
       _nutEntries=outsideWindow.concat(sheetEntriesForMerge).concat(activeRowsToPreserve);
       nutEnsureIds();
       // Sync _cheat entries back to NUT_CHEAT_KEY cache
@@ -43250,6 +43666,7 @@ function nutCopyFrom(offset,mealFilter){
   nutPersistEntries();
   nutScoreInvalidateDate(_nutDate,{skipRender:true});
   nutRenderDay();
+  nutritionRefreshAfterDoneFoodChanged(_nutDate,{source:'copyPreviousDay'});
   var msg=document.getElementById('nutCopyMsg');
   if(msg){msg.textContent='✓ Copied '+newEntries.length+' items from '+(offset===-1?'yesterday':'last week');msg.style.color='var(--green)';}
   setTimeout(function(){var m=document.getElementById('nutCopyMsg');if(m)m.textContent='';},3000);
@@ -43848,11 +44265,7 @@ function nutConfirmServing(){
 
   var ov=document.getElementById('nutServingOverlay');if(ov)ov.style.display='none';
   nutRenderDay();
-  // If day already marked done, keep week view and home card in sync with updated food
-  if(dayDoneGet()){
-    if(typeof nutRenderWeek==='function')nutRenderWeek();
-    if(typeof renderHomeCholCard==='function')renderHomeCholCard();
-  }
+  nutritionRefreshAfterDoneFoodChanged([oldEntry&&oldEntry.date,entry.date],{source:isEdit?'foodEdit':'foodLog'});
   // Data is already in localStorage — show saved immediately, sync in background
   nutBadge('live','Live');
   nutMsg('Logged to '+entry.date+' \u2713','var(--green)');
@@ -43890,10 +44303,7 @@ function nutMoveMealById(id,meal){var i=_nutIdxById(id);if(i>=0)nutMoveMeal(i,me
 
 function nutEditEntry(idx){
   var e=_nutEntries[idx];if(!e)return;
-  var _partsRaw=e.scanItems;
-  var _parts=[];
-  if(Array.isArray(_partsRaw))_parts=_partsRaw;
-  else if(typeof _partsRaw==='string'){try{var _p=JSON.parse(_partsRaw);if(Array.isArray(_p))_parts=_p;}catch(_e){}}
+  var _parts=nutEntryScanParts(e);
   if(_parts.length){
     nutMealScanOpenFromEntry(e,_parts);
     return;
@@ -43985,12 +44395,7 @@ function nutEditEntry(idx){
   if(_saveChk2)_saveChk2.checked=false;
   var _br=document.getElementById('nutServingBreakdown');
   if(_br){
-    var _partsRaw=e.scanItems;
-    var _parts=[];
-    if(Array.isArray(_partsRaw))_parts=_partsRaw;
-    else if(typeof _partsRaw==='string'){
-      try{var _parsed=JSON.parse(_partsRaw);if(Array.isArray(_parsed))_parts=_parsed;}catch(_e){}
-    }
+    var _parts=nutEntryScanParts(e);
     if(_parts.length){
       var _rows=_parts.map(function(it){
         var n=it.name||it.food||'Item';
@@ -44106,6 +44511,7 @@ function nutMoveToMeal(idx,newMeal){
   nutPersistEntries();
   nutScoreInvalidateDate(oldEntry.date,{skipRender:true});
   nutRenderDay();
+  nutritionRefreshAfterDoneFoodChanged(oldEntry.date,{source:'foodMove'});
   nutBadge('load','Saving');
   var steps=[
     {type:'deleteNutritionRow',date:oldEntry.date,meal:oldEntry.meal,food:oldEntry.food,id:oldEntry.id},
@@ -44145,6 +44551,7 @@ function nutDelEntry(idx){
   nutPersistEntries();
   nutScoreInvalidateDate(deleted.date,{skipRender:true});
   nutRenderDay();
+  nutritionRefreshAfterDoneFoodChanged(deleted.date,{source:'foodDelete'});
   _nutDeleteUndo={entry:deleted,action:action};
   var undoEl=document.getElementById('nutUndoToast');
   if(!undoEl){
@@ -44167,6 +44574,7 @@ function nutDelUndo(){
   var restoredEntry=_nutDeleteUndo?_nutDeleteUndo.entry:null;
   if(restoredEntry)nutScoreInvalidateDate(restoredEntry.date,{skipRender:true});
   _nutDeleteUndo=null;nutRenderDay();
+  if(restoredEntry)nutritionRefreshAfterDoneFoodChanged(restoredEntry.date,{source:'foodDeleteUndo'});
   nutMsg('Restored ✓','var(--green)');setTimeout(function(){nutMsg('');},2000);
   // Re-sync the restored entry in case the 4s commit already fired
   if(restoredEntry)nutSyncAction({type:'logNutrition',entries:[restoredEntry]},null,function(){});
@@ -45416,17 +45824,17 @@ function cholAIFeedback(){
   var workoutStr='No workout data.';
   if(lastTestDate&&_cachedSessions&&_cachedSessions.length){
     var seSess=_cachedSessions.filter(function(s){return s.date>lastTestDate;});
-    var strSess=seSess.filter(function(s){return (s.workoutType||'').indexOf('Strength')>=0;});
+    var strSess=seSess.filter(function(s){return sessionCountsAsStrengthGoal(s);});
     var hiitSess=seSess.filter(function(s){return isHIIT(s.workoutType);});
     var walkSess=seSess.filter(function(s){return s.workoutType==='Walk';});
     if(seSess.length){
       var avgEffort=hiitSess.length?Math.round(hiitSess.reduce(function(a,s){return a+(parseInt(s.effort)||0);},0)/hiitSess.length):0;
       var avgDur=hiitSess.length?Math.round(hiitSess.reduce(function(a,s){return a+(parseInt(s.duration)||0);},0)/hiitSess.length):0;
-      var totalWalkKm=walkSess.reduce(function(a,s){var ex=(s.exercises||[])[0]||{};return a+(parseFloat(ex.result||0)||0);},0);
+      var totalWalkMiles=walkSess.reduce(function(a,s){return a+walkDistanceMilesFromSession(s);},0);
       workoutStr='Since last test ('+seSess.length+' total sessions):\n'+
         '- Strength: '+strSess.length+' sessions\n'+
         '- HIIT: '+hiitSess.length+' sessions'+(avgEffort?' (avg effort '+avgEffort+', avg '+avgDur+' min)':'')+'\n'+
-        '- Walks: '+walkSess.length+(totalWalkKm>0?' ('+Math.round(totalWalkKm)+'km total)':'');
+        '- Walks: '+walkSess.length+(totalWalkMiles>0?' ('+Math.round(totalWalkMiles)+'mi total)':'');
     }
   }
 
@@ -48087,6 +48495,7 @@ function nutMealScanSave(){
       was_user_edited:!!it._edited,
       original_scan_estimate:it._origScanEstimate?Object.assign({},it._origScanEstimate):{cal:it.cal,prot:it.prot,carb:it.carb,fat:it.fat,fib:it.fib,sat:it.sat,sod:it.sod,confidence:it.confidence||'medium'},
       final_logged_macros:{calories:Math.round(it.cal*q),protein:Math.round(it.prot*q*10)/10,carbs:Math.round(it.carb*q*10)/10,fat:Math.round(it.fat*q*10)/10,fibre:Math.round(it.fib*q*10)/10,satFat:Math.round(it.sat*q*10)/10,sodium:Math.round(it.sod*q)},
+      scanItems:[{name:_msiCleanName(it.name),qty:q,calories:Math.round(it.cal*q),protein:Math.round(it.prot*q*10)/10,carbs:Math.round(it.carb*q*10)/10,fat:Math.round(it.fat*q*10)/10,fibre:Math.round(it.fib*q*10)/10,satFat:Math.round(it.sat*q*10)/10,sodium:Math.round(it.sod*q),confidence:it.confidence||'medium',source:it._fromFoods?'My Foods':(it._edited?'edited':(it.source||'GPT Vision')),weight_g:it.weight_g||0}],
       id:nutNewId('entry'),updatedAt:now+i,_src:'AI food scan'};});
   }
   // Validate + freeze snapshot on each logged entry.
@@ -48163,7 +48572,9 @@ function nutMealScanSave(){
       }),_nonce:now}).catch(function(){});
   }
 
-  nutMealScanClose();nutRenderDay();nutBadge('live','Live');
+  nutMealScanClose();nutRenderDay();
+  nutritionRefreshAfterDoneFoodChanged([_replacedOld&&_replacedOld.date].concat(entries.map(function(e){return e&&e.date;})),{source:'mealScanLog'});
+  nutBadge('live','Live');
   var savedMsg=_savedFoodsCount?' \u00b7 '+_savedFoodsCount+' saved to foods':'';
   if(_skippedDupCount>0)savedMsg+=' \u00b7 '+_skippedDupCount+' duplicate name skipped';
   nutMsg('\u2713 '+entries.length+' item'+(entries.length!==1?'s':'')+' logged to '+_msiMeal+' on '+_nutDate+savedMsg,'var(--green)');
