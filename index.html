@@ -470,6 +470,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
 .feel-confirm{font-size:0.7rem;color:var(--green);text-align:center;height:16px;opacity:0;transition:opacity 0.3s;}
 .feel-confirm.show{opacity:1;}
 .notes-inp{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:0.82rem;padding:10px 12px;resize:none;height:36px;transition:height 0.2s,border-color 0.15s;}
+.ex-body > .notes-inp{margin-bottom:10px;}
 .notes-inp:focus{outline:none;height:56px;border-color:var(--border2);}
 .notes-inp::placeholder{color:var(--muted);}
 
@@ -3911,8 +3912,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.11.155-scan-photo-coach-polish';
-			var WT_SW_VERSION='wt-shell-v177-scan-photo-coach-polish';
+			var WT_FRONTEND_VERSION='19.11.157-workout-live-order';
+			var WT_SW_VERSION='wt-shell-v179-workout-live-order';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4784,12 +4785,14 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.159-scan-photo-coach-polish';
+var APP_VERSION='v19.11.161-workout-live-order';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v186-scan-photo-coach-polish';
+var CACHE_VERSION='wt-cache-v188-workout-live-order';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
+  'Live workout screens now put set logging, effort, auto sets, set status, timer, voice cue, and notes before coaching details so mid-set controls are easier to reach',
+  'Photo Coach chat now stays scrolled to the newest message after you send a reply',
   'Photo Coach visual polish improves the secondary Looks right action contrast while keeping the chat optional and calm',
   'Photo Coach now treats plain no-question responses as done and accepts direct refined-item JSON without adding another logging delay',
   'Meal photo scans now include an optional Photo Coach chat that can ask multiple human-style follow-up questions before refining the breakdown',
@@ -23214,6 +23217,38 @@ function renderEx(){
     h+='</div>';
   }
   h+='</div><div class="ex-body">';
+  h+='<div class="log-section">';
+  if(ex.isPlank){
+    h+='<div class="log-pl-row">';
+    h+='<div class="log-pl-box"><label>Left (sec)</label><input type="number" inputmode="numeric" id="pi0" placeholder="-" value="'+(logs[curEx].sets[0].time||'')+'" oninput="logs['+curEx+'].sets[0].time=this.value"></div>';
+    h+='<div class="log-pl-box"><label>Right (sec)</label><input type="number" inputmode="numeric" id="pi1" placeholder="-" value="'+(logs[curEx].sets[1].time||'')+'" oninput="logs['+curEx+'].sets[1].time=this.value"></div>';
+    h+='</div>';
+  } else {
+    h+='<div class="log-sets-row"><div class="log-set-box"><label>Set '+(curSet+1)+' of '+ex.sets+' (target: '+ex.rc[curSet]+')</label><input type="number" inputmode="numeric" id="si0" placeholder="'+ex.rc[curSet]+'" value="'+(logs[curEx].sets[curSet].reps||ex.rc[curSet])+'" oninput="logs['+curEx+'].sets['+curSet+'].reps=this.value"></div></div>';
+  }
+  var fo=logs[curEx].feel;
+  h+='<div class="feel-row">';
+  h+='<button class="feel-btn'+(fo==='Medium'?' on-m':'')+'" onclick="setFeel(\'Medium\')">Medium</button>';
+  h+='<button class="feel-btn'+(fo==='Medium-hard'?' on-mh':'')+'" onclick="setFeel(\'Medium-hard\')">Med-hard</button>';
+  h+='<button class="feel-btn'+(fo==='Hard'?' on-h':'')+'" onclick="setFeel(\'Hard\')">Hard</button>';
+  h+='</div><div class="feel-confirm" id="feelConf">Logged!</div>';
+  h+='</div>';
+  var autoOn=exerciseAutoAdvanceEnabled(curEx);
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 4px;padding:9px 10px;background:var(--card2);border:1px solid '+(autoOn?'rgba(200,255,0,0.45)':'var(--border)')+';border-radius:var(--r-sm);">';
+  h+='<div style="font-size:0.62rem;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:'+(autoOn?'var(--accent)':'var(--muted)')+';">Auto sets</div>';
+  h+='<button id="exerciseAutoBtn" type="button" onclick="toggleExerciseAutoAdvance()" aria-pressed="'+(autoOn?'true':'false')+'" style="min-width:72px;padding:8px 12px;border-radius:999px;border:1px solid '+(autoOn?'var(--accent)':'var(--border2)')+';background:'+(autoOn?'var(--accent)':'var(--card)')+';color:'+(autoOn?'#000':'var(--text2)')+';font-size:0.7rem;font-weight:900;letter-spacing:0.6px;cursor:pointer;">'+(autoOn?'ON':'OFF')+'</button>';
+  h+='</div>';
+  h+='<div class="phase-row"><span class="ph-badge phb-ready" id="phBadge">READY</span><div class="set-dots">';
+  for(var di=0;di<ex.sets;di++){h+='<div class="set-dot'+(di<curSet?' dn':di===curSet?' cu':'')+'" onclick="jumpToSet('+di+')"></div>';}
+  h+='</div></div>';
+  h+='<div class="rest-row hidden" id="restAdj"><button class="radj-btn" onclick="adjRest(-15)">-</button><div class="rest-lbl" id="restLbl">Rest</div><button class="radj-btn" onclick="adjRest(15)">+</button></div>';
+  h+='<div class="timer-wrap"><div class="timer-lbl" id="timerLbl">TAP TO START</div>';
+  h+='<div class="t-ring"><svg width="84" height="84" viewBox="0 0 110 110"><circle class="r-bg" cx="55" cy="55" r="40"/><circle class="r-prog" id="rprog" cx="55" cy="55" r="40" stroke-dasharray="251.3" stroke-dashoffset="251.3"/></svg>';
+  h+='<div class="t-display"><div class="t-count" id="tCount">-</div><div class="t-sub" id="tSub">start</div></div></div>';
+  h+='<button id="plankStopBtn" onclick="stopPlankEarly()" style="display:none;margin-top:10px;padding:8px 24px;background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,104,48,0.35);border-radius:var(--r-sm);font-family:\"Bebas Neue\",sans-serif;font-size:0.9rem;letter-spacing:2px;cursor:pointer;">STOP &#9632;</button>';
+  h+='</div>';
+  h+='<div class="voice-wrap"><div class="voice-word" id="vWord">&nbsp;</div></div>';
+  h+='<textarea class="notes-inp" id="notesInp" placeholder="Notes..." oninput="saveNotes()">'+(logs[curEx].notes||'')+'</textarea>';
   if(ex.form&&!ex.tweak&&!ex.watch&&!ex.goal)h+='<div class="cue-form">'+ex.form+'</div>';
   if(ex.tweak)h+='<div class="cue-tweak">! '+ex.tweak+'</div>';
   if(ex.watch)h+='<div class="cue-watch">'+ex.watch+'</div>';
@@ -23295,38 +23330,6 @@ function renderEx(){
   } else {
     h+='<div class="seq-section"><div class="seq-lbl">Plank - hold timed</div></div>';
   }
-  h+='<div class="voice-wrap"><div class="voice-word" id="vWord">&nbsp;</div></div>';
-  h+='<div class="log-section">';
-  if(ex.isPlank){
-    h+='<div class="log-pl-row">';
-    h+='<div class="log-pl-box"><label>Left (sec)</label><input type="number" inputmode="numeric" id="pi0" placeholder="-" value="'+(logs[curEx].sets[0].time||'')+'" oninput="logs['+curEx+'].sets[0].time=this.value"></div>';
-    h+='<div class="log-pl-box"><label>Right (sec)</label><input type="number" inputmode="numeric" id="pi1" placeholder="-" value="'+(logs[curEx].sets[1].time||'')+'" oninput="logs['+curEx+'].sets[1].time=this.value"></div>';
-    h+='</div>';
-  } else {
-    h+='<div class="log-sets-row"><div class="log-set-box"><label>Set '+(curSet+1)+' of '+ex.sets+' (target: '+ex.rc[curSet]+')</label><input type="number" inputmode="numeric" id="si0" placeholder="'+ex.rc[curSet]+'" value="'+(logs[curEx].sets[curSet].reps||ex.rc[curSet])+'" oninput="logs['+curEx+'].sets['+curSet+'].reps=this.value"></div></div>';
-  }
-  var fo=logs[curEx].feel;
-  h+='<div class="feel-row">';
-  h+='<button class="feel-btn'+(fo==='Medium'?' on-m':'')+'" onclick="setFeel(\'Medium\')">Medium</button>';
-  h+='<button class="feel-btn'+(fo==='Medium-hard'?' on-mh':'')+'" onclick="setFeel(\'Medium-hard\')">Med-hard</button>';
-  h+='<button class="feel-btn'+(fo==='Hard'?' on-h':'')+'" onclick="setFeel(\'Hard\')">Hard</button>';
-  h+='</div><div class="feel-confirm" id="feelConf">Logged!</div>';
-  h+='<textarea class="notes-inp" id="notesInp" placeholder="Notes..." oninput="saveNotes()">'+(logs[curEx].notes||'')+'</textarea>';
-  h+='</div>';
-  var autoOn=exerciseAutoAdvanceEnabled(curEx);
-  h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 4px;padding:9px 10px;background:var(--card2);border:1px solid '+(autoOn?'rgba(200,255,0,0.45)':'var(--border)')+';border-radius:var(--r-sm);">';
-  h+='<div style="font-size:0.62rem;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:'+(autoOn?'var(--accent)':'var(--muted)')+';">Auto sets</div>';
-  h+='<button id="exerciseAutoBtn" type="button" onclick="toggleExerciseAutoAdvance()" aria-pressed="'+(autoOn?'true':'false')+'" style="min-width:72px;padding:8px 12px;border-radius:999px;border:1px solid '+(autoOn?'var(--accent)':'var(--border2)')+';background:'+(autoOn?'var(--accent)':'var(--card)')+';color:'+(autoOn?'#000':'var(--text2)')+';font-size:0.7rem;font-weight:900;letter-spacing:0.6px;cursor:pointer;">'+(autoOn?'ON':'OFF')+'</button>';
-  h+='</div>';
-  h+='<div class="phase-row"><span class="ph-badge phb-ready" id="phBadge">READY</span><div class="set-dots">';
-  for(var di=0;di<ex.sets;di++){h+='<div class="set-dot'+(di<curSet?' dn':di===curSet?' cu':'')+'" onclick="jumpToSet('+di+')"></div>';}
-  h+='</div></div>';
-  h+='<div class="rest-row hidden" id="restAdj"><button class="radj-btn" onclick="adjRest(-15)">-</button><div class="rest-lbl" id="restLbl">Rest</div><button class="radj-btn" onclick="adjRest(15)">+</button></div>';
-  h+='<div class="timer-wrap"><div class="timer-lbl" id="timerLbl">TAP TO START</div>';
-  h+='<div class="t-ring"><svg width="84" height="84" viewBox="0 0 110 110"><circle class="r-bg" cx="55" cy="55" r="40"/><circle class="r-prog" id="rprog" cx="55" cy="55" r="40" stroke-dasharray="251.3" stroke-dashoffset="251.3"/></svg>';
-  h+='<div class="t-display"><div class="t-count" id="tCount">-</div><div class="t-sub" id="tSub">start</div></div></div>';
-  h+='<button id="plankStopBtn" onclick="stopPlankEarly()" style="display:none;margin-top:10px;padding:8px 24px;background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,104,48,0.35);border-radius:var(--r-sm);font-family:\"Bebas Neue\",sans-serif;font-size:0.9rem;letter-spacing:2px;cursor:pointer;">STOP &#9632;</button>';
-  h+='</div>';
   h+='</div></div>';
   document.getElementById('sessionContent').innerHTML=h;
   var bh='<div class="btn-row"><button class="btn b-skip" onclick="reqSkip()">Skip Rest</button></div>';
@@ -47199,6 +47202,15 @@ function nutMsiHumanMessages(){
     .filter(function(m){return m&&String(m.content||'').trim();})
     .slice(-10);
 }
+function nutMsiHumanScrollChatBottom(){
+  var box=document.getElementById('nutMsiHumanMessages');
+  if(!box)return;
+  try{box.scrollTop=box.scrollHeight;}catch(e){}
+}
+function nutMsiHumanQueueScrollBottom(){
+  setTimeout(nutMsiHumanScrollChatBottom,0);
+  setTimeout(nutMsiHumanScrollChatBottom,80);
+}
 function nutMsiHumanQuestionText(res){
   res=res&&typeof res==='object'?res:{};
   var qs=[];
@@ -47296,7 +47308,7 @@ function nutMsiHumanRender(){
   }else if(st.state==='chat'||st.state==='question'||st.state==='applying'||st.state==='done'){
     var messages=nutMsiHumanMessages();
     if(!messages.length)messages=[{role:'assistant',content:'Anything you want me to check before you log this?'}];
-    html+='<div style="display:flex;flex-direction:column;gap:7px;margin-bottom:9px;max-height:226px;overflow-y:auto;padding:2px 1px 2px 0;">';
+    html+='<div id="nutMsiHumanMessages" style="display:flex;flex-direction:column;gap:7px;margin-bottom:9px;max-height:226px;overflow-y:auto;padding:2px 1px 2px 0;">';
     messages.forEach(function(m){
       var user=String(m.role||'')==='user';
       html+='<div style="text-align:'+(user?'right':'left')+';"><span style="display:inline-block;max-width:88%;text-align:left;background:'+(user?'var(--blue-dim)':'var(--card2)')+';border:1px solid '+(user?'rgba(59,131,246,0.32)':'var(--border)')+';border-radius:'+(user?'13px 13px 3px 13px':'3px 13px 13px 13px')+';padding:9px 10px;color:var(--text);font-size:0.76rem;line-height:1.45;box-shadow:0 2px 8px rgba(0,0,0,0.12);">'+nutMsiHumanText(m.content)+'</span></div>';
@@ -47323,6 +47335,7 @@ function nutMsiHumanRender(){
   }
   host.innerHTML=html;
   host.style.display='block';
+  if(st.state==='chat'||st.state==='question'||st.state==='applying'||st.state==='done')nutMsiHumanQueueScrollBottom();
 }
 function nutMsiHumanDismiss(){
   _msiHumanCheck.state='skipped';
