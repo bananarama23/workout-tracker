@@ -1,4 +1,4 @@
-const SW_VERSION = 'wt-shell-v172-nut-scan-detail-day';
+const SW_VERSION = 'wt-shell-v177-scan-photo-coach-polish';
 const SHELL_CACHE = `wt-shell-${SW_VERSION}`;
 const WT_BLOCK_PUBLIC_GITHUB_PAGES = /\.github\.io$/i.test((self.location && self.location.hostname) || '');
 const OFFLINE_URLS = [
