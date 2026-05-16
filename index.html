@@ -3911,8 +3911,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.11.150-nut-scan-detail-day';
-			var WT_SW_VERSION='wt-shell-v172-nut-scan-detail-day';
+			var WT_FRONTEND_VERSION='19.11.155-scan-photo-coach-polish';
+			var WT_SW_VERSION='wt-shell-v177-scan-photo-coach-polish';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4784,12 +4784,16 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.154-nut-scan-detail-day';
+var APP_VERSION='v19.11.159-scan-photo-coach-polish';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v181-nut-scan-detail-day';
+var CACHE_VERSION='wt-cache-v186-scan-photo-coach-polish';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
+  'Photo Coach visual polish improves the secondary Looks right action contrast while keeping the chat optional and calm',
+  'Photo Coach now treats plain no-question responses as done and accepts direct refined-item JSON without adding another logging delay',
+  'Meal photo scans now include an optional Photo Coach chat that can ask multiple human-style follow-up questions before refining the breakdown',
+  'Training celebrations now fire once when the week is completed, when strength or HIIT goes over target, and when an exercise beats its planned reps or seconds',
   'Today\'s photo-scan food breakdown now survives nutrition Sheet refreshes, so reopening the same-day entry keeps the scanned item detail',
   'Walk, streak, trainer feedback, progress, edit-session, and coach-context logic now share the same strength-session rules after QA',
   'Walk logging now treats distance as miles, shows walk history in miles, and lets saved walks be edited from history',
@@ -12465,6 +12469,136 @@ function weekGoalSummaryMeetsTargets(sum){
   var hiitOk=(parseInt(s.hiit,10)||0)>=hiitTarget;
   var effortOk=!s.hasEffortData||((parseInt(s.effort,10)||0)>=((_goals&&_goals.effortGoal)||13)&&(parseInt(s.duration,10)||0)>=((_goals&&_goals.durGoal)||28));
   return strOk&&hiitOk&&effortOk;
+}
+var WT_CELEBRATION_KEY='wt_week_celebrations_v1';
+var _wtCelebrationQueue=[],_wtCelebrationShowing=false;
+function wtCelebrationLoad(){
+  try{
+    var x=JSON.parse(localStorage.getItem(WT_CELEBRATION_KEY)||'{}');
+    return x&&typeof x==='object'?x:{};
+  }catch(e){return {};}
+}
+function wtCelebrationSave(x){
+  try{
+    x=x&&typeof x==='object'?x:{};
+    var keys=Object.keys(x).sort(function(a,b){return (x[b]||0)-(x[a]||0);}).slice(0,240);
+    var slim={};keys.forEach(function(k){slim[k]=x[k];});
+    localStorage.setItem(WT_CELEBRATION_KEY,JSON.stringify(slim));
+  }catch(e){}
+}
+function wtWeekDatesForDate(dateStr){
+  var base=new Date((dateStr||localDateStr())+'T12:00:00');
+  if(!isFinite(base.getTime()))base=new Date();
+  var dow=(base.getDay()+6)%7;
+  base.setDate(base.getDate()-dow);
+  var out=[];
+  for(var i=0;i<7;i++){var d=new Date(base);d.setDate(base.getDate()+i);out.push(fmtDate(d));}
+  return out;
+}
+function wtCelebrateTextShort(s,n){
+  s=String(s||'').trim();
+  if(!s)return 'Exercise';
+  s=s.replace('SINGLE-LEG GLUTE BRIDGES','Glute bridges').replace('CLOSE-GRIP PUSH-UPS','Push-ups').replace('SUPINATED PULL-UPS','Supinated pull-ups').replace('SIDE PLANKS','Side planks').replace('LEG RAISES','Leg raises').replace('PULL-UPS','Pull-ups').replace('DIPS','Dips');
+  return s.length>(n||34)?s.slice(0,(n||34)-1)+'…':s;
+}
+function wtCelebrateShowNext(){
+  if(!_wtCelebrationQueue.length){_wtCelebrationShowing=false;return;}
+  _wtCelebrationShowing=true;
+  var c=_wtCelebrationQueue.shift();
+  var el=document.getElementById('wtCelebrationToast');
+  if(!el){
+    el=document.createElement('div');
+    el.id='wtCelebrationToast';
+    el.style.cssText='position:fixed;left:12px;right:12px;bottom:calc(var(--nav-h) + var(--safe-b) + 18px);z-index:1300;max-width:520px;margin:0 auto;background:linear-gradient(135deg,rgba(13,17,23,0.98),rgba(20,26,34,0.98));border:1px solid rgba(200,255,0,0.35);border-radius:14px;padding:13px 15px;box-shadow:0 12px 38px rgba(0,0,0,0.48);transform:translateY(12px);opacity:0;transition:opacity 0.18s ease,transform 0.18s ease;pointer-events:none;';
+    document.body.appendChild(el);
+  }
+  var accent=c.accent||'var(--accent)';
+  el.style.borderColor=c.border||'rgba(200,255,0,0.35)';
+  el.innerHTML='<div style="display:flex;align-items:flex-start;gap:10px;">'
+    +'<div style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(200,255,0,0.1);border:1px solid rgba(200,255,0,0.35);color:'+accent+';font-family:&quot;Bebas Neue&quot;,sans-serif;font-size:1.1rem;line-height:1;">✦</div>'
+    +'<div style="min-width:0;flex:1;">'
+    +'<div style="font-size:0.58rem;font-weight:900;letter-spacing:1.4px;text-transform:uppercase;color:'+accent+';">'+escHtml(c.kicker||'Celebration')+'</div>'
+    +'<div style="font-size:0.92rem;font-weight:900;color:var(--text);line-height:1.25;margin-top:2px;">'+escHtml(c.title||'Nice work')+'</div>'
+    +'<div style="font-size:0.72rem;color:var(--text2);line-height:1.45;margin-top:4px;">'+escHtml(c.body||'You did the work.')+'</div>'
+    +'</div></div>';
+  el.style.display='block';
+  setTimeout(function(){el.style.opacity='1';el.style.transform='translateY(0)';},20);
+  setTimeout(function(){
+    el.style.opacity='0';el.style.transform='translateY(12px)';
+    setTimeout(function(){wtCelebrateShowNext();},240);
+  },c.ms||3600);
+}
+function wtCelebrateQueue(c){
+  _wtCelebrationQueue.push(c||{});
+  if(!_wtCelebrationShowing)wtCelebrateShowNext();
+}
+function wtCelebrateOnce(key,c){
+  if(!key)return false;
+  var seen=wtCelebrationLoad();
+  if(seen[key])return false;
+  seen[key]=Date.now();
+  wtCelebrationSave(seen);
+  wtCelebrateQueue(c);
+  return true;
+}
+function wtCelebrateWeeklyProgress(newSession,beforeSessions,afterSessions){
+  try{
+    if(!newSession||!newSession.date)return;
+    var dates=wtWeekDatesForDate(newSession.date),weekId=dates[0];
+    var before=weekGoalSummaryForDates(workoutVisibleSessions(beforeSessions||[],{}),dates);
+    var after=weekGoalSummaryForDates(workoutVisibleSessions(afterSessions||[],{}),dates);
+    var strTarget=Math.max(1,parseInt((_goals&&_goals.strGoal)||2,10)||2);
+    var hiitTarget=Math.max(0,parseInt((_goals&&_goals.hiitSessions)||0,10)||0);
+    if(!weekGoalSummaryMeetsTargets(before)&&weekGoalSummaryMeetsTargets(after)){
+      wtCelebrateOnce('week:'+weekId+':complete',{
+        kicker:'Week complete',
+        title:'Weekly training contract complete',
+        body:'Strength '+after.strength+'/'+strTarget+' and HIIT '+after.hiit+'/'+hiitTarget+' are done. Anything now is bonus work.',
+        accent:'var(--green)',
+        border:'rgba(0,212,138,0.45)',
+        ms:4300
+      });
+    }
+    function extras(kind,label,beforeCount,afterCount,target,accent,border){
+      if(!(target>0))return;
+      if(afterCount<=target||afterCount<=beforeCount)return;
+      for(var n=Math.max(target+1,beforeCount+1);n<=afterCount;n++){
+        wtCelebrateOnce('week:'+weekId+':extra:'+kind+':'+n,{
+          kicker:'Above target',
+          title:'Bonus '+label+' session '+n+'/'+target,
+          body:'You already met the weekly requirement. This one is extra credit, logged and counted.',
+          accent:accent,
+          border:border
+        });
+      }
+    }
+    extras('strength','strength',before.strength||0,after.strength||0,strTarget,'var(--accent)','rgba(200,255,0,0.45)');
+    extras('hiit','HIIT',before.hiit||0,after.hiit||0,hiitTarget,'var(--blue)','rgba(59,131,246,0.45)');
+  }catch(e){}
+}
+function wtCelebrateExerciseOverTargets(sd){
+  try{
+    if(!sd||!sessionCountsAsStrengthGoal(sd))return;
+    var sid=String(sd.sessionId||sd.date||Date.now());
+    (sd.exercises||[]).forEach(function(ex,idx){
+      if(!ex||String(ex.skipped||'').toLowerCase()==='yes')return;
+      var targets=postWorkoutTargets(ex),actuals=postWorkoutActuals(ex);
+      var n=Math.min(targets.length,actuals.length);
+      if(!n)return;
+      var extra=0;
+      for(var i=0;i<n;i++)extra+=Math.max(0,(parseFloat(actuals[i])||0)-(parseFloat(targets[i])||0));
+      if(extra<=0)return;
+      var unit=String(ex.isPlank||'').toLowerCase()==='yes'?' sec':' rep'+(extra===1?'':'s');
+      wtCelebrateOnce('session:'+sid+':exercise-extra:'+idx+':'+Math.round(extra*10)/10,{
+        kicker:'Exercise over target',
+        title:wtCelebrateTextShort(ex.name)+' +'+(Math.round(extra*10)/10)+unit,
+        body:'You beat the planned target on this exercise. Keep the form standard high so the trainer can progress it cleanly.',
+        accent:'var(--purple)',
+        border:'rgba(155,85,255,0.45)',
+        ms:3200
+      });
+    });
+  }catch(e){}
 }
 function loadHomeData(){
   var now=new Date(),h=now.getHours();
@@ -29533,6 +29667,7 @@ function finishWorkout(){
   }, {newSession:true});
   _completedSessionId=sd.sessionId;
   _hasSynced=false;
+  var _celebrateBeforeSessions=workoutVisibleSessions((_cachedSessions||[]).slice(),{});
   wtLogEvent('workout_finished',sd);
   exs.forEach(function(ex,ei){
     var log=logs[ei];
@@ -29576,6 +29711,8 @@ function finishWorkout(){
   recSession(sd);workoutUpsertCache(sd);
   workoutSetSyncStatus('Workout saved','sync_pending');
   appToast('Workout saved','var(--green)');
+  wtCelebrateExerciseOverTargets(sd);
+  wtCelebrateWeeklyProgress(sd,_celebrateBeforeSessions,_cachedSessions||[sd]);
   artifactQueueEnqueuePostWorkoutPipeline(sd);
   var rows='';
   exs.forEach(function(ex,ei){
@@ -29798,10 +29935,12 @@ function saveHIIT(){
   var payload={type:'hiit',date:date,week:'Week '+wn,duration:dur,effort:selEff,notes:notes,video:hiitVideo};
   // hiitVideo is 'HIIT' — use as the workoutType
   var localSd={date:date,week:'Week '+wn,workoutType:hiitVideo,duration:parseInt(dur)||0,effort:selEff,exercises:[{name:'HIIT',feel:'',notes:notes+(hiitVideo?' - '+hiitVideo:'')}]};
+  var _celebrateBeforeSessions=workoutVisibleSessions((_cachedSessions||[]).slice(),{});
   recSession(localSd);
   if(_sheetSessions){_sheetSessions=workoutReplaceHiitForSameDate(_sheetSessions,localSd);_cachedSessions=_sheetSessions;}
   else if(_cachedSessions){_cachedSessions=workoutReplaceHiitForSameDate(_cachedSessions,localSd);}
   renderHomeData(_cachedSessions||[localSd]);
+  wtCelebrateWeeklyProgress(localSd,_celebrateBeforeSessions,_cachedSessions||[localSd]);
   syncData(payload,'hiitMsg');
   setTimeout(function(){
     document.getElementById('hiitDur').value='';
@@ -46115,6 +46254,8 @@ var _msiScanReqId=0;
 var _msiScanning=false;
 var _msiReviewUnlockAt=0,_msiReviewTimer=null,_msiFeedback='';
 var _msiMeta={scan_type:'unknown',confidence:'medium',portion_confidence:'medium',source_basis:'unknown',needs_review:true,review_reason:'Review before logging.',warnings:[]};
+var NUT_MSI_HUMAN_MAX_TURNS=5;
+var _msiHumanCheck={state:'idle',messages:[],suggestions:[],draft:'',turns:0,askedForReq:0,applied:false,busy:false,why:''};
 
 function nutMsiReviewRemaining(){return Math.max(0,Math.ceil((_msiReviewUnlockAt-Date.now())/1000));}
 function nutMsiStartReviewLock(ms){
@@ -46980,6 +47121,324 @@ function nutMealScanSetStatus(txt,col){
   var el=document.getElementById('nutMealScanStatus');
   if(el){el.textContent=txt;el.style.color=col||'var(--muted)';}
 }
+function nutMsiHumanBaseState(state,reqId){
+  return {state:state||'idle',messages:[],suggestions:[],draft:'',turns:0,askedForReq:reqId||0,applied:false,busy:false,why:''};
+}
+function nutMsiHumanReset(){
+  _msiHumanCheck=nutMsiHumanBaseState('idle',0);
+  nutMsiHumanRender();
+}
+function nutMsiHumanSnapshot(){
+  return (_msi||[]).map(function(it){
+    return {
+      name:String(it.name||''),
+      qty:nutRoundTo(it.qty||1,2),
+      calories:Math.round(it.cal||0),
+      protein:Math.round((it.prot||0)*10)/10,
+      carbs:Math.round((it.carb||0)*10)/10,
+      fat:Math.round((it.fat||0)*10)/10,
+      fibre:Math.round((it.fib||0)*10)/10,
+      satFat:Math.round((it.sat||0)*10)/10,
+      sodium:Math.round(it.sod||0),
+      confidence:String(it.confidence||'medium'),
+      portion_confidence:String(it.portion_confidence||it.confidence||'medium'),
+      weight_g:Math.round(it.weight_g||0)
+    };
+  });
+}
+function nutMsiHumanParseJson(text){
+  text=String(text||'').replace(/```(?:json)?/gi,'').replace(/```/g,'').trim();
+  if(!text)return null;
+  try{return JSON.parse(text);}catch(e){}
+  try{if(typeof aiCoachExtractJson==='function')return aiCoachExtractJson(text);}catch(e1){}
+  var s=text.indexOf('{'),e=text.lastIndexOf('}');
+  if(s>=0&&e>s){try{return JSON.parse(text.slice(s,e+1));}catch(e2){}}
+  return null;
+}
+function nutMsiHumanImageJson(prompt,maxTokens,timeoutMs){
+  if(!_msiLastB64)return Promise.reject(new Error('no_scan_image'));
+  var model='gpt-5.4-mini';
+  function appsScriptImage(){
+    return wtBackendPost({
+      type:'aiOpenAIImageJson',
+      model:model,
+      prompt:prompt,
+      imageBase64:_msiLastB64,
+      mime:_msiLastMime||'image/jpeg',
+      detail:'high',
+      max_output_tokens:maxTokens||900,
+      timeoutMs:timeoutMs||45000,
+      _nonce:Date.now()
+    });
+  }
+  var req=wtAiProxyConfigured()
+    ?wtAiProxyPost('/v1/image-json',{
+      model:model,
+      prompt:prompt,
+      imageBase64:_msiLastB64,
+      mime:_msiLastMime||'image/jpeg',
+      detail:'high',
+      max_output_tokens:maxTokens||900
+    },timeoutMs||45000).catch(function(err){
+      appLogEvent('warn','nutrition.ai_proxy_human_scan_fallback','AI proxy human scan route failed; falling back to Apps Script image route.',{message:String(err&&err.message||err||'')});
+      return appsScriptImage();
+    })
+    :appsScriptImage();
+  return req.then(function(r){
+    if(!r||r.status!=='ok')throw new Error((r&&r.message)||'human_scan_ai_unavailable');
+    var data=r.data||{};
+    var text=data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content||'';
+    return nutMsiHumanParseJson(text);
+  });
+}
+function nutMsiHumanText(s){
+  return escHtml(String(s||'')).replace(/\n/g,'<br>');
+}
+function nutMsiHumanMessages(){
+  return ((_msiHumanCheck&&Array.isArray(_msiHumanCheck.messages))?_msiHumanCheck.messages:[])
+    .filter(function(m){return m&&String(m.content||'').trim();})
+    .slice(-10);
+}
+function nutMsiHumanQuestionText(res){
+  res=res&&typeof res==='object'?res:{};
+  var qs=[];
+  if(Array.isArray(res.questions)){
+    res.questions.forEach(function(q){
+      if(typeof q==='string')qs.push(q);
+      else if(q&&typeof q==='object')qs.push(q.question||q.text||q.ask||'');
+    });
+  }
+  if(String(res.question||'').trim())qs.push(res.question);
+  qs=qs.map(function(q){return String(q||'').trim();}).filter(Boolean).slice(0,6);
+  if(qs.length){
+    return qs.map(function(q,i){return (qs.length>1?(i+1)+'. ':'')+q;}).join('\n');
+  }
+  return String(res.message||res.reply||res.response||'').trim();
+}
+function nutMsiHumanIsQuestionLike(text){
+  var s=String(text||'').trim();
+  if(!s)return false;
+  if(s.indexOf('?')>=0)return true;
+  if(/(^|\n)\s*\d+[\).]\s+\S+/.test(s)&&/\b(is|are|was|were|did|do|does|any|how|which|what|who|where|when|all|half|much|many)\b/i.test(s))return true;
+  return /\b(is that|are those|was that|were those|did you|do you|does this|any sauce|any oil|how many|how much|which one|what kind|was it|were they|all yours|all of|half of)\b/i.test(s);
+}
+function nutMsiHumanSuggestionList(res){
+  res=res&&typeof res==='object'?res:{};
+  var src=[];
+  ['suggestions','quick_answers','quick','quickAnswers'].forEach(function(k){
+    if(Array.isArray(res[k]))src=src.concat(res[k]);
+  });
+  if(Array.isArray(res.questions)){
+    res.questions.forEach(function(q){
+      if(q&&typeof q==='object'){
+        ['quick_answers','suggestions','quick'].forEach(function(k){
+          if(Array.isArray(q[k]))src=src.concat(q[k]);
+        });
+      }
+    });
+  }
+  var seen={};
+  return src.map(function(x){return String(x||'').trim();}).filter(function(x){
+    var k=x.toLowerCase();
+    if(!x||seen[k])return false;
+    seen[k]=1;
+    return true;
+  }).slice(0,5).map(function(x){return x.slice(0,64);});
+}
+function nutMsiHumanNormalizeResponse(res){
+  res=res&&typeof res==='object'?res:{};
+  var action=String(res.action||res.intent||'').toLowerCase().trim();
+  var items=Array.isArray(res.items)?res.items:(Array.isArray(res.foods)?res.foods:(Array.isArray(res)?res:null));
+  var msg=nutMsiHumanQuestionText(res);
+  var hasQuestionField=Array.isArray(res.questions)||String(res.question||'').trim().length>0;
+  if(items&&items.length&&action!=='ask'&&action!=='question'){
+    return {action:'update',message:String(res.message||res.reply||'Got it — I updated the breakdown.').trim(),review_reason:String(res.review_reason||res.reason||res.why||'Updated from your clarification.').trim(),items:items,suggestions:[]};
+  }
+  if(action==='done'||action==='skip'||res.ask===false){
+    return {action:'done',message:String(res.message||res.reply||'Looks accurate enough to review and log.').trim(),why:String(res.why||res.reason||'').slice(0,180),suggestions:[]};
+  }
+  if(action==='ask'||action==='question'||res.ask===true||hasQuestionField||nutMsiHumanIsQuestionLike(msg)){
+    return {action:'ask',message:msg.slice(0,900),why:String(res.why||res.reason||'').slice(0,180),suggestions:nutMsiHumanSuggestionList(res)};
+  }
+  return {action:'done',message:String(res.message||res.reply||'Looks accurate enough to review and log.').trim(),why:String(res.why||res.reason||'').slice(0,180),suggestions:[]};
+}
+function nutMsiHumanBuildPayload(extra){
+  return Object.assign({
+    scanMeta:_msiMeta||{},
+    currentItems:nutMsiHumanSnapshot(),
+    conversation:nutMsiHumanMessages(),
+    userContext:{
+      meal:_msiMeal,
+      brand:(document.getElementById('nutMsiCtxRestaurant')||{}).value||_msiGeoPlace||_msiDetectedBrand||'',
+      notes:(document.getElementById('nutMsiCtxHint')||{}).value||'',
+      mealName:(document.getElementById('nutMsiMealName')||{}).value||''
+    }
+  },extra||{});
+}
+function nutMsiHumanRender(){
+  var host=document.getElementById('nutMsiHumanCheck');
+  if(!host)return;
+  var st=_msiHumanCheck||{state:'idle'};
+  if(st.state==='idle'||st.state==='skipped'){
+    host.style.display='none';
+    host.innerHTML='';
+    return;
+  }
+  var html='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px;">'
+    +'<div style="min-width:0;display:flex;align-items:center;gap:7px;">'
+    +'<div style="font-size:0.62rem;color:var(--accent);font-weight:900;letter-spacing:1.35px;text-transform:uppercase;">Photo Coach</div>'
+    +'<div style="font-size:0.54rem;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:2px 6px;font-weight:800;letter-spacing:0.8px;">OPTIONAL</div>'
+    +'</div>'
+    +'<button type="button" onclick="nutMsiHumanDismiss()" aria-label="Close Photo Coach" style="width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--muted);font-size:0.86rem;line-height:1;cursor:pointer;flex-shrink:0;">&times;</button>'
+    +'</div>';
+  if(st.state==='thinking'){
+    html+='<div style="display:flex;align-items:center;gap:9px;color:var(--muted);font-size:0.74rem;background:rgba(255,255,255,0.025);border:1px solid var(--border);border-radius:12px;padding:10px 11px;"><span style="width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></span>Checking the photo like a coach...</div>';
+  }else if(st.state==='chat'||st.state==='question'||st.state==='applying'||st.state==='done'){
+    var messages=nutMsiHumanMessages();
+    if(!messages.length)messages=[{role:'assistant',content:'Anything you want me to check before you log this?'}];
+    html+='<div style="display:flex;flex-direction:column;gap:7px;margin-bottom:9px;max-height:226px;overflow-y:auto;padding:2px 1px 2px 0;">';
+    messages.forEach(function(m){
+      var user=String(m.role||'')==='user';
+      html+='<div style="text-align:'+(user?'right':'left')+';"><span style="display:inline-block;max-width:88%;text-align:left;background:'+(user?'var(--blue-dim)':'var(--card2)')+';border:1px solid '+(user?'rgba(59,131,246,0.32)':'var(--border)')+';border-radius:'+(user?'13px 13px 3px 13px':'3px 13px 13px 13px')+';padding:9px 10px;color:var(--text);font-size:0.76rem;line-height:1.45;box-shadow:0 2px 8px rgba(0,0,0,0.12);">'+nutMsiHumanText(m.content)+'</span></div>';
+    });
+    if(st.state==='applying'){
+      html+='<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:0.72rem;padding:3px 0;"><span style="width:13px;height:13px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></span>Photo Coach is checking your answer...</div>';
+    }
+    html+='</div>';
+    if(Array.isArray(st.suggestions)&&st.suggestions.length&&st.state!=='applying'){
+      html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">'+st.suggestions.slice(0,5).map(function(q,i){
+        return '<button type="button" onclick="nutMsiHumanUseQuick('+i+')" style="padding:7px 9px;background:var(--card2);border:1px solid var(--border2);border-radius:999px;color:var(--text2);font-size:0.66rem;font-weight:800;cursor:pointer;">'+escHtml(q)+'</button>';
+      }).join('')+'</div>';
+    }
+    if(st.state!=='applying'){
+      var disabled=(st.turns||0)>=NUT_MSI_HUMAN_MAX_TURNS;
+      html+='<div style="display:flex;gap:8px;align-items:stretch;">'
+        +'<textarea id="nutMsiHumanAnswer" autocorrect="on" autocapitalize="sentences" spellcheck="true" placeholder="'+(disabled?'Review or edit manually':'Tell me what you ate...')+'" oninput="_msiHumanCheck.draft=this.value" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();nutMsiHumanApplyAnswer();}" '+(disabled?'disabled ':'')+'style="min-width:0;flex:1;background:rgba(255,255,255,0.035);border:1px solid var(--border2);border-radius:12px;color:var(--text);font-size:0.78rem;padding:10px 11px;outline:none;resize:none;height:50px;font-family:\'DM Sans\',sans-serif;line-height:1.35;">'+escHtml(st.draft||'')+'</textarea>'
+        +'<button type="button" onclick="nutMsiHumanApplyAnswer()" '+(disabled?'disabled ':'')+'style="padding:0 14px;background:'+(disabled?'var(--border2)':'var(--accent)')+';border:none;border-radius:12px;color:#000;font-size:0.68rem;font-weight:900;cursor:'+(disabled?'not-allowed':'pointer')+';box-shadow:'+(disabled?'none':'0 6px 18px rgba(200,255,0,0.14)')+';">Send</button>'
+        +'</div>';
+      html+='<button type="button" onclick="nutMsiHumanDismiss()" style="margin-top:8px;width:100%;padding:8px;background:rgba(255,255,255,0.025);border:1px solid var(--border2);border-radius:12px;color:var(--text2);font-size:0.66rem;font-weight:800;cursor:pointer;">Looks right</button>';
+    }
+  }else if(st.state==='error'){
+    html+='<div style="font-size:0.74rem;color:var(--orange);line-height:1.45;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.22);border-radius:12px;padding:10px 11px;">Photo Coach could not respond. You can still edit the items manually.</div>';
+  }
+  host.innerHTML=html;
+  host.style.display='block';
+}
+function nutMsiHumanDismiss(){
+  _msiHumanCheck.state='skipped';
+  _msiHumanCheck.applied=true;
+  _msiHumanCheck.busy=false;
+  nutMsiHumanRender();
+}
+function nutMsiHumanUseQuick(i){
+  var q=(_msiHumanCheck.suggestions||_msiHumanCheck.quick||[])[i]||'';
+  _msiHumanCheck.draft=String(_msiHumanCheck.draft||'').trim();
+  _msiHumanCheck.draft=_msiHumanCheck.draft?(_msiHumanCheck.draft+' '+q):q;
+  nutMsiHumanRender();
+  var inp=document.getElementById('nutMsiHumanAnswer');
+  if(inp){inp.value=_msiHumanCheck.draft;inp.focus();try{inp.selectionStart=inp.selectionEnd=inp.value.length;}catch(e){}}
+}
+function nutMsiHumanMaybeAsk(reqId){
+  if(!_msiLastB64||!_msi||!_msi.length)return;
+  if(_msiHumanCheck&&_msiHumanCheck.askedForReq===reqId)return;
+  _msiHumanCheck=nutMsiHumanBaseState('thinking',reqId);
+  nutMsiHumanRender();
+  var payload=nutMsiHumanBuildPayload();
+  var prompt='You are Photo Coach, a human-like nutrition coach attached to a food-photo scan. Look at the image and current JSON estimate. If talking to the user would materially improve calories, macros, food identity, portion size, hidden oils/sauces, or which items were eaten, start a short chat. You may ask whatever specific questions matter. For multi-item photos, ask several numbered questions in one message when useful. Examples: "Is that turkey sausage?", "Was all the rice yours?", "Any sauce or oil not visible?", "How many pieces did you eat?" If you can refine the estimate directly from the image/current context without asking, return updated items. If the estimate is already clear enough, return action="done". Return ONLY JSON in one of these shapes: {"action":"ask","message":"human chat message with one or more questions","why":"<=18 words","suggestions":["short optional reply","short optional reply"]} OR {"action":"update","message":"short human reply","review_reason":"short explanation","items":[{"name":"string","qty":1,"calories":0,"protein_g":0,"carbs_g":0,"fat_g":0,"saturated_fat_g":0,"fibre_g":0,"sodium_mg":0,"weight_g":0,"confidence":"low|medium|high"}]} OR {"action":"done","message":"short reason"}. Current estimate JSON: '+JSON.stringify(payload);
+  nutMsiHumanImageJson(prompt,780,42000).then(function(res){
+    if(reqId!==_msiScanReqId)return;
+    var norm=nutMsiHumanNormalizeResponse(res);
+    if(norm.action==='update'){
+      nutMsiHumanApplyItems(res,{lockMs:0,silent:false});
+      _msiHumanCheck=nutMsiHumanBaseState('chat',reqId);
+      _msiHumanCheck.messages=[{role:'assistant',content:String(norm.message||norm.review_reason||'I made a small update to the breakdown.').slice(0,700)}];
+      _msiHumanCheck.applied=true;
+    }else if(norm.action!=='ask'||String(norm.message||'').trim().length<4){
+      _msiHumanCheck=nutMsiHumanBaseState('skipped',reqId);
+      _msiHumanCheck.applied=true;
+      _msiHumanCheck.why=norm.why||'';
+    }else{
+      _msiHumanCheck=nutMsiHumanBaseState('chat',reqId);
+      _msiHumanCheck.messages=[{role:'assistant',content:norm.message}];
+      _msiHumanCheck.suggestions=norm.suggestions||[];
+      _msiHumanCheck.why=norm.why||'';
+    }
+    nutMsiHumanRender();
+  }).catch(function(){
+    if(reqId!==_msiScanReqId)return;
+    _msiHumanCheck=nutMsiHumanBaseState('idle',reqId);
+    _msiHumanCheck.applied=true;
+    nutMsiHumanRender();
+  });
+}
+function nutMsiHumanApplyItems(res,opts){
+  opts=opts&&typeof opts==='object'?opts:{};
+  var items=null;
+  if(res&&Array.isArray(res.items))items=nutMsiNorm(res.items);
+  else if(res&&Array.isArray(res.foods))items=nutMsiNorm(res.foods);
+  else if(Array.isArray(res))items=nutMsiNorm(res);
+  if(!items||!items.length)return false;
+  _msi=nutMsiApplyBias(nutMsiApplyMemoryOverrides(items));
+  _msiMeta=Object.assign({},_msiMeta||{},{
+    confidence:'medium',
+    portion_confidence:'medium',
+    source_basis:'user_context',
+    review_reason:String((res&&res.review_reason)||'Updated from your clarification.')
+  });
+  if(opts.lockMs)nutMsiStartReviewLock(opts.lockMs);
+  nutMealScanRender();
+  if(opts.silent!==true)nutMealScanSetStatus('Updated from Photo Coach — review before logging','var(--green)');
+  return true;
+}
+function nutMsiHumanApplyAnswer(){
+  if(!_msiHumanCheck||_msiHumanCheck.busy)return;
+  if((_msiHumanCheck.turns||0)>=NUT_MSI_HUMAN_MAX_TURNS){
+    if(typeof appToast==='function')appToast('Photo Coach limit reached — review or edit manually.','var(--orange)');
+    return;
+  }
+  var ans=String(((document.getElementById('nutMsiHumanAnswer')||{}).value)||(_msiHumanCheck&&_msiHumanCheck.draft)||'').trim();
+  if(ans.length<1){
+    var inp=document.getElementById('nutMsiHumanAnswer');
+    if(inp)inp.focus();
+    return;
+  }
+  var reqId=_msiScanReqId;
+  if(!Array.isArray(_msiHumanCheck.messages))_msiHumanCheck.messages=[];
+  _msiHumanCheck.messages.push({role:'user',content:ans});
+  _msiHumanCheck.state='applying';
+  _msiHumanCheck.busy=true;
+  _msiHumanCheck.draft='';
+  _msiHumanCheck.suggestions=[];
+  _msiHumanCheck.turns=(_msiHumanCheck.turns||0)+1;
+  nutMsiHumanRender();
+  var payload=nutMsiHumanBuildPayload({latestUserAnswer:ans});
+  var prompt='You are Photo Coach in a nutrition photo chat. Use the image, current estimate JSON, and full conversation. The user answer is authoritative for visible items, portions, sauces, oils, brand clues, and which food was theirs. You may ask another focused follow-up if it would materially improve accuracy, or update the estimate now. For multiple food items, keep asking until the important uncertainties are resolved, but keep the chat concise. Return ONLY JSON in exactly one of these shapes: {"action":"ask","message":"human follow-up question(s)","suggestions":["short optional reply"]} OR {"action":"update","message":"short human reply","review_reason":"short explanation","items":[{"name":"string","qty":1,"calories":0,"protein_g":0,"carbs_g":0,"fat_g":0,"saturated_fat_g":0,"fibre_g":0,"sodium_mg":0,"weight_g":0,"confidence":"low|medium|high"}]} OR {"action":"done","message":"short human reply"}. Avoid double-counting qty. Current estimate and chat JSON: '+JSON.stringify(payload);
+  nutMsiHumanImageJson(prompt,1800,52000).then(function(res){
+    if(reqId!==_msiScanReqId)return;
+    var norm=nutMsiHumanNormalizeResponse(res);
+    if(norm.action==='update'){
+      if(!nutMsiHumanApplyItems(res))throw new Error('no_refined_items');
+      _msiHumanCheck.messages.push({role:'assistant',content:String(norm.message||norm.review_reason||'Got it — I updated the breakdown.').slice(0,700)});
+    }else if(norm.action==='ask'){
+      _msiHumanCheck.messages.push({role:'assistant',content:norm.message});
+      _msiHumanCheck.suggestions=norm.suggestions||[];
+    }else{
+      _msiHumanCheck.messages.push({role:'assistant',content:String(norm.message||'Looks accurate enough to review and log.').slice(0,700)});
+      _msiHumanCheck.suggestions=[];
+    }
+    _msiHumanCheck.state='chat';
+    _msiHumanCheck.busy=false;
+    _msiHumanCheck.applied=true;
+    _msiHumanCheck.why=String((res&&res.review_reason)||norm.why||'').slice(0,180);
+    nutMsiHumanRender();
+  }).catch(function(){
+    if(reqId!==_msiScanReqId)return;
+    _msiHumanCheck.state='error';
+    _msiHumanCheck.busy=false;
+    nutMsiHumanRender();
+    nutMealScanSetStatus('Photo Coach could not refine — edit manually if needed','var(--orange)');
+  });
+}
 
 // ── Meal pills ────────────────────────────────────────────────────────────────
 function nutMealScanRenderMealBtns(){
@@ -47276,6 +47735,7 @@ function nutMealScanCallVision(b64,mime){
     if(total>700*Math.max(1,_msi.length))nutMealScanSetStatus('⚠️ '+_msi.length+' items · '+Math.round(total)+' kcal — check before logging','var(--yellow)');
     nutMealScanRender();
     nutMsiCheckHighCalorie();
+    setTimeout(function(){if(_isCurrent())nutMsiHumanMaybeAsk(reqId);},350);
     if(_msiCompareClaude&&_msiClaudeFullPass){
       setTimeout(function(){if(_isCurrent())nutMsiRunClaudeMealPass();},0);
     }
@@ -48670,6 +49130,7 @@ function nutMsiPageUploadHandler(inp){
 function nutMealScanOpenDirect(b64,mime){
   _msi=[];_msiMemory=false;_msiShowTotal=true;_msiVerified={};_msiCombine=true;_nutCamMealMode=false;
   _msiMeta={scan_type:'unknown',confidence:'medium',portion_confidence:'medium',source_basis:'unknown',needs_review:true,review_reason:'Review before logging.',warnings:[]};
+  nutMsiHumanReset();
   _msiLastBrandCtxApplied='';
   _msiEditingEntryId=null;
   _msiCompareClaude=true;
@@ -48700,6 +49161,7 @@ function nutMealScanOpenDirect(b64,mime){
 function nutMealScanOpenFromEntry(entry,parts){
   _msi=[];_msiMemory=false;_msiShowTotal=true;_msiVerified={};_msiCombine=true;_nutCamMealMode=false;
   _msiMeta={scan_type:String((entry&&entry.scan_type)||'unknown'),confidence:String((entry&&entry.confidence)||'medium'),portion_confidence:String((entry&&entry.portion_confidence)||'medium'),source_basis:String((entry&&entry.source_basis)||'unknown'),needs_review:true,review_reason:String((entry&&entry.review_reason)||'Review before logging.'),warnings:Array.isArray(entry&&entry.warnings)?entry.warnings.slice():[]};
+  nutMsiHumanReset();
   _msiCompareClaude=true;
   _msiClaudeFullPass=false;
   _msiClaudeMealCmp=null;
@@ -48745,7 +49207,9 @@ function nutMealScanOpenFromEntry(entry,parts){
 
 function nutMealScanClose(){
   // Reset scan state so stale data doesn't persist to next scan
+  _msiScanReqId++;
   _msi=[];_msiLastB64=null;_msiLastMime=null;_msiVerified={};_msiReviewUnlockAt=0;_msiFeedback='';_msiEditingEntryId=null;_msiMeta={scan_type:'unknown',confidence:'medium',portion_confidence:'medium',source_basis:'unknown',needs_review:true,review_reason:'Review before logging.',warnings:[]};if(_msiReviewTimer){clearInterval(_msiReviewTimer);_msiReviewTimer=null;}
+  nutMsiHumanReset();
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   var ms=document.getElementById('page-mealscan');if(ms)ms.classList.add('hidden');
   var pg=document.getElementById('page-nutrition');if(pg){pg.classList.remove('hidden');pg.classList.add('active');}
@@ -48953,6 +49417,7 @@ function nutMealScanToggleClaudeFullPass(){
   <!-- Items -->
   <div>
     <div id="nutMealScanItems"></div>
+    <div id="nutMsiHumanCheck" style="display:none;margin:10px 16px 12px;padding:13px 14px;background:linear-gradient(180deg,rgba(200,255,0,0.08),rgba(17,24,39,0.26));border:1px solid rgba(200,255,0,0.22);border-radius:14px;box-shadow:0 10px 26px rgba(0,0,0,0.22);"></div>
     <div id="nutMealScanTotals" style="display:none;margin:8px 16px;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;"></div>
     <div style="padding:4px 16px 12px;">
       <button type="button" onclick="nutMealScanAddItem()" style="width:100%;padding:11px;background:transparent;border:1px dashed var(--border2);border-radius:var(--r-sm);color:var(--muted);font-size:0.75rem;cursor:pointer;letter-spacing:0.5px;">Create manually</button>
