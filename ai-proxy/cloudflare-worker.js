@@ -258,8 +258,7 @@ function corsHeaders(request, env) {
   const origin = request.headers.get("Origin") || "";
   const allowed = allowedOrigins(env);
   const healthRoute = request.method === "GET" && normalizeRoutePath(url.pathname) === "/health";
-  const sameOrigin = !!origin && origin === url.origin;
-  const allowOrigin = healthRoute || sameOrigin || allowed.includes(origin) || (origin === "null" && allowed.includes("null"));
+  const allowOrigin = healthRoute || allowed.includes(origin) || (origin === "null" && allowed.includes("null"));
   return {
     "Access-Control-Allow-Origin": allowOrigin ? (origin || "*") : (allowed[0] || "null"),
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
@@ -433,8 +432,17 @@ function checkOriginAllowlist(request, env, auth) {
   if (auth && (auth.mode === "access_jwt" || auth.mode === "bearer")) return { ok: true };
 
   const origin = request.headers.get("Origin") || "";
+  const referer = request.headers.get("Referer") || "";
   const requestOrigin = new URL(request.url).origin;
+
+  // Safari / service-worker same-origin fetches can omit the Origin header.
+  // Allow them only when the Referer clearly matches this Worker/app origin.
   if (origin && origin === requestOrigin) return { ok: true };
+  if (!origin && referer) {
+    try {
+      if (new URL(referer).origin === requestOrigin) return { ok: true };
+    } catch (err) {}
+  }
 
   const allowed = allowedOrigins(env);
   if (!allowed.length) {
