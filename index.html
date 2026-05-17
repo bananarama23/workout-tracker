@@ -952,6 +952,16 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
         </div>
       </div>
     </div>
+    <div id="homeTrackerWatchCard" onclick="trackerOpenFromHome()" style="display:none;margin:0 16px 10px;background:linear-gradient(145deg,rgba(59,131,246,0.14),rgba(200,255,0,0.06));border:1px solid rgba(59,131,246,0.35);border-radius:var(--r);padding:12px 14px;cursor:pointer;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <div style="min-width:0;">
+          <div style="font-size:0.58rem;letter-spacing:1.6px;text-transform:uppercase;color:var(--blue);font-weight:800;margin-bottom:3px;">Tracker Watch</div>
+          <div id="homeTrackerWatchTitle" style="font-size:0.82rem;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">New alert</div>
+          <div id="homeTrackerWatchSub" style="font-size:0.66rem;color:var(--muted);margin-top:2px;">Tap to review in Budget</div>
+        </div>
+        <div id="homeTrackerWatchCount" style="flex-shrink:0;background:var(--blue-dim);border:1px solid rgba(59,131,246,0.35);border-radius:999px;color:var(--blue);font-size:0.68rem;font-weight:900;padding:5px 9px;">1</div>
+      </div>
+    </div>
     
     <!-- Week goal bar — mirrored from Plan page -->
     <div id="weekGoalBarHome" style="margin:0 16px 8px;padding:9px 13px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);display:flex;align-items:center;justify-content:space-between;gap:8px;opacity:0.92;">
@@ -1300,9 +1310,15 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <input type="number" inputmode="decimal" class="log-input log-input-big" id="bWaist" placeholder="34">
         </div>
       </div>
-      <div class="log-field">
-        <label>Arm flexed (cm)</label>
-        <input type="number" inputmode="decimal" class="log-input log-input-big" id="bArm" placeholder="35">
+      <div class="log-2col">
+        <div class="log-field">
+          <label>Arm flexed left (cm)</label>
+          <input type="number" inputmode="decimal" class="log-input log-input-big" id="bArmL" placeholder="35">
+        </div>
+        <div class="log-field">
+          <label>Arm flexed right (cm)</label>
+          <input type="number" inputmode="decimal" class="log-input log-input-big" id="bArmR" placeholder="35">
+        </div>
       </div>
       <div class="log-field">
         <label>Notes</label>
@@ -1676,6 +1692,51 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <span style="font-size:0.75rem;color:var(--text2);">Per month</span>
           <span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--orange);" id="vOneOffPM">—</span>
         </div>
+      </div>
+    </div>
+
+    <!-- TRACKER WATCH -->
+    <div id="trackerWatchSection" style="padding:20px 20px 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;">
+        <div>
+          <div style="font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;">Tracker Watch</div>
+          <div id="trackerWatchStatus" style="font-size:0.66rem;color:var(--muted);margin-top:3px;">Costco and Zillow alerts</div>
+        </div>
+        <button onclick="trackerLoad(true)" style="padding:7px 10px;background:var(--card2);border:1px solid var(--border2);border-radius:9px;color:var(--muted);font-size:0.62rem;font-weight:800;letter-spacing:1px;cursor:pointer;">REFRESH</button>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:10px;">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="trackerUrlInput" type="url" inputmode="url" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="Costco or Zillow URL" style="flex:1;min-width:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.82rem;padding:10px 12px;outline:none;">
+          <button onclick="trackerAddUrl()" style="flex-shrink:0;padding:10px 13px;background:var(--accent);border:none;border-radius:var(--r-sm);color:#000;font-size:0.7rem;font-weight:900;letter-spacing:1px;cursor:pointer;">ADD</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <label style="flex:1;font-size:0.62rem;color:var(--muted);">
+            <span style="display:block;margin-bottom:4px;font-weight:800;letter-spacing:1px;">ZILLOW</span>
+            <select id="trackerZillowFreq" onchange="trackerSaveSettings()" style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:0.72rem;padding:7px 8px;outline:none;">
+              <option value="1h">Every 1 hour</option>
+              <option value="2h">Every 2 hours</option>
+              <option value="3h">Every 3 hours</option>
+              <option value="daily">Daily</option>
+            </select>
+          </label>
+          <label style="flex:1;font-size:0.62rem;color:var(--muted);">
+            <span style="display:block;margin-bottom:4px;font-weight:800;letter-spacing:1px;">COSTCO</span>
+            <select id="trackerCostcoFreq" onchange="trackerSaveSettings()" style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:0.72rem;padding:7px 8px;outline:none;">
+              <option value="6h">Every 6 hours</option>
+              <option value="twice_daily">Twice daily</option>
+              <option value="daily">Daily</option>
+            </select>
+          </label>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+          <button id="trackerEmailToggle" onclick="trackerToggleEmail()" style="padding:8px 10px;background:var(--green-dim);border:1px solid rgba(76,217,100,0.35);border-radius:8px;color:var(--green);font-size:0.62rem;font-weight:900;letter-spacing:1px;cursor:pointer;">EMAIL ON</button>
+          <input id="trackerEmailInput" type="email" value="phil.ksmith@gmail.com" onblur="trackerSaveSettings()" style="flex:1;min-width:0;background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:0.72rem;padding:8px 10px;outline:none;">
+        </div>
+      </div>
+      <div id="trackerWatchItems"></div>
+      <div style="margin-top:10px;">
+        <div style="font-size:0.58rem;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">Alert History</div>
+        <div id="trackerWatchAlerts" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;"></div>
       </div>
     </div>
 
@@ -3176,6 +3237,31 @@ function wtAiProxyPost(path,payload,timeoutMs){
     throw err;
 	  });
 	}
+function wtAiProxyGet(path,timeoutMs){
+  var base=wtAiProxyBaseUrl();
+  if(!base)return Promise.reject(new Error('ai_proxy_not_configured'));
+  var route='/'+String(path||'').replace(/^\/+/,'');
+  var headers={};
+  var token=wtAiProxyBearerAuthEnabled()?wtAiProxyToken():'';
+  if(token)headers.Authorization='Bearer '+token;
+  if(typeof APP_VERSION!=='undefined')headers['X-WT-Client-Version']=String(APP_VERSION||'');
+  appDoctorPatchState('ai_proxy',{
+    configured:true,
+    url:wtAiProxyRedactedUrl(),
+    tokenConfigured:!!token,
+    authMode:token?'bearer':'none',
+    lastRoute:route,
+    lastStatus:'running'
+  });
+  return wtFetchJsonWithRetry_(base+route,{
+    method:'GET',
+    headers:headers
+  },{
+    tries:2,
+    timeoutMs:Math.min(90000,Math.max(12000,(parseInt(timeoutMs,10)||25000)+4000)),
+    baseDelayMs:350
+  });
+}
 	function wtTrainerCloudCacheAvailable(){return wtAiProxyConfigured();}
 		function wtTrainerCloudCachePatch(status,extra){
 		  try{
@@ -3491,6 +3577,7 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	    contextId:'trainer_context_current',
 	    profile:null,
 	    goals:null,
+	    bodyMetrics:null,
 	    voiceMins:null,
 	    calendarRules:null,
 	    calendar:{connected:false,urlMask:'',lastFetched:'',lastAutoRunStatus:'',lastAutoCheckStatus:''},
@@ -3501,6 +3588,7 @@ function wtAiProxyPost(path,payload,timeoutMs){
 	  };
 	  try{context.profile=aiProfileLoad();}catch(e){}
 	  try{context.goals=Object.assign({},_goals||{});}catch(e){}
+	  try{context.bodyMetrics=bodyMetricTrainerContext();}catch(e){}
 	  try{context.voiceMins=voiceMinsLoad();}catch(e){}
 	  try{context.calendarRules=calendarRulesLoad();}catch(e){}
 	  try{context.coachNotes=String(aiCoachNotesLoad()||'').slice(0,6000);}catch(e){}
@@ -3912,8 +4000,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.11.157-workout-live-order';
-			var WT_SW_VERSION='wt-shell-v179-workout-live-order';
+			var WT_FRONTEND_VERSION='19.12.0-tracker-watch';
+			var WT_SW_VERSION='wt-shell-v182-tracker-watch';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4785,12 +4873,14 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.11.161-workout-live-order';
+var APP_VERSION='v19.12.0-tracker-watch';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v188-workout-live-order';
+var CACHE_VERSION='wt-cache-v191-tracker-watch';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
+  'Fallback last-workout reviews now auto-upgrade to AI when the logged workout has enough set evidence, without changing the feedback layout',
+  'Body Metrics now logs left and right flexed arm measurements and sends them into trainer-brain context',
   'Live workout screens now put set logging, effort, auto sets, set status, timer, voice cue, and notes before coaching details so mid-set controls are easier to reach',
   'Photo Coach chat now stays scrolled to the newest message after you send a reply',
   'Photo Coach visual polish improves the secondary Looks right action contrast while keeping the chat optional and calm',
@@ -8507,6 +8597,19 @@ function postWorkoutShouldUseAiReview(sd,facts){
   if(facts.legacyEvidence&&facts.targetSetsInferred>0)return false;
   return true;
 }
+function postWorkoutReviewIsAiFinal(review){
+  return !!(review&&review.reviewId&&!review.fallbackUsed&&String(review.source||'').toLowerCase()==='ai');
+}
+function postWorkoutReviewNeedsAiUpgrade(review,session){
+  if(!review||!review.reviewId||postWorkoutReviewIsAiFinal(review))return false;
+  var src=String(review.source||'').toLowerCase();
+  var reason=String(review.fallbackReason||'').toLowerCase();
+  if(src==='legacy_import'||reason.indexOf('legacy_import')>=0)return false;
+  var sd=session||workoutFindLocal(review.sessionId||review.sourceSessionId);
+  if(!sd||!sd.sessionId)return false;
+  var facts=postWorkoutFacts(sd);
+  return postWorkoutShouldUseAiReview(sd,facts);
+}
 function postWorkoutRepairLegacyReviewIfNeeded(review,session,opts){
   if(!postWorkoutLegacyBadReview(review,session))return review||null;
   var repaired=postWorkoutDeterministicReview(session);
@@ -11140,12 +11243,18 @@ function artifactQueueCreateReviewJob(job){
   var existing=postWorkoutReviewLoad(sd.sessionId);
   var forceRetry=!!(job&&job.payload&&job.payload.force);
   var preserveExisting=!!(job&&job.payload&&job.payload.preserveExisting);
-  var keepExistingOnFailure=!!(forceRetry&&preserveExisting&&existing&&existing.reviewId);
-  if(existing&&existing.reviewId&&!forceRetry){
+  var upgradeExisting=!!(existing&&existing.reviewId&&postWorkoutReviewNeedsAiUpgrade(existing,sd));
+  var keepExistingOnFailure=!!(existing&&existing.reviewId&&((forceRetry&&preserveExisting)||upgradeExisting));
+  if(existing&&existing.reviewId&&!forceRetry&&!upgradeExisting){
     return {reviewId:existing.reviewId,artifactIds:[existing.reviewId],fallbackUsed:!!existing.fallbackUsed};
   }
   var started=Date.now();
   var base=postWorkoutDeterministicReview(sd);
+  if(keepExistingOnFailure&&existing&&existing.reviewId){
+    base.reviewId=String(existing.reviewId||base.reviewId);
+    base.createdAt=String(existing.createdAt||base.createdAt);
+    base.revision=Math.max(parseInt(existing.revision||1,10)||1,parseInt(base.revision||1,10)||1);
+  }
   if(!keepExistingOnFailure){
     base.syncState='sync_pending';
     postWorkoutReviewSave(base);
@@ -11161,6 +11270,10 @@ function artifactQueueCreateReviewJob(job){
   }
   var facts=base.facts||postWorkoutFacts(sd);
   if(!postWorkoutShouldUseAiReview(sd,facts)){
+    if(keepExistingOnFailure&&existing&&existing.reviewId){
+      wtLogEvent('post_review_ai_skip_keep_existing',{sessionId:sd.sessionId,reviewId:existing.reviewId,sourceSessionId:sd.sessionId,durationMs:Date.now()-started,fallbackUsed:!!existing.fallbackUsed,confidence:existing.confidence});
+      return {reviewId:existing.reviewId,artifactIds:[existing.reviewId],fallbackUsed:!!existing.fallbackUsed,keptExisting:true};
+    }
     wtLogEvent('post_review_ai_skipped_legacy_actuals',{sessionId:sd.sessionId,reviewId:base.reviewId,sourceSessionId:sd.sessionId,durationMs:Date.now()-started,fallbackUsed:true,confidence:base.confidence});
     return {reviewId:base.reviewId,artifactIds:[base.reviewId],fallbackUsed:true};
   }
@@ -12632,6 +12745,7 @@ function setTodayPlanLoading(){
 
 function renderHomeData(sessions){
   try{workoutCleanupVisibleHistoryCache('render_home');}catch(e){}
+  try{trackerHomeRefresh();}catch(e){}
   sessions=workoutVisibleSessions(sessions||[],{});
   var _days=getWeekDates(0), _wkFrom=fmtDate(_days[0]), _today=localDateStr();
   var weekSessions=sessions.filter(function(s){return s&&s.date&&s.date>=_wkFrom&&s.date<=_today;});
@@ -14588,6 +14702,86 @@ function aiCoachAutopilotPhase(ctx){
   }catch(e){return 'build';}
 }
 
+function bodyMetricCleanNumber(v){
+  if(v===null||v===undefined||v==='')return 0;
+  var n=parseFloat(String(v).replace(/[^\d.\-]/g,''));
+  return isFinite(n)&&n>0?Math.round(n*10)/10:0;
+}
+function bodyMetricArmLeftValue(x){
+  x=x||{};
+  return bodyMetricCleanNumber(x.armLeft!=null?x.armLeft:(x.arm_left!=null?x.arm_left:(x.leftArm!=null?x.leftArm:x.armL)));
+}
+function bodyMetricArmRightValue(x){
+  x=x||{};
+  return bodyMetricCleanNumber(x.armRight!=null?x.armRight:(x.arm_right!=null?x.arm_right:(x.rightArm!=null?x.rightArm:x.armR)));
+}
+function bodyMetricArmAverageValue(x){
+  x=x||{};
+  var l=bodyMetricArmLeftValue(x),r=bodyMetricArmRightValue(x);
+  if(l&&r)return Math.round(((l+r)/2)*10)/10;
+  if(l)return l;
+  if(r)return r;
+  return bodyMetricCleanNumber(x.arm);
+}
+function bodyMetricNormalizeEntry(x){
+  x=x||{};
+  var l=bodyMetricArmLeftValue(x),r=bodyMetricArmRightValue(x),arm=bodyMetricArmAverageValue(x);
+  return {
+    date:String(x.date||'').slice(0,10),
+    weight:Number(x.weight!=null?x.weight:x.weight_lb)||0,
+    weight_lb:Number(x.weight_lb!=null?x.weight_lb:x.weight)||0,
+    waist:bodyMetricCleanNumber(x.waist),
+    arm:arm,
+    armLeft:l,
+    armRight:r,
+    arm_left:l,
+    arm_right:r,
+    source:String(x.source||'manual')||'manual',
+    received_at:String(x.received_at||'')
+  };
+}
+function bodyMetricArmDisplay(x){
+  var l=bodyMetricArmLeftValue(x),r=bodyMetricArmRightValue(x),legacy=bodyMetricCleanNumber(x&&x.arm);
+  if(l&&r){
+    var diff=Math.round(Math.abs(l-r)*10)/10;
+    return 'arms flexed L '+l+'cm / R '+r+'cm'+(diff>=0.3?' (diff '+diff+'cm)':'');
+  }
+  if(l)return 'arm flexed L '+l+'cm';
+  if(r)return 'arm flexed R '+r+'cm';
+  if(legacy)return 'arm flexed '+legacy+'cm';
+  return '';
+}
+function bodyMetricTrainerContext(){
+  var byDate={};
+  function addMetricRow(row){
+    var r=bodyMetricNormalizeEntry(row);
+    if(!r.date||!(r.weight>0||r.waist>0||r.arm>0||r.armLeft>0||r.armRight>0))return;
+    var prev=byDate[r.date];
+    if(!prev){byDate[r.date]=r;return;}
+    var prevScore=(prev.weight>0?2:0)+(prev.waist>0?1:0)+(prev.armLeft>0?1:0)+(prev.armRight>0?1:0)+(prev.arm>0?1:0);
+    var nextScore=(r.weight>0?2:0)+(r.waist>0?1:0)+(r.armLeft>0?1:0)+(r.armRight>0?1:0)+(r.arm>0?1:0);
+    if(nextScore>=prevScore)byDate[r.date]=Object.assign({},prev,r);
+  }
+  try{((_bodyWeightData&&_bodyWeightData.length)?_bodyWeightData:progressWeightLoad()).forEach(addMetricRow);}catch(e){}
+  try{(_cachedSessions||[]).filter(function(s){return s&&s.workoutType==='Body';}).forEach(addMetricRow);}catch(e){}
+  var rows=Object.keys(byDate).map(function(k){return byDate[k];}).sort(function(a,b){return String(a.date).localeCompare(String(b.date));});
+  if(!rows.length)return null;
+  var latest=rows[rows.length-1],first=rows[0];
+  var weightDelta=(latest.weight>0&&first.weight>0)?Math.round((latest.weight-first.weight)*10)/10:null;
+  var armDiff=(latest.armLeft>0&&latest.armRight>0)?Math.round(Math.abs(latest.armLeft-latest.armRight)*10)/10:0;
+  return {
+    latestDate:latest.date,
+    latestWeightLb:latest.weight||0,
+    weightDeltaLb:weightDelta,
+    waistIn:latest.waist||0,
+    armFlexedAvgCm:latest.arm||0,
+    armFlexedLeftCm:latest.armLeft||0,
+    armFlexedRightCm:latest.armRight||0,
+    armFlexedAsymmetryCm:armDiff,
+    summary:[latest.weight?('weight '+latest.weight+'lb'):'',latest.waist?('waist '+latest.waist+'in'):'',bodyMetricArmDisplay(latest)].filter(Boolean).join(', ')
+  };
+}
+
 // ─── AI COACH ENGINE ──────────────────────────────────────────────────────────
 
 var HOME_EXERCISES=[
@@ -14607,7 +14801,7 @@ function aiCoachBuildContext(){
 
   // Body metrics (last 3)
   var bodyMetrics=(_cachedSessions||[])
-    .filter(function(s){return s.workoutType==='Body'&&s.weight;})
+    .filter(function(s){return s.workoutType==='Body'&&(s.weight||s.waist||s.arm||s.armLeft||s.armRight||s.arm_left||s.arm_right);})
     .sort(function(a,b){return a.date<b.date?1:-1;})
     .slice(0,3);
 
@@ -14748,20 +14942,28 @@ function aiCoachBuildContext(){
 
   var bodyCtx=(function(){
     // Body weight trend from last 4 logged metrics
-    var bodyLogs=(_cachedSessions||[])
-      .filter(function(s){return s.workoutType==='Body'&&s.weight;})
+    var bodyMap={};
+    function addBodyLog(row){
+      var r=bodyMetricNormalizeEntry(row);
+      if(!r.date||!(r.weight>0||r.waist>0||r.arm>0||r.armLeft>0||r.armRight>0))return;
+      bodyMap[r.date]=Object.assign({},bodyMap[r.date]||{},r);
+    }
+    try{((_bodyWeightData&&_bodyWeightData.length)?_bodyWeightData:progressWeightLoad()).forEach(addBodyLog);}catch(e){}
+    try{(_cachedSessions||[]).filter(function(s){return s.workoutType==='Body';}).forEach(addBodyLog);}catch(e){}
+    var bodyLogs=Object.keys(bodyMap).map(function(k){return bodyMap[k];})
       .sort(function(a,b){return a.date<b.date?1:-1;})
       .slice(0,4);
     if(!bodyLogs.length)return 'none logged';
     var latest=bodyLogs[0];
-    var out='Weight: '+latest.weight+'lbs ('+latest.date+')';
-    if(bodyLogs.length>=2){
+    var out=latest.weight?('Weight: '+latest.weight+'lbs ('+latest.date+')'):('Body metrics logged '+latest.date);
+    if(latest.weight&&bodyLogs.length>=2){
       var oldest=bodyLogs[bodyLogs.length-1];
       var delta=Math.round((parseFloat(latest.weight)-parseFloat(oldest.weight))*10)/10;
       out+=' trend '+(delta>=0?'+':'')+delta+'lbs over '+bodyLogs.length+' readings';
     }
     if(latest.waist)out+=', waist '+latest.waist+'"';
-    if(latest.arm)out+=', arm '+latest.arm+'cm';
+    var armLine=bodyMetricArmDisplay(latest);
+    if(armLine)out+=', '+armLine;
     return out;
   })();
 
@@ -20363,8 +20565,11 @@ function trainerEnsureMissingReviewQueued(reason){
   try{resolved=resolveLatestRealCompletedSessionSync({includeLegacy:true});}catch(e){resolved=null;}
   var sid=String((resolved&&resolved.sessionId)||'');
   if(!trainerRetryIsUsableSessionId(sid))return false;
+  var session=(resolved&&resolved.session)||workoutFindLocal(sid)||trainerRetrySeedSessionFromHints(sid,'HOME','missing_review_recovery');
+  if(!session)return false;
   var existing=postWorkoutReviewLoad(sid);
-  if(existing&&existing.reviewId)return false;
+  var upgradeExisting=!!(existing&&existing.reviewId&&postWorkoutReviewNeedsAiUpgrade(existing,session));
+  if(existing&&existing.reviewId&&!upgradeExisting)return false;
   var store=artifactQueueLoadStore();
   var openCreate=(store.jobs||[]).find(function(j){
     return j&&String(j.jobType||'')==='create_post_workout_review'
@@ -20372,23 +20577,23 @@ function trainerEnsureMissingReviewQueued(reason){
       && artifactQueueJobIsOpen(j);
   });
   if(openCreate)return false;
-  var session=(resolved&&resolved.session)||workoutFindLocal(sid)||trainerRetrySeedSessionFromHints(sid,'HOME','missing_review_recovery');
-  if(!session)return false;
   try{trainerRetryPersistSessionCandidate(session);}catch(e){}
   var now=artifactQueueNow();
+  var flow=upgradeExisting?'review_upgrade':'missing_review';
+  var flowBucket=upgradeExisting?(':'+String(Math.floor(now/(10*60*1000)))):'';
   var createJob=artifactQueueEnqueue({
     jobType:'create_post_workout_review',
     status:'pending',
     createdAt:now,
     updatedAt:now,
     attempts:0,
-    maxAttempts:3,
+    maxAttempts:upgradeExisting?6:3,
     nextRunAt:now,
     dependsOn:[],
-    idempotencyKey:'missing_review:create:'+sid,
+    idempotencyKey:flow+':create:'+sid+flowBucket,
     sourceSessionId:sid,
     artifactIds:[],
-    payload:{sessionId:sid,sessionRevision:(session&&session.sessionRevision)||1,preserveExisting:true,missingReviewRecovery:true,reason:String(reason||'missing_review_recovery')},
+    payload:{sessionId:sid,sessionRevision:(session&&session.sessionRevision)||1,force:upgradeExisting,preserveExisting:!!(existing&&existing.reviewId),missingReviewRecovery:!upgradeExisting,reviewUpgrade:upgradeExisting,reason:String(reason||(upgradeExisting?'review_upgrade':'missing_review_recovery'))},
     lastError:'',
     lastDurationMs:0
   });
@@ -20401,10 +20606,10 @@ function trainerEnsureMissingReviewQueued(reason){
     maxAttempts:6,
     nextRunAt:now,
     dependsOn:[createJob.jobId],
-    idempotencyKey:'missing_review:sync:'+sid,
+    idempotencyKey:flow+':sync:'+sid+flowBucket,
     sourceSessionId:sid,
     artifactIds:[],
-    payload:{sessionId:sid,missingReviewRecovery:true,reason:String(reason||'missing_review_recovery')},
+    payload:{sessionId:sid,missingReviewRecovery:!upgradeExisting,reviewUpgrade:upgradeExisting,reason:String(reason||(upgradeExisting?'review_upgrade':'missing_review_recovery'))},
     lastError:'',
     lastDurationMs:0
   });
@@ -20417,10 +20622,10 @@ function trainerEnsureMissingReviewQueued(reason){
     maxAttempts:3,
     nextRunAt:now,
     dependsOn:[createJob.jobId],
-    idempotencyKey:'missing_review:update_coach:'+sid,
+    idempotencyKey:flow+':update_coach:'+sid+flowBucket,
     sourceSessionId:sid,
     artifactIds:[],
-    payload:{sessionId:sid,missingReviewRecovery:true,reason:String(reason||'missing_review_recovery')},
+    payload:{sessionId:sid,missingReviewRecovery:!upgradeExisting,reviewUpgrade:upgradeExisting,reason:String(reason||(upgradeExisting?'review_upgrade':'missing_review_recovery'))},
     lastError:'',
     lastDurationMs:0
   });
@@ -20433,17 +20638,18 @@ function trainerEnsureMissingReviewQueued(reason){
     maxAttempts:6,
     nextRunAt:now,
     dependsOn:[updateCoach.jobId],
-    idempotencyKey:'missing_review:sync_coach:'+sid,
+    idempotencyKey:flow+':sync_coach:'+sid+flowBucket,
     sourceSessionId:sid,
     artifactIds:[],
-    payload:{sessionId:sid,missingReviewRecovery:true,reason:String(reason||'missing_review_recovery')},
+    payload:{sessionId:sid,missingReviewRecovery:!upgradeExisting,reviewUpgrade:upgradeExisting,reason:String(reason||(upgradeExisting?'review_upgrade':'missing_review_recovery'))},
     lastError:'',
     lastDurationMs:0
   });
   wtLogEvent('missing_review_recovery_queued',{
     sessionId:sid,
     sourceSessionId:sid,
-    errorCode:String(reason||'missing_review_recovery')
+    errorCode:String(reason||(upgradeExisting?'review_upgrade':'missing_review_recovery')),
+    fallbackUsed:upgradeExisting
   });
   return true;
 }
@@ -29991,26 +30197,27 @@ function saveBody(){
   if(!uiActionBegin('saveBody',_btn,'SAVING...'))return;
   resAC();
   var wt=document.getElementById('bWt').value,waist=document.getElementById('bWaist').value;
-  var arm=document.getElementById('bArm').value,notes=document.getElementById('bNotes').value;
+  var armLeft=document.getElementById('bArmL').value,armRight=document.getElementById('bArmR').value,notes=document.getElementById('bNotes').value;
+  var armAvg=bodyMetricArmAverageValue({armLeft:armLeft,armRight:armRight});
   var date=document.getElementById('bodyDate').value||localDateStr();
   var el=document.getElementById('bodyMsg');
-  if(!wt&&!waist&&!arm){el.textContent='Enter at least one measurement';el.style.background='var(--red-dim)';el.style.color='var(--red)';uiActionEnd('saveBody',200);return;}
-  var bodyPayload={type:'body',date:date,weight:wt,waist:waist,arm:arm,notes:notes};
+  if(!wt&&!waist&&!armLeft&&!armRight){el.textContent='Enter at least one measurement';el.style.background='var(--red-dim)';el.style.color='var(--red)';uiActionEnd('saveBody',200);return;}
+  var bodyPayload={type:'body',date:date,weight:wt,waist:waist,arm:armAvg||'',armLeft:armLeft,armRight:armRight,arm_left:armLeft,arm_right:armRight,notes:notes};
   // Save to local history immediately so offline isn't lost
-  var localSdBody={date:date,workoutType:'Body',weight:wt,waist:waist,arm:arm,notes:notes};
+  var localSdBody={date:date,workoutType:'Body',weight:wt,waist:waist,arm:armAvg||'',armLeft:armLeft,armRight:armRight,arm_left:armLeft,arm_right:armRight,notes:notes};
   recSession(localSdBody);
   if(_cachedSessions)_cachedSessions.push(localSdBody);
   try{
     var wNum=parseFloat(wt)||0;
     if(wNum>0){
       var entries=progressWeightLoad().filter(function(x){return x&&x.date!==date;});
-      entries.push({date:date,weight:wNum,weight_lb:wNum,waist:parseFloat(waist)||0,arm:parseFloat(arm)||0,source:'manual',received_at:new Date().toISOString()});
+      entries.push({date:date,weight:wNum,weight_lb:wNum,waist:parseFloat(waist)||0,arm:armAvg||0,armLeft:bodyMetricCleanNumber(armLeft),armRight:bodyMetricCleanNumber(armRight),arm_left:bodyMetricCleanNumber(armLeft),arm_right:bodyMetricCleanNumber(armRight),source:'manual',received_at:new Date().toISOString()});
       progressWeightSave(entries);
-      progressApplyBodyWeightData(entries.slice(-20).map(function(x){return{date:x.date,weight:Number(x.weight||x.weight_lb||0),waist:Number(x.waist||0),arm:Number(x.arm||0),source:x.source||'manual',received_at:x.received_at||''};}),{refreshInsights:currentPage==='progress'});
+      progressApplyBodyWeightData(entries.slice(-20).map(bodyMetricNormalizeEntry),{refreshInsights:currentPage==='progress'});
     }
   }catch(e){}
   syncData(bodyPayload,'bodyMsg');
-  setTimeout(function(){['bWt','bWaist','bArm','bNotes'].forEach(function(id){document.getElementById(id).value='';});uiActionEnd('saveBody',0);},3500);
+  setTimeout(function(){['bWt','bWaist','bArmL','bArmR','bNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});uiActionEnd('saveBody',0);},3500);
   setTimeout(function(){uiActionEnd('saveBody',0);},1200);
 }
 
@@ -32230,7 +32437,9 @@ function progressWeightLoad(){
       var d=String(x.date||'');
       var w=Number(x.weight!=null?x.weight:x.weight_lb);
       if(!d||!isFinite(w)||w<=0)return null;
-      return {date:d,weight:nutRoundTo(w,2),weight_lb:nutRoundTo(w,2),waist:Number(x.waist||0)||0,arm:Number(x.arm||0)||0,source:String(x.source||''),received_at:String(x.received_at||'')};
+      var out=bodyMetricNormalizeEntry(Object.assign({},x,{date:d,weight:nutRoundTo(w,2),weight_lb:nutRoundTo(w,2)}));
+      out.weight=nutRoundTo(w,2);out.weight_lb=nutRoundTo(w,2);
+      return out;
     }).filter(Boolean).sort(function(a,b){return String(a.date).localeCompare(String(b.date));});
   }catch(e){return [];}
 }
@@ -32246,13 +32455,13 @@ function applyImportedBodyWeightToProgress(importObj){
   var weight=Number(importObj.body_weight_lb);
   if(!isFinite(weight)||weight<=0)return;
   var entries=progressWeightLoad();
-  var nextEntry={date:String(importObj.date),weight_lb:nutRoundTo(weight,2),weight:nutRoundTo(weight,2),waist:0,arm:0,source:String(importObj.source||'apple_shortcut'),received_at:String(importObj.received_at||new Date().toISOString())};
+  var nextEntry={date:String(importObj.date),weight_lb:nutRoundTo(weight,2),weight:nutRoundTo(weight,2),waist:0,arm:0,armLeft:0,armRight:0,arm_left:0,arm_right:0,source:String(importObj.source||'apple_shortcut'),received_at:String(importObj.received_at||new Date().toISOString())};
   var existing=entries.find(function(x){return x&&x.date===nextEntry.date;});
   if(existing&&String(existing.source||'').toLowerCase()==='manual')return;
   var filtered=entries.filter(function(x){return x&&x.date!==nextEntry.date;});
   filtered.push(nextEntry);
   progressWeightSave(filtered);
-  _bodyWeightData=filtered.slice(-20).map(function(x){return {date:x.date,weight:Number(x.weight||x.weight_lb||0),waist:Number(x.waist||0),arm:Number(x.arm||0),source:x.source,received_at:x.received_at};});
+  _bodyWeightData=filtered.slice(-20).map(bodyMetricNormalizeEntry);
 }
 function nutritionHealthMetaLoad(){return safeLsJson(NUT_HEALTH_META_KEY,{},NUT_HEALTH_META_KEY)||{};}
 function nutritionHealthMetaSave(v){var s=JSON.stringify(v||{});try{localStorage.setItem(NUT_HEALTH_META_KEY,s);}catch(e){}wtDB.set(NUT_HEALTH_META_KEY,s);}
@@ -36228,23 +36437,23 @@ function fetchProgressHistory(cb){
   });
 }
 function progressNormalizeBodyMetricRows(rows){
-  var data=(rows||[]).filter(function(r){return r&&r.weight&&parseFloat(r.weight)>0;})
-    .map(function(r){return{date:String(r.date||'').slice(0,10),weight:parseFloat(r.weight),waist:parseFloat(r.waist)||0,arm:parseFloat(r.arm)||0,source:String(r.source||'manual')||'manual'};})
-    .filter(function(r){return r.date&&isFinite(r.weight)&&r.weight>0;})
+  var data=(rows||[]).filter(function(r){return r&&(parseFloat(r.weight)>0||parseFloat(r.waist)>0||bodyMetricArmAverageValue(r)>0);})
+    .map(function(r){return bodyMetricNormalizeEntry(Object.assign({},r,{weight:parseFloat(r.weight),weight_lb:parseFloat(r.weight)}));})
+    .filter(function(r){return r.date&&(r.weight>0||r.waist>0||r.arm>0||r.armLeft>0||r.armRight>0);})
     .sort(function(a,b){return a.date<b.date?-1:1;})
     .slice(-20);
   try{
     var imported=progressWeightLoad().filter(function(x){return String(x.source||'').toLowerCase()!=='manual';});
     imported.forEach(function(iw){
       var hasManual=data.some(function(d){return d&&d.date===iw.date;});
-      if(!hasManual)data.push({date:iw.date,weight:Number(iw.weight||iw.weight_lb||0),waist:Number(iw.waist||0),arm:Number(iw.arm||0),source:iw.source||'apple_shortcut',received_at:iw.received_at||''});
+      if(!hasManual)data.push(bodyMetricNormalizeEntry({date:iw.date,weight:Number(iw.weight||iw.weight_lb||0),weight_lb:Number(iw.weight||iw.weight_lb||0),waist:Number(iw.waist||0),arm:Number(iw.arm||0),armLeft:bodyMetricArmLeftValue(iw),armRight:bodyMetricArmRightValue(iw),source:iw.source||'apple_shortcut',received_at:iw.received_at||''}));
     });
-    data=data.filter(function(x){return x&&isFinite(Number(x.weight))&&Number(x.weight)>0;}).sort(function(a,b){return a.date<b.date?-1:1;}).slice(-20);
+    data=data.filter(function(x){return x&&x.date&&(Number(x.weight)>0||Number(x.waist)>0||Number(x.arm)>0||Number(x.armLeft)>0||Number(x.armRight)>0);}).sort(function(a,b){return a.date<b.date?-1:1;}).slice(-20);
   }catch(e){}
   return data;
 }
 function progressApplyBodyWeightData(data,opts){
-  var rows=Array.isArray(data)?data:[];
+  var rows=(Array.isArray(data)?data:[]).map(bodyMetricNormalizeEntry).filter(function(r){return r&&r.date&&(r.weight>0||r.waist>0||r.arm>0||r.armLeft>0||r.armRight>0);});
   _bodyWeightLoaded=true;
   _bodyWeightData=rows;
   var v=JSON.stringify(rows);
@@ -36378,9 +36587,17 @@ function buildProgressInsights(sessions){
       se.style.display='none';
       var weightLine='No body metric yet';
       if(_bodyWeightData&&_bodyWeightData.length){
-        var first=_bodyWeightData[0],last=_bodyWeightData[_bodyWeightData.length-1];
-        var dlt=Math.round((last.weight-first.weight)*10)/10;
-        weightLine=last.weight+' lbs ('+(dlt>0?'+':'')+dlt+' vs first)';
+        var metricLast=_bodyWeightData[_bodyWeightData.length-1];
+        var metricWeights=_bodyWeightData.filter(function(x){return x&&Number(x.weight)>0;});
+        if(metricWeights.length){
+          var first=metricWeights[0],last=metricWeights[metricWeights.length-1];
+          var dlt=Math.round((last.weight-first.weight)*10)/10;
+          weightLine=last.weight+' lbs'+(metricWeights.length>=2?' ('+(dlt>0?'+':'')+dlt+' vs first)':'');
+        } else {
+          weightLine='No weight logged';
+        }
+        var metricArm=bodyMetricArmDisplay(metricLast);
+        if(metricArm)weightLine+=' · '+metricArm;
       }
       function tile(lbl,val){
         return '<div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px 9px;">'
@@ -36886,16 +37103,21 @@ function buildPRs(sessions){
     // ── Body Weight row — same style as PR rows ──────────────────
     var bwExpanded=!!_bwExpanded;
     var bwSub=_bodyWeightData.length?(function(){
-      var lt=_bodyWeightData[_bodyWeightData.length-1],fi=_bodyWeightData[0];
-      var ch=Math.round((lt.weight-fi.weight)*10)/10;
+      var latestMetric=_bodyWeightData[_bodyWeightData.length-1];
+      var weightRows=_bodyWeightData.filter(function(x){return x&&Number(x.weight)>0;});
+      var lt=weightRows.length?weightRows[weightRows.length-1]:latestMetric,fi=weightRows.length?weightRows[0]:latestMetric;
+      var ch=(weightRows.length>=2)?Math.round((lt.weight-fi.weight)*10)/10:0;
       var goalWt=(_nutTargets&&_nutTargets.goalWeight)?parseFloat(_nutTargets.goalWeight):0;
-      var toGoal=goalWt>0?Math.round((lt.weight-goalWt)*10)/10:null;
+      var toGoal=(goalWt>0&&lt.weight>0)?Math.round((lt.weight-goalWt)*10)/10:null;
       var goalStr=toGoal!==null?' · '+(toGoal>0?toGoal+'lbs to goal':'At goal ✓'):'';
-      return lt.weight+' lbs · '+(ch>0?'+':'')+ch+' since start'+goalStr;
+      var armStr=bodyMetricArmDisplay(latestMetric);
+      var weightStr=lt.weight>0?(lt.weight+' lbs'+(weightRows.length>=2?' · '+(ch>0?'+':'')+ch+' since start':'')+goalStr):'No weight logged';
+      return weightStr+(armStr?' · '+armStr:'');
     })():(_bodyWeightLoaded?'No body metric yet':'Loading...');
     var bwTrend='',bwTrendCol='var(--muted)';
-    if(_bodyWeightData.length>=2){
-      var last2=_bodyWeightData[_bodyWeightData.length-1],prev2=_bodyWeightData[_bodyWeightData.length-2];
+    var bwWeightRows=_bodyWeightData.filter(function(x){return x&&Number(x.weight)>0;});
+    if(bwWeightRows.length>=2){
+      var last2=bwWeightRows[bwWeightRows.length-1],prev2=bwWeightRows[bwWeightRows.length-2];
       if(last2.weight<prev2.weight){bwTrend='↓ Down';bwTrendCol='var(--green)';}
       else if(last2.weight>prev2.weight){bwTrend='↑ Up';bwTrendCol='var(--red)';}
       else{bwTrend='→ Holding';bwTrendCol='var(--yellow)';}
@@ -37023,31 +37245,46 @@ function renderBodyWeightData(el,data){
     el.innerHTML='<div style="color:var(--muted);font-size:0.72rem;">No weight data — log via Body Metrics</div>';
     return;
   }
-  var latest=data[data.length-1],first=data[0];
-  var change=Math.round((latest.weight-first.weight)*10)/10;
+  var latestMetric=data[data.length-1];
+  var weightRows=data.filter(function(d){return d&&Number(d.weight)>0;});
+  var latest=weightRows.length?weightRows[weightRows.length-1]:latestMetric,first=weightRows.length?weightRows[0]:latestMetric;
+  var change=(weightRows.length>=2)?Math.round((latest.weight-first.weight)*10)/10:0;
   var changeCol=change<=0?'var(--green)':'var(--red)';
   var html='<div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">';
-  html+='<div style="display:flex;align-items:baseline;gap:6px;">';
-  html+='<div style="font-family:\"Bebas Neue\",sans-serif;font-size:2rem;color:var(--accent);line-height:1;">'+latest.weight+'</div>';
-  html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">lbs</div>';
-  html+='</div>';
-  html+='<div style="display:flex;align-items:baseline;gap:4px;">';
-  html+='<div style="font-family:\"Bebas Neue\",sans-serif;font-size:1.3rem;color:'+changeCol+';line-height:1;">'+(change>0?'+':'')+change+'</div>';
-  html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">since start</div>';
-  html+='</div>';
-  if(latest.waist>0){
+  if(latest.weight>0){
+    html+='<div style="display:flex;align-items:baseline;gap:6px;">';
+    html+='<div style="font-family:\"Bebas Neue\",sans-serif;font-size:2rem;color:var(--accent);line-height:1;">'+latest.weight+'</div>';
+    html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">lbs</div>';
+    html+='</div>';
+    if(weightRows.length>=2){
+      html+='<div style="display:flex;align-items:baseline;gap:4px;">';
+      html+='<div style="font-family:\"Bebas Neue\",sans-serif;font-size:1.3rem;color:'+changeCol+';line-height:1;">'+(change>0?'+':'')+change+'</div>';
+      html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">since start</div>';
+      html+='</div>';
+    }
+  } else {
+    html+='<div style="font-size:0.72rem;color:var(--muted);font-weight:700;">Body measurements logged</div>';
+  }
+  if(latestMetric.waist>0){
     html+='<div style="display:flex;align-items:baseline;gap:4px;">';
-    html+='<div style="font-family:\"Bebas Neue\",sans-serif;font-size:1.3rem;color:var(--text2);line-height:1;">'+latest.waist+'"</div>';
+    html+='<div style="font-family:\"Bebas Neue\",sans-serif;font-size:1.3rem;color:var(--text2);line-height:1;">'+latestMetric.waist+'"</div>';
     html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">waist</div>';
     html+='</div>';
   }
+  var armLabel=bodyMetricArmDisplay(latestMetric);
+  if(armLabel){
+    html+='<div style="display:flex;align-items:baseline;gap:4px;min-width:0;">';
+    html+='<div style="font-family:\"Bebas Neue\",sans-serif;font-size:1.05rem;color:var(--text2);line-height:1;white-space:nowrap;">'+escHtml(armLabel.replace('arms flexed ','').replace('arm flexed ',''))+'</div>';
+    html+='<div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:1px;">arms</div>';
+    html+='</div>';
+  }
   html+='</div>';
-  html+='<canvas id="bodyWtCanvas" style="width:100%;height:80px;display:block;"></canvas>';
+  if(weightRows.length>=2)html+='<canvas id="bodyWtCanvas" style="width:100%;height:80px;display:block;"></canvas>';
   el.innerHTML=html;
   setTimeout(function(){
     var canvas=document.getElementById('bodyWtCanvas');
-    if(canvas&&data.length>=2){
-      drawLineChart(canvas,data.map(function(d){return d.date;}),data.map(function(d){return d.weight;}),null,null,'var(--blue)');
+    if(canvas&&weightRows.length>=2){
+      drawLineChart(canvas,weightRows.map(function(d){return d.date;}),weightRows.map(function(d){return d.weight;}),null,null,'var(--blue)');
     }
   },50);
 }
@@ -37060,6 +37297,7 @@ function buildBodyWeightChart(){
   try{
     var cached=localStorage.getItem(BODY_WEIGHT_CACHE_KEY);
     if(cached){var cd=JSON.parse(cached);if(cd&&cd.length){
+      cd=cd.map(bodyMetricNormalizeEntry).filter(function(r){return r&&r.date&&(r.weight>0||r.waist>0||r.arm>0||r.armLeft>0||r.armRight>0);});
       hadCached=true;
       _bodyWeightLoaded=true;
       _bodyWeightData=cd;
@@ -37241,6 +37479,195 @@ function initDates(){
 
 // ─── BUDGET ───────────────────────────────────────────────────────
 var BUD_KEY='wt_budget';
+var _trackerWatchState={items:[],alerts:[],settings:null,loading:false,emailOn:true,lastHomeRefresh:0};
+
+function trackerApi(method,path,payload,timeoutMs){
+  if(!wtAiProxyConfigured())return Promise.reject(new Error('AI proxy is not configured'));
+  var route='/tracker/'+String(path||'').replace(/^\/+/,'');
+  return String(method||'GET').toUpperCase()==='GET'
+    ?wtAiProxyGet(route,timeoutMs||25000)
+    :wtAiProxyPost(route,payload||{},timeoutMs||45000);
+}
+function trackerSetStatus(msg,color){
+  var el=document.getElementById('trackerWatchStatus');
+  if(el){el.textContent=msg||'';el.style.color=color||'var(--muted)';}
+}
+function trackerLoad(force){
+  if(_trackerWatchState.loading&&!force)return Promise.resolve(null);
+  if(!wtAiProxyConfigured()){
+    trackerSetStatus('Connect the Cloudflare AI backend to use Tracker Watch','var(--orange)');
+    trackerRender();
+    trackerHomeRefresh();
+    return Promise.resolve(null);
+  }
+  _trackerWatchState.loading=true;
+  trackerSetStatus('Loading tracker...', 'var(--muted)');
+  return trackerApi('GET','list',null,28000).then(function(res){
+    _trackerWatchState.loading=false;
+    if(!res||res.status!=='ok')throw new Error((res&&(res.message||res.errorCode))||'Tracker unavailable');
+    _trackerWatchState.items=res.items||[];
+    _trackerWatchState.alerts=res.alerts||[];
+    _trackerWatchState.settings=res.settings||{};
+    _trackerWatchState.emailOn=(_trackerWatchState.settings.email_alerts||'on')!=='off';
+    trackerApplySettings();
+    trackerRender();
+    trackerHomeRefreshFromAlerts(_trackerWatchState.alerts);
+    trackerSetStatus((_trackerWatchState.items.length||0)+' watched · '+((_trackerWatchState.alerts||[]).filter(function(a){return !a.seen_at;}).length)+' unseen','var(--muted)');
+    return res;
+  }).catch(function(err){
+    _trackerWatchState.loading=false;
+    trackerSetStatus(String(err&&err.message||err||'Tracker unavailable'),'var(--orange)');
+    trackerRender();
+    return null;
+  });
+}
+function trackerApplySettings(){
+  var st=_trackerWatchState.settings||{};
+  var z=document.getElementById('trackerZillowFreq');if(z)z.value=st.zillow_frequency||'2h';
+  var c=document.getElementById('trackerCostcoFreq');if(c)c.value=st.costco_frequency||'twice_daily';
+  var e=document.getElementById('trackerEmailInput');if(e)e.value=st.alert_email||'phil.ksmith@gmail.com';
+  trackerRenderEmailToggle();
+}
+function trackerRenderEmailToggle(){
+  var b=document.getElementById('trackerEmailToggle');if(!b)return;
+  b.textContent=_trackerWatchState.emailOn?'EMAIL ON':'EMAIL OFF';
+  b.style.background=_trackerWatchState.emailOn?'var(--green-dim)':'var(--card2)';
+  b.style.color=_trackerWatchState.emailOn?'var(--green)':'var(--muted)';
+  b.style.borderColor=_trackerWatchState.emailOn?'rgba(76,217,100,0.35)':'var(--border2)';
+}
+function trackerRender(){
+  var list=document.getElementById('trackerWatchItems');
+  var alerts=document.getElementById('trackerWatchAlerts');
+  if(list){
+    var items=_trackerWatchState.items||[];
+    if(!wtAiProxyConfigured()){
+      list.innerHTML='<div style="background:var(--yellow-dim);border:1px solid rgba(245,158,11,0.35);border-radius:var(--r);padding:12px;color:var(--yellow);font-size:0.72rem;line-height:1.45;">Tracker Watch needs the Cloudflare AI backend and D1 DB binding. The rest of Budget is untouched.</div>';
+    }else if(!items.length){
+      list.innerHTML='<div style="background:var(--card);border:1px dashed var(--border2);border-radius:var(--r);padding:14px;text-align:center;color:var(--muted);font-size:0.72rem;">Add a Costco or Zillow URL to start watching.</div>';
+    }else{
+      list.innerHTML=items.map(function(it){return trackerItemHtml(it);}).join('');
+    }
+  }
+  if(alerts){
+    var rows=(_trackerWatchState.alerts||[]).slice(0,12);
+    if(!rows.length){
+      alerts.innerHTML='<div style="padding:12px;text-align:center;color:var(--muted);font-size:0.72rem;">No tracker alerts yet.</div>';
+    }else{
+      alerts.innerHTML=rows.map(function(a){
+        return '<div style="padding:10px 12px;border-bottom:1px solid var(--border);'+(!a.seen_at?'background:rgba(59,131,246,0.07);':'')+'">'
+          +'<div style="display:flex;justify-content:space-between;gap:8px;"><div style="font-size:0.76rem;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escHtml(a.title||a.label||'Tracker alert')+'</div><div style="font-size:0.58rem;color:var(--muted);white-space:nowrap;">'+escHtml(trackerTime(a.created_at))+'</div></div>'
+          +'<div style="font-size:0.68rem;color:var(--text2);line-height:1.35;margin-top:3px;">'+escHtml(a.message||'Changed')+'</div>'
+          +'</div>';
+      }).join('');
+    }
+  }
+}
+function trackerItemHtml(it){
+  var title=it.current_title||it.label||it.url;
+  var price=it.current_price||'—';
+  var st=it.current_status||'unknown';
+  var enabled=Number(it.enabled)!==0;
+  return '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:10px;">'
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">'
+      +'<div style="min-width:0;flex:1;"><div style="font-size:0.58rem;letter-spacing:1.3px;text-transform:uppercase;color:'+(it.kind==='zillow'?'var(--blue)':'var(--accent)')+';font-weight:900;">'+escHtml(it.kind||'tracker')+'</div>'
+      +'<div style="font-size:0.86rem;font-weight:850;color:var(--text);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escHtml(title)+'</div>'
+      +'<div style="font-size:0.66rem;color:var(--muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escHtml(it.url||'')+'</div></div>'
+      +'<button onclick="trackerToggleItem(\''+escHtmlAttr(it.id)+'\','+(enabled?0:1)+')" style="flex-shrink:0;padding:7px 9px;background:'+(enabled?'var(--green-dim)':'var(--card2)')+';border:1px solid '+(enabled?'rgba(76,217,100,0.35)':'var(--border2)')+';border-radius:999px;color:'+(enabled?'var(--green)':'var(--muted)')+';font-size:0.62rem;font-weight:900;cursor:pointer;">'+(enabled?'ON':'OFF')+'</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:10px;">'
+      +'<div style="flex:1;background:var(--card2);border-radius:8px;padding:8px;"><div style="font-size:0.52rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">Price</div><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.15rem;letter-spacing:1px;color:var(--text);">'+escHtml(price)+'</div></div>'
+      +'<div style="flex:1;background:var(--card2);border-radius:8px;padding:8px;"><div style="font-size:0.52rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">Status</div><div style="font-size:0.76rem;font-weight:800;color:var(--text2);margin-top:4px;">'+escHtml(st.replace(/_/g,' '))+'</div></div>'
+      +'<div style="flex:1;background:var(--card2);border-radius:8px;padding:8px;"><div style="font-size:0.52rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">Checked</div><div style="font-size:0.72rem;font-weight:800;color:var(--text2);margin-top:4px;">'+escHtml(trackerTime(it.last_checked_at))+'</div></div>'
+    +'</div>'
+    +(it.current_summary?'<div style="font-size:0.66rem;color:var(--muted);line-height:1.35;margin-top:9px;">'+escHtml(it.current_summary)+'</div>':'')
+    +'<div style="display:flex;gap:8px;margin-top:10px;">'
+      +'<button onclick="trackerCheckNow(\''+escHtmlAttr(it.id)+'\')" style="flex:1;padding:10px;background:var(--blue-dim);border:1px solid rgba(59,131,246,0.35);border-radius:9px;color:var(--blue);font-size:0.66rem;font-weight:900;letter-spacing:1px;cursor:pointer;">CHECK NOW</button>'
+      +'<button onclick="trackerDeleteItem(\''+escHtmlAttr(it.id)+'\')" style="padding:10px 12px;background:var(--red-dim);border:1px solid rgba(255,58,92,0.35);border-radius:9px;color:var(--red);font-size:0.66rem;font-weight:900;letter-spacing:1px;cursor:pointer;">DELETE</button>'
+    +'</div>'
+  +'</div>';
+}
+function trackerAddUrl(){
+  var inp=document.getElementById('trackerUrlInput');
+  var url=inp&&inp.value?inp.value.trim():'';
+  if(!url){trackerSetStatus('Paste a Costco or Zillow URL first','var(--orange)');return;}
+  trackerSetStatus('Adding tracker...','var(--muted)');
+  trackerApi('POST','add',{url:url},25000).then(function(res){
+    if(!res||res.status!=='ok')throw new Error((res&&(res.message||res.errorCode))||'Add failed');
+    if(inp)inp.value='';
+    return trackerLoad(true);
+  }).catch(function(err){trackerSetStatus(String(err&&err.message||err||'Add failed'),'var(--orange)');});
+}
+function trackerDeleteItem(id){
+  trackerApi('POST','delete',{id:id},22000).then(function(){trackerLoad(true);}).catch(function(err){trackerSetStatus(String(err&&err.message||err||'Delete failed'),'var(--orange)');});
+}
+function trackerToggleItem(id,on){
+  trackerApi('POST','update',{id:id,enabled:!!on},22000).then(function(){trackerLoad(true);}).catch(function(err){trackerSetStatus(String(err&&err.message||err||'Toggle failed'),'var(--orange)');});
+}
+function trackerCheckNow(id){
+  trackerSetStatus('Checking now...','var(--blue)');
+  trackerApi('POST','check-now',{id:id},70000).then(function(res){
+    if(!res||res.status!=='ok')throw new Error((res&&(res.message||res.errorCode))||'Check failed');
+    trackerSetStatus('Checked: '+(res.price||res.itemStatus||'done'),'var(--green)');
+    return trackerLoad(true);
+  }).catch(function(err){trackerSetStatus(String(err&&err.message||err||'Check failed'),'var(--orange)');});
+}
+function trackerToggleEmail(){
+  _trackerWatchState.emailOn=!_trackerWatchState.emailOn;
+  trackerRenderEmailToggle();
+  trackerSaveSettings();
+}
+function trackerSaveSettings(){
+  if(!wtAiProxyConfigured())return;
+  var z=document.getElementById('trackerZillowFreq');
+  var c=document.getElementById('trackerCostcoFreq');
+  var e=document.getElementById('trackerEmailInput');
+  trackerApi('POST','settings',{
+    zillow_frequency:z&&z.value||'2h',
+    costco_frequency:c&&c.value||'twice_daily',
+    email_alerts:_trackerWatchState.emailOn?'on':'off',
+    alert_email:e&&e.value||'phil.ksmith@gmail.com'
+  },22000).then(function(res){
+    if(res&&res.settings){_trackerWatchState.settings=res.settings;trackerApplySettings();}
+    trackerSetStatus('Tracker settings saved','var(--green)');
+    setTimeout(function(){trackerSetStatus((_trackerWatchState.items.length||0)+' watched','var(--muted)');},1800);
+  }).catch(function(err){trackerSetStatus(String(err&&err.message||err||'Settings not saved'),'var(--orange)');});
+}
+function trackerHomeRefresh(){
+  if(!wtAiProxyConfigured()){trackerHomeRefreshFromAlerts([]);return Promise.resolve(null);}
+  if(Date.now()-(_trackerWatchState.lastHomeRefresh||0)<30000)return Promise.resolve(null);
+  _trackerWatchState.lastHomeRefresh=Date.now();
+  return trackerApi('GET','alerts',null,18000).then(function(res){
+    trackerHomeRefreshFromAlerts(res&&res.alerts||[]);
+  }).catch(function(){trackerHomeRefreshFromAlerts([]);});
+}
+function trackerHomeRefreshFromAlerts(alerts){
+  var card=document.getElementById('homeTrackerWatchCard');
+  if(!card)return;
+  var unseen=(alerts||[]).filter(function(a){return !a.seen_at;});
+  if(!unseen.length){card.style.display='none';return;}
+  var first=unseen[0];
+  var t=document.getElementById('homeTrackerWatchTitle');if(t)t.textContent=first.title||first.message||'New tracker alert';
+  var sub=document.getElementById('homeTrackerWatchSub');if(sub)sub.textContent=first.message||'Tap to review in Budget';
+  var count=document.getElementById('homeTrackerWatchCount');if(count)count.textContent=String(unseen.length);
+  card.style.display='block';
+}
+function trackerOpenFromHome(){
+  try{navTo('budget');}catch(e){}
+  setTimeout(function(){
+    var sec=document.getElementById('trackerWatchSection');
+    if(sec&&typeof sec.scrollIntoView==='function')sec.scrollIntoView({behavior:'smooth',block:'start'});
+  },220);
+  if(wtAiProxyConfigured()){
+    trackerApi('POST','alerts/seen',{},18000).then(function(){trackerHomeRefreshFromAlerts([]);return trackerLoad(true);}).catch(function(){trackerHomeRefreshFromAlerts([]);});
+  }else trackerHomeRefreshFromAlerts([]);
+}
+function trackerTime(value){
+  var t=Date.parse(value||'');
+  if(!Number.isFinite(t))return 'Never';
+  var d=new Date(t);
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+function escHtmlAttr(s){return escHtml(s).replace(/'/g,'&#39;');}
 
 // Month rows in sheet: Dec=row7(idx0) Jan=row8(idx1) ... Nov=row18(idx11)
 // equityRows[i] = {label, equity(colB), bank(colF)} from sheet rows 7–18
@@ -37511,6 +37938,7 @@ function budLoad(){
   budApplyStored();
   budCalc();
   budSyncBadge('loading');
+  try{trackerLoad();}catch(e){}
   budFetchFromSheet();
 }
 
@@ -44991,17 +45419,22 @@ function progAIRunFeedback(btn,card,result){
   var walkSessions=(_cachedSessions||[]).filter(function(s){return s.workoutType==='Walk'&&days.indexOf(s.date)>=0;});
 
   // Real weight data from cache
-  var wtLatest=_bodyWeightData.length?_bodyWeightData[_bodyWeightData.length-1]:null;
-  var wtFirst=_bodyWeightData.length?_bodyWeightData[0]:null;
+  var wtMetricLatest=_bodyWeightData.length?_bodyWeightData[_bodyWeightData.length-1]:null;
+  var wtRows=_bodyWeightData.filter(function(x){return x&&Number(x.weight)>0;});
+  var wtLatest=wtRows.length?wtRows[wtRows.length-1]:null;
+  var wtFirst=wtRows.length?wtRows[0]:null;
   var wtChange=wtLatest&&wtFirst?Math.round((wtLatest.weight-wtFirst.weight)*10)/10:null;
   var wtTrend='No weight logged.';
-  if(wtLatest){
-    wtTrend='Current: '+wtLatest.weight+'lbs ('+wtLatest.date+').';
-    if(wtChange!==null)wtTrend+=' Change since '+wtFirst.date+': '+(wtChange>0?'+':'')+wtChange+'lbs.';
-    if(goalWeight)wtTrend+=' To goal: '+(wtLatest.weight-goalWeight>0?'+':'')+(Math.round((wtLatest.weight-goalWeight)*10)/10)+'lbs.';
-    if(_bodyWeightData.length>=3){
+  if(wtLatest||wtMetricLatest){
+    wtTrend=wtLatest?('Current: '+wtLatest.weight+'lbs ('+wtLatest.date+').'):'No weight logged.';
+    var wtArmLine=bodyMetricArmDisplay(wtMetricLatest||wtLatest);
+    if((wtMetricLatest||wtLatest).waist)wtTrend+=' Waist '+(wtMetricLatest||wtLatest).waist+'in.';
+    if(wtArmLine)wtTrend+=' '+wtArmLine+'.';
+    if(wtChange!==null&&wtFirst)wtTrend+=' Change since '+wtFirst.date+': '+(wtChange>0?'+':'')+wtChange+'lbs.';
+    if(goalWeight&&wtLatest)wtTrend+=' To goal: '+(wtLatest.weight-goalWeight>0?'+':'')+(Math.round((wtLatest.weight-goalWeight)*10)/10)+'lbs.';
+    if(wtRows.length>=3){
       // Last 3 entries for recent trend
-      var recent=_bodyWeightData.slice(-3);
+      var recent=wtRows.slice(-3);
       wtTrend+=' Recent: '+recent.map(function(w){return w.date+'='+w.weight;}).join(', ')+'.';
     }
   }
@@ -45983,12 +46416,17 @@ function cholAIFeedback(){
   // Weight trend
   var weightStr='No weight data.';
   if(_bodyWeightData&&_bodyWeightData.length){
-    var wLast=_bodyWeightData[_bodyWeightData.length-1];
-    var wFirst=_bodyWeightData[0];
-    var wChange=Math.round((wLast.weight-wFirst.weight)*10)/10;
-    weightStr='Current: '+wLast.weight+'lbs ('+wLast.date+'). Change since '+wFirst.date+': '+(wChange>0?'+':'')+wChange+'lbs.';
-    if(_bodyWeightData.length>=3){
-      var wRecent=_bodyWeightData.slice(-3);
+    var wMetricLast=_bodyWeightData[_bodyWeightData.length-1];
+    var wRows=_bodyWeightData.filter(function(x){return x&&Number(x.weight)>0;});
+    var wLast=wRows.length?wRows[wRows.length-1]:null;
+    var wFirst=wRows.length?wRows[0]:null;
+    var wChange=(wLast&&wFirst)?Math.round((wLast.weight-wFirst.weight)*10)/10:null;
+    weightStr=wLast?('Current: '+wLast.weight+'lbs ('+wLast.date+').'+(wChange!==null&&wRows.length>=2?' Change since '+wFirst.date+': '+(wChange>0?'+':'')+wChange+'lbs.':'')):'No weight logged.';
+    var wArmLine=bodyMetricArmDisplay(wMetricLast);
+    if(wMetricLast.waist)weightStr+=' Waist '+wMetricLast.waist+'in.';
+    if(wArmLine)weightStr+=' '+wArmLine+'.';
+    if(wRows.length>=3){
+      var wRecent=wRows.slice(-3);
       weightStr+=' Recent trend: '+wRecent.map(function(w){return w.date+'='+w.weight;}).join(', ')+'.';
     }
   }
