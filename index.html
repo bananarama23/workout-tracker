@@ -4000,8 +4000,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.12.1-tracker-route-fix';
-			var WT_SW_VERSION='wt-shell-v183-tracker-route-fix';
+			var WT_FRONTEND_VERSION='19.12.2-tracker-origin-fix';
+			var WT_SW_VERSION='wt-shell-v184-tracker-origin-fix';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4873,10 +4873,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.12.1-tracker-route-fix';
+var APP_VERSION='v19.12.2-tracker-origin-fix';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v192-tracker-route-fix';
+var CACHE_VERSION='wt-cache-v193-tracker-origin-fix';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Fallback last-workout reviews now auto-upgrade to AI when the logged workout has enough set evidence, without changing the feedback layout',
@@ -37485,14 +37485,16 @@ function trackerApi(method,path,payload,timeoutMs){
   var route='/tracker/'+String(path||'').replace(/^\/+/,'');
   var m=String(method||'GET').toUpperCase();
   var bases=[];
-  try{var configured=wtAiProxyBaseUrl();if(configured)bases.push(configured);}catch(e){}
+  try{if(wtIsSecureSameOriginProxyHost())bases.push('/api');}catch(e0){}
+  try{var configured=wtAiProxyBaseUrl();if(configured&&bases.indexOf(configured)<0)bases.push(configured);}catch(e){}
   if(bases.indexOf('/api')<0)bases.push('/api');
   if(!bases.length)return Promise.reject(new Error('AI proxy is not configured'));
   function callAt(i,lastErr){
     if(i>=bases.length)return Promise.reject(lastErr||new Error('Tracker API unavailable'));
     return trackerFetchJson(bases[i],route,m,payload,timeoutMs).catch(function(err){
       var msg=String(err&&err.message||err||'');
-      if(i+1<bases.length&&/(?:HTTP 400|HTTP 404|not_found|tracker_route_not_found|missing_tracker_id|failed to fetch)/i.test(msg)){
+      var status=err&&err.status;
+      if(i+1<bases.length&&(status===400||status===403||status===404||/(?:HTTP 400|HTTP 403|HTTP 404|not_found|origin_not_allowed|Request origin is not allowed|tracker_route_not_found|missing_tracker_id|failed to fetch)/i.test(msg))){
         return callAt(i+1,err);
       }
       throw err;
