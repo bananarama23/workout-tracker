@@ -258,7 +258,8 @@ function corsHeaders(request, env) {
   const origin = request.headers.get("Origin") || "";
   const allowed = allowedOrigins(env);
   const healthRoute = request.method === "GET" && normalizeRoutePath(url.pathname) === "/health";
-  const allowOrigin = healthRoute || allowed.includes(origin) || (origin === "null" && allowed.includes("null"));
+  const sameOrigin = !!origin && origin === url.origin;
+  const allowOrigin = healthRoute || sameOrigin || allowed.includes(origin) || (origin === "null" && allowed.includes("null"));
   return {
     "Access-Control-Allow-Origin": allowOrigin ? (origin || "*") : (allowed[0] || "null"),
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
@@ -430,6 +431,11 @@ function base64UrlToBytes(value) {
 function checkOriginAllowlist(request, env, auth) {
   if (String(env.AI_PROXY_TOKEN || "").trim()) return { ok: true };
   if (auth && (auth.mode === "access_jwt" || auth.mode === "bearer")) return { ok: true };
+
+  const origin = request.headers.get("Origin") || "";
+  const requestOrigin = new URL(request.url).origin;
+  if (origin && origin === requestOrigin) return { ok: true };
+
   const allowed = allowedOrigins(env);
   if (!allowed.length) {
     return {
@@ -437,7 +443,6 @@ function checkOriginAllowlist(request, env, auth) {
       message: "ALLOWED_ORIGINS must be set when AI_PROXY_TOKEN is not used"
     };
   }
-  const origin = request.headers.get("Origin") || "";
   if (allowed.includes(origin) || (origin === "null" && allowed.includes("null"))) return { ok: true };
   return {
     ok: false,
