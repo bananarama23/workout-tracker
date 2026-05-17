@@ -10,7 +10,8 @@ export function trackerHealth(env) {
 }
 
 export async function handleTrackerRequest(request, env, ctx) {
-  const path = normalizePath(new URL(request.url).pathname);
+  const url = new URL(request.url);
+  const path = normalizePath(url.pathname);
   const method = request.method;
   if (!path.startsWith("/tracker/")) return null;
   if (!hasD1(env)) return err("d1_missing", "D1 DB binding is not configured. Tracker Watch needs the DB binding.", 500);
@@ -23,6 +24,9 @@ export async function handleTrackerRequest(request, env, ctx) {
   let body = {};
   if (method === "POST") {
     try { body = await request.json(); } catch (_) { body = {}; }
+  }
+  if (method === "GET") {
+    body = Object.fromEntries(url.searchParams.entries());
   }
   if (method === "POST" && path === "/tracker/add") return ok(await trackerAdd(env, body));
   if (method === "POST" && path === "/tracker/update") return ok(await trackerUpdate(env, body));
@@ -143,7 +147,12 @@ async function trackerAdd(env, body) {
 }
 
 async function trackerDelete(env, body) {
-  const id = String(body && body.id || "").trim();
+  let id = trackerIdFromBody(body);
+  const url = String(body && body.url || "").trim();
+  if (!id && url) {
+    const row = await env.DB.prepare("SELECT id FROM tracker_items WHERE url = ? LIMIT 1").bind(url).first();
+    id = row && row.id ? String(row.id) : "";
+  }
   if (!id) throw statusError("missing_tracker_id", "Missing tracker item id.", 400);
   await env.DB.prepare("DELETE FROM tracker_alerts WHERE item_id = ?").bind(id).run();
   await env.DB.prepare("DELETE FROM tracker_snapshots WHERE item_id = ?").bind(id).run();
@@ -152,7 +161,7 @@ async function trackerDelete(env, body) {
 }
 
 async function trackerUpdate(env, body) {
-  const id = String(body && body.id || "").trim();
+  const id = trackerIdFromBody(body);
   if (!id) throw statusError("missing_tracker_id", "Missing tracker item id.", 400);
   const item = await env.DB.prepare("SELECT * FROM tracker_items WHERE id = ? LIMIT 1").bind(id).first();
   if (!item) throw statusError("tracker_item_missing", "Tracker item was not found.", 404);
@@ -164,7 +173,7 @@ async function trackerUpdate(env, body) {
 }
 
 async function trackerCheckNow(env, body, ctx) {
-  const id = String(body && body.id || "").trim();
+  const id = trackerIdFromBody(body);
   if (!id) throw statusError("missing_tracker_id", "Missing tracker item id.", 400);
   const item = await env.DB.prepare("SELECT * FROM tracker_items WHERE id = ? LIMIT 1").bind(id).first();
   if (!item) throw statusError("tracker_item_missing", "Tracker item was not found.", 404);
@@ -535,9 +544,18 @@ function safeUrl(value) {
 
 function normalizePath(pathname) {
   const path = String(pathname || "/");
-  if (path === "/api") return "/";
-  if (path.indexOf("/api/") === 0) return path.slice(4) || "/";
-  return path;
+  let out = path;
+  if (out === "/api") out = "/";
+  else if (out.indexOf("/api/") === 0) out = out.slice(4) || "/";
+  if (out.indexOf("/v1/tracker/") === 0) out = out.slice(3);
+  if (out.length > 1) out = out.replace(/\/+$/g, "");
+  return out;
+}
+
+function trackerIdFromBody(body) {
+  return String(
+    body && (body.id || body.itemId || body.item_id || body.trackerId || body.tracker_id) || ""
+  ).trim();
 }
 
 function normalizeValue(value) {
