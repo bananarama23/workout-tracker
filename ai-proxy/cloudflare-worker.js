@@ -1,3 +1,5 @@
+import { handleTrackerRequest, handleTrackerScheduled, trackerHealth } from "./tracker-watch.js";
+
 /*
  * PLUSULTRA lightweight AI proxy.
  *
@@ -58,6 +60,7 @@ export default {
           trainerCacheRoutes: true,
           trainerBrainRoutes: true,
           nutritionCacheRoutes: true,
+          ...trackerHealth(env),
           backgroundRoutes: true,
           providerRoutes: true,
           authCheckRoute: true,
@@ -123,6 +126,17 @@ export default {
         const body = await request.json();
         const result = await handleNutritionCacheUpsert(body, env);
         return json(withDuration(result, started), cors);
+      }
+
+      if (routePath.startsWith("/tracker/")) {
+        const result = await handleTrackerRequest(request, env, {
+          openaiJson,
+          waitUntil(promise) {
+            if (promise && typeof promise.then === "function") promise.catch(() => null);
+          }
+        });
+        const status = result && result.status === "error" ? (result.httpStatus || 500) : 200;
+        return json(withDuration(result, started), cors, status);
       }
 
       if (request.method === "POST" && routePath === "/v1/gemini-json") {
@@ -223,11 +237,19 @@ export default {
     } catch (err) {
       return json({
         status: "error",
-        errorCode: "ai_proxy_exception",
+        errorCode: String(err && err.errorCode || "ai_proxy_exception"),
         message: String(err && err.message || err || "AI proxy failed"),
         durationMs: Date.now() - started
-      }, cors, 500);
+      }, cors, err && err.httpStatus ? err.httpStatus : 500);
     }
+  },
+
+  async scheduled(event, env, ctx) {
+    try {
+      const job = handleTrackerScheduled(env, Object.assign({}, ctx || {}, { openaiJson }));
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(job);
+      else await job;
+    } catch (_) {}
   }
 };
 
@@ -1186,8 +1208,9 @@ function trainerBrainSlimState(state) {
       equipmentProfileHash: String(s.equipmentProfile.equipmentProfileHash || ""),
       updatedAt: String(s.equipmentProfile.updatedAt || "")
     } : null,
-    trainerContext: s.trainerContext ? {
+      trainerContext: s.trainerContext ? {
       goals: s.trainerContext.goals || null,
+      bodyMetrics: s.trainerContext.bodyMetrics || null,
       profile: s.trainerContext.profile ? {
         homeDuration: s.trainerContext.profile.homeDuration,
         hotelDuration: s.trainerContext.profile.hotelDuration,
