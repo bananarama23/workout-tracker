@@ -68,6 +68,19 @@ export default {
         }, cors);
       }
 
+      if (routePath.startsWith("/tracker/")) {
+        const result = await handleTrackerRequest(request, env, {
+          openaiJson,
+          waitUntil(promise) {
+            if (promise && typeof promise.then === "function") promise.catch(() => null);
+          }
+        });
+        if (result) {
+          const status = result && result.status === "error" ? (result.httpStatus || 500) : 200;
+          return json(withDuration(result, started), cors, status);
+        }
+      }
+
       const auth = await checkRequestAuth(request, env);
       if (!auth.ok) {
         return json({ status: "error", errorCode: "unauthorized", message: auth.message }, cors, 401);
@@ -128,16 +141,6 @@ export default {
         return json(withDuration(result, started), cors);
       }
 
-      if (routePath.startsWith("/tracker/")) {
-        const result = await handleTrackerRequest(request, env, {
-          openaiJson,
-          waitUntil(promise) {
-            if (promise && typeof promise.then === "function") promise.catch(() => null);
-          }
-        });
-        const status = result && result.status === "error" ? (result.httpStatus || 500) : 200;
-        return json(withDuration(result, started), cors, status);
-      }
 
       if (request.method === "POST" && routePath === "/v1/gemini-json") {
         if (!env.GEMINI_API_KEY) {
@@ -430,20 +433,6 @@ function base64UrlToBytes(value) {
 function checkOriginAllowlist(request, env, auth) {
   if (String(env.AI_PROXY_TOKEN || "").trim()) return { ok: true };
   if (auth && (auth.mode === "access_jwt" || auth.mode === "bearer")) return { ok: true };
-
-  const origin = request.headers.get("Origin") || "";
-  const referer = request.headers.get("Referer") || "";
-  const requestOrigin = new URL(request.url).origin;
-
-  // Safari / service-worker same-origin fetches can omit the Origin header.
-  // Allow them only when the Referer clearly matches this Worker/app origin.
-  if (origin && origin === requestOrigin) return { ok: true };
-  if (!origin && referer) {
-    try {
-      if (new URL(referer).origin === requestOrigin) return { ok: true };
-    } catch (err) {}
-  }
-
   const allowed = allowedOrigins(env);
   if (!allowed.length) {
     return {
@@ -451,6 +440,7 @@ function checkOriginAllowlist(request, env, auth) {
       message: "ALLOWED_ORIGINS must be set when AI_PROXY_TOKEN is not used"
     };
   }
+  const origin = request.headers.get("Origin") || "";
   if (allowed.includes(origin) || (origin === "null" && allowed.includes("null"))) return { ok: true };
   return {
     ok: false,
