@@ -68,19 +68,6 @@ export default {
         }, cors);
       }
 
-      if (routePath.startsWith("/tracker/")) {
-        const result = await handleTrackerRequest(request, env, {
-          openaiJson,
-          waitUntil(promise) {
-            if (promise && typeof promise.then === "function") promise.catch(() => null);
-          }
-        });
-        if (result) {
-          const status = result && result.status === "error" ? (result.httpStatus || 500) : 200;
-          return json(withDuration(result, started), cors, status);
-        }
-      }
-
       const auth = await checkRequestAuth(request, env);
       if (!auth.ok) {
         return json({ status: "error", errorCode: "unauthorized", message: auth.message }, cors, 401);
@@ -141,6 +128,16 @@ export default {
         return json(withDuration(result, started), cors);
       }
 
+      if (routePath.startsWith("/tracker/") || routePath.startsWith("/v1/tracker/")) {
+        const result = await handleTrackerRequest(request, env, {
+          openaiJson,
+          waitUntil(promise) {
+            if (promise && typeof promise.then === "function") promise.catch(() => null);
+          }
+        });
+        const status = result && result.status === "error" ? (result.httpStatus || 500) : 200;
+        return json(withDuration(result, started), cors, status);
+      }
 
       if (request.method === "POST" && routePath === "/v1/gemini-json") {
         if (!env.GEMINI_API_KEY) {
