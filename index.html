@@ -4000,8 +4000,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.12.0-tracker-watch';
-			var WT_SW_VERSION='wt-shell-v182-tracker-watch';
+			var WT_FRONTEND_VERSION='19.12.1-tracker-route-fix';
+			var WT_SW_VERSION='wt-shell-v183-tracker-route-fix';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4873,10 +4873,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.12.0-tracker-watch';
+var APP_VERSION='v19.12.1-tracker-route-fix';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v191-tracker-watch';
+var CACHE_VERSION='wt-cache-v192-tracker-route-fix';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Fallback last-workout reviews now auto-upgrade to AI when the logged workout has enough set evidence, without changing the feedback layout',
@@ -37482,11 +37482,56 @@ var BUD_KEY='wt_budget';
 var _trackerWatchState={items:[],alerts:[],settings:null,loading:false,emailOn:true,lastHomeRefresh:0};
 
 function trackerApi(method,path,payload,timeoutMs){
-  if(!wtAiProxyConfigured())return Promise.reject(new Error('AI proxy is not configured'));
   var route='/tracker/'+String(path||'').replace(/^\/+/,'');
-  return String(method||'GET').toUpperCase()==='GET'
-    ?wtAiProxyGet(route,timeoutMs||25000)
-    :wtAiProxyPost(route,payload||{},timeoutMs||45000);
+  var m=String(method||'GET').toUpperCase();
+  var bases=[];
+  try{var configured=wtAiProxyBaseUrl();if(configured)bases.push(configured);}catch(e){}
+  if(bases.indexOf('/api')<0)bases.push('/api');
+  if(!bases.length)return Promise.reject(new Error('AI proxy is not configured'));
+  function callAt(i,lastErr){
+    if(i>=bases.length)return Promise.reject(lastErr||new Error('Tracker API unavailable'));
+    return trackerFetchJson(bases[i],route,m,payload,timeoutMs).catch(function(err){
+      var msg=String(err&&err.message||err||'');
+      if(i+1<bases.length&&/(?:HTTP 400|HTTP 404|not_found|tracker_route_not_found|missing_tracker_id|failed to fetch)/i.test(msg)){
+        return callAt(i+1,err);
+      }
+      throw err;
+    });
+  }
+  return callAt(0,null);
+}
+function trackerFetchJson(base,route,method,payload,timeoutMs){
+  var headers={};
+  var token=wtAiProxyBearerAuthEnabled()?wtAiProxyToken():'';
+  if(token)headers.Authorization='Bearer '+token;
+  if(typeof APP_VERSION!=='undefined')headers['X-WT-Client-Version']=String(APP_VERSION||'');
+  var opts={method:method,headers:headers};
+  if(method!=='GET'){
+    headers['Content-Type']='application/json';
+    opts.body=JSON.stringify(Object.assign({clientVersion:(typeof APP_VERSION!=='undefined'?APP_VERSION:'')},payload||{}));
+  }
+  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var timer=null;
+  var ms=Math.min(90000,Math.max(12000,(parseInt(timeoutMs,10)||30000)+4000));
+  if(ctrl){opts.signal=ctrl.signal;timer=setTimeout(function(){try{ctrl.abort();}catch(e){}},ms);}
+  return fetch(String(base||'').replace(/\/+$/,'')+route,opts).then(function(res){
+    if(timer)clearTimeout(timer);
+    return res.text().then(function(text){
+      var data=null;
+      try{data=text?JSON.parse(text):null;}catch(e){}
+      if(!res.ok){
+        var msg=(data&&(data.message||data.errorCode))||('HTTP '+res.status);
+        var err=new Error(msg);
+        err.status=res.status;
+        err.data=data;
+        throw err;
+      }
+      return data||{};
+    });
+  }).catch(function(err){
+    if(timer)clearTimeout(timer);
+    throw err;
+  });
 }
 function trackerSetStatus(msg,color){
   var el=document.getElementById('trackerWatchStatus');
@@ -37572,7 +37617,7 @@ function trackerItemHtml(it){
       +'<div style="min-width:0;flex:1;"><div style="font-size:0.58rem;letter-spacing:1.3px;text-transform:uppercase;color:'+(it.kind==='zillow'?'var(--blue)':'var(--accent)')+';font-weight:900;">'+escHtml(it.kind||'tracker')+'</div>'
       +'<div style="font-size:0.86rem;font-weight:850;color:var(--text);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escHtml(title)+'</div>'
       +'<div style="font-size:0.66rem;color:var(--muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escHtml(it.url||'')+'</div></div>'
-      +'<button onclick="trackerToggleItem(\''+escHtmlAttr(it.id)+'\','+(enabled?0:1)+')" style="flex-shrink:0;padding:7px 9px;background:'+(enabled?'var(--green-dim)':'var(--card2)')+';border:1px solid '+(enabled?'rgba(76,217,100,0.35)':'var(--border2)')+';border-radius:999px;color:'+(enabled?'var(--green)':'var(--muted)')+';font-size:0.62rem;font-weight:900;cursor:pointer;">'+(enabled?'ON':'OFF')+'</button>'
+      +'<button type="button" onclick="trackerToggleItem(\''+escHtmlAttr(it.id)+'\','+(enabled?0:1)+')" style="flex-shrink:0;padding:7px 9px;background:'+(enabled?'var(--green-dim)':'var(--card2)')+';border:1px solid '+(enabled?'rgba(76,217,100,0.35)':'var(--border2)')+';border-radius:999px;color:'+(enabled?'var(--green)':'var(--muted)')+';font-size:0.62rem;font-weight:900;cursor:pointer;">'+(enabled?'ON':'OFF')+'</button>'
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-top:10px;">'
       +'<div style="flex:1;background:var(--card2);border-radius:8px;padding:8px;"><div style="font-size:0.52rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">Price</div><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.15rem;letter-spacing:1px;color:var(--text);">'+escHtml(price)+'</div></div>'
@@ -37581,8 +37626,8 @@ function trackerItemHtml(it){
     +'</div>'
     +(it.current_summary?'<div style="font-size:0.66rem;color:var(--muted);line-height:1.35;margin-top:9px;">'+escHtml(it.current_summary)+'</div>':'')
     +'<div style="display:flex;gap:8px;margin-top:10px;">'
-      +'<button onclick="trackerCheckNow(\''+escHtmlAttr(it.id)+'\')" style="flex:1;padding:10px;background:var(--blue-dim);border:1px solid rgba(59,131,246,0.35);border-radius:9px;color:var(--blue);font-size:0.66rem;font-weight:900;letter-spacing:1px;cursor:pointer;">CHECK NOW</button>'
-      +'<button onclick="trackerDeleteItem(\''+escHtmlAttr(it.id)+'\')" style="padding:10px 12px;background:var(--red-dim);border:1px solid rgba(255,58,92,0.35);border-radius:9px;color:var(--red);font-size:0.66rem;font-weight:900;letter-spacing:1px;cursor:pointer;">DELETE</button>'
+      +'<button type="button" onclick="trackerCheckNow(\''+escHtmlAttr(it.id)+'\')" style="flex:1;padding:10px;background:var(--blue-dim);border:1px solid rgba(59,131,246,0.35);border-radius:9px;color:var(--blue);font-size:0.66rem;font-weight:900;letter-spacing:1px;cursor:pointer;">CHECK NOW</button>'
+      +'<button type="button" onclick="trackerDeleteItem(\''+escHtmlAttr(it.id)+'\',\''+escHtmlAttr(it.url||'')+'\')" style="padding:10px 12px;background:var(--red-dim);border:1px solid rgba(255,58,92,0.35);border-radius:9px;color:var(--red);font-size:0.66rem;font-weight:900;letter-spacing:1px;cursor:pointer;">DELETE</button>'
     +'</div>'
   +'</div>';
 }
@@ -37597,8 +37642,22 @@ function trackerAddUrl(){
     return trackerLoad(true);
   }).catch(function(err){trackerSetStatus(String(err&&err.message||err||'Add failed'),'var(--orange)');});
 }
-function trackerDeleteItem(id){
-  trackerApi('POST','delete',{id:id},22000).then(function(){trackerLoad(true);}).catch(function(err){trackerSetStatus(String(err&&err.message||err||'Delete failed'),'var(--orange)');});
+function trackerDeleteItem(id,url){
+  id=String(id||'').trim();
+  url=String(url||'').trim();
+  if(!id&&!url){trackerSetStatus('Delete failed: tracker id missing','var(--orange)');return;}
+  var oldItems=(_trackerWatchState.items||[]).slice();
+  _trackerWatchState.items=oldItems.filter(function(x){return String(x.id||'')!==id&&(url?String(x.url||'')!==url:true);});
+  trackerRender();
+  trackerSetStatus('Deleting tracker...','var(--muted)');
+  trackerApi('POST','delete',{id:id,itemId:id,url:url},22000).then(function(){
+    trackerSetStatus('Tracker deleted','var(--green)');
+    return trackerLoad(true);
+  }).catch(function(err){
+    _trackerWatchState.items=oldItems;
+    trackerRender();
+    trackerSetStatus(String(err&&err.message||err||'Delete failed'),'var(--orange)');
+  });
 }
 function trackerToggleItem(id,on){
   trackerApi('POST','update',{id:id,enabled:!!on},22000).then(function(){trackerLoad(true);}).catch(function(err){trackerSetStatus(String(err&&err.message||err||'Toggle failed'),'var(--orange)');});
