@@ -430,6 +430,10 @@ function base64UrlToBytes(value) {
 function checkOriginAllowlist(request, env, auth) {
   if (String(env.AI_PROXY_TOKEN || "").trim()) return { ok: true };
   if (auth && (auth.mode === "access_jwt" || auth.mode === "bearer")) return { ok: true };
+  const origin = request.headers.get("Origin") || "";
+  try {
+    if (origin && origin === new URL(request.url).origin) return { ok: true };
+  } catch (_) {}
   const allowed = allowedOrigins(env);
   if (!allowed.length) {
     return {
@@ -437,7 +441,6 @@ function checkOriginAllowlist(request, env, auth) {
       message: "ALLOWED_ORIGINS must be set when AI_PROXY_TOKEN is not used"
     };
   }
-  const origin = request.headers.get("Origin") || "";
   if (allowed.includes(origin) || (origin === "null" && allowed.includes("null"))) return { ok: true };
   return {
     ok: false,
