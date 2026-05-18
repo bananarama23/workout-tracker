@@ -1706,7 +1706,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
       <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:10px;">
         <div style="display:flex;gap:8px;align-items:center;">
-          <input id="trackerUrlInput" type="url" inputmode="url" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="Costco, Redfin, Realtor, Homes, or Zillow URL" style="flex:1;min-width:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.82rem;padding:10px 12px;outline:none;">
+          <input id="trackerUrlInput" type="text" inputmode="text" autocorrect="on" autocapitalize="words" spellcheck="true" placeholder="House address or Costco/listing URL" style="flex:1;min-width:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.82rem;padding:10px 12px;outline:none;">
           <button onclick="trackerAddUrl()" style="flex-shrink:0;padding:10px 13px;background:var(--accent);border:none;border-radius:var(--r-sm);color:#000;font-size:0.7rem;font-weight:900;letter-spacing:1px;cursor:pointer;">ADD</button>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px;">
@@ -4000,8 +4000,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.12.5-tracker-web-search';
-			var WT_SW_VERSION='wt-shell-v187-tracker-web-search';
+			var WT_FRONTEND_VERSION='19.12.8-tracker-home-change';
+			var WT_SW_VERSION='wt-shell-v190-tracker-home-change';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4873,10 +4873,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.12.5-tracker-web-search';
+var APP_VERSION='v19.12.8-tracker-home-change';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v196-tracker-web-search';
+var CACHE_VERSION='wt-cache-v199-tracker-home-change';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Fallback last-workout reviews now auto-upgrade to AI when the logged workout has enough set evidence, without changing the feedback layout',
@@ -37625,16 +37625,35 @@ function trackerItemHtml(it){
       +'<div style="flex:1;background:var(--card2);border-radius:8px;padding:8px;"><div style="font-size:0.52rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">Checked</div><div style="font-size:0.72rem;font-weight:800;color:var(--text2);margin-top:4px;">'+escHtml(trackerTime(it.last_checked_at))+'</div></div>'
     +'</div>'
     +(it.current_summary?'<div style="font-size:0.66rem;color:var(--muted);line-height:1.35;margin-top:9px;">'+escHtml(it.current_summary)+'</div>':'')
+    +trackerHistoryHtml(it)
     +'<div style="display:flex;gap:8px;margin-top:10px;">'
       +'<button type="button" onclick="trackerCheckNow(\''+escHtmlAttr(it.id)+'\')" style="flex:1;padding:10px;background:var(--blue-dim);border:1px solid rgba(59,131,246,0.35);border-radius:9px;color:var(--blue);font-size:0.66rem;font-weight:900;letter-spacing:1px;cursor:pointer;">CHECK NOW</button>'
       +'<button type="button" onclick="trackerDeleteItem(\''+escHtmlAttr(it.id)+'\',\''+escHtmlAttr(it.url||'')+'\')" style="padding:10px 12px;background:var(--red-dim);border:1px solid rgba(255,58,92,0.35);border-radius:9px;color:var(--red);font-size:0.66rem;font-weight:900;letter-spacing:1px;cursor:pointer;">DELETE</button>'
     +'</div>'
   +'</div>';
 }
+function trackerHistoryHtml(it){
+  var rows=Array.isArray(it.price_history)?it.price_history:[];
+  if(!rows.length){
+    return '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:9px;font-size:0.64rem;color:var(--muted);">No price/status changes logged yet.</div>';
+  }
+  return '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:9px;">'
+    +'<div style="font-size:0.54rem;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);font-weight:800;margin-bottom:7px;">Price / Status History</div>'
+    +rows.slice(0,6).map(function(h){
+      var price=h.price||'—';
+      var status=(h.status||'unknown').replace(/_/g,' ');
+      return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid rgba(42,52,68,0.45);">'
+        +'<div style="min-width:0;"><div style="font-size:0.74rem;font-weight:850;color:var(--text);">'+escHtml(price)+' <span style="font-size:0.62rem;color:var(--muted);font-weight:700;">'+escHtml(status)+'</span></div>'
+        +(h.summary?'<div style="font-size:0.62rem;color:var(--muted);line-height:1.3;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70vw;">'+escHtml(h.summary)+'</div>':'')+'</div>'
+        +'<div style="font-size:0.58rem;color:var(--muted);white-space:nowrap;">'+escHtml(trackerTime(h.checked_at))+'</div>'
+      +'</div>';
+    }).join('')
+  +'</div>';
+}
 function trackerAddUrl(){
   var inp=document.getElementById('trackerUrlInput');
   var url=inp&&inp.value?inp.value.trim():'';
-  if(!url){trackerSetStatus('Paste a Costco or Zillow URL first','var(--orange)');return;}
+  if(!url){trackerSetStatus('Paste a house address, Costco URL, or listing URL first','var(--orange)');return;}
   trackerSetStatus('Adding tracker...','var(--muted)');
   trackerApi('POST','add',{url:url},25000).then(function(res){
     if(!res||res.status!=='ok')throw new Error((res&&(res.message||res.errorCode))||'Add failed');
@@ -37707,10 +37726,44 @@ function trackerHomeRefreshFromAlerts(alerts){
   var unseen=(alerts||[]).filter(function(a){return !a.seen_at;});
   if(!unseen.length){card.style.display='none';return;}
   var first=unseen[0];
-  var t=document.getElementById('homeTrackerWatchTitle');if(t)t.textContent=first.title||first.message||'New tracker alert';
-  var sub=document.getElementById('homeTrackerWatchSub');if(sub)sub.textContent=first.message||'Tap to review in Budget';
+  var headline=trackerAlertHeadline(first);
+  var t=document.getElementById('homeTrackerWatchTitle');if(t)t.textContent=headline;
+  var sub=document.getElementById('homeTrackerWatchSub');if(sub)sub.textContent=(first.title||first.label||'Tap to review in Budget');
   var count=document.getElementById('homeTrackerWatchCount');if(count)count.textContent=String(unseen.length);
   card.style.display='block';
+}
+function trackerAlertHeadline(a){
+  a=a||{};
+  if(a.alert_type==='price'){
+    var oldP=trackerMoneyNumber(a.old_value),newP=trackerMoneyNumber(a.new_value);
+    if(isFinite(oldP)&&isFinite(newP)&&oldP!==newP){
+      var d=newP-oldP;
+      return 'Price '+(d>0?'+':'-')+trackerMoneyFmt(Math.abs(d));
+    }
+    return 'Price changed';
+  }
+  if(a.alert_type==='status'){
+    var st=String(a.new_value||'').replace(/_/g,' ').toLowerCase();
+    if(st==='sold')return 'Now sold';
+    if(st==='pending')return 'Now pending';
+    if(st==='active')return 'Back active';
+    if(st==='off market')return 'Now off market';
+    if(st==='in stock')return 'Back in stock';
+    if(st==='out of stock')return 'Now out of stock';
+    return 'Status: '+(st||'changed');
+  }
+  var msg=String(a.message||'');
+  if(msg)return msg.split(' · ')[0].slice(0,80);
+  return 'Tracker changed';
+}
+function trackerMoneyNumber(v){
+  var raw=String(v||'').replace(/[^0-9.]/g,'');
+  return raw?Number(raw):NaN;
+}
+function trackerMoneyFmt(v){
+  var n=Number(v);
+  if(!isFinite(n))return '$0';
+  return '$'+Math.round(n).toLocaleString();
 }
 function trackerOpenFromHome(){
   try{navTo('budget');}catch(e){}
