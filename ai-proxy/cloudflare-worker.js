@@ -72,7 +72,7 @@ export default {
       if (!auth.ok) {
         return json({ status: "error", errorCode: "unauthorized", message: auth.message }, cors, 401);
       }
-      const origin = checkOriginAllowlist(request, env, auth);
+      const origin = checkOriginAllowlist(request, env, auth, routePath);
       if (!origin.ok) {
         return json({ status: "error", errorCode: "origin_not_allowed", message: origin.message }, cors, 403);
       }
@@ -427,13 +427,14 @@ function base64UrlToBytes(value) {
   return bytes;
 }
 
-function checkOriginAllowlist(request, env, auth) {
+function checkOriginAllowlist(request, env, auth, routePath) {
   if (String(env.AI_PROXY_TOKEN || "").trim()) return { ok: true };
   if (auth && (auth.mode === "access_jwt" || auth.mode === "bearer")) return { ok: true };
   const origin = request.headers.get("Origin") || "";
   try {
     if (origin && origin === new URL(request.url).origin) return { ok: true };
   } catch (_) {}
+  if (isPagesTrackerBridgeRequest(request, routePath)) return { ok: true };
   const allowed = allowedOrigins(env);
   if (!allowed.length) {
     return {
@@ -446,6 +447,28 @@ function checkOriginAllowlist(request, env, auth) {
     ok: false,
     message: "Request origin is not allowed"
   };
+}
+
+function isPagesTrackerBridgeRequest(request, routePath) {
+  try {
+    const rawPath = new URL(request.url).pathname || "";
+    const normalized = routePath || normalizeRoutePath(rawPath);
+    if (!(normalized.startsWith("/tracker/") || normalized.startsWith("/v1/tracker/"))) return false;
+    if (!(rawPath === "/api/tracker" || rawPath.indexOf("/api/tracker/") === 0 || rawPath.indexOf("/api/v1/tracker/") === 0)) return false;
+    const fetchSite = String(request.headers.get("Sec-Fetch-Site") || "").toLowerCase();
+    if (fetchSite === "cross-site") return false;
+    if (fetchSite === "same-origin" || fetchSite === "same-site" || fetchSite === "none") return true;
+    const referer = String(request.headers.get("Referer") || request.headers.get("Referrer") || "").trim();
+    const origin = String(request.headers.get("Origin") || "").trim();
+    const reqHost = new URL(request.url).hostname;
+    const refHost = referer ? new URL(referer).hostname : "";
+    const originHost = origin && origin !== "null" ? new URL(origin).hostname : "";
+    if (refHost && refHost === reqHost) return true;
+    if (originHost && originHost === reqHost) return true;
+    return !origin && !referer;
+  } catch (_) {
+    return false;
+  }
 }
 
 function allowedOrigins(env) {
