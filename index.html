@@ -1706,12 +1706,12 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
       </div>
       <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:10px;">
         <div style="display:flex;gap:8px;align-items:center;">
-          <input id="trackerUrlInput" type="url" inputmode="url" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="Costco or Zillow URL" style="flex:1;min-width:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.82rem;padding:10px 12px;outline:none;">
+          <input id="trackerUrlInput" type="url" inputmode="url" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="Costco, Redfin, Realtor, Homes, or Zillow URL" style="flex:1;min-width:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.82rem;padding:10px 12px;outline:none;">
           <button onclick="trackerAddUrl()" style="flex-shrink:0;padding:10px 13px;background:var(--accent);border:none;border-radius:var(--r-sm);color:#000;font-size:0.7rem;font-weight:900;letter-spacing:1px;cursor:pointer;">ADD</button>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px;">
           <label style="flex:1;font-size:0.62rem;color:var(--muted);">
-            <span style="display:block;margin-bottom:4px;font-weight:800;letter-spacing:1px;">ZILLOW</span>
+            <span style="display:block;margin-bottom:4px;font-weight:800;letter-spacing:1px;">HOME LISTINGS</span>
             <select id="trackerZillowFreq" onchange="trackerSaveSettings()" style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:0.72rem;padding:7px 8px;outline:none;">
               <option value="1h">Every 1 hour</option>
               <option value="2h">Every 2 hours</option>
@@ -4000,8 +4000,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.12.4-tracker-actions';
-			var WT_SW_VERSION='wt-shell-v186-tracker-actions';
+			var WT_FRONTEND_VERSION='19.12.5-tracker-web-search';
+			var WT_SW_VERSION='wt-shell-v187-tracker-web-search';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4873,10 +4873,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.12.4-tracker-actions';
+var APP_VERSION='v19.12.5-tracker-web-search';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v195-tracker-actions';
+var CACHE_VERSION='wt-cache-v196-tracker-web-search';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Fallback last-workout reviews now auto-upgrade to AI when the logged workout has enough set evidence, without changing the feedback layout',
