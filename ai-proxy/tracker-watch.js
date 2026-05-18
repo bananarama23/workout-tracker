@@ -6,11 +6,11 @@ export function trackerHealth(env) {
   return {
     trackerRoutes: true,
     trackerEmailConfigured: trackerEmailConfigured(env),
-    trackerBrevoEmailConfigured: trackerBrevoConfigured(env),
-    trackerMailjetEmailConfigured: trackerMailjetConfigured(env),
+    trackerEmailDebug: trackerEmailDebug(env),
     trackerCostcoApiConfigured: costcoRapidApiConfigured(env),
     trackerBrowserConfigured: trackerBrowserConfigured(env),
-    trackerBrowserRestConfigured: trackerBrowserRestConfigured(env)
+    trackerBrowserRestConfigured: trackerBrowserRestConfigured(env),
+    trackerSheetBackupConfigured: trackerSheetBackupConfigured(env)
   };
 }
 
@@ -33,33 +33,38 @@ export async function handleTrackerRequest(request, env, ctx) {
   if (method === "GET") {
     body = Object.fromEntries(url.searchParams.entries());
   }
-  if (method === "POST" && path === "/tracker/add") return ok(await trackerAdd(env, body));
-  if (method === "POST" && path === "/tracker/update") return ok(await trackerUpdate(env, body));
-  if (method === "POST" && path === "/tracker/delete") return ok(await trackerDelete(env, body));
+  if (method === "POST" && path === "/tracker/add") return ok(await trackerAdd(env, body, ctx));
+  if (method === "POST" && path === "/tracker/update") return ok(await trackerUpdate(env, body, ctx));
+  if (method === "POST" && path === "/tracker/delete") return ok(await trackerDelete(env, body, ctx));
   if (method === "POST" && path === "/tracker/check-now") return ok(await trackerCheckNow(env, body, ctx));
   if (method === "POST" && path === "/tracker/email-test") {
     const settings = await trackerSettings(env);
+    const requestedProvider = String(body && (body.provider || body.forceProvider) || "").trim().toLowerCase();
     const result = await sendTrackerEmail(
       env,
       settings,
       { url: "manual email test" },
       {
         alertType: "test",
-        message: "This is a test email from Workout Tracker via Mailjet."
-      }
+        message: `This is a test email from Workout Tracker${requestedProvider ? ` via ${requestedProvider}.` : "."}`
+      },
+      requestedProvider ? { provider: requestedProvider } : {}
     );
     return ok({
       type: "tracker-email-test",
       emailConfigured: trackerEmailConfigured(env),
-      brevoConfigured: trackerBrevoConfigured(env),
-      mailjetConfigured: trackerMailjetConfigured(env),
+      requestedProvider: requestedProvider || "brevo-primary",
+      provider: result && result.provider || "unknown",
+      hasBrevoApiKey: !!env.BREVO_API_KEY,
+      hasMailjetKeys: trackerMailjetConfigured(env),
       to: env.TRACKER_EMAIL_TO || settings?.alert_email || TRACKER_DEFAULT_EMAIL || null,
-      from: env.TRACKER_EMAIL_FROM || env.TRACKER_EMAIL_TO || null,
+      from: env.TRACKER_EMAIL_FROM || null,
       result
     });
   }
   if (method === "POST" && path === "/tracker/alerts/seen") return ok(await trackerAlertsSeen(env, body));
-  if (method === "POST" && path === "/tracker/settings") return ok(await trackerSettingsSave(env, body));
+  if (method === "POST" && path === "/tracker/settings") return ok(await trackerSettingsSave(env, body, ctx));
+  if (method === "POST" && path === "/tracker/sheets-backup") return ok(await trackerBackupAllToSheets(env, ctx));
   return err("tracker_route_not_found", "Unknown Tracker Watch route", 404);
 }
 
@@ -200,7 +205,7 @@ function buildTrackerHistory(rows) {
   return out;
 }
 
-async function trackerAdd(env, body) {
+async function trackerAdd(env, body, ctx) {
   const input = String(body && (body.url || body.query || body.address) || "").trim();
   const parsed = safeUrl(input);
   const kind = parsed ? trackerKind(parsed.href) : trackerKindFromQuery(input);
@@ -219,16 +224,22 @@ async function trackerAdd(env, body) {
       SET enabled = 1, label = COALESCE(NULLIF(?, ''), label), check_frequency = COALESCE(NULLIF(?, ''), check_frequency)
       WHERE id = ?
     `).bind(label, frequency, existing.id).run();
+    const saved = await env.DB.prepare("SELECT * FROM tracker_items WHERE id = ? LIMIT 1").bind(existing.id).first();
+    trackerSheetBackupSoon(env, ctx, { reason: "add-existing", items: [saved || existing] });
     return { type: "tracker-add", id: existing.id, kind: existing.kind || kind, existing: true };
   }
   await env.DB.prepare(`
     INSERT INTO tracker_items (id, kind, label, url, enabled, check_frequency, created_at)
     VALUES (?, ?, ?, ?, 1, ?, ?)
   `).bind(id, kind, label, storedUrl, frequency, now).run();
+  trackerSheetBackupSoon(env, ctx, {
+    reason: "add",
+    items: [{ id, kind, label, url: storedUrl, enabled: 1, check_frequency: frequency, last_checked_at: "", created_at: now }]
+  });
   return { type: "tracker-add", id, kind };
 }
 
-async function trackerDelete(env, body) {
+async function trackerDelete(env, body, ctx) {
   let id = trackerIdFromBody(body);
   const url = String(body && body.url || "").trim();
   const ids = new Set();
@@ -241,17 +252,29 @@ async function trackerDelete(env, body) {
   }
   if (!ids.size) throw statusError("missing_tracker_id", "Missing tracker item id.", 400);
   let deleted = 0;
+  const deletionRows = [];
   for (const matchId of Array.from(ids)) {
+    const existing = await env.DB.prepare("SELECT * FROM tracker_items WHERE id = ? LIMIT 1").bind(matchId).first();
+    if (existing) {
+      deletionRows.push({
+        entity: "tracker_item",
+        id: existing.id,
+        url: existing.url || "",
+        deleted_at: new Date().toISOString(),
+        payload: existing
+      });
+    }
     await env.DB.prepare("DELETE FROM tracker_alerts WHERE item_id = ?").bind(matchId).run();
     await env.DB.prepare("DELETE FROM tracker_snapshots WHERE item_id = ?").bind(matchId).run();
     const result = await env.DB.prepare("DELETE FROM tracker_items WHERE id = ?").bind(matchId).run();
     deleted += d1Changes(result);
   }
   if (deleted <= 0) throw statusError("tracker_item_missing", "Tracker item was already gone or could not be deleted.", 404);
+  if (deletionRows.length) trackerSheetBackupSoon(env, ctx, { reason: "delete", deletions: deletionRows });
   return { type: "tracker-delete", id: id || Array.from(ids)[0], deleted };
 }
 
-async function trackerUpdate(env, body) {
+async function trackerUpdate(env, body, ctx) {
   const id = trackerIdFromBody(body);
   if (!id) throw statusError("missing_tracker_id", "Missing tracker item id.", 400);
   const item = await env.DB.prepare("SELECT * FROM tracker_items WHERE id = ? LIMIT 1").bind(id).first();
@@ -260,6 +283,8 @@ async function trackerUpdate(env, body) {
   const label = body.label === undefined ? String(item.label || "") : String(body.label || "").trim().slice(0, 160);
   const frequency = body.check_frequency === undefined ? String(item.check_frequency || "daily") : String(body.check_frequency || "daily").trim();
   await env.DB.prepare("UPDATE tracker_items SET enabled = ?, label = ?, check_frequency = ? WHERE id = ?").bind(enabled ? 1 : 0, label, frequency, id).run();
+  const saved = await env.DB.prepare("SELECT * FROM tracker_items WHERE id = ? LIMIT 1").bind(id).first();
+  trackerSheetBackupSoon(env, ctx, { reason: "update", items: [saved || Object.assign({}, item, { enabled: enabled ? 1 : 0, label, check_frequency: frequency })] });
   return { type: "tracker-update", id, enabled: enabled ? 1 : 0 };
 }
 
@@ -316,7 +341,7 @@ async function trackerSettings(env) {
   };
 }
 
-async function trackerSettingsSave(env, body) {
+async function trackerSettingsSave(env, body, ctx) {
   const allowed = {
     zillow_frequency: new Set(["1h", "2h", "3h", "daily"]),
     costco_frequency: new Set(["2d", "3d", "4d", "5d"]),
@@ -333,7 +358,9 @@ async function trackerSettingsSave(env, body) {
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
     `).bind(key, value).run();
   }
-  return { type: "tracker-settings", settings: await trackerSettings(env) };
+  const settings = await trackerSettings(env);
+  trackerSheetBackupSoon(env, ctx, { reason: "settings", settings });
+  return { type: "tracker-settings", settings };
 }
 
 async function runTrackerCheck(env, item, ctx, source) {
@@ -408,20 +435,35 @@ async function runTrackerCheck(env, item, ctx, source) {
     LIMIT 1
   `).bind(item.id).first();
   const snapshotId = makeId("snap");
+  const snapshot = {
+    id: snapshotId,
+    item_id: item.id,
+    title: snap.title || "",
+    price: snap.price || "",
+    status: snap.status || "unknown",
+    raw_summary: snap.summary || fetched.summary || "",
+    checked_at: now
+  };
   await env.DB.prepare(`
     INSERT INTO tracker_snapshots (id, item_id, title, price, status, raw_summary, checked_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).bind(
-    snapshotId,
-    item.id,
-    snap.title || "",
-    snap.price || "",
-    snap.status || "unknown",
-    snap.summary || fetched.summary || "",
-    now
+    snapshot.id,
+    snapshot.item_id,
+    snapshot.title,
+    snapshot.price,
+    snapshot.status,
+    snapshot.raw_summary,
+    snapshot.checked_at
   ).run();
   await env.DB.prepare("UPDATE tracker_items SET last_checked_at = ? WHERE id = ?").bind(now, item.id).run();
   const alerts = await createAlertsForChanges(env, item, prev, snap, source, now);
+  trackerSheetBackupSoon(env, ctx, {
+    reason: source || "check",
+    items: [Object.assign({}, item, { last_checked_at: now })],
+    snapshots: [snapshot],
+    alerts
+  });
   if (alerts.length) {
     const settings = await trackerSettings(env);
     if (settings.email_alerts !== "off") {
@@ -728,9 +770,14 @@ async function extractPropertyViaWebSearch(env, item, fetched, ctx) {
 async function createAlertsForChanges(env, item, prev, snap, source, now) {
   if (!prev) return [];
   const changes = [];
-  addChange(changes, "price", prev.price, snap.price);
-  addChange(changes, "status", prev.status, snap.status);
-  addChange(changes, "title", prev.title, snap.title);
+  if (item && (item.kind === "zillow" || item.kind === "property")) {
+    addListingChange(changes, "price", prev.price, snap.price);
+    addListingChange(changes, "status", prev.status, snap.status);
+  } else {
+    addChange(changes, "price", prev.price, snap.price);
+    addChange(changes, "status", prev.status, snap.status);
+    addChange(changes, "title", prev.title, snap.title);
+  }
   const alerts = [];
   for (const c of changes) {
     const alert = {
@@ -751,6 +798,18 @@ async function createAlertsForChanges(env, item, prev, snap, source, now) {
     alerts.push(alert);
   }
   return alerts;
+}
+
+function addListingChange(out, type, oldValue, newValue) {
+  if (type === "status") {
+    const newStatus = normalizeStatus(newValue || "");
+    if (!["active", "pending", "sold"].includes(newStatus)) return;
+    const oldStatus = normalizeStatus(oldValue || "");
+    if (oldStatus === newStatus) return;
+    out.push({ type, oldValue: oldStatus || "", newValue: newStatus });
+    return;
+  }
+  addChange(out, type, oldValue, newValue);
 }
 
 function addChange(out, type, oldValue, newValue) {
@@ -970,7 +1029,7 @@ function trackerPrompt(kind, url, text) {
   ].join("\n");
 }
 
-async function sendTrackerEmail(env, settings, item, alert) {
+async function sendTrackerEmail(env, settings, item, alert, options) {
   const to = String(
     env.TRACKER_EMAIL_TO ||
     settings?.alert_email ||
@@ -992,8 +1051,11 @@ async function sendTrackerEmail(env, settings, item, alert) {
     return { skipped: true, reason: "missing_from_email" };
   }
 
-  const subject = `Tracker Watch: ${alert?.alertType || "alert"} changed`;
+  const subject = `Tracker Watch: ${trackerEmailSubjectInfo(item, alert)}`;
   const body = `${alert?.message || "Tracker alert"}\n\n${item?.url || ""}`;
+  const provider = String(options && options.provider || "").trim().toLowerCase();
+  if (provider === "mailjet") return await sendTrackerEmailMailjet(env, to, from, subject, body);
+  if (provider === "brevo") return await sendTrackerEmailBrevo(env, to, from, subject, body);
   const brevo = await sendTrackerEmailBrevo(env, to, from, subject, body);
   if (brevo && brevo.ok) return brevo;
   const mailjet = await sendTrackerEmailMailjet(env, to, from, subject, body);
@@ -1008,6 +1070,81 @@ async function sendTrackerEmail(env, settings, item, alert) {
     primary: brevo,
     fallback: mailjet
   };
+}
+
+function trackerEmailSubjectInfo(item, alert) {
+  const message = clean(alert && alert.message || "");
+  if (message) return message.slice(0, 140);
+  const type = clean(alert && (alert.alertType || alert.alert_type) || "alert");
+  const title = clean(alert && alert.title || item && (item.label || item.url) || "");
+  return [type.replace(/_/g, " "), title].filter(Boolean).join(" · ").slice(0, 140) || "Tracker alert";
+}
+
+async function trackerBackupAllToSheets(env, ctx) {
+  const itemsRes = await env.DB.prepare("SELECT * FROM tracker_items ORDER BY created_at DESC").all();
+  const snapRes = await env.DB.prepare("SELECT * FROM tracker_snapshots ORDER BY checked_at DESC LIMIT 1000").all();
+  const alertRes = await env.DB.prepare("SELECT * FROM tracker_alerts ORDER BY created_at DESC LIMIT 1000").all();
+  const settings = await trackerSettings(env);
+  const result = await trackerSheetBackup(env, {
+    reason: "manual-backup",
+    items: itemsRes.results || [],
+    snapshots: snapRes.results || [],
+    alerts: alertRes.results || [],
+    settings
+  });
+  return {
+    type: "tracker-sheets-backup",
+    configured: trackerSheetBackupConfigured(env),
+    items: (itemsRes.results || []).length,
+    snapshots: (snapRes.results || []).length,
+    alerts: (alertRes.results || []).length,
+    result
+  };
+}
+
+function trackerSheetBackupSoon(env, ctx, payload) {
+  if (!trackerSheetBackupConfigured(env)) return { skipped: true, reason: "apps_script_missing" };
+  const job = trackerSheetBackup(env, payload).catch(err => ({
+    ok: false,
+    error: String(err && err.message || err || "tracker sheets backup failed")
+  }));
+  if (ctx && typeof ctx.waitUntil === "function") {
+    ctx.waitUntil(job);
+    return { queued: true };
+  }
+  return job;
+}
+
+async function trackerSheetBackup(env, payload) {
+  const target = String(env && env.APPS_SCRIPT_URL || "").trim();
+  const token = String(env && (env.APPS_SCRIPT_TOKEN || env.APP_CLIENT_TOKEN) || "").trim();
+  if (!target || !token) return { skipped: true, reason: "apps_script_missing" };
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec(?:[?#].*)?$/i.test(target)) {
+    return { skipped: true, reason: "apps_script_url_invalid" };
+  }
+  const forwarded = Object.assign({
+    type: "syncTrackerWatch",
+    appToken: token,
+    viaCloudflare: true,
+    source: "tracker-watch"
+  }, payload || {});
+  const resp = await fetch(target, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+      "Accept": "application/json"
+    },
+    body: JSON.stringify(forwarded)
+  });
+  const text = await resp.text().catch(() => "");
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (_) {}
+  if (!resp.ok) return { ok: false, status: resp.status, message: text.slice(0, 500), response: data };
+  return data || { ok: true, status: resp.status };
+}
+
+function trackerSheetBackupConfigured(env) {
+  return !!(env && String(env.APPS_SCRIPT_URL || "").trim() && String(env.APPS_SCRIPT_TOKEN || env.APP_CLIENT_TOKEN || "").trim());
 }
 
 async function sendTrackerEmailBrevo(env, to, from, subject, body) {
