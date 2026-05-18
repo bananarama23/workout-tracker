@@ -128,6 +128,58 @@
   --wt-ios-nav-shift: 0px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+.tracker-watch-shell{padding:20px 20px 0;}
+.tracker-hero{background:#0A0E14;border:1px solid rgba(42,52,68,0.9);border-radius:var(--r);padding:12px;margin-bottom:10px;}
+.tracker-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.tracker-kicker{font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--blue);font-weight:900;}
+.tracker-status{font-size:0.68rem;color:var(--text2);line-height:1.35;margin-top:4px;}
+.tracker-refresh{padding:8px 10px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;color:var(--text2);font-size:0.62rem;font-weight:900;letter-spacing:1px;cursor:pointer;}
+.tracker-stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:11px;}
+.tracker-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px;}
+.tracker-stat-val{font-family:'Bebas Neue',Impact,sans-serif;font-size:1.2rem;color:var(--text);letter-spacing:1px;line-height:1;}
+.tracker-stat-lbl{font-size:0.52rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:4px;font-weight:800;}
+.tracker-control-card{background:#0A0E14;border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:10px;}
+.tracker-add-row{display:flex;gap:8px;align-items:center;}
+.tracker-input,.tracker-select{width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.78rem;padding:10px 12px;outline:none;}
+.tracker-add-btn{flex-shrink:0;padding:10px 13px;background:var(--accent);border:none;border-radius:var(--r-sm);color:#000;font-size:0.7rem;font-weight:950;letter-spacing:1px;cursor:pointer;}
+.tracker-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+.tracker-label{font-size:0.58rem;color:var(--muted);font-weight:850;letter-spacing:1px;text-transform:uppercase;}
+.tracker-label span{display:block;margin-bottom:5px;}
+.tracker-email-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;margin-top:10px;align-items:center;}
+.tracker-email-btn{padding:9px 10px;background:var(--green-dim);border:1px solid rgba(76,217,100,0.35);border-radius:10px;color:var(--green);font-size:0.62rem;font-weight:950;letter-spacing:1px;cursor:pointer;white-space:nowrap;}
+.tracker-email-test-btn{padding:9px 10px;background:var(--blue-dim);border:1px solid rgba(59,131,246,0.35);border-radius:10px;color:var(--blue);font-size:0.62rem;font-weight:950;letter-spacing:1px;cursor:pointer;white-space:nowrap;}
+.tracker-items-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;}
+.tracker-item-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px;overflow:hidden;}
+.tracker-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.tracker-pill{display:inline-flex;align-items:center;gap:6px;font-size:0.56rem;letter-spacing:1.25px;text-transform:uppercase;font-weight:950;color:var(--blue);}
+.tracker-pill.costco{color:var(--accent);}
+.tracker-title{font-size:0.88rem;font-weight:900;color:var(--text);line-height:1.2;margin-top:5px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.tracker-url{font-size:0.62rem;color:var(--muted);line-height:1.25;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tracker-toggle{flex-shrink:0;padding:7px 9px;border-radius:999px;font-size:0.62rem;font-weight:950;cursor:pointer;}
+.tracker-metric-grid{display:grid;grid-template-columns:1.15fr 0.9fr 0.95fr;gap:7px;margin-top:10px;}
+.tracker-metric{background:var(--card2);border:1px solid rgba(42,52,68,0.65);border-radius:10px;padding:8px;min-width:0;}
+.tracker-metric-label{font-size:0.5rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;font-weight:850;}
+.tracker-price{font-family:'Bebas Neue',Impact,sans-serif;font-size:1.35rem;letter-spacing:1px;color:var(--text);line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tracker-metric-value{font-size:0.7rem;font-weight:850;color:var(--text2);line-height:1.2;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tracker-actions{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:11px;}
+.tracker-check-btn,.tracker-delete-btn{padding:10px;border-radius:11px;font-size:0.64rem;font-weight:950;letter-spacing:1px;cursor:pointer;}
+.tracker-check-btn{background:var(--blue-dim);border:1px solid rgba(59,131,246,0.38);color:var(--blue);}
+.tracker-delete-btn{background:var(--red-dim);border:1px solid rgba(255,58,92,0.38);color:var(--red);}
+.tracker-details{margin-top:9px;border-top:1px solid var(--border);padding-top:8px;}
+.tracker-details summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:0.58rem;font-weight:950;letter-spacing:1.2px;text-transform:uppercase;}
+.tracker-details summary::-webkit-details-marker{display:none;}
+.tracker-details summary::after{content:'+';font-size:0.86rem;color:var(--text2);line-height:1;}
+.tracker-details[open] summary::after{content:'-';}
+.tracker-summary-full{font-size:0.64rem;color:var(--text2);line-height:1.4;margin-top:8px;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px;}
+.tracker-history{margin-top:10px;border-top:1px solid var(--border);padding-top:9px;}
+.tracker-history-title{font-size:0.52rem;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);font-weight:900;margin-bottom:5px;}
+.tracker-history-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid rgba(42,52,68,0.4);}
+.tracker-history-price{font-size:0.72rem;font-weight:900;color:var(--text);}
+.tracker-history-summary{font-size:0.6rem;color:var(--muted);line-height:1.25;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:58vw;}
+.tracker-alert-panel{margin-top:12px;}
+.tracker-alert-title{font-size:0.58rem;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);font-weight:800;margin-bottom:8px;}
+.tracker-alert-list{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+@media (max-width:420px){.tracker-watch-shell{padding-left:16px;padding-right:16px}.tracker-settings-grid{grid-template-columns:1fr}.tracker-stat-row{grid-template-columns:repeat(3,minmax(0,1fr))}.tracker-metric-grid{grid-template-columns:1fr}.tracker-items-grid{grid-template-columns:1fr}.tracker-email-row{grid-template-columns:1fr}.tracker-email-btn,.tracker-email-test-btn{width:100%;}}
 html{height:100%;min-height:100%;overflow:hidden;width:100%;}
 body{
   height:var(--wt-app-h,var(--wt-vh,100dvh));
@@ -1696,47 +1748,56 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
     </div>
 
     <!-- TRACKER WATCH -->
-    <div id="trackerWatchSection" style="padding:20px 20px 0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;">
-        <div>
-          <div style="font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;">Tracker Watch</div>
-          <div id="trackerWatchStatus" style="font-size:0.66rem;color:var(--muted);margin-top:3px;">Costco and Zillow alerts</div>
+    <div id="trackerWatchSection" class="tracker-watch-shell">
+      <div class="tracker-hero">
+        <div class="tracker-hero-top">
+          <div>
+            <div class="tracker-kicker">Tracker Watch</div>
+            <div id="trackerWatchStatus" class="tracker-status">Costco and home listing alerts</div>
+          </div>
+          <button onclick="trackerLoad(true)" class="tracker-refresh">REFRESH</button>
         </div>
-        <button onclick="trackerLoad(true)" style="padding:7px 10px;background:var(--card2);border:1px solid var(--border2);border-radius:9px;color:var(--muted);font-size:0.62rem;font-weight:800;letter-spacing:1px;cursor:pointer;">REFRESH</button>
+        <div class="tracker-stat-row">
+          <div class="tracker-stat"><div class="tracker-stat-val" id="trackerStatWatched">0</div><div class="tracker-stat-lbl">Watched</div></div>
+          <div class="tracker-stat"><div class="tracker-stat-val" id="trackerStatUnseen">0</div><div class="tracker-stat-lbl">Unseen</div></div>
+          <div class="tracker-stat"><div class="tracker-stat-val" id="trackerStatChecked">—</div><div class="tracker-stat-lbl">Last Check</div></div>
+        </div>
       </div>
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:10px;">
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input id="trackerUrlInput" type="text" inputmode="text" autocorrect="on" autocapitalize="words" spellcheck="true" placeholder="House address or Costco/listing URL" style="flex:1;min-width:0;background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:0.82rem;padding:10px 12px;outline:none;">
-          <button onclick="trackerAddUrl()" style="flex-shrink:0;padding:10px 13px;background:var(--accent);border:none;border-radius:var(--r-sm);color:#000;font-size:0.7rem;font-weight:900;letter-spacing:1px;cursor:pointer;">ADD</button>
+      <div class="tracker-control-card">
+        <div class="tracker-add-row">
+          <input id="trackerUrlInput" class="tracker-input" type="text" inputmode="text" autocorrect="on" autocapitalize="words" spellcheck="true" placeholder="House address or Costco/listing URL">
+          <button onclick="trackerAddUrl()" class="tracker-add-btn">ADD</button>
         </div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <label style="flex:1;font-size:0.62rem;color:var(--muted);">
-            <span style="display:block;margin-bottom:4px;font-weight:800;letter-spacing:1px;">HOME LISTINGS</span>
-            <select id="trackerZillowFreq" onchange="trackerSaveSettings()" style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:0.72rem;padding:7px 8px;outline:none;">
+        <div class="tracker-settings-grid">
+          <label class="tracker-label">
+            <span>Home listings</span>
+            <select id="trackerZillowFreq" class="tracker-select" onchange="trackerSaveSettings()">
               <option value="1h">Every 1 hour</option>
               <option value="2h">Every 2 hours</option>
               <option value="3h">Every 3 hours</option>
               <option value="daily">Daily</option>
             </select>
           </label>
-          <label style="flex:1;font-size:0.62rem;color:var(--muted);">
-            <span style="display:block;margin-bottom:4px;font-weight:800;letter-spacing:1px;">COSTCO</span>
-            <select id="trackerCostcoFreq" onchange="trackerSaveSettings()" style="width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:0.72rem;padding:7px 8px;outline:none;">
-              <option value="6h">Every 6 hours</option>
-              <option value="twice_daily">Twice daily</option>
-              <option value="daily">Daily</option>
+          <label class="tracker-label">
+            <span>Costco</span>
+            <select id="trackerCostcoFreq" class="tracker-select" onchange="trackerSaveSettings()">
+              <option value="2d">Every 2 days</option>
+              <option value="3d">Every 3 days</option>
+              <option value="4d">Every 4 days</option>
+              <option value="5d">Every 5 days</option>
             </select>
           </label>
         </div>
-        <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
-          <button id="trackerEmailToggle" onclick="trackerToggleEmail()" style="padding:8px 10px;background:var(--green-dim);border:1px solid rgba(76,217,100,0.35);border-radius:8px;color:var(--green);font-size:0.62rem;font-weight:900;letter-spacing:1px;cursor:pointer;">EMAIL ON</button>
-          <input id="trackerEmailInput" type="email" value="phil.ksmith@gmail.com" onblur="trackerSaveSettings()" style="flex:1;min-width:0;background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:0.72rem;padding:8px 10px;outline:none;">
+        <div class="tracker-email-row">
+          <button id="trackerEmailToggle" onclick="trackerToggleEmail()" class="tracker-email-btn">EMAIL ON</button>
+          <input id="trackerEmailInput" class="tracker-input" type="email" value="outfits-purer1p@icloud.com" onblur="trackerSaveSettings()">
+          <button type="button" onclick="trackerEmailTest()" class="tracker-email-test-btn">TEST</button>
         </div>
       </div>
-      <div id="trackerWatchItems"></div>
-      <div style="margin-top:10px;">
-        <div style="font-size:0.58rem;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px;">Alert History</div>
-        <div id="trackerWatchAlerts" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;"></div>
+      <div id="trackerWatchItems" class="tracker-items-grid"></div>
+      <div class="tracker-alert-panel">
+        <div class="tracker-alert-title">Alert History</div>
+        <div id="trackerWatchAlerts" class="tracker-alert-list"></div>
       </div>
     </div>
 
@@ -4000,8 +4061,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.12.14-costco-fields-property-strict';
-			var WT_SW_VERSION='wt-shell-v193-tracker-api-no-store';
+			var WT_FRONTEND_VERSION='19.12.17-tracker-polish-test';
+			var WT_SW_VERSION='wt-shell-v194-tracker-mailjet-dashboard';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4873,10 +4934,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.12.14-costco-fields-property-strict';
+var APP_VERSION='v19.12.17-tracker-polish-test';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v205-costco-fields-property-strict';
+var CACHE_VERSION='wt-cache-v208-tracker-polish-test';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Fallback last-workout reviews now auto-upgrade to AI when the logged workout has enough set evidence, without changing the feedback layout',
@@ -37573,8 +37634,8 @@ function trackerLoad(force){
 function trackerApplySettings(){
   var st=_trackerWatchState.settings||{};
   var z=document.getElementById('trackerZillowFreq');if(z)z.value=st.zillow_frequency||'2h';
-  var c=document.getElementById('trackerCostcoFreq');if(c)c.value=st.costco_frequency||'twice_daily';
-  var e=document.getElementById('trackerEmailInput');if(e)e.value=st.alert_email||'phil.ksmith@gmail.com';
+  var c=document.getElementById('trackerCostcoFreq');if(c)c.value=st.costco_frequency||'3d';
+  var e=document.getElementById('trackerEmailInput');if(e)e.value=st.alert_email||'outfits-purer1p@icloud.com';
   trackerRenderEmailToggle();
 }
 function trackerRenderEmailToggle(){
@@ -37587,6 +37648,7 @@ function trackerRenderEmailToggle(){
 function trackerRender(){
   var list=document.getElementById('trackerWatchItems');
   var alerts=document.getElementById('trackerWatchAlerts');
+  trackerRenderStats();
   if(list){
     var items=_trackerWatchState.items||[];
     if(!wtAiProxyConfigured()){
@@ -37611,45 +37673,65 @@ function trackerRender(){
     }
   }
 }
+function trackerRenderStats(){
+  var items=_trackerWatchState.items||[];
+  var alerts=_trackerWatchState.alerts||[];
+  var unseen=alerts.filter(function(a){return !a.seen_at;}).length;
+  var checked=items.reduce(function(best,it){var t=Date.parse(it.last_checked_at||'');return Number.isFinite(t)&&t>best?t:best;},0);
+  var w=document.getElementById('trackerStatWatched');if(w)w.textContent=String(items.length||0);
+  var u=document.getElementById('trackerStatUnseen');if(u)u.textContent=String(unseen||0);
+  var c=document.getElementById('trackerStatChecked');if(c)c.textContent=checked?trackerShortTime(new Date(checked).toISOString()):'—';
+}
 function trackerItemHtml(it){
   var title=it.current_title||it.label||it.url;
   var price=it.current_price||'—';
   var st=it.current_status||'unknown';
   var enabled=Number(it.enabled)!==0;
-  return '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:10px;">'
-    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">'
-      +'<div style="min-width:0;flex:1;"><div style="font-size:0.58rem;letter-spacing:1.3px;text-transform:uppercase;color:'+(it.kind==='zillow'?'var(--blue)':'var(--accent)')+';font-weight:900;">'+escHtml(it.kind||'tracker')+'</div>'
-      +'<div style="font-size:0.86rem;font-weight:850;color:var(--text);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escHtml(title)+'</div>'
-      +'<div style="font-size:0.66rem;color:var(--muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escHtml(it.url||'')+'</div></div>'
-      +'<button type="button" onclick="trackerToggleItem(\''+escHtmlAttr(it.id)+'\','+(enabled?0:1)+')" style="flex-shrink:0;padding:7px 9px;background:'+(enabled?'var(--green-dim)':'var(--card2)')+';border:1px solid '+(enabled?'rgba(76,217,100,0.35)':'var(--border2)')+';border-radius:999px;color:'+(enabled?'var(--green)':'var(--muted)')+';font-size:0.62rem;font-weight:900;cursor:pointer;">'+(enabled?'ON':'OFF')+'</button>'
+  var kind=String(it.kind||'tracker');
+  var kindLabel=kind==='zillow'||kind==='property'?'HOME':kind.toUpperCase();
+  return '<div class="tracker-item-card">'
+    +'<div class="tracker-item-top">'
+      +'<div style="min-width:0;flex:1;"><div class="tracker-pill '+(kind==='costco'?'costco':'')+'">'+escHtml(kindLabel)+'</div>'
+      +'<div class="tracker-title">'+escHtml(title)+'</div>'
+      +'<div class="tracker-url">'+escHtml(trackerDisplayUrl(it.url||''))+'</div></div>'
+      +'<button type="button" class="tracker-toggle" onclick="trackerToggleItem(\''+escHtmlAttr(it.id)+'\','+(enabled?0:1)+')" style="background:'+(enabled?'var(--green-dim)':'var(--card2)')+';border:1px solid '+(enabled?'rgba(76,217,100,0.35)':'var(--border2)')+';color:'+(enabled?'var(--green)':'var(--muted)')+';">'+(enabled?'ON':'OFF')+'</button>'
     +'</div>'
-    +'<div style="display:flex;gap:8px;margin-top:10px;">'
-      +'<div style="flex:1;background:var(--card2);border-radius:8px;padding:8px;"><div style="font-size:0.52rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">Price</div><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.15rem;letter-spacing:1px;color:var(--text);">'+escHtml(price)+'</div></div>'
-      +'<div style="flex:1;background:var(--card2);border-radius:8px;padding:8px;"><div style="font-size:0.52rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">Status</div><div style="font-size:0.76rem;font-weight:800;color:var(--text2);margin-top:4px;">'+escHtml(st.replace(/_/g,' '))+'</div></div>'
-      +'<div style="flex:1;background:var(--card2);border-radius:8px;padding:8px;"><div style="font-size:0.52rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">Checked</div><div style="font-size:0.72rem;font-weight:800;color:var(--text2);margin-top:4px;">'+escHtml(trackerTime(it.last_checked_at))+'</div></div>'
+    +'<div class="tracker-metric-grid">'
+      +'<div class="tracker-metric"><div class="tracker-metric-label">Price</div><div class="tracker-price">'+escHtml(price)+'</div></div>'
+      +'<div class="tracker-metric"><div class="tracker-metric-label">Status</div><div class="tracker-metric-value">'+escHtml(st.replace(/_/g,' '))+'</div></div>'
+      +'<div class="tracker-metric"><div class="tracker-metric-label">Checked</div><div class="tracker-metric-value">'+escHtml(trackerShortTime(it.last_checked_at))+'</div></div>'
     +'</div>'
-    +(it.current_summary?'<div style="font-size:0.66rem;color:var(--muted);line-height:1.35;margin-top:9px;">'+escHtml(it.current_summary)+'</div>':'')
-    +trackerHistoryHtml(it)
-    +'<div style="display:flex;gap:8px;margin-top:10px;">'
-      +'<button type="button" onclick="trackerCheckNow(\''+escHtmlAttr(it.id)+'\')" style="flex:1;padding:10px;background:var(--blue-dim);border:1px solid rgba(59,131,246,0.35);border-radius:9px;color:var(--blue);font-size:0.66rem;font-weight:900;letter-spacing:1px;cursor:pointer;">CHECK NOW</button>'
-      +'<button type="button" onclick="trackerDeleteItem(\''+escHtmlAttr(it.id)+'\',\''+escHtmlAttr(it.url||'')+'\')" style="padding:10px 12px;background:var(--red-dim);border:1px solid rgba(255,58,92,0.35);border-radius:9px;color:var(--red);font-size:0.66rem;font-weight:900;letter-spacing:1px;cursor:pointer;">DELETE</button>'
+    +'<div class="tracker-actions">'
+      +'<button type="button" class="tracker-check-btn" onclick="trackerCheckNow(\''+escHtmlAttr(it.id)+'\')">CHECK NOW</button>'
+      +'<button type="button" class="tracker-delete-btn" onclick="trackerDeleteItem(\''+escHtmlAttr(it.id)+'\',\''+escHtmlAttr(it.url||'')+'\')">DELETE</button>'
     +'</div>'
+    +trackerDetailsHtml(it)
   +'</div>';
+}
+function trackerDetailsHtml(it){
+  var hasSummary=!!String(it.current_summary||'').trim();
+  var rows=Array.isArray(it.price_history)?it.price_history:[];
+  if(!hasSummary&&!rows.length)return '';
+  return '<details class="tracker-details">'
+    +'<summary>Details & history</summary>'
+    +(hasSummary?'<div class="tracker-summary-full">'+escHtml(it.current_summary)+'</div>':'')
+    +trackerHistoryHtml(it)
+  +'</details>';
 }
 function trackerHistoryHtml(it){
   var rows=Array.isArray(it.price_history)?it.price_history:[];
   if(!rows.length){
-    return '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:9px;font-size:0.64rem;color:var(--muted);">No price/status changes logged yet.</div>';
+    return '<div class="tracker-history"><div style="font-size:0.64rem;color:var(--muted);">No price/status changes logged yet.</div></div>';
   }
-  return '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:9px;">'
-    +'<div style="font-size:0.54rem;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);font-weight:800;margin-bottom:7px;">Price / Status History</div>'
+  return '<div class="tracker-history">'
+    +'<div class="tracker-history-title">Price / Status History</div>'
     +rows.slice(0,6).map(function(h){
       var price=h.price||'—';
       var status=(h.status||'unknown').replace(/_/g,' ');
-      return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid rgba(42,52,68,0.45);">'
-        +'<div style="min-width:0;"><div style="font-size:0.74rem;font-weight:850;color:var(--text);">'+escHtml(price)+' <span style="font-size:0.62rem;color:var(--muted);font-weight:700;">'+escHtml(status)+'</span></div>'
-        +(h.summary?'<div style="font-size:0.62rem;color:var(--muted);line-height:1.3;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70vw;">'+escHtml(h.summary)+'</div>':'')+'</div>'
-        +'<div style="font-size:0.58rem;color:var(--muted);white-space:nowrap;">'+escHtml(trackerTime(h.checked_at))+'</div>'
+    return '<div class="tracker-history-row">'
+        +'<div style="min-width:0;"><div class="tracker-history-price">'+escHtml(price)+' <span style="font-size:0.62rem;color:var(--muted);font-weight:700;">'+escHtml(status)+'</span></div>'
+        +(h.summary?'<div class="tracker-history-summary">'+escHtml(h.summary)+'</div>':'')+'</div>'
+        +'<div style="font-size:0.58rem;color:var(--muted);white-space:nowrap;">'+escHtml(trackerShortTime(h.checked_at))+'</div>'
       +'</div>';
     }).join('')
   +'</div>';
@@ -37684,7 +37766,7 @@ function trackerEnsureAddedVisible(res,input){
     label:isUrl?'':raw.replace(/\s+/g,' ').trim(),
     url:stored,
     enabled:1,
-    check_frequency:kind==='costco'?'twice_daily':'2h',
+    check_frequency:kind==='costco'?'3d':'2h',
     last_checked_at:'',
     current_title:isUrl?raw:raw.replace(/\s+/g,' ').trim(),
     current_price:'',
@@ -37744,6 +37826,21 @@ function trackerToggleEmail(){
   trackerRenderEmailToggle();
   trackerSaveSettings();
 }
+function trackerEmailTest(){
+  if(!wtAiProxyConfigured()){trackerSetStatus('Connect the Cloudflare AI backend first','var(--orange)');return;}
+  trackerSetStatus('Sending test email...','var(--blue)');
+  trackerApi('POST','email-test',{},30000).then(function(res){
+    if(!res||res.status!=='ok')throw new Error((res&&(res.message||res.errorCode))||'Email test failed');
+    var result=res.result||{};
+    if(res.emailConfigured&&result.ok){
+      trackerSetStatus('Test email sent to '+(res.to||'tracker inbox'),'var(--green)');
+    }else{
+      trackerSetStatus('Email test not sent: '+(result.reason||result.message||'Mailjet not configured'),'var(--orange)');
+    }
+  }).catch(function(err){
+    trackerSetStatus(String(err&&err.message||err||'Email test failed'),'var(--orange)');
+  });
+}
 function trackerSaveSettings(){
   if(!wtAiProxyConfigured())return;
   var z=document.getElementById('trackerZillowFreq');
@@ -37751,9 +37848,9 @@ function trackerSaveSettings(){
   var e=document.getElementById('trackerEmailInput');
   trackerApi('POST','settings',{
     zillow_frequency:z&&z.value||'2h',
-    costco_frequency:c&&c.value||'twice_daily',
+    costco_frequency:c&&c.value||'3d',
     email_alerts:_trackerWatchState.emailOn?'on':'off',
-    alert_email:e&&e.value||'phil.ksmith@gmail.com'
+    alert_email:e&&e.value||'outfits-purer1p@icloud.com'
   },22000).then(function(res){
     if(res&&res.settings){_trackerWatchState.settings=res.settings;trackerApplySettings();}
     trackerSetStatus('Tracker settings saved','var(--green)');
@@ -37828,6 +37925,25 @@ function trackerTime(value){
   if(!Number.isFinite(t))return 'Never';
   var d=new Date(t);
   return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+function trackerShortTime(value){
+  var t=Date.parse(value||'');
+  if(!Number.isFinite(t))return 'Never';
+  var now=Date.now();
+  var diff=Math.max(0,now-t);
+  if(diff<60000)return 'Now';
+  if(diff<3600000)return Math.floor(diff/60000)+'m ago';
+  if(diff<86400000)return Math.floor(diff/3600000)+'h ago';
+  var d=new Date(t);
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+}
+function trackerDisplayUrl(value){
+  var s=String(value||'');
+  if(/^address:/i.test(s))return s.replace(/^address:/i,'');
+  try{
+    var u=new URL(s);
+    return u.hostname.replace(/^www\./,'')+u.pathname.replace(/\/$/,'');
+  }catch(e){return s;}
 }
 function escHtmlAttr(s){return escHtml(s).replace(/'/g,'&#39;');}
 
