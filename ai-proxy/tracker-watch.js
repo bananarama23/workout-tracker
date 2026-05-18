@@ -5,7 +5,9 @@ const TRACKER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKi
 export function trackerHealth(env) {
   return {
     trackerRoutes: true,
-    trackerEmailConfigured: !!(env && env.MAILJET_API_KEY && env.MAILJET_SECRET_KEY && env.TRACKER_EMAIL_TO),
+    trackerEmailConfigured: trackerEmailConfigured(env),
+    trackerBrevoEmailConfigured: trackerBrevoConfigured(env),
+    trackerMailjetEmailConfigured: trackerMailjetConfigured(env),
     trackerCostcoApiConfigured: costcoRapidApiConfigured(env),
     trackerBrowserConfigured: trackerBrowserConfigured(env),
     trackerBrowserRestConfigured: trackerBrowserRestConfigured(env)
@@ -48,7 +50,9 @@ export async function handleTrackerRequest(request, env, ctx) {
     );
     return ok({
       type: "tracker-email-test",
-      emailConfigured: !!(env && env.MAILJET_API_KEY && env.MAILJET_SECRET_KEY && env.TRACKER_EMAIL_TO),
+      emailConfigured: trackerEmailConfigured(env),
+      brevoConfigured: trackerBrevoConfigured(env),
+      mailjetConfigured: trackerMailjetConfigured(env),
       to: env.TRACKER_EMAIL_TO || settings?.alert_email || TRACKER_DEFAULT_EMAIL || null,
       from: env.TRACKER_EMAIL_FROM || env.TRACKER_EMAIL_TO || null,
       result
@@ -967,10 +971,6 @@ function trackerPrompt(kind, url, text) {
 }
 
 async function sendTrackerEmail(env, settings, item, alert) {
-  if (!env || !env.MAILJET_API_KEY || !env.MAILJET_SECRET_KEY) {
-    return { skipped: true, reason: "mailjet_missing" };
-  }
-
   const to = String(
     env.TRACKER_EMAIL_TO ||
     settings?.alert_email ||
@@ -994,6 +994,77 @@ async function sendTrackerEmail(env, settings, item, alert) {
 
   const subject = `Tracker Watch: ${alert?.alertType || "alert"} changed`;
   const body = `${alert?.message || "Tracker alert"}\n\n${item?.url || ""}`;
+  const brevo = await sendTrackerEmailBrevo(env, to, from, subject, body);
+  if (brevo && brevo.ok) return brevo;
+  const mailjet = await sendTrackerEmailMailjet(env, to, from, subject, body);
+  if (mailjet && mailjet.ok) {
+    mailjet.fallbackFrom = "brevo";
+    mailjet.primaryResult = brevo;
+    return mailjet;
+  }
+  return {
+    ok: false,
+    provider: "email_fallback",
+    primary: brevo,
+    fallback: mailjet
+  };
+}
+
+async function sendTrackerEmailBrevo(env, to, from, subject, body) {
+  if (!trackerBrevoConfigured(env)) {
+    return { skipped: true, provider: "brevo", reason: "brevo_missing" };
+  }
+
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": String(env.BREVO_API_KEY || "").trim(),
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    body: JSON.stringify({
+      sender: {
+        email: from,
+        name: "Workout Tracker"
+      },
+      to: [
+        {
+          email: to
+        }
+      ],
+      subject,
+      textContent: body
+    })
+  });
+
+  const text = await res.text().catch(() => "");
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      provider: "brevo",
+      status: res.status,
+      message: text
+    };
+  }
+
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch (_) {}
+
+  return {
+    ok: true,
+    provider: "brevo",
+    response: json || text
+  };
+}
+
+async function sendTrackerEmailMailjet(env, to, from, subject, body) {
+  if (!trackerMailjetConfigured(env)) {
+    return { skipped: true, provider: "mailjet", reason: "mailjet_missing" };
+  }
+
   const auth = btoa(`${env.MAILJET_API_KEY}:${env.MAILJET_SECRET_KEY}`);
 
   const res = await fetch("https://api.mailjet.com/v3.1/send", {
@@ -1042,6 +1113,18 @@ async function sendTrackerEmail(env, settings, item, alert) {
     provider: "mailjet",
     response: json || text
   };
+}
+
+function trackerEmailConfigured(env) {
+  return !!(env && env.TRACKER_EMAIL_TO && (trackerBrevoConfigured(env) || trackerMailjetConfigured(env)));
+}
+
+function trackerBrevoConfigured(env) {
+  return !!(env && String(env.BREVO_API_KEY || "").trim());
+}
+
+function trackerMailjetConfigured(env) {
+  return !!(env && String(env.MAILJET_API_KEY || "").trim() && String(env.MAILJET_SECRET_KEY || "").trim());
 }
 
 function trackerIsDue(item) {
