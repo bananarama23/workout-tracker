@@ -4000,8 +4000,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.12.3-pages-tracker-origin';
-			var WT_SW_VERSION='wt-shell-v185-pages-tracker-origin';
+			var WT_FRONTEND_VERSION='19.12.4-tracker-actions';
+			var WT_SW_VERSION='wt-shell-v186-tracker-actions';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4873,10 +4873,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.12.3-pages-tracker-origin';
+var APP_VERSION='v19.12.4-tracker-actions';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v194-pages-tracker-origin';
+var CACHE_VERSION='wt-cache-v195-tracker-actions';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Fallback last-workout reviews now auto-upgrade to AI when the logged workout has enough set evidence, without changing the feedback layout',
@@ -37650,8 +37650,9 @@ function trackerDeleteItem(id,url){
   _trackerWatchState.items=oldItems.filter(function(x){return String(x.id||'')!==id&&(url?String(x.url||'')!==url:true);});
   trackerRender();
   trackerSetStatus('Deleting tracker...','var(--muted)');
-  trackerApi('POST','delete',{id:id,itemId:id,url:url},22000).then(function(){
-    trackerSetStatus('Tracker deleted','var(--green)');
+  trackerApi('POST','delete',{id:id,itemId:id,url:url},22000).then(function(res){
+    var deleted=parseInt(res&&res.deleted,10)||0;
+    trackerSetStatus(deleted>0?'Tracker deleted':'Delete sent; refreshing tracker','var(--green)');
     return trackerLoad(true);
   }).catch(function(err){
     _trackerWatchState.items=oldItems;
@@ -37666,7 +37667,8 @@ function trackerCheckNow(id){
   trackerSetStatus('Checking now...','var(--blue)');
   trackerApi('POST','check-now',{id:id},70000).then(function(res){
     if(!res||res.status!=='ok')throw new Error((res&&(res.message||res.errorCode))||'Check failed');
-    trackerSetStatus('Checked: '+(res.price||res.itemStatus||'done'),'var(--green)');
+    if(res.extractionError)trackerSetStatus('Checked page, but extraction needs attention: '+res.extractionError,'var(--orange)');
+    else trackerSetStatus('Checked: '+(res.price||res.itemStatus||'done'),'var(--green)');
     return trackerLoad(true);
   }).catch(function(err){trackerSetStatus(String(err&&err.message||err||'Check failed'),'var(--orange)');});
 }
