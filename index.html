@@ -131,9 +131,11 @@
 .tracker-watch-shell{padding:20px 20px 0;}
 .tracker-hero{background:#0A0E14;border:1px solid rgba(42,52,68,0.9);border-radius:var(--r);padding:12px;margin-bottom:10px;}
 .tracker-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.tracker-hero-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;}
 .tracker-kicker{font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--blue);font-weight:900;}
 .tracker-status{font-size:0.68rem;color:var(--text2);line-height:1.35;margin-top:4px;}
 .tracker-refresh{padding:8px 10px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;color:var(--text2);font-size:0.62rem;font-weight:900;letter-spacing:1px;cursor:pointer;}
+.tracker-backup-btn{background:var(--green-dim);border-color:rgba(76,217,100,0.28);color:var(--green);}
 .tracker-stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:11px;}
 .tracker-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px;}
 .tracker-stat-val{font-family:'Bebas Neue',Impact,sans-serif;font-size:1.2rem;color:var(--text);letter-spacing:1px;line-height:1;}
@@ -145,9 +147,10 @@
 .tracker-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
 .tracker-label{font-size:0.58rem;color:var(--muted);font-weight:850;letter-spacing:1px;text-transform:uppercase;}
 .tracker-label span{display:block;margin-bottom:5px;}
-.tracker-email-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;margin-top:10px;align-items:center;}
+.tracker-email-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:8px;margin-top:10px;align-items:center;}
 .tracker-email-btn{padding:9px 10px;background:var(--green-dim);border:1px solid rgba(76,217,100,0.35);border-radius:10px;color:var(--green);font-size:0.62rem;font-weight:950;letter-spacing:1px;cursor:pointer;white-space:nowrap;}
 .tracker-email-test-btn{padding:9px 10px;background:var(--blue-dim);border:1px solid rgba(59,131,246,0.35);border-radius:10px;color:var(--blue);font-size:0.62rem;font-weight:950;letter-spacing:1px;cursor:pointer;white-space:nowrap;}
+.tracker-email-fallback-btn{padding:9px 10px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;color:var(--text2);font-size:0.62rem;font-weight:950;letter-spacing:1px;cursor:pointer;white-space:nowrap;}
 .tracker-items-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;}
 .tracker-item-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px;overflow:hidden;}
 .tracker-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
@@ -179,7 +182,7 @@
 .tracker-alert-panel{margin-top:12px;}
 .tracker-alert-title{font-size:0.58rem;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);font-weight:800;margin-bottom:8px;}
 .tracker-alert-list{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
-@media (max-width:420px){.tracker-watch-shell{padding-left:16px;padding-right:16px}.tracker-settings-grid{grid-template-columns:1fr}.tracker-stat-row{grid-template-columns:repeat(3,minmax(0,1fr))}.tracker-metric-grid{grid-template-columns:1fr}.tracker-items-grid{grid-template-columns:1fr}.tracker-email-row{grid-template-columns:1fr}.tracker-email-btn,.tracker-email-test-btn{width:100%;}}
+@media (max-width:420px){.tracker-watch-shell{padding-left:16px;padding-right:16px}.tracker-settings-grid{grid-template-columns:1fr}.tracker-stat-row{grid-template-columns:repeat(3,minmax(0,1fr))}.tracker-metric-grid{grid-template-columns:1fr}.tracker-items-grid{grid-template-columns:1fr}.tracker-email-row{grid-template-columns:1fr}.tracker-email-btn,.tracker-email-test-btn,.tracker-email-fallback-btn{width:100%;}.tracker-hero-actions{width:100%;justify-content:flex-start}.tracker-hero-actions .tracker-refresh{flex:1;}}
 html{height:100%;min-height:100%;overflow:hidden;width:100%;}
 body{
   height:var(--wt-app-h,var(--wt-vh,100dvh));
@@ -1755,7 +1758,10 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
             <div class="tracker-kicker">Tracker Watch</div>
             <div id="trackerWatchStatus" class="tracker-status">Costco and home listing alerts</div>
           </div>
-          <button onclick="trackerLoad(true)" class="tracker-refresh">REFRESH</button>
+          <div class="tracker-hero-actions">
+            <button onclick="trackerBackupSheets()" class="tracker-refresh tracker-backup-btn">SHEETS</button>
+            <button onclick="trackerLoad(true)" class="tracker-refresh">REFRESH</button>
+          </div>
         </div>
         <div class="tracker-stat-row">
           <div class="tracker-stat"><div class="tracker-stat-val" id="trackerStatWatched">0</div><div class="tracker-stat-lbl">Watched</div></div>
@@ -1792,6 +1798,7 @@ input[type=range]{flex:1;accent-color:var(--accent);height:4px;}
           <button id="trackerEmailToggle" onclick="trackerToggleEmail()" class="tracker-email-btn">EMAIL ON</button>
           <input id="trackerEmailInput" class="tracker-input" type="email" value="outfits-purer1p@icloud.com" onblur="trackerSaveSettings()">
           <button type="button" onclick="trackerEmailTest()" class="tracker-email-test-btn">TEST</button>
+          <button type="button" onclick="trackerEmailTest('mailjet')" class="tracker-email-fallback-btn">MAILJET</button>
         </div>
       </div>
       <div id="trackerWatchItems" class="tracker-items-grid"></div>
@@ -4061,8 +4068,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.12.17-tracker-polish-test';
-			var WT_SW_VERSION='wt-shell-v194-tracker-mailjet-dashboard';
+			var WT_FRONTEND_VERSION='19.12.20-tracker-sheets-hardening';
+			var WT_SW_VERSION='wt-shell-v196-tracker-sheets-hardening';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4934,10 +4941,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.12.17-tracker-polish-test';
+var APP_VERSION='v19.12.20-tracker-sheets-hardening';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v208-tracker-polish-test';
+var CACHE_VERSION='wt-cache-v211-tracker-sheets-hardening';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Fallback last-workout reviews now auto-upgrade to AI when the logged workout has enough set evidence, without changing the feedback layout',
@@ -37826,19 +37833,56 @@ function trackerToggleEmail(){
   trackerRenderEmailToggle();
   trackerSaveSettings();
 }
-function trackerEmailTest(){
+function trackerEmailTest(provider){
   if(!wtAiProxyConfigured()){trackerSetStatus('Connect the Cloudflare AI backend first','var(--orange)');return;}
-  trackerSetStatus('Sending test email...','var(--blue)');
-  trackerApi('POST','email-test',{},30000).then(function(res){
+  provider=String(provider||'').trim().toLowerCase();
+  trackerSetStatus('Sending '+(provider||'Brevo')+' test email...','var(--blue)');
+  trackerApi('POST','email-test',provider?{provider:provider}:{},30000).then(function(res){
     if(!res||res.status!=='ok')throw new Error((res&&(res.message||res.errorCode))||'Email test failed');
     var result=res.result||{};
     if(res.emailConfigured&&result.ok){
-      trackerSetStatus('Test email sent to '+(res.to||'tracker inbox'),'var(--green)');
+      var id=trackerEmailMessageId(result);
+      var providerName=(result.provider||res.requestedProvider||'email').toUpperCase();
+      trackerSetStatus(providerName+' accepted test to '+(res.to||'tracker inbox')+(id?' · '+id:''),'var(--green)');
     }else{
-      trackerSetStatus('Email test not sent: '+(result.reason||result.message||'Mailjet not configured'),'var(--orange)');
+      trackerSetStatus('Email test not sent: '+trackerEmailErrorText(result),'var(--orange)');
     }
   }).catch(function(err){
     trackerSetStatus(String(err&&err.message||err||'Email test failed'),'var(--orange)');
+  });
+}
+function trackerEmailMessageId(result){
+  try{
+    var r=result&&result.response;
+    if(r&&r.messageId)return String(r.messageId);
+    if(r&&r.MessageID)return String(r.MessageID);
+    if(r&&Array.isArray(r.Messages)&&r.Messages[0]&&(r.Messages[0].To&&r.Messages[0].To[0]&&r.Messages[0].To[0].MessageID))return String(r.Messages[0].To[0].MessageID);
+    if(r&&Array.isArray(r.Messages)&&r.Messages[0]&&r.Messages[0].MessageID)return String(r.Messages[0].MessageID);
+  }catch(e){}
+  return '';
+}
+function trackerEmailErrorText(result){
+  if(!result)return 'not configured';
+  if(result.reason)return String(result.reason);
+  if(result.message)return String(result.message).slice(0,160);
+  if(result.primary&&result.fallback)return 'Brevo: '+trackerEmailErrorText(result.primary)+' · Mailjet: '+trackerEmailErrorText(result.fallback);
+  return 'provider rejected the request';
+}
+function trackerBackupSheets(){
+  if(!wtAiProxyConfigured()){trackerSetStatus('Connect the Cloudflare AI backend first','var(--orange)');return;}
+  trackerSetStatus('Backing up Tracker Watch to Sheets...','var(--blue)');
+  trackerApi('POST','sheets-backup',{},45000).then(function(res){
+    if(!res||res.status!=='ok')throw new Error((res&&(res.message||res.errorCode))||'Sheets backup failed');
+    var r=res.result||{};
+    if(r.status==='ok'||r.ok===true){
+      trackerSetStatus('Sheets backed up: '+(res.items||0)+' items · '+(res.snapshots||0)+' snapshots · '+(res.alerts||0)+' alerts','var(--green)');
+    }else if(!res.configured||r.skipped){
+      trackerSetStatus('Sheets backup skipped: '+(r.reason||r.message||'Apps Script not configured'),'var(--orange)');
+    }else{
+      trackerSetStatus('Sheets backup failed: '+(r.message||r.errorCode||'Apps Script did not confirm backup'),'var(--orange)');
+    }
+  }).catch(function(err){
+    trackerSetStatus(String(err&&err.message||err||'Sheets backup failed'),'var(--orange)');
   });
 }
 function trackerSaveSettings(){
