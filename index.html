@@ -4000,8 +4000,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.12.8-tracker-home-change';
-			var WT_SW_VERSION='wt-shell-v190-tracker-home-change';
+			var WT_FRONTEND_VERSION='19.12.10-tracker-address-fix';
+			var WT_SW_VERSION='wt-shell-v192-tracker-address-fix';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4873,10 +4873,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.12.8-tracker-home-change';
+var APP_VERSION='v19.12.10-tracker-address-fix';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v199-tracker-home-change';
+var CACHE_VERSION='wt-cache-v201-tracker-address-fix';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Fallback last-workout reviews now auto-upgrade to AI when the logged workout has enough set evidence, without changing the feedback layout',
@@ -37588,7 +37588,7 @@ function trackerRender(){
     if(!wtAiProxyConfigured()){
       list.innerHTML='<div style="background:var(--yellow-dim);border:1px solid rgba(245,158,11,0.35);border-radius:var(--r);padding:12px;color:var(--yellow);font-size:0.72rem;line-height:1.45;">Tracker Watch needs the Cloudflare AI backend and D1 DB binding. The rest of Budget is untouched.</div>';
     }else if(!items.length){
-      list.innerHTML='<div style="background:var(--card);border:1px dashed var(--border2);border-radius:var(--r);padding:14px;text-align:center;color:var(--muted);font-size:0.72rem;">Add a Costco or Zillow URL to start watching.</div>';
+      list.innerHTML='<div style="background:var(--card);border:1px dashed var(--border2);border-radius:var(--r);padding:14px;text-align:center;color:var(--muted);font-size:0.72rem;">Add a house address or Costco URL to start watching.</div>';
     }else{
       list.innerHTML=items.map(function(it){return trackerItemHtml(it);}).join('');
     }
@@ -37658,7 +37658,9 @@ function trackerAddUrl(){
   trackerApi('POST','add',{url:url},25000).then(function(res){
     if(!res||res.status!=='ok')throw new Error((res&&(res.message||res.errorCode))||'Add failed');
     if(inp)inp.value='';
-    return trackerLoad(true);
+    return trackerLoad(true).then(function(){
+      trackerSetStatus(res.existing?'Already watching this address or URL':'Tracker added','var(--green)');
+    });
   }).catch(function(err){trackerSetStatus(String(err&&err.message||err||'Add failed'),'var(--orange)');});
 }
 function trackerDeleteItem(id,url){
