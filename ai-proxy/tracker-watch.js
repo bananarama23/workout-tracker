@@ -6,6 +6,7 @@ export function trackerHealth(env) {
   return {
     trackerRoutes: true,
     trackerEmailConfigured: !!(env && env.TRACKER_EMAIL),
+    trackerCostcoApiConfigured: costcoRapidApiConfigured(env),
     trackerBrowserConfigured: trackerBrowserConfigured(env),
     trackerBrowserRestConfigured: trackerBrowserRestConfigured(env)
   };
@@ -186,8 +187,17 @@ async function trackerAdd(env, body) {
   const frequency = String(body.check_frequency || body.frequency || defaultFrequencyForKind(kind, settings) || "daily");
   const now = new Date().toISOString();
   const id = makeId("trk");
-  const storedUrl = parsed ? parsed.href : `address:${input}`;
-  const label = String(body.label || (!parsed && input) || "").trim().slice(0, 160);
+  const storedUrl = parsed ? parsed.href : `address:${normalizeAddressInput(input)}`;
+  const label = String(body.label || (!parsed && normalizeAddressInput(input)) || "").trim().slice(0, 160);
+  const existing = await findTrackerByCanonicalUrl(env, storedUrl);
+  if (existing && existing.id) {
+    await env.DB.prepare(`
+      UPDATE tracker_items
+      SET enabled = 1, label = COALESCE(NULLIF(?, ''), label), check_frequency = COALESCE(NULLIF(?, ''), check_frequency)
+      WHERE id = ?
+    `).bind(label, frequency, existing.id).run();
+    return { type: "tracker-add", id: existing.id, kind: existing.kind || kind, existing: true };
+  }
   await env.DB.prepare(`
     INSERT INTO tracker_items (id, kind, label, url, enabled, check_frequency, created_at)
     VALUES (?, ?, ?, ?, 1, ?, ?)
@@ -198,26 +208,24 @@ async function trackerAdd(env, body) {
 async function trackerDelete(env, body) {
   let id = trackerIdFromBody(body);
   const url = String(body && body.url || "").trim();
-  if (!id && url) {
-    const row = await env.DB.prepare("SELECT id FROM tracker_items WHERE url = ? LIMIT 1").bind(url).first();
-    id = row && row.id ? String(row.id) : "";
-  }
-  if (!id) throw statusError("missing_tracker_id", "Missing tracker item id.", 400);
-  await env.DB.prepare("DELETE FROM tracker_alerts WHERE item_id = ?").bind(id).run();
-  await env.DB.prepare("DELETE FROM tracker_snapshots WHERE item_id = ?").bind(id).run();
-  const byId = await env.DB.prepare("DELETE FROM tracker_items WHERE id = ?").bind(id).run();
-  let deleted = d1Changes(byId);
-  if (deleted <= 0 && url) {
-    const matches = await env.DB.prepare("SELECT id FROM tracker_items WHERE url = ?").bind(url).all();
-    const ids = (matches.results || []).map(row => String(row.id || "")).filter(Boolean);
-    for (const matchId of ids) {
-      await env.DB.prepare("DELETE FROM tracker_alerts WHERE item_id = ?").bind(matchId).run();
-      await env.DB.prepare("DELETE FROM tracker_snapshots WHERE item_id = ?").bind(matchId).run();
+  const ids = new Set();
+  if (id) ids.add(id);
+  if (url) {
+    const matches = await findTrackersByCanonicalUrl(env, url);
+    for (const row of matches) {
+      if (row && row.id) ids.add(String(row.id));
     }
-    const byUrl = await env.DB.prepare("DELETE FROM tracker_items WHERE url = ?").bind(url).run();
-    deleted = d1Changes(byUrl);
   }
-  return { type: "tracker-delete", id, deleted };
+  if (!ids.size) throw statusError("missing_tracker_id", "Missing tracker item id.", 400);
+  let deleted = 0;
+  for (const matchId of Array.from(ids)) {
+    await env.DB.prepare("DELETE FROM tracker_alerts WHERE item_id = ?").bind(matchId).run();
+    await env.DB.prepare("DELETE FROM tracker_snapshots WHERE item_id = ?").bind(matchId).run();
+    const result = await env.DB.prepare("DELETE FROM tracker_items WHERE id = ?").bind(matchId).run();
+    deleted += d1Changes(result);
+  }
+  if (deleted <= 0) throw statusError("tracker_item_missing", "Tracker item was already gone or could not be deleted.", 404);
+  return { type: "tracker-delete", id: id || Array.from(ids)[0], deleted };
 }
 
 async function trackerUpdate(env, body) {
@@ -307,24 +315,50 @@ async function trackerSettingsSave(env, body) {
 
 async function runTrackerCheck(env, item, ctx, source) {
   const now = new Date().toISOString();
-  const fetched = await fetchVisibleText(item.url, env);
+  let fetched = { mode: "not_started", text: "", summary: "", browserRenderingAvailable: false };
   let extractError = "";
   let snap = {
     title: item.label || item.url || "",
     price: "",
     status: "unknown",
-    summary: fetched.summary || "checked"
+    summary: "checked"
   };
-  if (!env.OPENAI_API_KEY) {
-    extractError = "OPENAI_API_KEY missing; fetched page but could not extract price/status.";
-    snap.summary = [snap.summary, extractError].filter(Boolean).join("; ");
-  } else {
+
+  if (item.kind === "costco" && costcoRapidApiConfigured(env)) {
     try {
-      snap = await extractTrackerSnapshotWithFallback(env, item, fetched, ctx);
+      snap = await extractCostcoViaRapidApi(env, item);
+      fetched = {
+        mode: "costco_rapidapi",
+        text: "",
+        summary: snap.summary || "costco_rapidapi_ok",
+        browserRenderingAvailable: trackerBrowserConfigured(env)
+      };
     } catch (err) {
-      extractError = String(err && err.message || err || "extract failed");
-      snap.summary = [fetched.summary || "", "extract_failed: " + extractError].filter(Boolean).join("; ");
+      extractError = "costco_rapidapi_failed: " + String(err && err.message || err || "unknown");
     }
+  } else if (item.kind === "costco") {
+    extractError = "RAPIDAPI_KEY missing; configure COSTCO_RAPIDAPI_KEY, REAL_TIME_COSTCO_RAPIDAPI_KEY, or RAPIDAPI_KEY for Costco tracking.";
+  }
+
+  if (fetched.mode !== "costco_rapidapi") {
+    fetched = await fetchVisibleText(item.url, env);
+    snap.summary = fetched.summary || "checked";
+    if (!env.OPENAI_API_KEY) {
+      const msg = "OPENAI_API_KEY missing; fetched page but could not extract price/status.";
+      extractError = [extractError, msg].filter(Boolean).join("; ");
+      snap.summary = [snap.summary, extractError].filter(Boolean).join("; ");
+    } else {
+      try {
+        snap = await extractTrackerSnapshotWithFallback(env, item, fetched, ctx);
+        if (extractError) snap.summary = [snap.summary, extractError].filter(Boolean).join("; ");
+      } catch (err) {
+        const msg = String(err && err.message || err || "extract failed");
+        extractError = [extractError, msg].filter(Boolean).join("; ");
+        snap.summary = [fetched.summary || "", "extract_failed: " + extractError].filter(Boolean).join("; ");
+      }
+    }
+  } else {
+    extractError = "";
   }
   const prev = await env.DB.prepare(`
     SELECT * FROM tracker_snapshots
@@ -369,6 +403,163 @@ async function runTrackerCheck(env, item, ctx, source) {
     fetchMode: fetched.mode,
     browserRenderingAvailable: fetched.browserRenderingAvailable
   };
+}
+
+async function extractCostcoViaRapidApi(env, item) {
+  const productId = costcoProductIdFromInput(item.url) || costcoProductIdFromInput(item.label);
+  let payload = null;
+  let source = "";
+  if (productId) {
+    payload = await costcoRapidApiFetch(env, "product-details", {
+      product_id: productId,
+      country: "US",
+      language: "en-US"
+    });
+    source = `RapidAPI Costco product-details ${productId}`;
+  } else {
+    const query = costcoSearchQuery(item);
+    if (!query) throw statusError("costco_query_missing", "Costco tracker needs a product URL, item number, or searchable label.", 400);
+    payload = await costcoRapidApiFetch(env, "search", {
+      query,
+      country: "US",
+      start: "0",
+      language: "en-US"
+    });
+    source = `RapidAPI Costco search "${query}"`;
+  }
+
+  const product = costcoFirstProduct(payload && payload.data);
+  if (!product) throw statusError("costco_product_missing", "RapidAPI Costco returned no product data for this tracker.", 502);
+  const title = clean(deepFindFirst(product, ["name", "title", "product_name", "productName", "short_description", "description"]));
+  const price = costcoPrice(product);
+  const status = costcoStatus(product);
+  const promo = clean(deepFindFirst(product, ["promo_text", "promotion", "promotions", "discount", "savings", "coupon"]));
+  const requestId = clean(payload.request_id || payload.requestId || "");
+  const rate = payload.rateRemaining ? `rate_remaining_${payload.rateRemaining}` : "";
+  const summary = [source, requestId ? `request_${requestId}` : "", promo, rate].filter(Boolean).join("; ");
+  return { title, price, status, summary };
+}
+
+async function costcoRapidApiFetch(env, endpoint, params) {
+  const key = costcoRapidApiKey(env);
+  if (!key) throw statusError("costco_rapidapi_missing_key", "Costco RapidAPI key is not configured.", 500);
+  const url = new URL(`https://real-time-costco-data.p.rapidapi.com/${endpoint}`);
+  Object.keys(params || {}).forEach(k => url.searchParams.set(k, String(params[k] || "")));
+  const resp = await fetch(url.href, {
+    method: "GET",
+    headers: {
+      "Accept": "application/json",
+      "X-RapidAPI-Host": "real-time-costco-data.p.rapidapi.com",
+      "X-RapidAPI-Key": key
+    }
+  });
+  const text = await resp.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (_) {}
+  if (!resp.ok) {
+    const msg = data && data.error && data.error.message ? data.error.message : (text || `RapidAPI HTTP ${resp.status}`);
+    throw statusError("costco_rapidapi_http_error", clean(msg) || `RapidAPI HTTP ${resp.status}`, resp.status === 429 ? 429 : 502);
+  }
+  if (!data || String(data.status || "OK").toUpperCase() === "ERROR") {
+    const msg = data && data.error && data.error.message ? data.error.message : "RapidAPI Costco returned an error.";
+    throw statusError("costco_rapidapi_error", clean(msg), 502);
+  }
+  data.rateRemaining = resp.headers.get("x-ratelimit-requests-remaining") || "";
+  return data;
+}
+
+function costcoFirstProduct(data) {
+  if (!data) return null;
+  if (Array.isArray(data)) return data[0] || null;
+  if (Array.isArray(data.products)) return data.products[0] || null;
+  if (Array.isArray(data.results)) return data.results[0] || null;
+  if (Array.isArray(data.items)) return data.items[0] || null;
+  if (data.product && typeof data.product === "object") return data.product;
+  if (data.item && typeof data.item === "object") return data.item;
+  if (typeof data === "object") return data;
+  return null;
+}
+
+function costcoPrice(product) {
+  const raw = deepFindFirst(product, [
+    "sale_price",
+    "salePrice",
+    "current_price",
+    "currentPrice",
+    "online_price",
+    "onlinePrice",
+    "price",
+    "list_price",
+    "listPrice",
+    "regular_price",
+    "regularPrice"
+  ]);
+  return formatCostcoPrice(raw);
+}
+
+function formatCostcoPrice(value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "number" && Number.isFinite(value)) return "$" + value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  if (typeof value === "object") {
+    const amount = value.amount ?? value.value ?? value.price ?? value.min ?? value.max ?? "";
+    const currency = String(value.currency || value.currency_code || "USD").toUpperCase();
+    const formatted = formatCostcoPrice(amount);
+    if (formatted) return currency === "USD" ? formatted : `${formatted} ${currency}`;
+    return "";
+  }
+  const s = clean(value);
+  if (!s) return "";
+  if (/\$|usd|cad/i.test(s)) return s;
+  const n = Number(String(s).replace(/[^0-9.]/g, ""));
+  if (Number.isFinite(n) && n > 0) return "$" + n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  return s;
+}
+
+function costcoStatus(product) {
+  const raw = deepFindFirst(product, [
+    "stock_status",
+    "stockStatus",
+    "availability",
+    "availability_status",
+    "availabilityStatus",
+    "inventory_status",
+    "inventoryStatus",
+    "status"
+  ]);
+  const available = deepFindFirst(product, ["in_stock", "inStock", "is_available", "isAvailable", "available", "buyable"]);
+  if (available === true || String(available).toLowerCase() === "true") return "in_stock";
+  if (available === false || String(available).toLowerCase() === "false") return "out_of_stock";
+  return normalizeStatus(raw || "");
+}
+
+function deepFindFirst(value, keys) {
+  const wanted = new Set((keys || []).map(k => String(k).toLowerCase()));
+  const seen = new Set();
+  const scan = input => {
+    if (input === null || input === undefined) return "";
+    if (typeof input !== "object") return "";
+    if (seen.has(input)) return "";
+    seen.add(input);
+    if (Array.isArray(input)) {
+      for (const item of input) {
+        const found = scan(item);
+        if (found !== "") return found;
+      }
+      return "";
+    }
+    for (const key of Object.keys(input)) {
+      if (wanted.has(key.toLowerCase())) {
+        const found = input[key];
+        if (found !== null && found !== undefined && found !== "") return found;
+      }
+    }
+    for (const key of Object.keys(input)) {
+      const found = scan(input[key]);
+      if (found !== "") return found;
+    }
+    return "";
+  };
+  return scan(value);
 }
 
 async function extractTrackerSnapshotWithFallback(env, item, fetched, ctx) {
@@ -738,8 +929,92 @@ function trackerKindFromQuery(input) {
   const s = String(input || "").trim();
   if (!s) return "";
   if (/\d+.+\b(?:st|street|ave|avenue|rd|road|dr|drive|ct|court|ln|lane|way|blvd|circle|cir|place|pl)\b/i.test(s)) return "property";
+  if (/^\d{1,6}\s+[a-z0-9 .'-]+(?:,\s*)?[a-z .'-]+(?:,\s*)?[a-z]{2}\s+\d{5}(?:-\d{4})?$/i.test(s)) return "property";
+  if (/^\d{1,6}\s+[a-z0-9 .'-]+\s+\d{5}(?:-\d{4})?$/i.test(s)) return "property";
   if (/\b(?:las vegas|henderson|north las vegas|nv|ca|az|ut|tx|fl|home|house|property)\b/i.test(s) && /\d/.test(s)) return "property";
   return "";
+}
+
+async function findTrackerByCanonicalUrl(env, url) {
+  const matches = await findTrackersByCanonicalUrl(env, url);
+  return matches[0] || null;
+}
+
+async function findTrackersByCanonicalUrl(env, url) {
+  const exact = await env.DB.prepare("SELECT id, kind, url FROM tracker_items WHERE url = ?").bind(url).all();
+  const out = exact.results || [];
+  const wanted = canonicalTrackerUrl(url);
+  if (!wanted) return out;
+  const all = await env.DB.prepare("SELECT id, kind, url FROM tracker_items").all();
+  const seen = new Set(out.map(row => String(row.id || "")));
+  for (const row of all.results || []) {
+    if (!row || seen.has(String(row.id || ""))) continue;
+    if (canonicalTrackerUrl(row.url) === wanted) {
+      out.push(row);
+      seen.add(String(row.id || ""));
+    }
+  }
+  return out;
+}
+
+function canonicalTrackerUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^address:/i.test(raw)) return "address:" + normalizeAddressInput(raw.replace(/^address:/i, ""));
+  const parsed = safeUrl(raw);
+  if (!parsed) return normalizeAddressInput(raw);
+  parsed.hash = "";
+  parsed.searchParams.sort();
+  parsed.hostname = parsed.hostname.toLowerCase().replace(/^www\./i, "");
+  return parsed.href.replace(/\/+$/g, "").toLowerCase();
+}
+
+function normalizeAddressInput(value) {
+  return String(value || "")
+    .replace(/^address:/i, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*,\s*/g, ", ")
+    .trim();
+}
+
+function costcoRapidApiKey(env) {
+  return String(env && (env.COSTCO_RAPIDAPI_KEY || env.REAL_TIME_COSTCO_RAPIDAPI_KEY || env.RAPIDAPI_KEY) || "").trim();
+}
+
+function costcoRapidApiConfigured(env) {
+  return !!costcoRapidApiKey(env);
+}
+
+function costcoProductIdFromInput(value) {
+  const s = String(value || "");
+  const patterns = [
+    /\/product\.(\d{5,})\.html/i,
+    /[?&](?:product_id|item_number|itemId|id)=(\d{5,})/i,
+    /\b(?:item|item_number|product_id|product)\D{0,12}(\d{5,})\b/i,
+    /\b(\d{6,})\b/
+  ];
+  for (const pattern of patterns) {
+    const match = s.match(pattern);
+    if (match && match[1]) return match[1];
+  }
+  return "";
+}
+
+function costcoSearchQuery(item) {
+  const label = String(item && item.label || "").trim();
+  if (label && !/^https?:/i.test(label)) return label.slice(0, 120);
+  const rawUrl = String(item && item.url || "");
+  try {
+    const u = new URL(rawUrl);
+    const path = decodeURIComponent(u.pathname || "")
+      .replace(/\/product\.\d+\.html/ig, " ")
+      .replace(/[-_/]+/g, " ")
+      .replace(/\b(?:costco|product|html)\b/ig, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (path) return path.slice(0, 120);
+  } catch (_) {}
+  return label || "";
 }
 
 function propertySearchQuery(item) {
