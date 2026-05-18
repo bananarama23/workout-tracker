@@ -335,13 +335,31 @@ async function runTrackerCheck(env, item, ctx, source) {
       };
     } catch (err) {
       extractError = "costco_rapidapi_failed: " + String(err && err.message || err || "unknown");
+      snap.summary = extractError;
+      fetched = {
+        mode: "costco_rapidapi_failed",
+        text: "",
+        summary: extractError,
+        browserRenderingAvailable: trackerBrowserConfigured(env)
+      };
     }
   } else if (item.kind === "costco") {
     extractError = "RAPIDAPI_KEY missing; configure COSTCO_RAPIDAPI_KEY, REAL_TIME_COSTCO_RAPIDAPI_KEY, or RAPIDAPI_KEY for Costco tracking.";
+    snap.summary = extractError;
+    fetched = {
+      mode: "costco_rapidapi_missing_key",
+      text: "",
+      summary: extractError,
+      browserRenderingAvailable: false
+    };
   }
 
-  if (fetched.mode !== "costco_rapidapi") {
-    fetched = await fetchVisibleText(item.url, env);
+  const homeListing = item.kind === "zillow" || item.kind === "property";
+  const costcoApiTerminal = item.kind === "costco";
+  if (fetched.mode !== "costco_rapidapi" && !costcoApiTerminal) {
+    fetched = homeListing
+      ? { mode: "web_search_direct", text: "", summary: "address_web_search_direct", browserRenderingAvailable: trackerBrowserConfigured(env) }
+      : await fetchVisibleText(item.url, env);
     snap.summary = fetched.summary || "checked";
     if (!env.OPENAI_API_KEY) {
       const msg = "OPENAI_API_KEY missing; fetched page but could not extract price/status.";
@@ -357,7 +375,7 @@ async function runTrackerCheck(env, item, ctx, source) {
         snap.summary = [fetched.summary || "", "extract_failed: " + extractError].filter(Boolean).join("; ");
       }
     }
-  } else {
+  } else if (fetched.mode === "costco_rapidapi") {
     extractError = "";
   }
   const prev = await env.DB.prepare(`
@@ -409,23 +427,32 @@ async function extractCostcoViaRapidApi(env, item) {
   const productId = costcoProductIdFromInput(item.url) || costcoProductIdFromInput(item.label);
   let payload = null;
   let source = "";
+  let detailError = "";
   if (productId) {
-    payload = await costcoRapidApiFetch(env, "product-details", {
-      product_id: productId,
-      country: "US",
-      language: "en-US"
-    });
-    source = `RapidAPI Costco product-details ${productId}`;
-  } else {
+    try {
+      payload = await costcoRapidApiFetch(env, "product-details", {
+        product_id: productId,
+        country: "US",
+        language: "en-US"
+      });
+      source = `RapidAPI Costco product-details ${productId}`;
+    } catch (err) {
+      detailError = String(err && err.message || err || "");
+      payload = null;
+    }
+  }
+  if (!payload || !costcoFirstProduct(payload && payload.data)) {
     const query = costcoSearchQuery(item);
-    if (!query) throw statusError("costco_query_missing", "Costco tracker needs a product URL, item number, or searchable label.", 400);
+    if (!query) {
+      throw statusError("costco_query_missing", detailError || "Costco tracker needs a product URL, item number, or searchable label.", 400);
+    }
     payload = await costcoRapidApiFetch(env, "search", {
       query,
       country: "US",
       start: "0",
       language: "en-US"
     });
-    source = `RapidAPI Costco search "${query}"`;
+    source = `RapidAPI Costco search "${query}"${detailError ? ` after product-details failed: ${detailError}` : ""}`;
   }
 
   const product = costcoFirstProduct(payload && payload.data);
@@ -803,7 +830,6 @@ async function openaiWebSearchJson(env, prompt, ctx) {
       { role: "system", content: "Use web search when needed. Return strict JSON only, no markdown or prose." },
       { role: "user", content: prompt }
     ],
-    text: { format: { type: "json_object" } },
     max_output_tokens: 900
   };
   try {
@@ -826,7 +852,7 @@ async function openaiWebSearchJson(env, prompt, ctx) {
     return data;
   } catch (err) {
     const msg = String(err && err.message || err || "");
-    if (!/web_search/i.test(msg)) throw err;
+    if (!/(web_search|json mode|json_object)/i.test(msg)) throw err;
     const fallback = Object.assign({}, payload, { tools: [{ type: "web_search_preview", search_context_size: "medium" }] });
     if (ctx && typeof ctx.openaiJson === "function") {
       return await ctx.openaiJson("/responses", {
@@ -1007,9 +1033,11 @@ function costcoSearchQuery(item) {
   try {
     const u = new URL(rawUrl);
     const path = decodeURIComponent(u.pathname || "")
+      .replace(/\.product\.\d+\.html/ig, " ")
       .replace(/\/product\.\d+\.html/ig, " ")
-      .replace(/[-_/]+/g, " ")
+      .replace(/[-_/.]+/g, " ")
       .replace(/\b(?:costco|product|html)\b/ig, " ")
+      .replace(/\b\d{5,}\b/g, " ")
       .replace(/\s+/g, " ")
       .trim();
     if (path) return path.slice(0, 120);
