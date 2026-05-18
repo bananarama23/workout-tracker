@@ -4000,8 +4000,8 @@ function aiBackendStatusTest(){
   return fallback();
 }
 
-			var WT_FRONTEND_VERSION='19.12.10-tracker-address-fix';
-			var WT_SW_VERSION='wt-shell-v192-tracker-address-fix';
+			var WT_FRONTEND_VERSION='19.12.12-tracker-add-visible';
+			var WT_SW_VERSION='wt-shell-v193-tracker-api-no-store';
 var WT_NO_SW_MODE=/(?:\?|&)no-sw=1(?:&|$)/.test(String(location.search||''));
 var WT_LEGACY_LOCAL_AI_UI_ENABLED=false;
 var WT_APPSTATUS_CACHE_KEY='wt_app_status_cache_v1';
@@ -4873,10 +4873,10 @@ function aiPendingTargetsMarkConsumed(type){
   }catch(e){}
 }
 
-var APP_VERSION='v19.12.10-tracker-address-fix';
+var APP_VERSION='v19.12.12-tracker-add-visible';
 var APP_SCHEMA_VERSION='2026-05-09-stabilization-resolvers';
 var SCHEMA_VERSION=APP_SCHEMA_VERSION;
-var CACHE_VERSION='wt-cache-v201-tracker-address-fix';
+var CACHE_VERSION='wt-cache-v203-tracker-add-visible';
 var MIGRATION_VERSION='phase8-bootstrap-safe-non-destructive';
 var APP_CHANGELOG=[
   'Fallback last-workout reviews now auto-upgrade to AI when the logged workout has enough set evidence, without changing the feedback layout',
@@ -37505,7 +37505,9 @@ function trackerFetchJson(base,route,method,payload,timeoutMs){
   var token=wtAiProxyBearerAuthEnabled()?wtAiProxyToken():'';
   if(token)headers.Authorization='Bearer '+token;
   if(typeof APP_VERSION!=='undefined')headers['X-WT-Client-Version']=String(APP_VERSION||'');
-  var opts={method:method,headers:headers};
+  headers['Cache-Control']='no-store';
+  headers['Pragma']='no-cache';
+  var opts={method:method,headers:headers,cache:'no-store'};
   if(method!=='GET'){
     headers['Content-Type']='application/json';
     opts.body=JSON.stringify(Object.assign({clientVersion:(typeof APP_VERSION!=='undefined'?APP_VERSION:'')},payload||{}));
@@ -37514,7 +37516,9 @@ function trackerFetchJson(base,route,method,payload,timeoutMs){
   var timer=null;
   var ms=Math.min(90000,Math.max(12000,(parseInt(timeoutMs,10)||30000)+4000));
   if(ctrl){opts.signal=ctrl.signal;timer=setTimeout(function(){try{ctrl.abort();}catch(e){}},ms);}
-  return fetch(String(base||'').replace(/\/+$/,'')+route,opts).then(function(res){
+  var fullUrl=String(base||'').replace(/\/+$/,'')+route;
+  if(method==='GET')fullUrl+=(fullUrl.indexOf('?')>=0?'&':'?')+'_wtTs='+encodeURIComponent(String(Date.now()));
+  return fetch(fullUrl,opts).then(function(res){
     if(timer)clearTimeout(timer);
     return res.text().then(function(text){
       var data=null;
@@ -37659,9 +37663,36 @@ function trackerAddUrl(){
     if(!res||res.status!=='ok')throw new Error((res&&(res.message||res.errorCode))||'Add failed');
     if(inp)inp.value='';
     return trackerLoad(true).then(function(){
+      trackerEnsureAddedVisible(res,url);
       trackerSetStatus(res.existing?'Already watching this address or URL':'Tracker added','var(--green)');
     });
   }).catch(function(err){trackerSetStatus(String(err&&err.message||err||'Add failed'),'var(--orange)');});
+}
+function trackerEnsureAddedVisible(res,input){
+  if(!res||!res.id)return;
+  var id=String(res.id||'');
+  var raw=String(input||'').trim();
+  var items=_trackerWatchState.items||[];
+  var found=items.some(function(x){return String(x.id||'')===id||String(x.url||'')===raw||String(x.url||'')==='address:'+raw;});
+  if(found)return;
+  var isUrl=/^https?:\/\//i.test(raw);
+  var kind=String(res.kind||'')||(isUrl&&/costco\./i.test(raw)?'costco':'property');
+  var stored=isUrl?raw:'address:'+raw.replace(/\s+/g,' ').trim();
+  _trackerWatchState.items=[{
+    id:id,
+    kind:kind,
+    label:isUrl?'':raw.replace(/\s+/g,' ').trim(),
+    url:stored,
+    enabled:1,
+    check_frequency:kind==='costco'?'twice_daily':'2h',
+    last_checked_at:'',
+    current_title:isUrl?raw:raw.replace(/\s+/g,' ').trim(),
+    current_price:'',
+    current_status:'unknown',
+    current_summary:'Saved. Check Now will fetch the first snapshot.',
+    price_history:[]
+  }].concat(items);
+  trackerRender();
 }
 function trackerDeleteItem(id,url){
   id=String(id||'').trim();
@@ -37674,11 +37705,25 @@ function trackerDeleteItem(id,url){
   trackerApi('POST','delete',{id:id,itemId:id,url:url},22000).then(function(res){
     var deleted=parseInt(res&&res.deleted,10)||0;
     trackerSetStatus(deleted>0?'Tracker deleted':'Delete sent; refreshing tracker','var(--green)');
-    return trackerLoad(true);
+    return trackerLoad(true).then(function(){
+      _trackerWatchState.items=(_trackerWatchState.items||[]).filter(function(x){return String(x.id||'')!==id&&(url?String(x.url||'')!==url:true);});
+      trackerRender();
+    });
   }).catch(function(err){
+    var msg=String(err&&err.message||err||'Delete failed');
+    if(/already gone|could not be deleted|not found|tracker_item_missing/i.test(msg)){
+      _trackerWatchState.items=(_trackerWatchState.items||oldItems).filter(function(x){return String(x.id||'')!==id&&(url?String(x.url||'')!==url:true);});
+      trackerRender();
+      trackerSetStatus('Tracker deleted','var(--green)');
+      trackerLoad(true).then(function(){
+        _trackerWatchState.items=(_trackerWatchState.items||[]).filter(function(x){return String(x.id||'')!==id&&(url?String(x.url||'')!==url:true);});
+        trackerRender();
+      });
+      return;
+    }
     _trackerWatchState.items=oldItems;
     trackerRender();
-    trackerSetStatus(String(err&&err.message||err||'Delete failed'),'var(--orange)');
+    trackerSetStatus(msg,'var(--orange)');
   });
 }
 function trackerToggleItem(id,on){
@@ -37689,7 +37734,8 @@ function trackerCheckNow(id){
   trackerApi('POST','check-now',{id:id},70000).then(function(res){
     if(!res||res.status!=='ok')throw new Error((res&&(res.message||res.errorCode))||'Check failed');
     if(res.extractionError)trackerSetStatus('Checked page, but extraction needs attention: '+res.extractionError,'var(--orange)');
-    else trackerSetStatus('Checked: '+(res.price||res.itemStatus||'done'),'var(--green)');
+    else if(res.price)trackerSetStatus('Checked: '+res.price+' · '+(res.itemStatus||'unknown'),'var(--green)');
+    else trackerSetStatus('Checked, but no price was found yet. Try the address plus city/state/ZIP.','var(--orange)');
     return trackerLoad(true);
   }).catch(function(err){trackerSetStatus(String(err&&err.message||err||'Check failed'),'var(--orange)');});
 }
