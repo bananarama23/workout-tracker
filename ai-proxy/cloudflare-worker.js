@@ -18,14 +18,14 @@ import { handleTrackerRequest, handleTrackerScheduled, trackerHealth } from "./t
 const OPENAI_BASE = "https://api.openai.com/v1";
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const ANTHROPIC_BASE = "https://api.anthropic.com/v1";
-const AI_PROXY_VERSION = "v1.7.0-secure-app-gateway";
+const AI_PROXY_VERSION = "v1.7.1-tracker-watch-hardening";
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 const SCAN_PROMPT = 'This is a nutrition label or food packaging. Extract the nutrition information and return ONLY a JSON object with these exact keys (use null if not found): {"name":"food name","serving":number,"unit":"g or ml or oz or piece or scoop or serving","calories":number,"protein":number,"carbs":number,"fat":number,"fibre":number,"satFat":number,"sodium":number}. All numbers per serving. Sodium in mg. Return raw JSON only, no markdown.';
 let ACCESS_JWKS_CACHE = { issuer: "", expiresAt: 0, keys: [] };
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const started = Date.now();
     const url = new URL(request.url);
     const routePath = normalizeRoutePath(url.pathname);
@@ -132,7 +132,10 @@ export default {
         const result = await handleTrackerRequest(request, env, {
           openaiJson,
           waitUntil(promise) {
-            if (promise && typeof promise.then === "function") promise.catch(() => null);
+            if (!promise || typeof promise.then !== "function") return;
+            const guarded = promise.catch(() => null);
+            if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(guarded);
+            else return guarded;
           }
         });
         const status = result && result.status === "error" ? (result.httpStatus || 500) : 200;
