@@ -1,4 +1,4 @@
-const SW_VERSION = 'wt-shell-v192-tracker-address-fix';
+const SW_VERSION = 'wt-shell-v193-tracker-api-no-store';
 const SHELL_CACHE = `wt-shell-${SW_VERSION}`;
 const WT_BLOCK_PUBLIC_GITHUB_PAGES = /\.github\.io$/i.test((self.location && self.location.hostname) || '');
 const OFFLINE_URLS = [
@@ -61,6 +61,7 @@ function isSensitiveRequest(reqUrl) {
     const p = (u.pathname || '').toLowerCase();
     const q = (u.search || '').toLowerCase();
     if (q.includes('token=') || q.includes('apikey=') || q.includes('api_key=') || q.includes('bridge_token=')) return true;
+    if (p.startsWith('/api/') || p.startsWith('/tracker/') || p.startsWith('/v1/tracker/')) return true;
     if (p === '/health' || p.includes('/health/') || p.includes('/calendar') || p.includes('/auth') || p.includes('/token')) return true;
     if (p.startsWith('/v1/') || p.includes('/v1/chat') || p.includes('/v1/messages')) return true;
     if (u.hostname.includes('workers.dev') || u.hostname.includes('script.google.com') || u.hostname.includes('googleapis.com')) return true;
