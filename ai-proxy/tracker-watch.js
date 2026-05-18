@@ -1,11 +1,11 @@
-const TRACKER_DEFAULT_EMAIL = "phil.ksmith@gmail.com";
+const TRACKER_DEFAULT_EMAIL = "outfits-purer1p@icloud.com";
 const TRACKER_MAX_TEXT = 22000;
 const TRACKER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 export function trackerHealth(env) {
   return {
     trackerRoutes: true,
-    trackerEmailConfigured: !!(env && env.TRACKER_EMAIL),
+    trackerEmailConfigured: !!(env && env.MAILJET_API_KEY && env.MAILJET_SECRET_KEY && env.TRACKER_EMAIL_TO),
     trackerCostcoApiConfigured: costcoRapidApiConfigured(env),
     trackerBrowserConfigured: trackerBrowserConfigured(env),
     trackerBrowserRestConfigured: trackerBrowserRestConfigured(env)
@@ -35,6 +35,25 @@ export async function handleTrackerRequest(request, env, ctx) {
   if (method === "POST" && path === "/tracker/update") return ok(await trackerUpdate(env, body));
   if (method === "POST" && path === "/tracker/delete") return ok(await trackerDelete(env, body));
   if (method === "POST" && path === "/tracker/check-now") return ok(await trackerCheckNow(env, body, ctx));
+  if (method === "POST" && path === "/tracker/email-test") {
+    const settings = await trackerSettings(env);
+    const result = await sendTrackerEmail(
+      env,
+      settings,
+      { url: "manual email test" },
+      {
+        alertType: "test",
+        message: "This is a test email from Workout Tracker via Mailjet."
+      }
+    );
+    return ok({
+      type: "tracker-email-test",
+      emailConfigured: !!(env && env.MAILJET_API_KEY && env.MAILJET_SECRET_KEY && env.TRACKER_EMAIL_TO),
+      to: env.TRACKER_EMAIL_TO || settings?.alert_email || TRACKER_DEFAULT_EMAIL || null,
+      from: env.TRACKER_EMAIL_FROM || env.TRACKER_EMAIL_TO || null,
+      result
+    });
+  }
   if (method === "POST" && path === "/tracker/alerts/seen") return ok(await trackerAlertsSeen(env, body));
   if (method === "POST" && path === "/tracker/settings") return ok(await trackerSettingsSave(env, body));
   return err("tracker_route_not_found", "Unknown Tracker Watch route", 404);
@@ -287,7 +306,7 @@ async function trackerSettings(env) {
   for (const row of rows.results || []) map[row.key] = row.value;
   return {
     zillow_frequency: map.zillow_frequency || "2h",
-    costco_frequency: map.costco_frequency || "twice_daily",
+    costco_frequency: map.costco_frequency || "3d",
     email_alerts: map.email_alerts || "on",
     alert_email: map.alert_email || TRACKER_DEFAULT_EMAIL
   };
@@ -296,7 +315,7 @@ async function trackerSettings(env) {
 async function trackerSettingsSave(env, body) {
   const allowed = {
     zillow_frequency: new Set(["1h", "2h", "3h", "daily"]),
-    costco_frequency: new Set(["6h", "twice_daily", "daily"]),
+    costco_frequency: new Set(["2d", "3d", "4d", "5d"]),
     email_alerts: new Set(["on", "off"]),
     alert_email: null
   };
@@ -948,32 +967,81 @@ function trackerPrompt(kind, url, text) {
 }
 
 async function sendTrackerEmail(env, settings, item, alert) {
-  const binding = env && env.TRACKER_EMAIL;
-  if (!binding || typeof binding.send !== "function") return { skipped: true, reason: "send_email_missing" };
-  const to = String(settings.alert_email || TRACKER_DEFAULT_EMAIL).trim() || TRACKER_DEFAULT_EMAIL;
-  const subject = `Tracker Watch: ${alert.alertType} changed`;
-  const body = `${alert.message}\n\n${item.url}`;
-  try {
-    if (typeof EmailMessage !== "undefined") {
-      await binding.send(new EmailMessage("tracker-watch@plusultra.local", to, rawEmail(to, subject, body)));
-    } else {
-      await binding.send({ to, subject, text: body });
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, message: String(e && e.message || e || "email failed") };
+  if (!env || !env.MAILJET_API_KEY || !env.MAILJET_SECRET_KEY) {
+    return { skipped: true, reason: "mailjet_missing" };
   }
-}
 
-function rawEmail(to, subject, body) {
-  return [
-    `To: ${to}`,
-    "From: tracker-watch@plusultra.local",
-    `Subject: ${subject}`,
-    "Content-Type: text/plain; charset=UTF-8",
-    "",
-    body
-  ].join("\r\n");
+  const to = String(
+    env.TRACKER_EMAIL_TO ||
+    settings?.alert_email ||
+    TRACKER_DEFAULT_EMAIL ||
+    ""
+  ).trim();
+
+  const from = String(
+    env.TRACKER_EMAIL_FROM ||
+    env.TRACKER_EMAIL_TO ||
+    to
+  ).trim();
+
+  if (!to) {
+    return { skipped: true, reason: "missing_to_email" };
+  }
+
+  if (!from) {
+    return { skipped: true, reason: "missing_from_email" };
+  }
+
+  const subject = `Tracker Watch: ${alert?.alertType || "alert"} changed`;
+  const body = `${alert?.message || "Tracker alert"}\n\n${item?.url || ""}`;
+  const auth = btoa(`${env.MAILJET_API_KEY}:${env.MAILJET_SECRET_KEY}`);
+
+  const res = await fetch("https://api.mailjet.com/v3.1/send", {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${auth}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      Messages: [
+        {
+          From: {
+            Email: from,
+            Name: "Workout Tracker"
+          },
+          To: [
+            {
+              Email: to
+            }
+          ],
+          Subject: subject,
+          TextPart: body
+        }
+      ]
+    })
+  });
+
+  const text = await res.text().catch(() => "");
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      provider: "mailjet",
+      status: res.status,
+      message: text
+    };
+  }
+
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch (_) {}
+
+  return {
+    ok: true,
+    provider: "mailjet",
+    response: json || text
+  };
 }
 
 function trackerIsDue(item) {
@@ -989,12 +1057,17 @@ function frequencyMs(value) {
   if (v === "3h") return 3 * 3600000;
   if (v === "6h") return 6 * 3600000;
   if (v === "twice_daily") return 12 * 3600000;
+  if (v === "2d") return 2 * 24 * 3600000;
+  if (v === "3d") return 3 * 24 * 3600000;
+  if (v === "4d") return 4 * 24 * 3600000;
+  if (v === "5d") return 5 * 24 * 3600000;
+  if (v === "weekly") return 7 * 24 * 3600000;
   return 24 * 3600000;
 }
 
 function defaultFrequencyForKind(kind, settings) {
   if (kind === "zillow" || kind === "property") return settings && settings.zillow_frequency || "2h";
-  if (kind === "costco") return settings && settings.costco_frequency || "twice_daily";
+  if (kind === "costco") return settings && settings.costco_frequency || "3d";
   return "daily";
 }
 
