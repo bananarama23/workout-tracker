@@ -156,8 +156,19 @@ async function trackerDelete(env, body) {
   if (!id) throw statusError("missing_tracker_id", "Missing tracker item id.", 400);
   await env.DB.prepare("DELETE FROM tracker_alerts WHERE item_id = ?").bind(id).run();
   await env.DB.prepare("DELETE FROM tracker_snapshots WHERE item_id = ?").bind(id).run();
-  await env.DB.prepare("DELETE FROM tracker_items WHERE id = ?").bind(id).run();
-  return { type: "tracker-delete", id };
+  const byId = await env.DB.prepare("DELETE FROM tracker_items WHERE id = ?").bind(id).run();
+  let deleted = d1Changes(byId);
+  if (deleted <= 0 && url) {
+    const matches = await env.DB.prepare("SELECT id FROM tracker_items WHERE url = ?").bind(url).all();
+    const ids = (matches.results || []).map(row => String(row.id || "")).filter(Boolean);
+    for (const matchId of ids) {
+      await env.DB.prepare("DELETE FROM tracker_alerts WHERE item_id = ?").bind(matchId).run();
+      await env.DB.prepare("DELETE FROM tracker_snapshots WHERE item_id = ?").bind(matchId).run();
+    }
+    const byUrl = await env.DB.prepare("DELETE FROM tracker_items WHERE url = ?").bind(url).run();
+    deleted = d1Changes(byUrl);
+  }
+  return { type: "tracker-delete", id, deleted };
 }
 
 async function trackerUpdate(env, body) {
@@ -246,10 +257,26 @@ async function trackerSettingsSave(env, body) {
 }
 
 async function runTrackerCheck(env, item, ctx, source) {
-  if (!env.OPENAI_API_KEY) throw statusError("openai_key_missing", "OPENAI_API_KEY missing. Tracker Watch can fetch the page, but needs OpenAI to extract price/status.", 500);
-  const fetched = await fetchVisibleText(item.url, env);
-  const snap = await extractSnapshot(env, item, fetched, ctx);
   const now = new Date().toISOString();
+  const fetched = await fetchVisibleText(item.url, env);
+  let extractError = "";
+  let snap = {
+    title: item.label || item.url || "",
+    price: "",
+    status: "unknown",
+    summary: fetched.summary || "checked"
+  };
+  if (!env.OPENAI_API_KEY) {
+    extractError = "OPENAI_API_KEY missing; fetched page but could not extract price/status.";
+    snap.summary = [snap.summary, extractError].filter(Boolean).join("; ");
+  } else {
+    try {
+      snap = await extractSnapshot(env, item, fetched, ctx);
+    } catch (err) {
+      extractError = String(err && err.message || err || "extract failed");
+      snap.summary = [fetched.summary || "", "extract_failed: " + extractError].filter(Boolean).join("; ");
+    }
+  }
   const prev = await env.DB.prepare(`
     SELECT * FROM tracker_snapshots
     WHERE item_id = ?
@@ -283,10 +310,12 @@ async function runTrackerCheck(env, item, ctx, source) {
     type: "tracker-check-now",
     itemId: item.id,
     snapshotId,
+    checkedAt: now,
     title: snap.title || "",
     price: snap.price || "",
     itemStatus: snap.status || "unknown",
     summary: snap.summary || "",
+    extractionError: extractError,
     alertsCreated: alerts.length,
     fetchMode: fetched.mode,
     browserRenderingAvailable: fetched.browserRenderingAvailable
@@ -573,6 +602,11 @@ function similarity(a, b) {
 
 function clean(value) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, 500);
+}
+
+function d1Changes(result) {
+  const n = result && result.meta && Number(result.meta.changes);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function hasD1(env) {
