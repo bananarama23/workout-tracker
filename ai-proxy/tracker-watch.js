@@ -116,6 +116,16 @@ async function trackerList(env) {
     FROM tracker_items i
     ORDER BY created_at DESC
   `).all();
+  const snapRes = await env.DB.prepare(`
+    SELECT item_id, title, price, status, raw_summary, checked_at
+    FROM tracker_snapshots
+    ORDER BY checked_at DESC
+    LIMIT 240
+  `).all();
+  const historyByItem = buildTrackerHistory(snapRes.results || []);
+  const items = (itemsRes.results || []).map(item => Object.assign({}, item, {
+    price_history: historyByItem[item.id] || []
+  }));
   const alertsRes = await env.DB.prepare(`
     SELECT a.*, i.label, i.kind, i.url
     FROM tracker_alerts a
@@ -125,26 +135,63 @@ async function trackerList(env) {
   `).all();
   return {
     type: "tracker-list",
-    items: itemsRes.results || [],
+    items,
     alerts: alertsRes.results || [],
     settings: await trackerSettings(env)
   };
 }
 
+function buildTrackerHistory(rows) {
+  const grouped = {};
+  for (const row of rows || []) {
+    const itemId = String(row.item_id || "");
+    if (!itemId) continue;
+    if (!grouped[itemId]) grouped[itemId] = [];
+    grouped[itemId].push(row);
+  }
+  const out = {};
+  for (const itemId of Object.keys(grouped)) {
+    const chronological = grouped[itemId].slice().sort((a, b) => String(a.checked_at || "").localeCompare(String(b.checked_at || "")));
+    const changes = [];
+    let lastKey = "";
+    for (const row of chronological) {
+      const price = clean(row.price || "");
+      const status = normalizeStatus(row.status || "");
+      const title = clean(row.title || "");
+      const summary = clean(row.raw_summary || "");
+      const key = [price, status, title].join("|");
+      if (!price && status === "unknown" && !title) continue;
+      if (key === lastKey) continue;
+      lastKey = key;
+      changes.push({
+        title,
+        price,
+        status,
+        summary,
+        checked_at: row.checked_at || ""
+      });
+    }
+    out[itemId] = changes.reverse().slice(0, 12);
+  }
+  return out;
+}
+
 async function trackerAdd(env, body) {
-  const url = String(body && body.url || "").trim();
-  const parsed = safeUrl(url);
-  if (!parsed) throw statusError("invalid_url", "Enter a valid Costco or Zillow URL.", 400);
-  const kind = trackerKind(parsed.href);
-  if (!kind) throw statusError("unsupported_tracker_url", "Tracker Watch currently supports Costco and home listing URLs from Zillow, Redfin, Realtor.com, Homes.com, Compass, Trulia, and Properties.com.", 400);
+  const input = String(body && (body.url || body.query || body.address) || "").trim();
+  const parsed = safeUrl(input);
+  const kind = parsed ? trackerKind(parsed.href) : trackerKindFromQuery(input);
+  if (!input) throw statusError("invalid_tracker_input", "Enter a Costco URL, home listing URL, or house address.", 400);
+  if (!kind) throw statusError("unsupported_tracker_url", "Tracker Watch supports Costco URLs and house addresses or listing URLs.", 400);
   const settings = await trackerSettings(env);
   const frequency = String(body.check_frequency || body.frequency || defaultFrequencyForKind(kind, settings) || "daily");
   const now = new Date().toISOString();
   const id = makeId("trk");
+  const storedUrl = parsed ? parsed.href : `address:${input}`;
+  const label = String(body.label || (!parsed && input) || "").trim().slice(0, 160);
   await env.DB.prepare(`
     INSERT INTO tracker_items (id, kind, label, url, enabled, check_frequency, created_at)
     VALUES (?, ?, ?, ?, 1, ?, ?)
-  `).bind(id, kind, String(body.label || "").trim().slice(0, 160), parsed.href, frequency, now).run();
+  `).bind(id, kind, label, storedUrl, frequency, now).run();
   return { type: "tracker-add", id, kind };
 }
 
@@ -326,6 +373,9 @@ async function runTrackerCheck(env, item, ctx, source) {
 
 async function extractTrackerSnapshotWithFallback(env, item, fetched, ctx) {
   const homeListing = item.kind === "zillow" || item.kind === "property";
+  if (homeListing) {
+    try { return await extractPropertyViaWebSearch(env, item, fetched, ctx); } catch (_) {}
+  }
   const shouldSearch = homeListing && (trackerAccessDeniedText(fetched.text) || String(fetched.text || "").length < 500);
   if (shouldSearch) {
     try {
@@ -684,8 +734,17 @@ function trackerKind(url) {
   return "";
 }
 
+function trackerKindFromQuery(input) {
+  const s = String(input || "").trim();
+  if (!s) return "";
+  if (/\d+.+\b(?:st|street|ave|avenue|rd|road|dr|drive|ct|court|ln|lane|way|blvd|circle|cir|place|pl)\b/i.test(s)) return "property";
+  if (/\b(?:las vegas|henderson|north las vegas|nv|ca|az|ut|tx|fl|home|house|property)\b/i.test(s) && /\d/.test(s)) return "property";
+  return "";
+}
+
 function propertySearchQuery(item) {
   const rawUrl = String(item && item.url || "");
+  if (/^address:/i.test(rawUrl)) return rawUrl.replace(/^address:/i, "").trim();
   let fromPath = "";
   try {
     const u = new URL(rawUrl);
@@ -715,7 +774,46 @@ function normalizeStatus(value) {
 
 function trackerAlertMessage(item, change, snap) {
   const name = snap.title || item.label || item.url;
-  return `${item.kind.toUpperCase()} ${change.type} changed for ${name}: ${change.oldValue || "unknown"} -> ${change.newValue || "unknown"}`;
+  const label = trackerAlertShortLabel(change);
+  return `${label} · ${name}`;
+}
+
+function trackerAlertShortLabel(change) {
+  if (!change) return "Tracker changed";
+  if (change.type === "price") {
+    const oldPrice = moneyNumber(change.oldValue);
+    const newPrice = moneyNumber(change.newValue);
+    if (Number.isFinite(oldPrice) && Number.isFinite(newPrice)) {
+      const delta = newPrice - oldPrice;
+      if (delta !== 0) return `Price ${delta > 0 ? "+" : "-"}${formatMoney(Math.abs(delta))} (${formatMoney(newPrice)})`;
+    }
+    return `Price ${change.oldValue || "unknown"} -> ${change.newValue || "unknown"}`;
+  }
+  if (change.type === "status") {
+    const next = normalizeStatus(change.newValue || "");
+    if (next === "sold") return "Now sold";
+    if (next === "pending") return "Now pending";
+    if (next === "active") return "Back active";
+    if (next === "off_market") return "Now off market";
+    if (next === "out_of_stock") return "Now out of stock";
+    if (next === "in_stock") return "Back in stock";
+    return `Status ${String(change.newValue || "unknown").replace(/_/g, " ")}`;
+  }
+  if (change.type === "title") return "Listing details changed";
+  return "Tracker changed";
+}
+
+function moneyNumber(value) {
+  const raw = String(value || "").replace(/[^0-9.]/g, "");
+  if (!raw) return NaN;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function formatMoney(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "$0";
+  return "$" + Math.round(n).toLocaleString("en-US");
 }
 
 function htmlToVisibleText(html) {
