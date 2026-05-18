@@ -457,10 +457,29 @@ async function extractCostcoViaRapidApi(env, item) {
 
   const product = costcoFirstProduct(payload && payload.data);
   if (!product) throw statusError("costco_product_missing", "RapidAPI Costco returned no product data for this tracker.", 502);
-  const title = clean(deepFindFirst(product, ["name", "title", "product_name", "productName", "short_description", "description"]));
+  const title = clean(deepFindFirst(product, [
+    "item_product_name",
+    "item_name",
+    "item_short_description",
+    "name",
+    "title",
+    "product_name",
+    "productName",
+    "short_description",
+    "description"
+  ]));
   const price = costcoPrice(product);
   const status = costcoStatus(product);
-  const promo = clean(deepFindFirst(product, ["promo_text", "promotion", "promotions", "discount", "savings", "coupon"]));
+  const promo = clean(deepFindFirst(product, [
+    "item_product_marketing_statement",
+    "item_product_marketing_features",
+    "promo_text",
+    "promotion",
+    "promotions",
+    "discount",
+    "savings",
+    "coupon"
+  ]));
   const requestId = clean(payload.request_id || payload.requestId || "");
   const rate = payload.rateRemaining ? `rate_remaining_${payload.rateRemaining}` : "";
   const summary = [source, requestId ? `request_${requestId}` : "", promo, rate].filter(Boolean).join("; ");
@@ -499,6 +518,8 @@ function costcoFirstProduct(data) {
   if (!data) return null;
   if (Array.isArray(data)) return data[0] || null;
   if (Array.isArray(data.products)) return data.products[0] || null;
+  if (Array.isArray(data.product_results)) return data.product_results[0] || null;
+  if (Array.isArray(data.search_results)) return data.search_results[0] || null;
   if (Array.isArray(data.results)) return data.results[0] || null;
   if (Array.isArray(data.items)) return data.items[0] || null;
   if (data.product && typeof data.product === "object") return data.product;
@@ -509,6 +530,15 @@ function costcoFirstProduct(data) {
 
 function costcoPrice(product) {
   const raw = deepFindFirst(product, [
+    "item_location_pricing_salePrice",
+    "item_location_pricing_listPrice",
+    "item_location_pricing_price",
+    "item_location_pricing_finalPrice",
+    "item_location_pricing_regularPrice",
+    "minSalePrice",
+    "maxSalePrice",
+    "salePrice",
+    "listPrice",
     "sale_price",
     "salePrice",
     "current_price",
@@ -544,6 +574,8 @@ function formatCostcoPrice(value) {
 
 function costcoStatus(product) {
   const raw = deepFindFirst(product, [
+    "item_availability",
+    "item_stock_status",
     "stock_status",
     "stockStatus",
     "availability",
@@ -553,7 +585,24 @@ function costcoStatus(product) {
     "inventoryStatus",
     "status"
   ]);
-  const available = deepFindFirst(product, ["in_stock", "inStock", "is_available", "isAvailable", "available", "buyable"]);
+  const available = deepFindFirst(product, [
+    "isItemInStock",
+    "item_product_buyable",
+    "item_buyable",
+    "item_product_status_published",
+    "in_stock",
+    "inStock",
+    "is_available",
+    "isAvailable",
+    "available",
+    "buyable"
+  ]);
+  const zeroInventory = deepFindFirst(product, [
+    "item_product_status_disponzeroinv",
+    "item_product_status_oos",
+    "out_of_stock"
+  ]);
+  if (zeroInventory === true || String(zeroInventory).toLowerCase() === "true") return "out_of_stock";
   if (available === true || String(available).toLowerCase() === "true") return "in_stock";
   if (available === false || String(available).toLowerCase() === "false") return "out_of_stock";
   return normalizeStatus(raw || "");
@@ -577,6 +626,10 @@ function deepFindFirst(value, keys) {
     for (const key of Object.keys(input)) {
       if (wanted.has(key.toLowerCase())) {
         const found = input[key];
+        if (Array.isArray(found)) {
+          const joined = found.map(x => typeof x === "object" ? deepFindFirst(x, ["value", "name", "text", "label", "description"]) : String(x || "")).filter(Boolean).join("; ");
+          if (joined) return joined;
+        }
         if (found !== null && found !== undefined && found !== "") return found;
       }
     }
@@ -623,8 +676,11 @@ async function extractTrackerSnapshotWithFallback(env, item, fetched, ctx) {
 async function extractPropertyViaWebSearch(env, item, fetched, ctx) {
   const query = propertySearchQuery(item);
   const prompt = [
-    "Search the public web for the current real estate listing represented by this URL/address.",
+    "Search the public web for the current real estate listing represented by this exact URL/address.",
     "Use any reliable public listing source you can find, such as Realtor.com, Redfin, Homes.com, Compass, Trulia, brokerage/MLS pages, or the original URL if available.",
+    "Match the exact street number, street name, city, and state when available. If the street number is uncertain, say so in summary and do not invent a price.",
+    "Return the current listed sale price only. Do not use Zestimate, Redfin Estimate, assessed value, rent estimate, tax value, nearby comparable price, or old sale price as the price.",
+    "If multiple sources disagree, prefer an active listing source with a visible current list price; include the chosen source and any conflict in summary.",
     "Return strict JSON only with this exact shape: {\"title\":\"\",\"price\":\"\",\"status\":\"unknown\",\"summary\":\"\"}.",
     "For status use active, pending, sold, off_market, or unknown. Do not guess a price; leave it empty if not found.",
     "Include the source site/date hint in summary when visible.",
@@ -1035,9 +1091,12 @@ function costcoSearchQuery(item) {
     const path = decodeURIComponent(u.pathname || "")
       .replace(/\.product\.\d+\.html/ig, " ")
       .replace(/\/product\.\d+\.html/ig, " ")
+      .replace(/(\d)\.(\d)/g, "$1WTDECIMAL$2")
       .replace(/[-_/.]+/g, " ")
       .replace(/\b(?:costco|product|html)\b/ig, " ")
+      .replace(/\bp\b/ig, " ")
       .replace(/\b\d{5,}\b/g, " ")
+      .replace(/WTDECIMAL/g, ".")
       .replace(/\s+/g, " ")
       .trim();
     if (path) return path.slice(0, 120);
